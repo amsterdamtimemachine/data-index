@@ -12,15 +12,18 @@ import type {
   HeatmapResolutionConfig,
   Histogram,
   Histograms,
-  TimeSlice 
+  TimeSlice,
+  HeatmapIndex,
+  HistogramIndex,
+  SectionIndex
 } from '@atm/shared/types';
 
 export class VisualizationBinaryWriter {
   private writer: any;
   private currentOffset: number = 0;
-  private sections: VisualizationMetadata['sections'] = { 
-    heatmaps: { offset: 0, length: 0 },
-    histograms: { offset: 0, length: 0 }
+  private sections: VisualizationMetadata['sections'] = {
+    heatmaps: { offset: 0, length: 0, index: {} },
+    histograms: { offset: 0, length: 0, index: {} }
   };
 
   constructor(private binaryPath: string) {}
@@ -41,55 +44,109 @@ export class VisualizationBinaryWriter {
   }
 
   /**
-   * Write heatmaps data to the binary file
+   * Write heatmaps data to the binary file with granular indexing
+   * Each heatmap (resolution/timeSlice/recordType/tag) is written as a separate msgpack section
    */
   async writeHeatmaps(heatmapResolutions: HeatmapResolutions): Promise<void> {
-    console.log(`🔥 Writing heatmaps data...`);
-    
-    // Store the absolute offset (including reserved metadata space)
+    console.log(`🔥 Writing heatmaps data with granular indexing...`);
+
     const heatmapsStartOffset = this.currentOffset;
-    
-    // Encode heatmaps data
-    const encodedHeatmaps = encode(heatmapResolutions);
-    
-    // Write to file
-    this.writer.write(encodedHeatmaps);
-    
-    // Store relative offset (from start of data sections, not including metadata)
+    const index: HeatmapIndex = {};
+    let sectionCount = 0;
+
+    for (const [resKey, timeline] of Object.entries(heatmapResolutions)) {
+      index[resKey] = {};
+
+      for (const [tsKey, recordTypes] of Object.entries(timeline)) {
+        index[resKey][tsKey] = {};
+
+        for (const [rtKey, data] of Object.entries(recordTypes)) {
+          // Write base heatmap as individual msgpack section
+          const baseEncoded = encode(data.base);
+          const baseOffset = this.currentOffset - heatmapsStartOffset;
+          this.writer.write(baseEncoded);
+          this.currentOffset += baseEncoded.byteLength;
+          sectionCount++;
+
+          index[resKey][tsKey][rtKey] = {
+            base: { offset: baseOffset, length: baseEncoded.byteLength },
+            tags: {}
+          };
+
+          // Write each tag heatmap as individual msgpack section
+          for (const [tagKey, heatmap] of Object.entries(data.tags)) {
+            const tagEncoded = encode(heatmap);
+            const tagOffset = this.currentOffset - heatmapsStartOffset;
+            this.writer.write(tagEncoded);
+            this.currentOffset += tagEncoded.byteLength;
+            sectionCount++;
+
+            index[resKey][tsKey][rtKey].tags[tagKey] = {
+              offset: tagOffset,
+              length: tagEncoded.byteLength
+            };
+          }
+        }
+      }
+    }
+
+    const totalLength = this.currentOffset - heatmapsStartOffset;
     this.sections.heatmaps = {
-      offset: 0, // First data section, so offset is 0 relative to data start
-      length: encodedHeatmaps.byteLength
+      offset: 0, // First data section
+      length: totalLength,
+      index
     };
-    
-    this.currentOffset += encodedHeatmaps.byteLength;
-    
-    console.log(`✅ Heatmaps written: ${encodedHeatmaps.byteLength} bytes at offset ${heatmapsStartOffset}`);
+
+    console.log(`✅ Heatmaps written: ${sectionCount} sections, ${totalLength} bytes total`);
   }
 
   /**
-   * Write histograms data to the binary file
+   * Write histograms data to the binary file with granular indexing
+   * Each histogram (recordType/base and recordType/tag) is written as a separate msgpack section
    */
   async writeHistograms(histograms: Histograms): Promise<void> {
-    console.log(`📊 Writing histograms data...`);
-    
-    // Store the absolute offset
+    console.log(`📊 Writing histograms data with granular indexing...`);
+
     const histogramsStartOffset = this.currentOffset;
-    
-    // Encode histograms data
-    const encodedHistograms = encode(histograms);
-    
-    // Write to file
-    this.writer.write(encodedHistograms);
-    
-    // Store relative offset (histograms come after heatmaps)
+    const index: HistogramIndex = {};
+    let sectionCount = 0;
+
+    for (const [recordType, data] of Object.entries(histograms)) {
+      // Write base histogram as individual msgpack section
+      const baseEncoded = encode(data.base);
+      const baseOffset = this.currentOffset - histogramsStartOffset;
+      this.writer.write(baseEncoded);
+      this.currentOffset += baseEncoded.byteLength;
+      sectionCount++;
+
+      index[recordType] = {
+        base: { offset: baseOffset, length: baseEncoded.byteLength },
+        tags: {}
+      };
+
+      // Write each tag histogram as individual msgpack section
+      for (const [tagKey, histogram] of Object.entries(data.tags)) {
+        const tagEncoded = encode(histogram);
+        const tagOffset = this.currentOffset - histogramsStartOffset;
+        this.writer.write(tagEncoded);
+        this.currentOffset += tagEncoded.byteLength;
+        sectionCount++;
+
+        index[recordType].tags[tagKey] = {
+          offset: tagOffset,
+          length: tagEncoded.byteLength
+        };
+      }
+    }
+
+    const totalLength = this.currentOffset - histogramsStartOffset;
     this.sections.histograms = {
-      offset: this.sections.heatmaps.length, // Offset relative to data start (after heatmaps)
-      length: encodedHistograms.byteLength
+      offset: this.sections.heatmaps.length, // After heatmaps section
+      length: totalLength,
+      index
     };
-    
-    this.currentOffset += encodedHistograms.byteLength;
-    
-    console.log(`✅ Histograms written: ${encodedHistograms.byteLength} bytes at offset ${histogramsStartOffset}`);
+
+    console.log(`✅ Histograms written: ${sectionCount} sections, ${totalLength} bytes total`);
   }
 
   /**
@@ -131,7 +188,7 @@ export class VisualizationBinaryWriter {
     
     // Create metadata
     const metadata: VisualizationMetadata = {
-      version: '2.0.0',
+      version: '3.0.0', // v3: granular indexed sections for mmap efficiency
       timestamp: new Date().toISOString(),
       heatmapDimensions,
       heatmapBlueprint,

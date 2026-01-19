@@ -24,59 +24,6 @@ export class VisualizationDataService {
 	}
 
 	/**
-	 * Filter heatmap timeline to only include requested recordTypes (no merging on server)
-	 */
-	private filterHeatmapTimelines(
-		timeline: HeatmapTimeline,
-		recordTypes: RecordType[],
-		tag?: string
-	): HeatmapTimeline {
-		const filtered: HeatmapTimeline = {};
-
-		for (const [timeSliceKey, timeSliceData] of Object.entries(timeline)) {
-			const filteredTimeSlice: any = {};
-
-			// Include only requested recordTypes for this time slice
-			for (const recordType of recordTypes) {
-				const recordTypeData = timeSliceData[recordType];
-				if (recordTypeData) {
-					if (tag) {
-						// Use tag-specific heatmap if available
-						if (recordTypeData.tags[tag]) {
-							filteredTimeSlice[recordType] = {
-								base: recordTypeData.tags[tag],
-								tags: { [tag]: recordTypeData.tags[tag] }
-							};
-						} else {
-							// Tag doesn't exist - create empty heatmap with same structure as base
-							const baseHeatmap = recordTypeData.base;
-							const emptyHeatmap = {
-								countArray: new Array(baseHeatmap.countArray.length).fill(0),
-								densityArray: new Array(baseHeatmap.densityArray.length).fill(0)
-							};
-
-							filteredTimeSlice[recordType] = {
-								base: emptyHeatmap,
-								tags: { [tag]: emptyHeatmap }
-							};
-						}
-					} else {
-						// Use full recordType data (base + all tags)
-						filteredTimeSlice[recordType] = recordTypeData;
-					}
-				}
-			}
-
-			// Only include time slices that have data for at least one recordType
-			if (Object.keys(filteredTimeSlice).length > 0) {
-				filtered[timeSliceKey] = filteredTimeSlice;
-			}
-		}
-
-		return filtered;
-	}
-
-	/**
 	 * Get histogram for specific recordTypes and optional tags
 	 * If no recordTypes provided, defaults to all available recordTypes
 	 */
@@ -210,6 +157,7 @@ export class VisualizationDataService {
 	 * Get HeatmapTimeline for specific recordTypes and optional tags
 	 * If no recordTypes provided, defaults to all available recordTypes
 	 * Always returns all periods at single resolution (first available resolution)
+	 * Uses granular reads (v3.0.0+) for memory efficiency when available
 	 */
 	async getHeatmapTimeline(
 		recordTypes?: RecordType[],
@@ -220,10 +168,11 @@ export class VisualizationDataService {
 		try {
 			await this.initialize();
 
+			const metadata = this.binaryHandler.getMetadata();
+
 			// Default to all recordTypes if none provided
 			let effectiveRecordTypes: RecordType[];
 			if (!recordTypes || recordTypes.length === 0) {
-				const metadata = this.binaryHandler.getMetadata();
 				effectiveRecordTypes = metadata.recordTypes;
 				console.log(
 					`🔥 No recordTypes specified, defaulting to all: ${effectiveRecordTypes.join(', ')}`
@@ -239,68 +188,30 @@ export class VisualizationDataService {
 				console.log(`🏷️ With tags: ${tags.join(', ')}`);
 			}
 
-			const heatmapResolutions = await this.binaryHandler.readHeatmaps();
-			const metadata = this.binaryHandler.getMetadata();
+			// Get resolution info
+			const resolutionKey = `${metadata.resolutions[0].cols}x${metadata.resolutions[0].rows}`;
+			const timeSliceKeys = metadata.timeSlices.map((ts) => ts.key);
 
-			// Get first available resolution
-			const resolutionKeys = Object.keys(heatmapResolutions);
-			if (resolutionKeys.length === 0) {
-				throw new Error('No heatmap resolutions available');
+			console.log(`📐 Using resolution: ${resolutionKey}`);
+			console.log(`📅 Time periods: ${timeSliceKeys.length}`);
+
+			// Determine which tag to filter by
+			let tag: string | undefined;
+			if (tags && tags.length === 1) {
+				tag = tags[0];
+			} else if (tags && tags.length > 1) {
+				tag = tags.sort().join('+'); // Combination key
 			}
 
-			const selectedResolution = resolutionKeys[0]; // Use first resolution
-			const heatmapTimeline = heatmapResolutions[selectedResolution];
-
-			console.log(`📐 Using resolution: ${selectedResolution}`);
-			console.log(`📅 Available time periods: ${Object.keys(heatmapTimeline).length}`);
-
-			// Validate that all recordTypes exist in at least one time slice
-			const allRecordTypesInHeatmap = new Set<string>();
-			Object.values(heatmapTimeline).forEach((timeSlice) => {
-				Object.keys(timeSlice).forEach((recordType) => {
-					allRecordTypesInHeatmap.add(recordType);
-				});
-			});
-
-			const missingTypes = effectiveRecordTypes.filter(
-				(type) => !allRecordTypesInHeatmap.has(type)
+			// Read only the sections we need (memory-efficient granular read)
+			const resultTimeline = this.binaryHandler.readHeatmapsFiltered(
+				resolutionKey,
+				timeSliceKeys,
+				effectiveRecordTypes,
+				tag
 			);
-			if (missingTypes.length > 0) {
-				throw new Error(`RecordTypes "${missingTypes.join(', ')}" not found in heatmap data`);
-			}
 
-			// If tags are specified, we need to filter/modify the timeline
-			let resultTimeline: HeatmapTimeline;
-
-			if (!tags || tags.length === 0) {
-				// Return filtered timeline with individual recordType keys (client will merge)
-				resultTimeline = this.filterHeatmapTimelines(heatmapTimeline, effectiveRecordTypes);
-				console.log(
-					`🔥 Returning filtered heatmap timeline for recordTypes "${effectiveRecordTypes.join(', ')}": ${Object.keys(resultTimeline).length} periods`
-				);
-			} else if (tags.length === 1) {
-				// Single tag - return filtered timeline with tag-specific heatmaps
-				const tag = tags[0];
-				resultTimeline = this.filterHeatmapTimelines(heatmapTimeline, effectiveRecordTypes, tag);
-
-				// No need to throw error - empty timeline is valid (shows empty visualization)
-
-				console.log(
-					`🏷️ Returning tag-filtered timeline for "${tag}": ${Object.keys(resultTimeline).length} periods`
-				);
-			} else {
-				// Multiple tags - use combination key
-				const comboKey = tags.sort().join('+');
-				resultTimeline = this.filterHeatmapTimelines(
-					heatmapTimeline,
-					effectiveRecordTypes,
-					comboKey
-				);
-
-				console.log(
-					`🏷️ Returning tag-combination-filtered timeline for "${comboKey}": ${Object.keys(resultTimeline).length} periods`
-				);
-			}
+			console.log(`✅ Read complete: ${Object.keys(resultTimeline).length} periods`);
 
 			const processingTime = Date.now() - startTime;
 
@@ -308,7 +219,7 @@ export class VisualizationDataService {
 				heatmapTimeline: this.binaryHandler.prepareForJsonResponse(resultTimeline),
 				recordTypes: effectiveRecordTypes,
 				tags,
-				resolution: selectedResolution,
+				resolution: resolutionKey,
 				success: true,
 				processingTime
 			};

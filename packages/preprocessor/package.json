@@ -11,6 +11,8 @@
     "generate:docker": "bun src/main.ts",
     "test": "../../scripts/sync-env.sh && bun --env-file=.env test src/tests/",
     "test:binary": "../../scripts/sync-env.sh && bun --env-file=.env test src/tests/binaryDataValidation.test.ts",
+    "test:granular": "../../scripts/sync-env.sh && bun --env-file=.env test src/tests/granularIndexValidation.test.ts",
+    "test:chunks": "../../scripts/sync-env.sh && bun --env-file=.env test src/tests/chunkLoadingValidation.test.ts",
     "test:generation": "../../scripts/sync-env.sh && bun --env-file=.env test src/tests/dataGeneration.test.ts",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix"
