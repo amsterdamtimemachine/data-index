@@ -90,16 +90,20 @@ describe('Tag Combinations Binary Validation', () => {
               
               const heatmap = recordTypeData.tags[tagKey];
               
-              // Validate heatmap structure
+              // Validate sparse heatmap structure
               expect(heatmap).toBeDefined();
-              expect(heatmap.countArray).toBeDefined();
-              expect(heatmap.densityArray).toBeDefined();
-              expect(Array.isArray(heatmap.countArray)).toBe(true);
-              expect(Array.isArray(heatmap.densityArray)).toBe(true);
-              expect(heatmap.countArray.length).toBe(heatmap.densityArray.length);
-              
-              // Check that combination has some data (not all zeros)
-              const hasData = heatmap.countArray.some(count => count > 0);
+              expect(heatmap.indices).toBeDefined();
+              expect(heatmap.counts).toBeDefined();
+              expect(heatmap.densities).toBeDefined();
+              expect(heatmap.dimensions).toBeDefined();
+              expect(Array.isArray(heatmap.indices)).toBe(true);
+              expect(Array.isArray(heatmap.counts)).toBe(true);
+              expect(Array.isArray(heatmap.densities)).toBe(true);
+              expect(heatmap.counts.length).toBe(heatmap.indices.length);
+              expect(heatmap.densities.length).toBe(heatmap.indices.length);
+
+              // Check that combination has some data
+              const hasData = heatmap.counts.length > 0;
               if (hasData) {
                 console.log(`  ✅ Found combination "${tagKey}" for ${recordType} in ${timeSliceKey} with data`);
               }
@@ -154,11 +158,11 @@ describe('Tag Combinations Binary Validation', () => {
           
           if (individualTagsExist) {
             const comboHeatmap = tags[combo];
-            const comboTotal = comboHeatmap.countArray.reduce((sum, count) => sum + count, 0);
-            
-            // Individual tag totals
-            const individualTotals = comboParts.map(tag => 
-              tags[tag].countArray.reduce((sum, count) => sum + count, 0)
+            const comboTotal = comboHeatmap.counts.reduce((sum, count) => sum + count, 0);
+
+            // Individual tag totals (sparse format)
+            const individualTotals = comboParts.map(tag =>
+              tags[tag].counts.reduce((sum, count) => sum + count, 0)
             );
             const minIndividualTotal = Math.min(...individualTotals);
             

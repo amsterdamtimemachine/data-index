@@ -1,8 +1,17 @@
 import type { RecordType } from './feature';
 
+/**
+ * Sparse heatmap representation - only non-zero cells are stored
+ * Uses parallel arrays for compact msgpack encoding
+ */
 export interface Heatmap {
-  densityArray: number[];
-  countArray: number[];
+  indices: number[];      // Cell indices (row * cols + col) with non-zero values
+  counts: number[];       // Count values for corresponding indices
+  densities: number[];    // Density values (0-1) for corresponding indices
+  dimensions: {           // Grid dimensions for validation
+    rows: number;
+    cols: number;
+  };
 }
 
 export interface HeatmapTimeline {

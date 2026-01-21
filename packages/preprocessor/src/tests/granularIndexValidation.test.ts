@@ -65,8 +65,8 @@ describe('Granular Index Validation (v3.0.0)', () => {
 		console.log(`Histograms section: ${metadata.sections.histograms.length} bytes`);
 	});
 
-	test('binary version is 3.0.0', () => {
-		expect(binaryData.metadata.version).toBe('3.0.0');
+	test('binary version is 4.0.0', () => {
+		expect(binaryData.metadata.version).toBe('4.0.0');
 	});
 
 	test('heatmap index exists and has correct structure', () => {
@@ -122,10 +122,13 @@ describe('Granular Index Validation (v3.0.0)', () => {
 					);
 
 					expect(baseHeatmap).toBeDefined();
-					expect(baseHeatmap.countArray).toBeDefined();
-					expect(baseHeatmap.densityArray).toBeDefined();
-					expect(Array.isArray(baseHeatmap.countArray) || ArrayBuffer.isView(baseHeatmap.countArray)).toBe(true);
-					expect(Array.isArray(baseHeatmap.densityArray) || ArrayBuffer.isView(baseHeatmap.densityArray)).toBe(true);
+					expect(baseHeatmap.indices).toBeDefined();
+					expect(baseHeatmap.counts).toBeDefined();
+					expect(baseHeatmap.densities).toBeDefined();
+					expect(baseHeatmap.dimensions).toBeDefined();
+					expect(Array.isArray(baseHeatmap.indices) || ArrayBuffer.isView(baseHeatmap.indices)).toBe(true);
+					expect(Array.isArray(baseHeatmap.counts) || ArrayBuffer.isView(baseHeatmap.counts)).toBe(true);
+					expect(Array.isArray(baseHeatmap.densities) || ArrayBuffer.isView(baseHeatmap.densities)).toBe(true);
 					sectionsChecked++;
 
 					// Check tag heatmaps
@@ -138,8 +141,10 @@ describe('Granular Index Validation (v3.0.0)', () => {
 						);
 
 						expect(tagHeatmap).toBeDefined();
-						expect(tagHeatmap.countArray).toBeDefined();
-						expect(tagHeatmap.densityArray).toBeDefined();
+						expect(tagHeatmap.indices).toBeDefined();
+						expect(tagHeatmap.counts).toBeDefined();
+						expect(tagHeatmap.densities).toBeDefined();
+						expect(tagHeatmap.dimensions).toBeDefined();
 						sectionsChecked++;
 					}
 				}
@@ -336,15 +341,18 @@ describe('Granular Index Validation (v3.0.0)', () => {
 				section
 			);
 
-			const countLength = Array.isArray(heatmap.countArray)
-				? heatmap.countArray.length
-				: (heatmap.countArray as any).length;
-			const densityLength = Array.isArray(heatmap.densityArray)
-				? heatmap.densityArray.length
-				: (heatmap.densityArray as any).length;
+			// Verify dimensions match resolution
+			expect(heatmap.dimensions.rows).toBe(rows);
+			expect(heatmap.dimensions.cols).toBe(cols);
 
-			expect(countLength).toBe(expectedSize);
-			expect(densityLength).toBe(expectedSize);
+			// Verify all arrays have same length (sparse consistency)
+			const nonZeroCount = heatmap.indices.length;
+			expect(heatmap.counts.length).toBe(nonZeroCount);
+			expect(heatmap.densities.length).toBe(nonZeroCount);
+
+			// Sparse heatmap should have fewer cells than total grid
+			expect(nonZeroCount).toBeLessThanOrEqual(expectedSize);
+			expect(nonZeroCount).toBeGreaterThan(0); // Should have some data
 		}
 	});
 

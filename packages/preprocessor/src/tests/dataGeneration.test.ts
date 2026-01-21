@@ -190,17 +190,20 @@ describe('Data Generation Pipeline', () => {
       const recordTypesWithData = Object.keys(timeSliceData);
       expect(recordTypesWithData.length).toBeGreaterThan(0);
       
-      // For recordTypes that have data, verify structure
+      // For recordTypes that have data, verify sparse structure
       for (const recordType of recordTypesWithData) {
         const recordTypeData = timeSliceData[recordType as RecordType];
         expect(recordTypeData).toBeDefined();
         expect(recordTypeData.base).toBeDefined();
-        expect(recordTypeData.base.countArray).toBeDefined();
-        expect(recordTypeData.base.densityArray).toBeDefined();
+        expect(recordTypeData.base.indices).toBeDefined();
+        expect(recordTypeData.base.counts).toBeDefined();
+        expect(recordTypeData.base.densities).toBeDefined();
+        expect(recordTypeData.base.dimensions).toBeDefined();
         expect(recordTypeData.tags).toBeDefined();
-        
-        // Arrays should have consistent length
-        expect(recordTypeData.base.countArray.length).toBe(recordTypeData.base.densityArray.length);
+
+        // Sparse arrays should have consistent length
+        expect(recordTypeData.base.counts.length).toBe(recordTypeData.base.indices.length);
+        expect(recordTypeData.base.densities.length).toBe(recordTypeData.base.indices.length);
       }
     }
     

@@ -10,6 +10,7 @@ import type {
   HeatmapDimensions,
   HeatmapBlueprint,
   HeatmapResolutionConfig,
+  Heatmap,
   Histogram,
   Histograms,
   TimeSlice,
@@ -188,7 +189,7 @@ export class VisualizationBinaryWriter {
     
     // Create metadata
     const metadata: VisualizationMetadata = {
-      version: '3.0.0', // v3: granular indexed sections for mmap efficiency
+      version: '4.0.0', // v4: sparse heatmap representation (v3: granular indexed sections)
       timestamp: new Date().toISOString(),
       heatmapDimensions,
       heatmapBlueprint,
@@ -308,25 +309,25 @@ export function generateVisualizationStats(
   if (firstResolutionKey) {
     const heatmapTimeline = heatmapResolutions[firstResolutionKey];
     
-    // Count features from heatmaps (spatial aggregation)
+    // Count features from sparse heatmaps (spatial aggregation)
     for (const [timeSliceKey, timeSliceData] of Object.entries(heatmapTimeline)) {
       for (const [recordType, recordTypeData] of Object.entries(timeSliceData)) {
-        const counts = Array.from(recordTypeData.base.countArray || []);
+        const counts = Array.from(recordTypeData.base.counts || []);
         const recordTypeTotal = counts.reduce((sum, count) => sum + count, 0);
-        
+
         featuresPerRecordType[recordType as RecordType] += recordTypeTotal;
         totalFeatures += recordTypeTotal;
       }
     }
-    
-    // Get grid cell count from first heatmap with data
+
+    // Get grid cell count from dimensions
     let gridCellCount = 0;
     const timeSlices = Object.values(heatmapTimeline);
     for (const timeSlice of timeSlices) {
       const recordTypes = Object.values(timeSlice);
       for (const recordType of recordTypes) {
-        if (recordType?.base?.countArray) {
-          gridCellCount = recordType.base.countArray.length;
+        if (recordType?.base?.dimensions) {
+          gridCellCount = recordType.base.dimensions.rows * recordType.base.dimensions.cols;
           break;
         }
       }
@@ -467,7 +468,7 @@ export function createVisualizationData(
 //  // Extract dimensions from first heatmap
 //  const firstTimeSlice = Object.values(firstResolution)[0];
 //  const firstRecordType = Object.values(firstTimeSlice)[0];
-//  const gridCellCount = firstRecordType.base.countArray?.length || 0;
+//  const gridCellCount = firstRecordType.base.dimensions?.rows * firstRecordType.base.dimensions?.cols || 0;
 //  
 //  // Calculate dimensions from grid cell count and first resolution
 //  const firstResConfig = resolutions[0];
@@ -594,45 +595,103 @@ export class VisualizationBinaryReader {
   }
   
   /**
-   * Read heatmaps data from binary file
+   * Read heatmaps data from binary file (v4.0.0+ granular format)
    */
   async readHeatmaps(): Promise<HeatmapResolutions> {
     const metadata = await this.readMetadata();
     const file = Bun.file(this.binaryPath);
     const buffer = await file.arrayBuffer();
-    
+
     const dataView = new DataView(buffer);
     const metadataSize = dataView.getUint32(0, false);
     const dataStartOffset = 4 + metadataSize;
-    
-    const heatmapsBytes = new Uint8Array(
-      buffer,
-      dataStartOffset + metadata.sections.heatmaps.offset,
-      metadata.sections.heatmaps.length
-    );
-    
-    return decode(heatmapsBytes) as HeatmapResolutions;
+    const heatmapsOffset = metadata.sections.heatmaps.offset;
+    const index = metadata.sections.heatmaps.index;
+
+    // Reconstruct HeatmapResolutions from granular sections
+    const heatmapResolutions: HeatmapResolutions = {};
+
+    for (const [resKey, timeSlices] of Object.entries(index)) {
+      heatmapResolutions[resKey] = {};
+
+      for (const [tsKey, recordTypes] of Object.entries(timeSlices)) {
+        heatmapResolutions[resKey][tsKey] = {} as any;
+
+        for (const [rtKey, sections] of Object.entries(recordTypes)) {
+          // Read base heatmap
+          const baseBytes = new Uint8Array(
+            buffer,
+            dataStartOffset + heatmapsOffset + sections.base.offset,
+            sections.base.length
+          );
+          const baseHeatmap = decode(baseBytes) as Heatmap;
+
+          // Read tag heatmaps
+          const tagHeatmaps: Record<string, Heatmap> = {};
+          for (const [tagKey, tagSection] of Object.entries(sections.tags)) {
+            const tagBytes = new Uint8Array(
+              buffer,
+              dataStartOffset + heatmapsOffset + tagSection.offset,
+              tagSection.length
+            );
+            tagHeatmaps[tagKey] = decode(tagBytes) as Heatmap;
+          }
+
+          heatmapResolutions[resKey][tsKey][rtKey as RecordType] = {
+            base: baseHeatmap,
+            tags: tagHeatmaps
+          };
+        }
+      }
+    }
+
+    return heatmapResolutions;
   }
   
   /**
-   * Read histograms data from binary file
+   * Read histograms data from binary file (v4.0.0+ granular format)
    */
   async readHistograms(): Promise<Histograms> {
     const metadata = await this.readMetadata();
     const file = Bun.file(this.binaryPath);
     const buffer = await file.arrayBuffer();
-    
+
     const dataView = new DataView(buffer);
     const metadataSize = dataView.getUint32(0, false);
     const dataStartOffset = 4 + metadataSize;
-    
-    const histogramsBytes = new Uint8Array(
-      buffer,
-      dataStartOffset + metadata.sections.histograms.offset,
-      metadata.sections.histograms.length
-    );
-    
-    return decode(histogramsBytes) as Histograms;
+    const histogramsOffset = metadata.sections.histograms.offset;
+    const index = metadata.sections.histograms.index;
+
+    // Reconstruct Histograms from granular sections
+    const histograms: Histograms = {};
+
+    for (const [rtKey, sections] of Object.entries(index)) {
+      // Read base histogram
+      const baseBytes = new Uint8Array(
+        buffer,
+        dataStartOffset + histogramsOffset + sections.base.offset,
+        sections.base.length
+      );
+      const baseHistogram = decode(baseBytes) as Histogram;
+
+      // Read tag histograms
+      const tagHistograms: Record<string, Histogram> = {};
+      for (const [tagKey, tagSection] of Object.entries(sections.tags)) {
+        const tagBytes = new Uint8Array(
+          buffer,
+          dataStartOffset + histogramsOffset + tagSection.offset,
+          tagSection.length
+        );
+        tagHistograms[tagKey] = decode(tagBytes) as Histogram;
+      }
+
+      histograms[rtKey as RecordType] = {
+        base: baseHistogram,
+        tags: tagHistograms
+      };
+    }
+
+    return histograms;
   }
   
   /**

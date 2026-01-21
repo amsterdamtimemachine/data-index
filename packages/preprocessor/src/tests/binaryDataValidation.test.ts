@@ -187,8 +187,8 @@ class BinaryValidator {
         continue;
       }
 
-      // Sum heatmap countArray
-      const heatmapTotal = timeSliceData[recordType].base.countArray.reduce(
+      // Sum heatmap counts (sparse format)
+      const heatmapTotal = timeSliceData[recordType].base.counts.reduce(
         (sum: number, count: number) => sum + count, 0
       );
 
@@ -239,8 +239,8 @@ class BinaryValidator {
         continue;
       }
 
-      // Sum tag heatmap countArray
-      const heatmapTotal = timeSliceData[recordType].tags[tag].countArray.reduce(
+      // Sum tag heatmap counts (sparse format)
+      const heatmapTotal = timeSliceData[recordType].tags[tag].counts.reduce(
         (sum: number, count: number) => sum + count, 0
       );
 
@@ -306,8 +306,8 @@ class BinaryValidator {
   }
 
   private calculateHeatmapTotal(heatmap: any): number {
-    if (!heatmap || !heatmap.countArray) return 0;
-    return heatmap.countArray.reduce((sum: number, count: number) => sum + count, 0);
+    if (!heatmap || !heatmap.counts) return 0;
+    return heatmap.counts.reduce((sum: number, count: number) => sum + count, 0);
   }
 }
 
@@ -400,7 +400,7 @@ describe('Binary Data Validation', () => {
     const histogramData = testData.histograms[firstRecordType];
     
     if (heatmapData && histogramData) {
-      const heatmapTotal = heatmapData.base.countArray.reduce(
+      const heatmapTotal = heatmapData.base.counts.reduce(
         (sum: number, count: number) => sum + count, 0
       );
       
@@ -438,27 +438,42 @@ describe('Binary Data Validation', () => {
       }
     }
 
-    // Test that all counts are non-negative
+    // Test that all counts are non-negative (sparse format)
     const primaryResolution = Object.values(testData.heatmaps)[0];
     for (const timeSliceData of Object.values(primaryResolution)) {
       for (const recordTypeData of Object.values(timeSliceData)) {
-        // Check base heatmap
-        for (const count of recordTypeData.base.countArray) {
+        // Check base heatmap (sparse structure)
+        expect(recordTypeData.base.indices).toBeDefined();
+        expect(recordTypeData.base.counts).toBeDefined();
+        expect(recordTypeData.base.densities).toBeDefined();
+        expect(recordTypeData.base.dimensions).toBeDefined();
+
+        // All sparse arrays should have same length
+        expect(recordTypeData.base.counts.length).toBe(recordTypeData.base.indices.length);
+        expect(recordTypeData.base.densities.length).toBe(recordTypeData.base.indices.length);
+
+        for (const count of recordTypeData.base.counts) {
           expect(count).toBeGreaterThanOrEqual(0);
         }
-        
+
         // Check density values are in valid range [0, 1]
-        for (const density of recordTypeData.base.densityArray) {
+        for (const density of recordTypeData.base.densities) {
           expect(density).toBeGreaterThanOrEqual(0);
           expect(density).toBeLessThanOrEqual(1);
         }
 
-        // Check tag heatmaps
+        // Check tag heatmaps (sparse structure)
         for (const tagData of Object.values(recordTypeData.tags)) {
-          for (const count of tagData.countArray) {
+          expect(tagData.indices).toBeDefined();
+          expect(tagData.counts).toBeDefined();
+          expect(tagData.densities).toBeDefined();
+          expect(tagData.counts.length).toBe(tagData.indices.length);
+          expect(tagData.densities.length).toBe(tagData.indices.length);
+
+          for (const count of tagData.counts) {
             expect(count).toBeGreaterThanOrEqual(0);
           }
-          for (const density of tagData.densityArray) {
+          for (const density of tagData.densities) {
             expect(density).toBeGreaterThanOrEqual(0);
             expect(density).toBeLessThanOrEqual(1);
           }

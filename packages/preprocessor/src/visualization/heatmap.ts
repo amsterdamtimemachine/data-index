@@ -48,39 +48,45 @@ export function getCellIdForCoordinates(
 }
 
 /**
- * Generate heatmap from count data
+ * Generate sparse heatmap from count data
+ * Only stores non-zero cells for efficient transmission
  */
 export function generateHeatmap(
   counts: Map<string, number>,
   heatmapDimensions: HeatmapDimensions
-): { countArray: number[]; densityArray: number[] } {
-  const totalCells = heatmapDimensions.rowsAmount * heatmapDimensions.colsAmount;
-  const countarray = new Array<number>(totalCells).fill(0);
-  
-  // Fill count array
+): { indices: number[]; counts: number[]; densities: number[]; dimensions: { rows: number; cols: number } } {
+  const indices: number[] = [];
+  const countValues: number[] = [];
+
+  // Collect non-zero cells
   for (const [cellId, count] of Array.from(counts.entries())) {
-    const [row, col] = cellId.split('_').map(Number);
-    const index = row * heatmapDimensions.colsAmount + col;
-    countarray[index] = count;
-  }
-  
-  // Find max count for normalization
-  const maxCount = Math.max(...countarray, 0);
-  
-  // Generate density array with log transformation
-  const densityarray = new Array<number>(totalCells).fill(0);
-  
-  if (maxCount > 0) {
-    const maxTransformed = Math.log(maxCount + 1);
-    for (let i = 0; i < totalCells; i++) {
-      densityarray[i] = countarray[i] > 0 ? 
-        Math.log(countarray[i] + 1) / maxTransformed : 0;
+    if (count > 0) {
+      const [row, col] = cellId.split('_').map(Number);
+      const index = row * heatmapDimensions.colsAmount + col;
+      indices.push(index);
+      countValues.push(count);
     }
   }
-  
+
+  // Calculate densities with log transformation
+  const densities: number[] = [];
+  if (countValues.length > 0) {
+    const maxCount = Math.max(...countValues);
+    const maxTransformed = Math.log(maxCount + 1);
+
+    for (const count of countValues) {
+      densities.push(Math.log(count + 1) / maxTransformed);
+    }
+  }
+
   return {
-    countArray: countarray,
-    densityArray: densityarray
+    indices,
+    counts: countValues,
+    densities,
+    dimensions: {
+      rows: heatmapDimensions.rowsAmount,
+      cols: heatmapDimensions.colsAmount
+    }
   };
 }
 

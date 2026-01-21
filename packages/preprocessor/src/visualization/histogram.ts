@@ -76,9 +76,9 @@ export function generateAllHistogramsFromHeatmapTimeline(
       if (timeSliceData && timeSliceData[recordType]) {
         const recordTypeData = timeSliceData[recordType];
         
-        // Sum up all counts from the base heatmap's countArray
-        if (recordTypeData.base && recordTypeData.base.countArray) {
-          totalCount = recordTypeData.base.countArray.reduce(
+        // Sum up all counts from the base heatmap (sparse format)
+        if (recordTypeData.base && recordTypeData.base.counts) {
+          totalCount = recordTypeData.base.counts.reduce(
             (sum: number, count: number) => sum + count, 0
           );
         }
@@ -109,9 +109,9 @@ export function generateAllHistogramsFromHeatmapTimeline(
         if (timeSliceData && timeSliceData[recordType] && timeSliceData[recordType].tags[tag]) {
           const tagData = timeSliceData[recordType].tags[tag];
           
-          // Sum up all counts from the tag-specific heatmap's countArray
-          if (tagData.countArray) {
-            totalCount = tagData.countArray.reduce(
+          // Sum up all counts from the tag-specific heatmap (sparse format)
+          if (tagData.counts) {
+            totalCount = tagData.counts.reduce(
               (sum: number, count: number) => sum + count, 0
             );
           }
@@ -151,9 +151,9 @@ export function generateAllHistogramsFromHeatmapTimeline(
           const comboData = timeSliceData[recordType].tags[comboKey];
           let totalCount = 0;
           
-          // Sum up all counts from the combination heatmap's countArray
-          if (comboData && comboData.countArray) {
-            totalCount = comboData.countArray.reduce(
+          // Sum up all counts from the combination heatmap (sparse format)
+          if (comboData && comboData.counts) {
+            totalCount = comboData.counts.reduce(
               (sum: number, count: number) => sum + count, 0
             );
           }

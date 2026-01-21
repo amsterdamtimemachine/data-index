@@ -10,7 +10,7 @@ import type {
 } from '@atm/shared/types';
 
 /**
- * Validation function that verifies histogram bin counts match heatmap countArray sums
+ * Validation function that verifies histogram bin counts match heatmap counts sums (sparse format)
  */
 function validateHistogramHeatmapConsistency(
   heatmapTimeline: HeatmapTimeline,
@@ -37,9 +37,9 @@ function validateHistogramHeatmapConsistency(
       if (heatmapData) {
         summary.totalChecks++;
         summary.baseChecks++;
-        
-        // Get expected count from heatmap
-        const heatmapTotal = heatmapData.base.countArray.reduce((sum, count) => sum + count, 0);
+
+        // Get expected count from heatmap (sparse format)
+        const heatmapTotal = heatmapData.base.counts.reduce((sum, count) => sum + count, 0);
         
         // Get actual count from histogram bin
         const histogramBin = recordTypeHistograms.base.bins.find(bin => bin.timeSlice.key === timeSlice.key);
@@ -69,9 +69,9 @@ function validateHistogramHeatmapConsistency(
           } else {
             summary.tagChecks++;
           }
-          
-          // Get expected count from tag heatmap
-          const heatmapTotal = heatmapData.tags[tagKey].countArray.reduce((sum, count) => sum + count, 0);
+
+          // Get expected count from tag heatmap (sparse format)
+          const heatmapTotal = heatmapData.tags[tagKey].counts.reduce((sum, count) => sum + count, 0);
           
           // Get actual count from tag histogram bin
           const histogramBin = recordTypeHistograms.tags[tagKey].bins.find(bin => bin.timeSlice.key === timeSlice.key);
@@ -200,7 +200,7 @@ describe('Real Data Validation', () => {
     
     for (const [timeSliceKey, timeSliceData] of Object.entries(heatmapTimeline)) {
       for (const [recordType, recordTypeData] of Object.entries(timeSliceData)) {
-        const counts = recordTypeData.base.countArray.reduce((sum, count) => sum + count, 0);
+        const counts = recordTypeData.base.counts.reduce((sum, count) => sum + count, 0);
         totalHeatmapFeatures += counts;
         heatmapFeaturesByType[recordType] = (heatmapFeaturesByType[recordType] || 0) + counts;
       }

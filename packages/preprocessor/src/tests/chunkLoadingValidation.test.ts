@@ -107,7 +107,8 @@ describe('Chunk Loading Validation', () => {
 		const singleReadMemory = heapAfterSingle - heapBefore;
 
 		console.log(`Single section read: ${(singleReadMemory / 1024).toFixed(2)} KB`);
-		console.log(`  - countArray length: ${singleHeatmap.countArray.length}`);
+		console.log(`  - Non-zero cells: ${singleHeatmap.indices.length}`);
+		console.log(`  - Grid size: ${singleHeatmap.dimensions.rows}x${singleHeatmap.dimensions.cols}`);
 		console.log(`  - Section bytes: ${singleSection!.section.length}`);
 
 		// Clear and measure full read
@@ -202,10 +203,12 @@ describe('Chunk Loading Validation', () => {
 		);
 
 		expect(subsetHeatmaps.length).toBe(subsetCount);
-		expect(subsetHeatmaps[0].countArray).toBeDefined();
+		expect(subsetHeatmaps[0].indices).toBeDefined();
+		expect(subsetHeatmaps[0].counts).toBeDefined();
+		expect(subsetHeatmaps[0].densities).toBeDefined();
 	});
 
-	test('decoded heatmap size matches expected JS object size', () => {
+	test('decoded sparse heatmap size is efficient', () => {
 		const index = binaryData.metadata.sections.heatmaps.index;
 		const heatmapsOffset = binaryData.metadata.sections.heatmaps.offset;
 
@@ -234,22 +237,38 @@ describe('Chunk Loading Validation', () => {
 			section!
 		);
 
-		// Each heatmap has 2 arrays of cellCount numbers
-		// JS numbers are 8 bytes each (64-bit floats)
-		const expectedMinBytes = cellCount * 2 * 8;
+		// Sparse format: 3 arrays (indices, counts, densities) of nonZero elements
+		// Plus dimensions object
+		const nonZeroCount = heatmap.indices.length;
+		const sparsity = ((cellCount - nonZeroCount) / cellCount * 100).toFixed(1);
+
+		// JS numbers are 8 bytes each (64-bit floats), integers can be 4 bytes
+		// Dense would be: cellCount * 2 arrays * 8 bytes
+		const denseMightBe = cellCount * 2 * 8;
+		// Sparse is: nonZeroCount * 3 arrays * ~6 bytes avg (msgpack encodes efficiently)
+		const sparseExpected = nonZeroCount * 3 * 6;
 		const msgpackBytes = section!.length;
 
 		console.log(`Resolution: ${firstRes} (${cellCount} cells)`);
+		console.log(`Non-zero cells: ${nonZeroCount} (${sparsity}% sparse)`);
 		console.log(`msgpack section: ${msgpackBytes} bytes`);
-		console.log(`Expected JS minimum: ${expectedMinBytes} bytes (${cellCount} × 2 arrays × 8 bytes)`);
-		console.log(`Compression ratio: ${(expectedMinBytes / msgpackBytes).toFixed(2)}x`);
+		console.log(`Dense JS minimum: ${denseMightBe} bytes`);
+		console.log(`Sparse expected: ~${sparseExpected} bytes`);
+		console.log(`Actual compression vs dense: ${(denseMightBe / msgpackBytes).toFixed(2)}x`);
 
-		// Verify arrays have correct length
-		expect(heatmap.countArray.length).toBe(cellCount);
-		expect(heatmap.densityArray.length).toBe(cellCount);
+		// Verify sparse arrays have correct structure
+		expect(heatmap.indices.length).toBe(nonZeroCount);
+		expect(heatmap.counts.length).toBe(nonZeroCount);
+		expect(heatmap.densities.length).toBe(nonZeroCount);
+		expect(heatmap.dimensions.rows).toBe(rows);
+		expect(heatmap.dimensions.cols).toBe(cols);
 
-		// msgpack should be more compact than raw JS representation
-		expect(msgpackBytes).toBeLessThan(expectedMinBytes);
+		// Sparse format should be more compact than dense
+		expect(msgpackBytes).toBeLessThan(denseMightBe);
+
+		// Non-zero count should be less than total cells (proving sparsity)
+		expect(nonZeroCount).toBeLessThan(cellCount);
+		expect(nonZeroCount).toBeGreaterThan(0);
 	});
 
 	test('individual section bytes sum to total section length', () => {
