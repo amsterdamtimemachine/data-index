@@ -215,10 +215,12 @@ export class VisualizationBinaryHandler {
 							const tagHeatmap = this.readHeatmap(resolution, ts, rt, tag);
 							timeline[ts][rt as RecordType].tags[tag] = tagHeatmap;
 						} catch {
-							// Tag doesn't exist for this recordType/timeSlice - use empty heatmap
+							// Tag doesn't exist for this recordType/timeSlice - use empty sparse heatmap
 							timeline[ts][rt as RecordType].tags[tag] = {
-								countArray: new Array(base.countArray.length).fill(0),
-								densityArray: new Array(base.densityArray.length).fill(0)
+								indices: [],
+								counts: [],
+								densities: [],
+								dimensions: base.dimensions
 							};
 						}
 					}

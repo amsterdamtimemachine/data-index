@@ -168,13 +168,17 @@ import { PUBLIC_DEFAULT_CELL } from '$env/static/public';
 			}
 		}
 
-		// Return empty heatmap when no data exists for this period
+		// Return empty sparse heatmap when no data exists for this period
 		// This keeps the map visible with all cells at 0 density
 		if (heatmapBlueprint && dimensions) {
-			const gridSize = dimensions.colsAmount * dimensions.rowsAmount;
 			return {
-				countArray: new Array(gridSize).fill(0),
-				densityArray: new Array(gridSize).fill(0)
+				indices: [],
+				counts: [],
+				densities: [],
+				dimensions: {
+					rows: dimensions.rowsAmount,
+					cols: dimensions.colsAmount
+				}
 			};
 		}
 

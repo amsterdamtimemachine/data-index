@@ -148,17 +148,19 @@ export const GET: RequestHandler = async ({ url }) => {
 				Object.values(timeSlice).forEach(recordTypeData => {
 					if (recordTypeData.base) {
 						totalHeatmaps++;
-						totalDataPoints += recordTypeData.base.densityArray.length;
+						// Sparse format: only count non-zero cells
+						totalDataPoints += recordTypeData.base.indices.length;
 					}
 					Object.values(recordTypeData.tags || {}).forEach(tagHeatmap => {
 						totalHeatmaps++;
-						totalDataPoints += tagHeatmap.densityArray.length;
+						// Sparse format: only count non-zero cells
+						totalDataPoints += tagHeatmap.indices.length;
 					});
 				});
 			});
-			
+
 			console.log(
-				`✅ Heatmaps API success - ${timeSliceCount} time periods, ${totalHeatmaps} total heatmaps, ${totalDataPoints.toLocaleString()} data points (${Math.round(totalDataPoints * 8 / 1024 / 1024)}MB estimated) at resolution ${response.resolution}`
+				`✅ Heatmaps API success - ${timeSliceCount} time periods, ${totalHeatmaps} total heatmaps, ${totalDataPoints.toLocaleString()} non-zero cells (sparse format, ~${Math.round(totalDataPoints * 3 * 6 / 1024)}KB estimated) at resolution ${response.resolution}`
 			);
 			return json(response, { headers });
 		} else {

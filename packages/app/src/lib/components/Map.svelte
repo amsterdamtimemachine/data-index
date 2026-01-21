@@ -112,23 +112,22 @@
 	});
 
 	let activeCells = $derived.by(() => {
-		if (!isMapLoaded || !map || !heatmap || !heatmap.countArray || !cellIdMap.size) {
+		if (!isMapLoaded || !map || !heatmap || !heatmap.indices || !cellIdMap.size) {
 			return new Map<string, { value: number; count: number }>();
 		}
 
-		const { densityArray, countArray } = heatmap;
+		// Sparse heatmap format: iterate only non-zero cells
+		const { indices, counts, densities } = heatmap;
 		const result = new Map<string, { value: number; count: number }>();
 
-		for (let i = 0; i < countArray.length; i++) {
-			const count = countArray[i];
-			if (count > 0) {
-				const cellId = cellIdMap.get(i);
-				if (cellId) {
-					result.set(cellId, {
-						value: densityArray[i] || 0,
-						count
-					});
-				}
+		for (let j = 0; j < indices.length; j++) {
+			const cellIndex = indices[j];
+			const cellId = cellIdMap.get(cellIndex);
+			if (cellId) {
+				result.set(cellId, {
+					value: densities[j] || 0,
+					count: counts[j]
+				});
 			}
 		}
 

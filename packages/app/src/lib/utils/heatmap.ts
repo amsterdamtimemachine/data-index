@@ -1,39 +1,37 @@
 import type { Heatmap, HeatmapTimeline, RecordType, HeatmapBlueprint } from '@atm/shared/types';
 
 /**
- * Merge multiple heatmaps into a single heatmap by combining counts and recalculating density
- * All heatmaps must have the same grid dimensions and cell alignment
+ * Merge multiple sparse heatmaps into a single sparse heatmap
+ * All heatmaps must have the same grid dimensions
  *
- * @param heatmaps Array of heatmaps to merge
+ * @param heatmaps Array of sparse heatmaps to merge
  * @param blueprint Optional heatmap blueprint for grid size validation
- * @returns Single merged heatmap with combined counts and recalculated density
+ * @returns Single merged sparse heatmap with combined counts and recalculated density
  */
 export function mergeHeatmaps(heatmaps: Heatmap[], blueprint?: HeatmapBlueprint): Heatmap {
 	// Filter out invalid heatmaps
 	const validHeatmaps = heatmaps.filter(
 		(heatmap) =>
-			heatmap && heatmap.countArray && heatmap.densityArray && heatmap.countArray.length > 0
+			heatmap && heatmap.indices && heatmap.counts && heatmap.densities && heatmap.dimensions
 	);
 
 	if (validHeatmaps.length === 0) {
-		// Validate blueprint and calculate grid size safely
-		let gridSize = 0;
+		// Return empty sparse heatmap
+		let rows = 0;
+		let cols = 0;
+
 		if (blueprint) {
 			if (blueprint.rows > 0 && blueprint.cols > 0) {
-				// Blueprint has rows/cols properties
-				gridSize = blueprint.rows * blueprint.cols;
-			} else if (
-				Array.isArray(blueprint) ||
-				(typeof blueprint === 'object' && Object.keys(blueprint).length > 0)
-			) {
-				// Blueprint is an array of cells or object with numeric keys
-				gridSize = Array.isArray(blueprint) ? blueprint.length : Object.keys(blueprint).length;
+				rows = blueprint.rows;
+				cols = blueprint.cols;
 			}
 		}
 
 		return {
-			densityArray: new Array(gridSize).fill(0),
-			countArray: new Array(gridSize).fill(0)
+			indices: [],
+			counts: [],
+			densities: [],
+			dimensions: { rows, cols }
 		};
 	}
 
@@ -41,61 +39,59 @@ export function mergeHeatmaps(heatmaps: Heatmap[], blueprint?: HeatmapBlueprint)
 		return validHeatmaps[0];
 	}
 
-	// Get grid size from first valid heatmap
-	const gridSize = validHeatmaps[0].countArray.length;
+	// Get dimensions from first valid heatmap
+	const { rows, cols } = validHeatmaps[0].dimensions;
+	const gridSize = rows * cols;
 
-	// Validate all valid heatmaps have the same grid size
+	// Validate all heatmaps have same dimensions
 	for (let i = 1; i < validHeatmaps.length; i++) {
-		if (validHeatmaps[i].countArray.length !== gridSize) {
+		const dims = validHeatmaps[i].dimensions;
+		if (dims.rows !== rows || dims.cols !== cols) {
 			throw new Error(
-				`Heatmap grid size mismatch: expected ${gridSize}, got ${validHeatmaps[i].countArray.length}`
-			);
-		}
-		if (validHeatmaps[i].densityArray.length !== gridSize) {
-			throw new Error(
-				`Heatmap grid size mismatch: expected ${gridSize}, got ${validHeatmaps[i].densityArray.length}`
+				`Heatmap dimension mismatch: expected ${rows}x${cols}, got ${dims.rows}x${dims.cols}`
 			);
 		}
 	}
 
-	// Initialize merged arrays
-	const mergedCounts = new Array(gridSize).fill(0);
-	const mergedDensity = new Array(gridSize).fill(0);
+	// Merge sparse heatmaps by accumulating counts in a dense temporary array
+	const tempCounts = new Array(gridSize).fill(0);
 
-	// Merge counts cell by cell
+	// Accumulate all counts
+	for (const heatmap of validHeatmaps) {
+		for (let j = 0; j < heatmap.indices.length; j++) {
+			const cellIndex = heatmap.indices[j];
+			tempCounts[cellIndex] += heatmap.counts[j];
+		}
+	}
+
+	// Convert back to sparse format - only non-zero cells
+	const mergedIndices: number[] = [];
+	const mergedCounts: number[] = [];
+
 	for (let cellIndex = 0; cellIndex < gridSize; cellIndex++) {
-		let totalCount = 0;
-
-		// Sum counts from all valid heatmaps for this cell
-		for (const heatmap of validHeatmaps) {
-			totalCount += heatmap.countArray[cellIndex];
+		if (tempCounts[cellIndex] > 0) {
+			mergedIndices.push(cellIndex);
+			mergedCounts.push(tempCounts[cellIndex]);
 		}
-
-		mergedCounts[cellIndex] = totalCount;
 	}
 
-	// Recalculate density based on merged counts using logarithmic transformation
-	// This matches the preprocessor's density calculation method
-	const maxCount = Math.max(...mergedCounts);
-
-	if (maxCount > 0) {
+	// Recalculate density using logarithmic transformation
+	const mergedDensities: number[] = [];
+	if (mergedCounts.length > 0) {
+		const maxCount = Math.max(...mergedCounts);
 		const maxTransformed = Math.log(maxCount + 1);
-		for (let cellIndex = 0; cellIndex < gridSize; cellIndex++) {
-			mergedDensity[cellIndex] =
-				mergedCounts[cellIndex] > 0 ? Math.log(mergedCounts[cellIndex] + 1) / maxTransformed : 0;
-		}
-	} else {
-		for (let cellIndex = 0; cellIndex < gridSize; cellIndex++) {
-			mergedDensity[cellIndex] = 0;
+
+		for (const count of mergedCounts) {
+			mergedDensities.push(Math.log(count + 1) / maxTransformed);
 		}
 	}
 
-	const result = {
-		densityArray: mergedDensity,
-		countArray: mergedCounts
+	return {
+		indices: mergedIndices,
+		counts: mergedCounts,
+		densities: mergedDensities,
+		dimensions: { rows, cols }
 	};
-
-	return result;
 }
 
 /**
