@@ -123,12 +123,13 @@ describe('Tag Combinations Binary Validation', () => {
     expect(foundCombinations).toBeGreaterThan(0);
     expect(totalCombinations.size).toBeGreaterThan(0);
     
-    // Verify combinations follow expected format (tag1+tag2)
+    // Verify combinations follow expected format (tag1+tag2+...)
     for (const combo of totalCombinations) {
       expect(combo).toMatch(/^[^+]+\+[^+]+(\+[^+]+)*$/);
       const parts = combo.split('+');
       expect(parts.length).toBeGreaterThanOrEqual(2);
-      expect(parts.length).toBeLessThanOrEqual(3); // Max combinations = 2 means max 2 tags
+      // maxTagCombinations=4 means combinations of up to 4 tags
+      expect(parts.length).toBeLessThanOrEqual(4);
     }
   });
 

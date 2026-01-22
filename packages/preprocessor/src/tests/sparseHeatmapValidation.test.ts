@@ -61,8 +61,8 @@ describe('Sparse Heatmap Validation (v4.0.0)', () => {
 		console.log(`Binary version: ${metadata.version}`);
 	});
 
-	test('binary version is 4.0.0', () => {
-		expect(binaryData.metadata.version).toBe('4.0.0');
+	test('binary version is 5.0.0', () => {
+		expect(binaryData.metadata.version).toBe('5.0.0');
 	});
 
 	test('all heatmaps have sparse structure', () => {

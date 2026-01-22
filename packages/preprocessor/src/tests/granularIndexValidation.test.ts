@@ -65,8 +65,8 @@ describe('Granular Index Validation (v3.0.0)', () => {
 		console.log(`Histograms section: ${metadata.sections.histograms.length} bytes`);
 	});
 
-	test('binary version is 4.0.0', () => {
-		expect(binaryData.metadata.version).toBe('4.0.0');
+	test('binary version is 5.0.0', () => {
+		expect(binaryData.metadata.version).toBe('5.0.0');
 	});
 
 	test('heatmap index exists and has correct structure', () => {
