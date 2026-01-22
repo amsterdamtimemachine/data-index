@@ -1,4 +1,4 @@
-import type { Heatmap, HeatmapTimeline, RecordType, HeatmapBlueprint } from '@atm/shared/types';
+import type { Heatmap, HeatmapTimeline, RecordType, HeatmapBlueprint, HeatmapBlueprintMetadata, HeatmapCellBounds } from '@atm/shared/types';
 
 /**
  * Merge multiple sparse heatmaps into a single sparse heatmap
@@ -187,4 +187,121 @@ export function mergeHeatmapTimeline(
 	}
 
 	return mergedTimeline;
+}
+
+/**
+ * Calculate cell bounds for a specific cell - matches preprocessor logic exactly
+ * This is the CLIENT-SIDE equivalent of packages/preprocessor/src/visualization/heatmap.ts:calculateCellBounds()
+ */
+export function calculateCellBounds(
+	row: number,
+	col: number,
+	blueprint: HeatmapBlueprintMetadata
+): HeatmapCellBounds {
+	const cellWidth = (blueprint.bounds.maxLon - blueprint.bounds.minLon) / blueprint.cols;
+	const cellHeight = (blueprint.bounds.maxLat - blueprint.bounds.minLat) / blueprint.rows;
+
+	const minLon = blueprint.bounds.minLon + (col * cellWidth);
+	const minLat = blueprint.bounds.minLat + (row * cellHeight);
+
+	let maxLon = minLon + cellWidth;
+	let maxLat = minLat + cellHeight;
+
+	// For the last column/row, use exact boundary to match inclusive assignment logic
+	if (col === blueprint.cols - 1) { maxLon = blueprint.bounds.maxLon; }
+	if (row === blueprint.rows - 1) { maxLat = blueprint.bounds.maxLat; }
+
+	return { minLon, maxLon, minLat, maxLat };
+}
+
+/**
+ * Get cellId from row/col - matches preprocessor format exactly
+ */
+export function getCellIdFromRowCol(row: number, col: number): string {
+	return `${row}_${col}`;
+}
+
+/**
+ * Parse cellId back to row/col
+ */
+export function parseRowColFromCellId(cellId: string): { row: number; col: number } | null {
+	const parts = cellId.split('_');
+	if (parts.length !== 2) return null;
+
+	const row = parseInt(parts[0], 10);
+	const col = parseInt(parts[1], 10);
+
+	if (isNaN(row) || isNaN(col)) return null;
+	return { row, col };
+}
+
+/**
+ * Find cell bounds from cellId - convenience function
+ */
+export function getCellBoundsFromCellId(
+	cellId: string,
+	blueprint: HeatmapBlueprintMetadata
+): HeatmapCellBounds | null {
+	const parsed = parseRowColFromCellId(cellId);
+	if (!parsed) return null;
+
+	const { row, col } = parsed;
+
+	// Validate bounds
+	if (row < 0 || row >= blueprint.rows || col < 0 || col >= blueprint.cols) {
+		return null;
+	}
+
+	return calculateCellBounds(row, col, blueprint);
+}
+
+/**
+ * Generate cellId map (index -> cellId) - matches Map.svelte's current usage
+ */
+export function generateCellIdMap(blueprint: HeatmapBlueprintMetadata): Map<number, string> {
+	const idMap = new Map<number, string>();
+
+	for (let row = 0; row < blueprint.rows; row++) {
+		for (let col = 0; col < blueprint.cols; col++) {
+			const index = row * blueprint.cols + col;
+			const cellId = getCellIdFromRowCol(row, col);
+			idMap.set(index, cellId);
+		}
+	}
+
+	return idMap;
+}
+
+/**
+ * Generate GeoJSON cell definitions - matches Map.svelte's current usage
+ */
+export interface CellGeometry {
+	cellId: string;
+	row: number;
+	col: number;
+	coordinates: [number, number][][]; // GeoJSON Polygon coordinates
+}
+
+export function generateCellGeometries(blueprint: HeatmapBlueprintMetadata): CellGeometry[] {
+	const geometries: CellGeometry[] = [];
+
+	for (let row = 0; row < blueprint.rows; row++) {
+		for (let col = 0; col < blueprint.cols; col++) {
+			const cellId = getCellIdFromRowCol(row, col);
+			const bounds = calculateCellBounds(row, col, blueprint);
+
+			// GeoJSON Polygon: [lon, lat] format, closed ring (first point === last point)
+			const coordinates = [[
+				[bounds.minLon, bounds.minLat],
+				[bounds.maxLon, bounds.minLat],
+				[bounds.maxLon, bounds.maxLat],
+				[bounds.minLon, bounds.maxLat],
+				[bounds.minLon, bounds.minLat]
+			]];
+
+			geometries.push({ cellId, row, col, coordinates });
+		}
+	}
+
+	return geometries;
 }

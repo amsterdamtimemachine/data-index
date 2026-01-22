@@ -1,7 +1,6 @@
 // src/main.ts - Binary generation for Amsterdam Time Machine
 
-import { 
-  generateHeatmapBlueprint,
+import {
   createTimeSlices,
   generateHeatmapResolutionsWithDiscovery,
 } from './visualization/heatmap';
@@ -132,8 +131,7 @@ async function main() {
       maxLat: bounds.maxLat
     };
 
-    const heatmapBlueprint = generateHeatmapBlueprint(heatmapDimensions);
-    console.log(`Generated blueprint with ${heatmapBlueprint.cells.length} cells`);
+    console.log(`Using grid dimensions: ${heatmapDimensions.colsAmount}x${heatmapDimensions.rowsAmount} (${heatmapDimensions.colsAmount * heatmapDimensions.rowsAmount} cells)`);
 
     // Generate visualization statistics
     console.log('\nGenerating visualization statistics...');
@@ -153,7 +151,6 @@ async function main() {
       heatmapResolutions,
       histograms,
       heatmapDimensions,
-      heatmapBlueprint,
       timeSlices,
       recordTypes,
       resolutions,

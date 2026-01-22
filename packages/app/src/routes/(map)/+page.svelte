@@ -5,7 +5,7 @@
 	import { goto } from '$app/navigation';
 	import { createStateController } from '$state/StateController.svelte';
 	import { createPageErrorData } from '$utils/error';
-	import { mergeHeatmapTimeline, mergeHeatmaps } from '$utils/heatmap';
+	import { mergeHeatmapTimeline, mergeHeatmaps, getCellBoundsFromCellId } from '$utils/heatmap';
 	import { mergeHistograms } from '$utils/histogram';
 	import { translateContentTypes, reverseTranslateContentTypes } from '$utils/translations';
 	import { loadingState } from '$lib/state/loadingState.svelte';
@@ -40,7 +40,22 @@ import { PUBLIC_DEFAULT_CELL } from '$env/static/public';
 		data?.availableTags?.tags?.map((tag: { name: string }) => tag.name) || data?.metadata?.tags || []
 	);
 	let heatmapTimeline = $derived((data?.heatmapTimeline as HeatmapTimelineApiResponse | null)?.heatmapTimeline);
-	let heatmapBlueprint = $derived(data?.metadata?.heatmapBlueprint?.cells);
+
+	// Create lightweight blueprint metadata from dimensions for client-side calculation
+	let blueprintMetadata = $derived.by(() => {
+		if (!dimensions) return null;
+		return {
+			rows: dimensions.rowsAmount,
+			cols: dimensions.colsAmount,
+			bounds: {
+				minLon: dimensions.minLon,
+				maxLon: dimensions.maxLon,
+				minLat: dimensions.minLat,
+				maxLat: dimensions.maxLat
+			}
+		};
+	});
+
 	let currentRecordTypes = $derived(data?.currentRecordTypes || []);
 	let currentTags = $derived(data?.currentTags || []);
 	let currentTagOperator = $derived(data?.currentTagOperator || 'OR');
@@ -170,14 +185,14 @@ import { PUBLIC_DEFAULT_CELL } from '$env/static/public';
 
 		// Return empty sparse heatmap when no data exists for this period
 		// This keeps the map visible with all cells at 0 density
-		if (heatmapBlueprint && dimensions) {
+		if (blueprintMetadata) {
 			return {
 				indices: [],
 				counts: [],
 				densities: [],
 				dimensions: {
-					rows: dimensions.rowsAmount,
-					cols: dimensions.colsAmount
+					rows: blueprintMetadata.rows,
+					cols: blueprintMetadata.cols
 				}
 			};
 		}
@@ -207,17 +222,13 @@ import { PUBLIC_DEFAULT_CELL } from '$env/static/public';
 				
 				if (lastPeriod && defaultRecordTypes.length > 0) {
 					controller.syncUrlParameters(lastPeriod, currentTagOperator, defaultRecordTypes);
-					
+
 					// Set default cell selection
-					if (PUBLIC_DEFAULT_CELL && heatmapBlueprint) {
-						const cell = heatmapBlueprint.find((c) => c.cellId === PUBLIC_DEFAULT_CELL);
-						if (cell?.bounds) {
-							controller.selectCell(PUBLIC_DEFAULT_CELL, {
-								minLat: cell.bounds.minLat,
-								maxLat: cell.bounds.maxLat,
-								minLon: cell.bounds.minLon,
-								maxLon: cell.bounds.maxLon
-							});
+					if (PUBLIC_DEFAULT_CELL && blueprintMetadata) {
+						// Calculate bounds on-demand instead of looking up in blueprint
+						const bounds = getCellBoundsFromCellId(PUBLIC_DEFAULT_CELL, blueprintMetadata);
+						if (bounds) {
+							controller.selectCell(PUBLIC_DEFAULT_CELL, bounds);
 						}
 					}
 				}
@@ -271,16 +282,11 @@ import { PUBLIC_DEFAULT_CELL } from '$env/static/public';
 
 	// Handle cell selection from map
 	function handleCellClick(cellId: string | null) {
-		if (cellId && heatmapBlueprint) {
-			// Find the cell bounds from the blueprint
-			const cell = heatmapBlueprint.find((c) => c.cellId === cellId);
-			if (cell?.bounds) {
-				controller.selectCell(cellId, {
-					minLat: cell.bounds.minLat,
-					maxLat: cell.bounds.maxLat,
-					minLon: cell.bounds.minLon,
-					maxLon: cell.bounds.maxLon
-				});
+		if (cellId && blueprintMetadata) {
+			// Calculate bounds on-demand instead of looking up in blueprint
+			const bounds = getCellBoundsFromCellId(cellId, blueprintMetadata);
+			if (bounds) {
+				controller.selectCell(cellId, bounds);
 			} else {
 				controller.selectCell(cellId);
 			}
@@ -299,10 +305,10 @@ import { PUBLIC_DEFAULT_CELL } from '$env/static/public';
 
 <div class="relative flex flex-col w-screen h-screen">
 	<div class="relative flex-1">
-		{#if currentHeatmap && heatmapBlueprint && dimensions}
+		{#if currentHeatmap && blueprintMetadata && dimensions}
 			<Map
 				heatmap={currentHeatmap}
-				{heatmapBlueprint}
+				{blueprintMetadata}
 				{dimensions}
 				{selectedCellId}
 				{handleCellClick}

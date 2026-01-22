@@ -1,4 +1,4 @@
-import { HeatmapBlueprint, HeatmapDimensions, HeatmapResolutions, HeatmapResolutionConfig } from "./heatmap";
+import { HeatmapDimensions, HeatmapResolutions, HeatmapResolutionConfig } from "./heatmap";
 import { Histograms } from "./histogram";
 import { TimeSlice } from "./temporal";
 import { RecordType } from "./feature";
@@ -38,8 +38,7 @@ export interface HistogramIndex {
 export interface VisualizationMetadata {
   version: string;
   timestamp: string;
-  heatmapDimensions: HeatmapDimensions; // Primary resolution (backward compatibility)
-  heatmapBlueprint: HeatmapBlueprint;
+  heatmapDimensions: HeatmapDimensions; // Primary resolution - includes all bounds needed for client-side calculation
   timeSlices: TimeSlice[];
   timeRange: {
     start: string;

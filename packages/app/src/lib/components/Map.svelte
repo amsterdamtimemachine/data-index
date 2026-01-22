@@ -8,9 +8,10 @@
 	import type {
 		Heatmap,
 		HeatmapDimensions,
-		HeatmapBlueprintCell,
+		HeatmapBlueprintMetadata,
 		Coordinates
 	} from '@atm/shared/types';
+	import { generateCellIdMap, generateCellGeometries } from '$utils/heatmap';
 	import { mergeCss } from '$utils/utils';
 	import resolveConfig from 'tailwindcss/resolveConfig';
 	import tailwindConfig from '$tailwindConfig';
@@ -47,7 +48,7 @@
 
 	export interface MapProps {
 		heatmap: Heatmap;
-		heatmapBlueprint: HeatmapBlueprintCell[];
+		blueprintMetadata: HeatmapBlueprintMetadata;
 		dimensions: HeatmapDimensions;
 		selectedCellId: string | null;
 		mapStyle?: MapStyle;
@@ -83,7 +84,7 @@
 
 	let {
 		heatmap,
-		heatmapBlueprint,
+		blueprintMetadata,
 		dimensions,
 		selectedCellId = null,
 		class: className,
@@ -98,17 +99,8 @@
 	let hoverTooltip = $state<{ x: number; y: number; count: number; cellId: string } | null>(null);
 
 	const cellIdMap = $derived.by(() => {
-		const idMap = new Map<number, string>();
-		if (!heatmapBlueprint || !dimensions) {
-			return idMap;
-		}
-
-		heatmapBlueprint.forEach((cell) => {
-			const index = cell.row * dimensions.colsAmount + cell.col;
-			idMap.set(index, cell.cellId);
-		});
-
-		return idMap;
+		if (!blueprintMetadata) return new Map<number, string>();
+		return generateCellIdMap(blueprintMetadata);
 	});
 
 	let activeCells = $derived.by(() => {
@@ -136,7 +128,7 @@
 
 	// Update heatmap cells when active cells change
 	$effect(() => {
-		if (!isMapLoaded || !map || !heatmapBlueprint) return;
+		if (!isMapLoaded || !map || !blueprintMetadata) return;
 		resetAllCells();
 		setActiveCells();
 	});
@@ -184,9 +176,12 @@
 	}
 
 	function generateHeatmapCells(
-		blueprint: HeatmapBlueprintCell[]
+		metadata: HeatmapBlueprintMetadata
 	): FeatureCollection<Polygon, CellProperties> {
-		const features = blueprint.map(
+		// Generate geometries on-the-fly using client-side calculation
+		const cellGeometries = generateCellGeometries(metadata);
+
+		const features = cellGeometries.map(
 			(cell): Feature<Polygon, CellProperties> => ({
 				type: 'Feature',
 				id: cell.cellId,
@@ -198,15 +193,7 @@
 				},
 				geometry: {
 					type: 'Polygon',
-					coordinates: [
-						[
-							[cell.bounds.minLon, cell.bounds.minLat],
-							[cell.bounds.maxLon, cell.bounds.minLat],
-							[cell.bounds.maxLon, cell.bounds.maxLat],
-							[cell.bounds.minLon, cell.bounds.maxLat],
-							[cell.bounds.minLon, cell.bounds.minLat]
-						]
-					]
+					coordinates: cell.coordinates
 				}
 			})
 		);
@@ -258,11 +245,11 @@
 		});
 
 		map.on('load', () => {
-			if (!map) return; // Guard for TypeScript
+			if (!map || !blueprintMetadata) return; // Guard for TypeScript
 			const mapInstance = map;
 
-			// Heatmap geometry
-			const geojsonData = generateHeatmapCells(heatmapBlueprint);
+			// Heatmap geometry - generate from metadata
+			const geojsonData = generateHeatmapCells(blueprintMetadata);
 
 			// Add background layer with custom color
 			mapInstance.addLayer(

@@ -122,6 +122,8 @@ export function calculateCellBounds(
 
 /**
  * Generate heatmap blueprint from grid dimensions
+ * @deprecated This function is no longer used. Cell bounds are now calculated client-side using calculateCellBounds().
+ * Kept for backwards compatibility only.
  */
 export function generateHeatmapBlueprint(heatmapDimensions: HeatmapDimensions): HeatmapBlueprint {
   const cells = [];

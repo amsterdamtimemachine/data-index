@@ -8,7 +8,6 @@ import type {
   HeatmapTimeline,
   HeatmapResolutions,
   HeatmapDimensions,
-  HeatmapBlueprint,
   HeatmapResolutionConfig,
   Heatmap,
   Histogram,
@@ -155,7 +154,6 @@ export class VisualizationBinaryWriter {
    */
   async finalize(
     heatmapDimensions: HeatmapDimensions,
-    heatmapBlueprint: HeatmapBlueprint,
     timeSlices: TimeSlice[],
     recordTypes: RecordType[],
     resolutions: HeatmapResolutionConfig[],
@@ -189,10 +187,9 @@ export class VisualizationBinaryWriter {
     
     // Create metadata
     const metadata: VisualizationMetadata = {
-      version: '4.0.0', // v4: sparse heatmap representation (v3: granular indexed sections)
+      version: '5.0.0', // v5: removed heatmapBlueprint (client-side calculation) (v4: sparse heatmap representation)
       timestamp: new Date().toISOString(),
-      heatmapDimensions,
-      heatmapBlueprint,
+      heatmapDimensions, // Contains all bounds needed for client-side cell calculation
       timeSlices,
       timeRange,
       recordTypes,
@@ -253,7 +250,6 @@ export async function createVisualizationBinary(
   heatmapResolutions: HeatmapResolutions,
   histograms: Histograms,
   heatmapDimensions: HeatmapDimensions,
-  heatmapBlueprint: HeatmapBlueprint,
   timeSlices: TimeSlice[],
   recordTypes: RecordType[],
   resolutions: HeatmapResolutionConfig[],
@@ -262,17 +258,16 @@ export async function createVisualizationBinary(
   stats?: VisualizationMetadata['stats']
 ): Promise<void> {
   const writer = new VisualizationBinaryWriter(binaryPath);
-  
+
   try {
     await writer.initialize();
-    
+
     // Write both data types (both required)
     await writer.writeHeatmaps(heatmapResolutions);
     await writer.writeHistograms(histograms);
-    
+
     await writer.finalize(
       heatmapDimensions,
-      heatmapBlueprint,
       timeSlices,
       recordTypes,
       resolutions,
@@ -280,7 +275,7 @@ export async function createVisualizationBinary(
       bounds,
       stats
     );
-    
+
     console.log(`🎉 Successfully created visualization binary: ${binaryPath}`);
   } catch (error) {
     console.error(`❌ Failed to create visualization binary:`, error);
