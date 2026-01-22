@@ -1,14 +1,14 @@
-import type { Heatmap, HeatmapTimeline, RecordType, HeatmapBlueprint, HeatmapBlueprintMetadata, HeatmapCellBounds } from '@atm/shared/types';
+import type { Heatmap, HeatmapTimeline, RecordType, HeatmapBlueprintMetadata, HeatmapCellBounds } from '@atm/shared/types';
 
 /**
  * Merge multiple sparse heatmaps into a single sparse heatmap
  * All heatmaps must have the same grid dimensions
  *
  * @param heatmaps Array of sparse heatmaps to merge
- * @param blueprint Optional heatmap blueprint for grid size validation
+ * @param blueprint Optional blueprint metadata for grid size validation
  * @returns Single merged sparse heatmap with combined counts and recalculated density
  */
-export function mergeHeatmaps(heatmaps: Heatmap[], blueprint?: HeatmapBlueprint): Heatmap {
+export function mergeHeatmaps(heatmaps: Heatmap[], blueprint?: HeatmapBlueprintMetadata): Heatmap {
 	// Filter out invalid heatmaps
 	const validHeatmaps = heatmaps.filter(
 		(heatmap) =>
@@ -129,14 +129,14 @@ export function mergeTimeSliceHeatmaps(
  * @param timeline Original HeatmapTimeline containing multiple recordTypes
  * @param recordTypes Array of recordTypes to merge
  * @param selectedTags Optional tags to use instead of base heatmaps (supports combinations)
- * @param blueprint Optional heatmap blueprint for grid size validation
+ * @param blueprint Optional blueprint metadata for grid size validation
  * @returns New HeatmapTimeline with merged recordTypes for smooth navigation
  */
 export function mergeHeatmapTimeline(
 	timeline: HeatmapTimeline,
 	recordTypes: RecordType[],
 	selectedTags?: string[],
-	blueprint?: HeatmapBlueprint
+	blueprint?: HeatmapBlueprintMetadata
 ): HeatmapTimeline {
 	const mergedTimeline: HeatmapTimeline = {};
 
@@ -291,7 +291,7 @@ export function generateCellGeometries(blueprint: HeatmapBlueprintMetadata): Cel
 			const bounds = calculateCellBounds(row, col, blueprint);
 
 			// GeoJSON Polygon: [lon, lat] format, closed ring (first point === last point)
-			const coordinates = [[
+			const coordinates: [number, number][][] = [[
 				[bounds.minLon, bounds.minLat],
 				[bounds.maxLon, bounds.minLat],
 				[bounds.maxLon, bounds.maxLat],

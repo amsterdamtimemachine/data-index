@@ -10,6 +10,7 @@ import type {
 import type { AppError } from '$types/error';
 import { createPageErrorData, createError, createValidationError, createPeriodNotFoundError } from '$utils/error';
 import { validateCellId } from '$utils/utils';
+import { getCellBoundsFromCellId } from '$utils/heatmap';
 import { translateContentType, translateContentTypes } from '$utils/translations';
 import { loadingState } from '$lib/state/loadingState.svelte';
 
@@ -347,20 +348,25 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	let validatedCell: string | null = null;
 	let cellBounds: { minLat: number; maxLat: number; minLon: number; maxLon: number } | null = null;
 
-	if (cellParam && metadata?.heatmapBlueprint && metadata?.heatmapDimensions) {
-		const validation = validateCellId(cellParam, metadata.heatmapBlueprint.cells, metadata.heatmapDimensions);
-		
+	if (cellParam && metadata?.heatmapDimensions) {
+		const validation = validateCellId(cellParam, metadata.heatmapDimensions);
+
 		if (validation.isValid) {
 			validatedCell = cellParam;
-			// Find cell bounds from blueprint
-			const cell = metadata.heatmapBlueprint.cells.find((c) => c.cellId === cellParam);
-			if (cell?.bounds) {
-				cellBounds = {
-					minLat: cell.bounds.minLat,
-					maxLat: cell.bounds.maxLat,
-					minLon: cell.bounds.minLon,
-					maxLon: cell.bounds.maxLon
-				};
+			// Calculate cell bounds on-demand from dimensions
+			const blueprintMetadata = {
+				rows: metadata.heatmapDimensions.rowsAmount,
+				cols: metadata.heatmapDimensions.colsAmount,
+				bounds: {
+					minLon: metadata.heatmapDimensions.minLon,
+					maxLon: metadata.heatmapDimensions.maxLon,
+					minLat: metadata.heatmapDimensions.minLat,
+					maxLat: metadata.heatmapDimensions.maxLat
+				}
+			};
+			const bounds = getCellBoundsFromCellId(cellParam, blueprintMetadata);
+			if (bounds) {
+				cellBounds = bounds;
 			}
 		} else {
 			errors.push(

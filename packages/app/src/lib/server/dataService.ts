@@ -518,7 +518,6 @@ export class VisualizationDataService {
 			tags: metadata.tags,
 			resolutions: metadata.resolutions,
 			heatmapDimensions: metadata.heatmapDimensions,
-			heatmapBlueprint: metadata.heatmapBlueprint,
 			stats: metadata.stats
 		};
 	}

@@ -1,7 +1,7 @@
 import type { ClassValue } from 'clsx';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import type { HeatmapBlueprintCell, HeatmapDimensions } from '@atm/shared/types';
+import type { HeatmapDimensions } from '@atm/shared/types';
 
 export function mergeCss(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
@@ -29,11 +29,11 @@ export function prettifyKey(key: string): string {
 }
 
 /**
- * Validates if a cell ID exists in the heatmap blueprint and is properly formatted
+ * Validates if a cell ID is properly formatted and within grid bounds
+ * Since the grid is deterministic, we only need dimensions to validate
  */
 export function validateCellId(
 	cellId: string,
-	heatmapBlueprint: HeatmapBlueprintCell[],
 	dimensions: HeatmapDimensions
 ): { isValid: boolean; error?: string } {
 	// Check basic format (row_col pattern)
@@ -54,15 +54,6 @@ export function validateCellId(
 		return {
 			isValid: false,
 			error: `Cell "${cellId}" is outside grid bounds (${dimensions.rowsAmount}x${dimensions.colsAmount})`
-		};
-	}
-
-	// Check if cell actually exists in blueprint
-	const cellExists = heatmapBlueprint.some((cell) => cell.cellId === cellId);
-	if (!cellExists) {
-		return {
-			isValid: false,
-			error: `Cell "${cellId}" not found in heatmap data`
 		};
 	}
 

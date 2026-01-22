@@ -52,13 +52,6 @@ export interface HeatmapCellBounds {
 }
 
 
-export interface HeatmapBlueprintCell {
-  cellId: string;
-  row: number;
-  col: number;
-  bounds: HeatmapCellBounds;
-}
-
 /**
  * Lightweight blueprint - only store grid metadata, not all cells
  * Use this for client-side calculations instead of storing full cell list
@@ -72,16 +65,6 @@ export interface HeatmapBlueprintMetadata {
     minLat: number;
     maxLat: number;
   };
-}
-
-/**
- * @deprecated Use HeatmapBlueprintMetadata and calculate bounds client-side
- * Full blueprint type kept for preprocessor backwards compatibility
- */
-export interface HeatmapBlueprint {
-  rows: number;
-  cols: number;
-  cells: HeatmapBlueprintCell[];
 }
 
 export interface HeatmapCellCounts {

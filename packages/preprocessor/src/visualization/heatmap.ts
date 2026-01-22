@@ -1,15 +1,14 @@
 // src/visualization/heatmap.ts - Dynamic heatmap generation with vocabulary discovery
 
-import type { 
+import type {
   MinimalFeature,
-  HeatmapDimensions, 
+  HeatmapDimensions,
   DatabaseConfig,
   ChunkingConfig,
   HeatmapTimeline,
   HeatmapResolutions,
   HeatmapResolutionConfig,
   HeatmapCellBounds,
-  HeatmapBlueprint,
   TimeSlice,
   VocabularyTracker,
   DiscoveryHeatmapAccumulator
@@ -118,35 +117,6 @@ export function calculateCellBounds(
   }
 
   return { minLon: minlon, maxLon: maxlon, minLat: minlat, maxLat: maxlat };
-}
-
-/**
- * Generate heatmap blueprint from grid dimensions
- * @deprecated This function is no longer used. Cell bounds are now calculated client-side using calculateCellBounds().
- * Kept for backwards compatibility only.
- */
-export function generateHeatmapBlueprint(heatmapDimensions: HeatmapDimensions): HeatmapBlueprint {
-  const cells = [];
-  
-  for (let row = 0; row < heatmapDimensions.rowsAmount; row++) {
-    for (let col = 0; col < heatmapDimensions.colsAmount; col++) {
-      const cellId = `${row}_${col}`;
-      const bounds = calculateCellBounds(row, col, heatmapDimensions);
-      
-      cells.push({
-        cellId,
-        row,
-        col,
-        bounds
-      });
-    }
-  }
-  
-  return {
-    rows: heatmapDimensions.rowsAmount,
-    cols: heatmapDimensions.colsAmount,
-    cells
-  };
 }
 
 /**
