@@ -1,34 +1,54 @@
 services:
-  # Data initialization - generates visualization data if missing
-  data-init:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.preprocessor
+  # PostgreSQL with PostGIS
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: atm-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-atm}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-atm_dev_password}
+      POSTGRES_DB: amsterdam_time_machine
+    ports:
+      - "5432:5432"
     volumes:
-      - ./data/docker:/app/data:rw
-    env_file:
-      - .env
+      - pgdata:/var/lib/postgresql/data
     networks:
       - atm-network
-    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-atm} -d amsterdam_time_machine"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  # Main application - waits for data to be ready
+  # Database admin UI (optional, for development)
+  adminer:
+    image: adminer
+    container_name: atm-adminer
+    ports:
+      - "8080:8080"
+    networks:
+      - atm-network
+    depends_on:
+      - db
+    profiles:
+      - dev  # Only starts with: docker compose --profile dev up
+
+  # Main application
   app:
     build:
       context: .
       dockerfile: docker/Dockerfile.app
     ports:
       - "3000:3000"
-    volumes:
-      - ./data/docker:/app/data:rw
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-atm}:${DB_PASSWORD:-atm_dev_password}@db:5432/amsterdam_time_machine
     env_file:
       - .env
     networks:
       - atm-network
     restart: unless-stopped
     depends_on:
-      data-init:
-        condition: service_completed_successfully
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/metadata"]
       interval: 30s
@@ -38,3 +58,6 @@ services:
 networks:
   atm-network:
     driver: bridge
+
+volumes:
+  pgdata:

@@ -1,0 +1,30 @@
+{
+  "name": "@atm/db",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema.ts",
+    "./queries": "./src/queries/index.ts"
+  },
+  "scripts": {
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio",
+    "db:ingest": "bun run src/etl/index.ts ingest",
+    "db:rebuild-cells": "bun run src/etl/index.ts rebuild-cells",
+    "benchmark:heatmap": "bun run src/benchmark/heatmap-benchmark.ts"
+  },
+  "dependencies": {
+    "@atm/shared": "workspace:*",
+    "drizzle-orm": "^0.45.1",
+    "pg": "^8.17.2",
+    "csv-parse": "^6.1.0",
+    "commander": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.16.0",
+    "drizzle-kit": "^0.31.8",
+    "typescript": "^5.0.0"
+  }
+}
