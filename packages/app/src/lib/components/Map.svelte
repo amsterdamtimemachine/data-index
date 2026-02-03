@@ -5,13 +5,8 @@
 	import { onMount, onDestroy } from 'svelte';
 	import maplibre, { type Map as MapLibreMap } from 'maplibre-gl';
 	import type { FeatureCollection, Feature, Polygon, GeoJsonProperties } from 'geojson';
-	import type {
-		Heatmap,
-		HeatmapDimensions,
-		HeatmapBlueprintMetadata,
-		Coordinates
-	} from '@atm/shared/types';
-	import { generateCellIdMap, generateCellGeometries } from '$utils/heatmap';
+	import type { Heatmap, HeatmapDimensions, Coordinates } from '@atm/shared/types';
+	import { generateCellIdMap, generateCellGeometries, calculateDensity } from '$utils/heatmap';
 	import { mergeCss } from '$utils/utils';
 	import resolveConfig from 'tailwindcss/resolveConfig';
 	import tailwindConfig from '$tailwindConfig';
@@ -48,7 +43,6 @@
 
 	export interface MapProps {
 		heatmap: Heatmap;
-		blueprintMetadata: HeatmapBlueprintMetadata;
 		dimensions: HeatmapDimensions;
 		selectedCellId: string | null;
 		mapStyle?: MapStyle;
@@ -84,7 +78,6 @@
 
 	let {
 		heatmap,
-		blueprintMetadata,
 		dimensions,
 		selectedCellId = null,
 		class: className,
@@ -99,8 +92,8 @@
 	let hoverTooltip = $state<{ x: number; y: number; count: number; cellId: string } | null>(null);
 
 	const cellIdMap = $derived.by(() => {
-		if (!blueprintMetadata) return new Map<number, string>();
-		return generateCellIdMap(blueprintMetadata);
+		if (!dimensions) return new Map<number, string>();
+		return generateCellIdMap(dimensions);
 	});
 
 	let activeCells = $derived.by(() => {
@@ -108,8 +101,8 @@
 			return new Map<string, { value: number; count: number }>();
 		}
 
-		// Sparse heatmap format: iterate only non-zero cells
-		const { indices, counts, densities } = heatmap;
+		const { indices, counts } = heatmap;
+		const maxCount = Math.max(...counts, 0);
 		const result = new Map<string, { value: number; count: number }>();
 
 		for (let j = 0; j < indices.length; j++) {
@@ -117,7 +110,7 @@
 			const cellId = cellIdMap.get(cellIndex);
 			if (cellId) {
 				result.set(cellId, {
-					value: densities[j] || 0,
+					value: calculateDensity(counts[j], maxCount),
 					count: counts[j]
 				});
 			}
@@ -128,7 +121,7 @@
 
 	// Update heatmap cells when active cells change
 	$effect(() => {
-		if (!isMapLoaded || !map || !blueprintMetadata) return;
+		if (!isMapLoaded || !map || !dimensions) return;
 		resetAllCells();
 		setActiveCells();
 	});
@@ -176,10 +169,10 @@
 	}
 
 	function generateHeatmapCells(
-		metadata: HeatmapBlueprintMetadata
+		dims: HeatmapDimensions
 	): FeatureCollection<Polygon, CellProperties> {
 		// Generate geometries on-the-fly using client-side calculation
-		const cellGeometries = generateCellGeometries(metadata);
+		const cellGeometries = generateCellGeometries(dims);
 
 		const features = cellGeometries.map(
 			(cell): Feature<Polygon, CellProperties> => ({
@@ -245,11 +238,11 @@
 		});
 
 		map.on('load', () => {
-			if (!map || !blueprintMetadata) return; // Guard for TypeScript
+			if (!map || !dimensions) return; // Guard for TypeScript
 			const mapInstance = map;
 
-			// Heatmap geometry - generate from metadata
-			const geojsonData = generateHeatmapCells(blueprintMetadata);
+			// Heatmap geometry - generate from dimensions
+			const geojsonData = generateHeatmapCells(dimensions);
 
 			// Add background layer with custom color
 			mapInstance.addLayer(
@@ -393,7 +386,7 @@
 							{ hover: true }
 						);
 						hoveredFeatureId = featureId;
-						
+
 						// Show tooltip with count
 						hoverTooltip = {
 							x: e.point.x,
@@ -458,11 +451,11 @@
 
 <div class={mergeCss('h-full w-full relative', className)}>
 	<div bind:this={mapContainer} class="h-full w-full"></div>
-	
+
 	<!-- Hover tooltip -->
 	{#if hoverTooltip}
 		{@const featuresText = hoverTooltip.count === 1 ? 'feature' : 'features'}
-		<div 
+		<div
 			class="absolute z-50 bg-black bg-opacity-80 text-white px-2 py-1 rounded text-sm pointer-events-none transform -translate-x-1/2 -translate-y-full"
 			style="left: {hoverTooltip.x}px; top: {hoverTooltip.y - 8}px;"
 		>

@@ -157,11 +157,6 @@ export async function getMetadata(): Promise<VisualizationMetadata> {
     resolutionDimensions: {
       [resolutionKey]: heatmapDimensions
     },
-    // Omit 'sections' - that's binary-file specific
-    sections: {
-      heatmaps: { offset: 0, length: 0, index: {} },
-      histograms: { offset: 0, length: 0, index: {} }
-    },
     stats: {
       totalFeatures: stats.totalFeatures,
       featuresPerRecordType: stats.featuresPerRecordType,

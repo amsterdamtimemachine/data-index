@@ -2,54 +2,36 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { RecordType } from '@atm/shared/types';
-import { getDataService } from '$lib/server/dataServiceSingleton';
-
-interface AvailableTagsResponse {
-	tags: Array<{ name: string; totalFeatures: number; recordTypes: RecordType[] }>;
-	recordTypes: RecordType[];
-	success: boolean;
-	message?: string;
-}
+import { getAvailableTags } from '@atm/db';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
 		// Parse query parameters
 		const recordTypesParam = url.searchParams.get('recordTypes');
 
-		// Get API service
-		const dataService = await getDataService();
-
 		// Parse recordTypes - default to all available recordTypes if none specified
-		let recordTypes: RecordType[] | undefined;
-		if (recordTypesParam) {
-			recordTypes = recordTypesParam.split(',').map((t) => t.trim()) as RecordType[];
-		}
+		const recordTypes = recordTypesParam
+			? (recordTypesParam.split(',').map((t) => t.trim()) as RecordType[])
+			: undefined;
 
 		console.log(`🏷️ Available tags API request - recordTypes: ${recordTypes?.join(', ') || 'all'}`);
 
-		// Get available tags from service
-		const response = await dataService.getAvailableTags(recordTypes);
+		// Get available tags from database
+		const result = await getAvailableTags(recordTypes);
+
+		const tagCount = result.tags.length;
+		const totalFeatures = result.tags.reduce((sum, tag) => sum + tag.totalFeatures, 0);
+		console.log(
+			`✅ Available tags API success - ${tagCount} tags with ${totalFeatures} total features`
+		);
 
 		// Set appropriate cache headers
 		const headers = {
-			'Cache-Control': 'public, max-age=1800', // Cache for 30 minutes (shorter than other data)
+			'Cache-Control': 'public, max-age=1800', // Cache for 30 minutes
 			'Access-Control-Allow-Origin': '*'
 		};
 
-		if (response.success) {
-			const tagCount = response.tags.length;
-			const totalFeatures = response.tags.reduce((sum, tag) => sum + tag.totalFeatures, 0);
-			console.log(
-				`✅ Available tags API success - ${tagCount} tags with ${totalFeatures} total features`
-			);
-			return json(response, { headers });
-		} else {
-			console.error(`❌ Available tags API error: ${response.message}`);
-			throw error(500, {
-				code: 'TAGS_LOAD_ERROR',
-				message: response.message || 'Failed to load available tags'
-			});
-		}
+		return json(result, { headers });
 	} catch (err) {
 		console.error('❌ Available tags API unexpected error:', err);
 		throw error(500, {

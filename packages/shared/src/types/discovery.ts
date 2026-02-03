@@ -1,6 +1,5 @@
 import type { RecordType, MinimalFeature } from './feature';
-import type { ChunkResult, SpatialChunk } from './streaming';
-import type { HeatmapAccumulator } from './heatmap';
+import type { SpatialChunk } from './streaming';
 
 /**
  * Vocabulary tracking for discovered recordTypes and tags
@@ -22,13 +21,4 @@ export interface DiscoveryChunkResult {
     invalidSkipped: number;
   };
   vocabulary: VocabularyTracker;
-}
-
-/**
- * Enhanced accumulator that includes vocabulary tracking and tag combinations
- */
-export interface DiscoveryHeatmapAccumulator extends HeatmapAccumulator {
-  vocabulary: VocabularyTracker;
-  maxTagCombinations: number;
-  tagCombinationStats: Map<string, number>; // Track how many features each combination has
 }

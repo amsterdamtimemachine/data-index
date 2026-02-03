@@ -1,217 +1,32 @@
-import type { Heatmap, HeatmapTimeline, RecordType, HeatmapBlueprintMetadata, HeatmapCellBounds } from '@atm/shared/types';
-
-/**
- * Merge multiple sparse heatmaps into a single sparse heatmap
- * All heatmaps must have the same grid dimensions
- *
- * @param heatmaps Array of sparse heatmaps to merge
- * @param blueprint Optional blueprint metadata for grid size validation
- * @returns Single merged sparse heatmap with combined counts and recalculated density
- */
-export function mergeHeatmaps(heatmaps: Heatmap[], blueprint?: HeatmapBlueprintMetadata): Heatmap {
-	// Filter out invalid heatmaps
-	const validHeatmaps = heatmaps.filter(
-		(heatmap) =>
-			heatmap && heatmap.indices && heatmap.counts && heatmap.densities && heatmap.dimensions
-	);
-
-	if (validHeatmaps.length === 0) {
-		// Return empty sparse heatmap
-		let rows = 0;
-		let cols = 0;
-
-		if (blueprint) {
-			if (blueprint.rows > 0 && blueprint.cols > 0) {
-				rows = blueprint.rows;
-				cols = blueprint.cols;
-			}
-		}
-
-		return {
-			indices: [],
-			counts: [],
-			densities: [],
-			dimensions: { rows, cols }
-		};
-	}
-
-	if (validHeatmaps.length === 1) {
-		return validHeatmaps[0];
-	}
-
-	// Get dimensions from first valid heatmap
-	const { rows, cols } = validHeatmaps[0].dimensions;
-	const gridSize = rows * cols;
-
-	// Validate all heatmaps have same dimensions
-	for (let i = 1; i < validHeatmaps.length; i++) {
-		const dims = validHeatmaps[i].dimensions;
-		if (dims.rows !== rows || dims.cols !== cols) {
-			throw new Error(
-				`Heatmap dimension mismatch: expected ${rows}x${cols}, got ${dims.rows}x${dims.cols}`
-			);
-		}
-	}
-
-	// Merge sparse heatmaps by accumulating counts in a dense temporary array
-	const tempCounts = new Array(gridSize).fill(0);
-
-	// Accumulate all counts
-	for (const heatmap of validHeatmaps) {
-		for (let j = 0; j < heatmap.indices.length; j++) {
-			const cellIndex = heatmap.indices[j];
-			tempCounts[cellIndex] += heatmap.counts[j];
-		}
-	}
-
-	// Convert back to sparse format - only non-zero cells
-	const mergedIndices: number[] = [];
-	const mergedCounts: number[] = [];
-
-	for (let cellIndex = 0; cellIndex < gridSize; cellIndex++) {
-		if (tempCounts[cellIndex] > 0) {
-			mergedIndices.push(cellIndex);
-			mergedCounts.push(tempCounts[cellIndex]);
-		}
-	}
-
-	// Recalculate density using logarithmic transformation
-	const mergedDensities: number[] = [];
-	if (mergedCounts.length > 0) {
-		const maxCount = Math.max(...mergedCounts);
-		const maxTransformed = Math.log(maxCount + 1);
-
-		for (const count of mergedCounts) {
-			mergedDensities.push(Math.log(count + 1) / maxTransformed);
-		}
-	}
-
-	return {
-		indices: mergedIndices,
-		counts: mergedCounts,
-		densities: mergedDensities,
-		dimensions: { rows, cols }
-	};
-}
-
-/**
- * Merge heatmaps from multiple recordTypes within a time slice
- *
- * @param timeSliceData Data for a specific time slice containing multiple recordTypes
- * @param recordTypes Array of recordTypes to merge
- * @returns Merged heatmap or null if no valid data
- */
-export function mergeTimeSliceHeatmaps(
-	timeSliceData: any,
-	recordTypes: RecordType[]
-): Heatmap | null {
-	const heatmapsToMerge: Heatmap[] = [];
-
-	// Collect base heatmaps from all requested recordTypes
-	for (const recordType of recordTypes) {
-		const recordTypeData = timeSliceData[recordType];
-		if (recordTypeData?.base) {
-			heatmapsToMerge.push(recordTypeData.base);
-		}
-	}
-
-	if (heatmapsToMerge.length === 0) {
-		return null;
-	}
-
-	return mergeHeatmaps(heatmapsToMerge);
-}
-
-/**
- * Merge multiple HeatmapTimelines into a single timeline with merged recordTypes
- * This creates a new timeline where each time slice contains merged heatmaps
- *
- * @param timeline Original HeatmapTimeline containing multiple recordTypes
- * @param recordTypes Array of recordTypes to merge
- * @param selectedTags Optional tags to use instead of base heatmaps (supports combinations)
- * @param blueprint Optional blueprint metadata for grid size validation
- * @returns New HeatmapTimeline with merged recordTypes for smooth navigation
- */
-export function mergeHeatmapTimeline(
-	timeline: HeatmapTimeline,
-	recordTypes: RecordType[],
-	selectedTags?: string[],
-	blueprint?: HeatmapBlueprintMetadata
-): HeatmapTimeline {
-	const mergedTimeline: HeatmapTimeline = {};
-
-	// Process each time slice
-	for (const [timeSliceKey, timeSliceData] of Object.entries(timeline)) {
-		const heatmapsToMerge: Heatmap[] = [];
-
-		// Collect heatmaps from all requested recordTypes for this time slice
-		for (const recordType of recordTypes) {
-			const recordTypeData = timeSliceData[recordType];
-
-			if (recordTypeData) {
-				if (selectedTags && selectedTags.length > 0) {
-					// Use tag combination or individual tag heatmap
-					const tagKey = selectedTags.length > 1 ? selectedTags.sort().join('+') : selectedTags[0];
-					if (recordTypeData.tags[tagKey]) {
-						heatmapsToMerge.push(recordTypeData.tags[tagKey]);
-					}
-				} else if (recordTypeData.base) {
-					// Use base heatmap
-					heatmapsToMerge.push(recordTypeData.base);
-				}
-			}
-		}
-
-		// Only include time slices that have data from at least one recordType
-		if (heatmapsToMerge.length > 0) {
-			const mergedHeatmap = mergeHeatmaps(heatmapsToMerge, blueprint);
-
-			// Create a combined recordType key (e.g., "text+image")
-			const combinedRecordType = recordTypes.sort().join('+') as RecordType;
-
-			// Structure the merged data as a single recordType in the timeline
-			const tagKey =
-				selectedTags && selectedTags.length > 0
-					? selectedTags.length > 1
-						? selectedTags.sort().join('+')
-						: selectedTags[0]
-					: undefined;
-
-			mergedTimeline[timeSliceKey] = {
-				[combinedRecordType]: {
-					base: mergedHeatmap,
-					tags: tagKey ? { [tagKey]: mergedHeatmap } : {}
-				}
-			} as any;
-		}
-	}
-
-	return mergedTimeline;
-}
+import type { Heatmap, HeatmapDimensions, HeatmapCellBounds } from '@atm/shared/types';
 
 /**
  * Calculate cell bounds for a specific cell - matches preprocessor logic exactly
- * This is the CLIENT-SIDE equivalent of packages/preprocessor/src/visualization/heatmap.ts:calculateCellBounds()
  */
 export function calculateCellBounds(
 	row: number,
 	col: number,
-	blueprint: HeatmapBlueprintMetadata
+	dimensions: HeatmapDimensions
 ): HeatmapCellBounds {
-	const cellWidth = (blueprint.bounds.maxLon - blueprint.bounds.minLon) / blueprint.cols;
-	const cellHeight = (blueprint.bounds.maxLat - blueprint.bounds.minLat) / blueprint.rows;
+	const { minLon, maxLon, minLat, maxLat, colsAmount, rowsAmount } = dimensions;
+	const cellWidth = (maxLon - minLon) / colsAmount;
+	const cellHeight = (maxLat - minLat) / rowsAmount;
 
-	const minLon = blueprint.bounds.minLon + (col * cellWidth);
-	const minLat = blueprint.bounds.minLat + (row * cellHeight);
+	const cellMinLon = minLon + col * cellWidth;
+	const cellMinLat = minLat + row * cellHeight;
 
-	let maxLon = minLon + cellWidth;
-	let maxLat = minLat + cellHeight;
+	let cellMaxLon = cellMinLon + cellWidth;
+	let cellMaxLat = cellMinLat + cellHeight;
 
 	// For the last column/row, use exact boundary to match inclusive assignment logic
-	if (col === blueprint.cols - 1) { maxLon = blueprint.bounds.maxLon; }
-	if (row === blueprint.rows - 1) { maxLat = blueprint.bounds.maxLat; }
+	if (col === colsAmount - 1) {
+		cellMaxLon = maxLon;
+	}
+	if (row === rowsAmount - 1) {
+		cellMaxLat = maxLat;
+	}
 
-	return { minLon, maxLon, minLat, maxLat };
+	return { minLon: cellMinLon, maxLon: cellMaxLon, minLat: cellMinLat, maxLat: cellMaxLat };
 }
 
 /**
@@ -240,7 +55,7 @@ export function parseRowColFromCellId(cellId: string): { row: number; col: numbe
  */
 export function getCellBoundsFromCellId(
 	cellId: string,
-	blueprint: HeatmapBlueprintMetadata
+	dimensions: HeatmapDimensions
 ): HeatmapCellBounds | null {
 	const parsed = parseRowColFromCellId(cellId);
 	if (!parsed) return null;
@@ -248,22 +63,22 @@ export function getCellBoundsFromCellId(
 	const { row, col } = parsed;
 
 	// Validate bounds
-	if (row < 0 || row >= blueprint.rows || col < 0 || col >= blueprint.cols) {
+	if (row < 0 || row >= dimensions.rowsAmount || col < 0 || col >= dimensions.colsAmount) {
 		return null;
 	}
 
-	return calculateCellBounds(row, col, blueprint);
+	return calculateCellBounds(row, col, dimensions);
 }
 
 /**
  * Generate cellId map (index -> cellId) - matches Map.svelte's current usage
  */
-export function generateCellIdMap(blueprint: HeatmapBlueprintMetadata): Map<number, string> {
+export function generateCellIdMap(dimensions: HeatmapDimensions): Map<number, string> {
 	const idMap = new Map<number, string>();
 
-	for (let row = 0; row < blueprint.rows; row++) {
-		for (let col = 0; col < blueprint.cols; col++) {
-			const index = row * blueprint.cols + col;
+	for (let row = 0; row < dimensions.rowsAmount; row++) {
+		for (let col = 0; col < dimensions.colsAmount; col++) {
+			const index = row * dimensions.colsAmount + col;
 			const cellId = getCellIdFromRowCol(row, col);
 			idMap.set(index, cellId);
 		}
@@ -282,26 +97,47 @@ export interface CellGeometry {
 	coordinates: [number, number][][]; // GeoJSON Polygon coordinates
 }
 
-export function generateCellGeometries(blueprint: HeatmapBlueprintMetadata): CellGeometry[] {
+export function generateCellGeometries(dimensions: HeatmapDimensions): CellGeometry[] {
 	const geometries: CellGeometry[] = [];
 
-	for (let row = 0; row < blueprint.rows; row++) {
-		for (let col = 0; col < blueprint.cols; col++) {
+	for (let row = 0; row < dimensions.rowsAmount; row++) {
+		for (let col = 0; col < dimensions.colsAmount; col++) {
 			const cellId = getCellIdFromRowCol(row, col);
-			const bounds = calculateCellBounds(row, col, blueprint);
+			const bounds = calculateCellBounds(row, col, dimensions);
 
 			// GeoJSON Polygon: [lon, lat] format, closed ring (first point === last point)
-			const coordinates: [number, number][][] = [[
-				[bounds.minLon, bounds.minLat],
-				[bounds.maxLon, bounds.minLat],
-				[bounds.maxLon, bounds.maxLat],
-				[bounds.minLon, bounds.maxLat],
-				[bounds.minLon, bounds.minLat]
-			]];
+			const coordinates: [number, number][][] = [
+				[
+					[bounds.minLon, bounds.minLat],
+					[bounds.maxLon, bounds.minLat],
+					[bounds.maxLon, bounds.maxLat],
+					[bounds.minLon, bounds.maxLat],
+					[bounds.minLon, bounds.minLat]
+				]
+			];
 
 			geometries.push({ cellId, row, col, coordinates });
 		}
 	}
 
 	return geometries;
+}
+
+/**
+ * Create an empty sparse heatmap
+ */
+export function createEmptyHeatmap(): Heatmap {
+	return {
+		indices: [],
+		counts: []
+	};
+}
+
+/**
+ * Calculate density (0-1) from count using log normalization
+ */
+export function calculateDensity(count: number, maxCount: number): number {
+	if (maxCount === 0 || count === 0) return 0;
+	const maxTransformed = Math.log(maxCount + 1);
+	return Math.log(count + 1) / maxTransformed;
 }

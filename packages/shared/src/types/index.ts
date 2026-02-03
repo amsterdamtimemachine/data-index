@@ -6,5 +6,6 @@ export * from './histogram';
 export * from './serialization';
 export * from './streaming';
 export * from './spatial';
+export * from './tags';
 export * from './temporal';
 export * from './ui';

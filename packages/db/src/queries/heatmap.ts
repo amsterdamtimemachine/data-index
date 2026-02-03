@@ -35,21 +35,7 @@ function buildSparseHeatmap(countsMap: Map<number, number>): Heatmap {
     counts.push(count);
   }
 
-  const densities: number[] = [];
-  if (counts.length > 0) {
-    const maxCount = Math.max(...counts);
-    const maxTransformed = Math.log(maxCount + 1);
-    for (const count of counts) {
-      densities.push(Math.log(count + 1) / maxTransformed);
-    }
-  }
-
-  return {
-    indices,
-    counts,
-    densities,
-    dimensions: { rows: GRID_ROWS, cols: GRID_COLS }
-  };
+  return { indices, counts };
 }
 
 /**
@@ -79,9 +65,7 @@ async function getMaxCellBounds(): Promise<{ maxX: number; maxY: number }> {
 export async function getHeatmap(
   timeSliceKey: string,
   recordTypes?: RecordType[]
-): Promise<{ heatmap: Heatmap; processingTime: number }> {
-  const t = Date.now();
-
+): Promise<Heatmap> {
   const types = recordTypes || await getRecordTypes();
   const timeSlice = TIME_SLICES.find(ts => ts.key === timeSliceKey);
 
@@ -111,10 +95,7 @@ export async function getHeatmap(
     countsMap.set(gridIndex, (countsMap.get(gridIndex) || 0) + parseInt(row.count));
   }
 
-  return {
-    heatmap: buildSparseHeatmap(countsMap),
-    processingTime: Date.now() - t
-  };
+  return buildSparseHeatmap(countsMap);
 }
 
 /**
@@ -123,9 +104,7 @@ export async function getHeatmap(
  */
 export async function getHeatmapTimeline(
   recordTypes?: RecordType[]
-): Promise<{ heatmapTimeline: HeatmapTimeline; processingTime: number }> {
-  const t = Date.now();
-
+): Promise<HeatmapTimeline> {
   const types = recordTypes || await getRecordTypes();
   const { maxX, maxY } = await getMaxCellBounds();
 
@@ -156,23 +135,13 @@ export async function getHeatmapTimeline(
     countsMap.set(gridIndex, (countsMap.get(gridIndex) || 0) + parseInt(row.count));
   }
 
-  // Build heatmap timeline structure
+  // Build heatmap timeline
   const heatmapTimeline: HeatmapTimeline = {};
 
   for (const timeSlice of TIME_SLICES) {
     const countsMap = countsBySlice.get(timeSlice.startYear) || new Map();
-    const heatmap = buildSparseHeatmap(countsMap);
-
-    heatmapTimeline[timeSlice.key] = {
-      combined: {
-        base: heatmap,
-        tags: {}
-      }
-    };
+    heatmapTimeline[timeSlice.key] = buildSparseHeatmap(countsMap);
   }
 
-  return {
-    heatmapTimeline,
-    processingTime: Date.now() - t
-  };
+  return heatmapTimeline;
 }

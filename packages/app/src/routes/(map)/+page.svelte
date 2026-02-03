@@ -5,8 +5,6 @@
 	import { goto } from '$app/navigation';
 	import { createStateController } from '$state/StateController.svelte';
 	import { createPageErrorData } from '$utils/error';
-	import { mergeHeatmapTimeline, mergeHeatmaps, getCellBoundsFromCellId } from '$utils/heatmap';
-	import { mergeHistograms } from '$utils/histogram';
 	import { translateContentTypes, reverseTranslateContentTypes } from '$utils/translations';
 	import { loadingState } from '$lib/state/loadingState.svelte';
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
@@ -27,8 +25,9 @@
 	import Nav from '$components/Nav.svelte';
 	import NavItem from '$components/NavItem.svelte';
 	import type { PageData } from './$types';
-import type { HeatmapTimelineApiResponse, HistogramApiResponse, HeatmapTimeline } from '@atm/shared/types';
+import type { Histogram, HeatmapTimeline } from '@atm/shared/types';
 import { PUBLIC_DEFAULT_CELL } from '$env/static/public';
+import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 
 	let { data }: { data: PageData } = $props();
 
@@ -39,22 +38,7 @@ import { PUBLIC_DEFAULT_CELL } from '$env/static/public';
 	let availableTagNames = $derived(
 		data?.availableTags?.tags?.map((tag: { name: string }) => tag.name) || data?.metadata?.tags || []
 	);
-	let heatmapTimeline = $derived((data?.heatmapTimeline as HeatmapTimelineApiResponse | null)?.heatmapTimeline);
-
-	// Create lightweight blueprint metadata from dimensions for client-side calculation
-	let blueprintMetadata = $derived.by(() => {
-		if (!dimensions) return null;
-		return {
-			rows: dimensions.rowsAmount,
-			cols: dimensions.colsAmount,
-			bounds: {
-				minLon: dimensions.minLon,
-				maxLon: dimensions.maxLon,
-				minLat: dimensions.minLat,
-				maxLat: dimensions.maxLat
-			}
-		};
-	});
+	let heatmapTimeline = $derived(data?.heatmapTimeline as HeatmapTimeline | null);
 
 	let currentRecordTypes = $derived(data?.currentRecordTypes || []);
 	let currentTags = $derived(data?.currentTags || []);
@@ -62,7 +46,7 @@ import { PUBLIC_DEFAULT_CELL } from '$env/static/public';
 	let validatedCell = $derived(data?.validatedCell);
 	let validatedCellBounds = $derived(data?.cellBounds);
 	let validatedPeriod = $derived(data?.validatedPeriod);
-	let histograms = $derived((data?.histogram as HistogramApiResponse | null)?.histograms);
+	let histogram = $derived(data?.histogram as Histogram | null);
 
 	// Translated content types for UI display  
 	let translatedRecordTypes = $derived(recordTypes ? translateContentTypes(recordTypes) : []);
@@ -88,117 +72,11 @@ import { PUBLIC_DEFAULT_CELL } from '$env/static/public';
 		return createPageErrorData([...serverErrors, ...controllerErrors]);
 	});
 
-	let mergedHeatmapTimeline = $derived.by(() => {
-		if (heatmapTimeline && currentRecordTypes && recordTypes) {
-			const timelineData = heatmapTimeline?.heatmapTimeline || heatmapTimeline;
+	// Heatmap for current time period - directly from API (DB handles merging)
+	let currentHeatmap = $derived(
+		heatmapTimeline?.[currentPeriod] ?? (dimensions ? createEmptyHeatmap() : null)
+	);
 
-			const needsMerging =
-				currentRecordTypes.length > 1 || (currentTags && currentTags.length > 0);
-
-			// TODO: Re-enable client-side merging when tags are used again
-			// Server now handles record type merging automatically when recordTypes.length > 1
-			// if (needsMerging) {
-			// 	// For OR operations with multiple tags, server already merged - just merge recordTypes if needed
-			// 	if (currentTagOperator === 'OR' && currentTags && currentTags.length > 1) {
-			// 		// OR operations: server already merged tags into base heatmaps, only merge recordTypes if needed
-			// 		if (currentRecordTypes.length > 1) {
-			// 			return mergeHeatmapTimeline(
-			// 				timelineData as unknown as HeatmapTimeline,
-			// 				currentRecordTypes,
-			// 				undefined, // Don't pass tags - use base heatmaps
-			// 				data?.metadata?.heatmapBlueprint
-			// 			);
-			// 		} else {
-			// 			// Single recordType with OR tags - use as-is (server already merged)
-			// 			return timelineData;
-			// 		}
-			// 	} else {
-			// 		// AND operations or single tag - use original client-side merging logic
-			// 		const selectedTags = currentTags && currentTags.length > 0 ? currentTags : undefined;
-			// 		return mergeHeatmapTimeline(
-			// 			timelineData as unknown as HeatmapTimeline,
-			// 			currentRecordTypes,
-			// 			selectedTags,
-			// 			data?.metadata?.heatmapBlueprint
-			// 		);
-			// 	}
-			// } else {
-			// 	// Single recordType, no tags - use original timeline
-			// 	return timelineData;
-			// }
-			
-			// Use server data directly (server handles merging when needed)
-			return timelineData;
-		}
-		return null;
-	});
-
-	let mergedHistogram = $derived.by(() => {
-		if (histograms && currentRecordTypes && recordTypes) {
-			// Determine selected tags if any
-			const selectedTags = currentTags && currentTags.length > 0 ? currentTags : undefined;
-
-			// Collect histograms to merge
-			const histogramsToMerge = [];
-
-			for (const recordType of currentRecordTypes) {
-				const recordTypeData = histograms[recordType];
-				if (recordTypeData) {
-					// For OR operations with multiple tags, server already merged - use base histograms
-					if (currentTagOperator === 'OR' && selectedTags && selectedTags.length > 1) {
-						// OR operations: server already merged tags into base histograms
-						if (recordTypeData.base) {
-							histogramsToMerge.push(recordTypeData.base);
-						}
-					} else if (selectedTags && selectedTags.length > 0) {
-						// AND operations or single tag - use original logic
-						const tagKey =
-							selectedTags.length > 1 ? selectedTags.sort().join('+') : selectedTags[0];
-						if (recordTypeData.tags[tagKey]) {
-							histogramsToMerge.push(recordTypeData.tags[tagKey]);
-						}
-					} else if (recordTypeData.base) {
-						// Use base histogram
-						histogramsToMerge.push(recordTypeData.base);
-					}
-				}
-			}
-
-			if (histogramsToMerge.length === 0) {
-				return null;
-			}
-
-			// Merge histograms on client side
-			return mergeHistograms(histogramsToMerge);
-		}
-		return null;
-	});
-
-	let currentHeatmap = $derived.by(() => {
-		if (mergedHeatmapTimeline && currentPeriod) {
-			const timeSliceData = (mergedHeatmapTimeline as any)[currentPeriod];
-			if (timeSliceData) {
-				const mergedKey = Object.keys(timeSliceData)[0];
-				return timeSliceData[mergedKey]?.base || null;
-			}
-		}
-
-		// Return empty sparse heatmap when no data exists for this period
-		// This keeps the map visible with all cells at 0 density
-		if (blueprintMetadata) {
-			return {
-				indices: [],
-				counts: [],
-				densities: [],
-				dimensions: {
-					rows: blueprintMetadata.rows,
-					cols: blueprintMetadata.cols
-				}
-			};
-		}
-
-		return null;
-	});
 
 	onMount(() => {
 		// Initialize controller with server-validated period
@@ -224,9 +102,9 @@ import { PUBLIC_DEFAULT_CELL } from '$env/static/public';
 					controller.syncUrlParameters(lastPeriod, currentTagOperator, defaultRecordTypes);
 
 					// Set default cell selection
-					if (PUBLIC_DEFAULT_CELL && blueprintMetadata) {
-						// Calculate bounds on-demand instead of looking up in blueprint
-						const bounds = getCellBoundsFromCellId(PUBLIC_DEFAULT_CELL, blueprintMetadata);
+					if (PUBLIC_DEFAULT_CELL && dimensions) {
+						// Calculate bounds on-demand from dimensions
+						const bounds = getCellBoundsFromCellId(PUBLIC_DEFAULT_CELL, dimensions);
 						if (bounds) {
 							controller.selectCell(PUBLIC_DEFAULT_CELL, bounds);
 						}
@@ -282,9 +160,9 @@ import { PUBLIC_DEFAULT_CELL } from '$env/static/public';
 
 	// Handle cell selection from map
 	function handleCellClick(cellId: string | null) {
-		if (cellId && blueprintMetadata) {
-			// Calculate bounds on-demand instead of looking up in blueprint
-			const bounds = getCellBoundsFromCellId(cellId, blueprintMetadata);
+		if (cellId && dimensions) {
+			// Calculate bounds on-demand from dimensions
+			const bounds = getCellBoundsFromCellId(cellId, dimensions);
 			if (bounds) {
 				controller.selectCell(cellId, bounds);
 			} else {
@@ -305,10 +183,9 @@ import { PUBLIC_DEFAULT_CELL } from '$env/static/public';
 
 <div class="relative flex flex-col w-screen h-screen">
 	<div class="relative flex-1">
-		{#if currentHeatmap && blueprintMetadata && dimensions}
+		{#if currentHeatmap && dimensions}
 			<Map
 				heatmap={currentHeatmap}
-				{blueprintMetadata}
 				{dimensions}
 				{selectedCellId}
 				{handleCellClick}
@@ -419,10 +296,10 @@ import { PUBLIC_DEFAULT_CELL } from '$env/static/public';
 		{/if}
 	</div>
 
-	{#if mergedHistogram}
+	{#if histogram}
 		<TimePeriodSelector
 			period={currentPeriod}
-			histogram={mergedHistogram}
+			histogram={histogram}
 			onPeriodChange={handlePeriodChange}
 			class="z-40 bg-atm-sand border-t border-atm-sand-border"
 		/>

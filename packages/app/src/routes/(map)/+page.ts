@@ -2,8 +2,7 @@
 import type { PageLoad } from './$types';
 import type {
 	VisualizationMetadata,
-	HistogramApiResponse,
-	HeatmapTimelineApiResponse,
+	Histogram,
 	HeatmapTimeline,
 	RecordType
 } from '@atm/shared/types';
@@ -45,8 +44,8 @@ export const load: PageLoad = async ({ fetch, url }) => {
 
 	const errors: AppError[] = [];
 	let metadata: VisualizationMetadata | null = null;
-	let histogram: HistogramApiResponse | null = null;
-	let heatmapTimeline: HeatmapTimelineApiResponse | null = null;
+	let histogram: Histogram | null = null;
+	let heatmapTimeline: HeatmapTimeline | null = null;
 	let availableTags: any = null;
 
 	// Parse URL parameters
@@ -214,8 +213,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 					})
 				);
 			} else {
-				const histogramData = (await histogramResponse.json()) as HistogramApiResponse;
-				histogram = histogramData;
+				histogram = (await histogramResponse.json()) as Histogram;
 			}
 		} catch (err) {
 			console.error('❌ Failed to load histogram:', err);
@@ -274,8 +272,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 					})
 				);
 			} else {
-				const heatmapData = (await heatmapResponse.json()) as HeatmapTimelineApiResponse;
-				heatmapTimeline = heatmapData;
+				heatmapTimeline = (await heatmapResponse.json()) as HeatmapTimeline;
 			}
 		} catch (err) {
 			console.error('❌ Failed to load heatmap timeline:', err);
@@ -354,17 +351,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		if (validation.isValid) {
 			validatedCell = cellParam;
 			// Calculate cell bounds on-demand from dimensions
-			const blueprintMetadata = {
-				rows: metadata.heatmapDimensions.rowsAmount,
-				cols: metadata.heatmapDimensions.colsAmount,
-				bounds: {
-					minLon: metadata.heatmapDimensions.minLon,
-					maxLon: metadata.heatmapDimensions.maxLon,
-					minLat: metadata.heatmapDimensions.minLat,
-					maxLat: metadata.heatmapDimensions.maxLat
-				}
-			};
-			const bounds = getCellBoundsFromCellId(cellParam, blueprintMetadata);
+			const bounds = getCellBoundsFromCellId(cellParam, metadata.heatmapDimensions);
 			if (bounds) {
 				cellBounds = bounds;
 			}
@@ -385,7 +372,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	if (periodParam && metadata) {
 		// Get available periods from metadata (all periods that exist in dataset)
 		const metadataPeriods = metadata.timeSlices.map(slice => slice.key);
-		const timelineData = heatmapTimeline ? (heatmapTimeline as HeatmapTimelineApiResponse).heatmapTimeline : {};
+		const timelineData = heatmapTimeline ? heatmapTimeline : {};
 		
 		// 1. Format validation
 		if (!isValidPeriodFormat(periodParam)) {
@@ -433,7 +420,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	}
 
 	// Default to last available period if validation fails or no period provided
-	const defaultPeriod = validatedPeriod || getLastAvailablePeriod(heatmapTimeline ? (heatmapTimeline as HeatmapTimelineApiResponse).heatmapTimeline : null);
+	const defaultPeriod = validatedPeriod || getLastAvailablePeriod(heatmapTimeline ? heatmapTimeline : null);
 
 	// Only validate tag combinations for AND operator (OR allows any combination)
 	if (
