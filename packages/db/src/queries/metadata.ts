@@ -110,14 +110,9 @@ async function getStats(): Promise<{
  * Build heatmap dimensions from bounds and grid config
  */
 function buildHeatmapDimensions(bounds: Bounds): HeatmapDimensions {
-  const cellWidth = (bounds.maxLon - bounds.minLon) / GRID_COLS;
-  const cellHeight = (bounds.maxLat - bounds.minLat) / GRID_ROWS;
-
   return {
     colsAmount: GRID_COLS,
     rowsAmount: GRID_ROWS,
-    cellWidth,
-    cellHeight,
     minLon: bounds.minLon,
     maxLon: bounds.maxLon,
     minLat: bounds.minLat,

@@ -1,0 +1,300 @@
+import { sql } from 'drizzle-orm';
+import type {
+  RecordType,
+  FeaturesQuery,
+  FeatureResult,
+  FeaturesResponse,
+  FeaturesSortField,
+  SortDirection
+} from '@atm/shared';
+import { TIME_SLICES } from '@atm/shared';
+import { db } from '../client';
+import { features, featureCells, featureTags, tags, sources } from '../schema';
+
+// Query result types (internal)
+type BaseCellBoundsRow = {
+  min_x: number;
+  max_x: number;
+  min_y: number;
+  max_y: number;
+  min_lon: number;
+  max_lon: number;
+  min_lat: number;
+  max_lat: number;
+};
+
+type FeatureRow = {
+  id: string;
+  record_type: RecordType;
+  label: string;
+  description: string | null;
+  content_url: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  weight: number | null;
+  source_label: string | null;
+  tags: string[] | null;
+};
+
+type CountRow = { count: string };
+
+// Cache for base grid bounds (doesn't change)
+let baseCellBoundsCache: BaseCellBoundsRow | null = null;
+
+/**
+ * Get the base grid cell bounds and geographic extent
+ * Cached since this doesn't change
+ */
+async function getBaseCellBounds(): Promise<BaseCellBoundsRow> {
+  if (baseCellBoundsCache) {
+    return baseCellBoundsCache;
+  }
+
+  const result = await db.execute<BaseCellBoundsRow>(sql`
+    SELECT
+      MIN(fc.cell_x) as min_x,
+      MAX(fc.cell_x) as max_x,
+      MIN(fc.cell_y) as min_y,
+      MAX(fc.cell_y) as max_y,
+      ST_XMin(ST_Extent(ST_Transform(f.geometry, 4326))) as min_lon,
+      ST_XMax(ST_Extent(ST_Transform(f.geometry, 4326))) as max_lon,
+      ST_YMin(ST_Extent(ST_Transform(f.geometry, 4326))) as min_lat,
+      ST_YMax(ST_Extent(ST_Transform(f.geometry, 4326))) as max_lat
+    FROM feature_cells fc
+    JOIN features f ON fc.feature_id = f.id
+    WHERE f.geometry IS NOT NULL
+  `);
+
+  baseCellBoundsCache = result.rows[0];
+  return baseCellBoundsCache;
+}
+
+/**
+ * Convert geographic bounds to base cell range
+ */
+async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Promise<{
+  minCellX: number;
+  maxCellX: number;
+  minCellY: number;
+  maxCellY: number;
+}> {
+  const base = await getBaseCellBounds();
+
+  const cellWidth = (base.max_lon - base.min_lon) / (base.max_x - base.min_x + 1);
+  const cellHeight = (base.max_lat - base.min_lat) / (base.max_y - base.min_y + 1);
+
+  const minCellX = Math.floor((bounds.minLon - base.min_lon) / cellWidth) + base.min_x;
+  const maxCellX = Math.floor((bounds.maxLon - base.min_lon) / cellWidth) + base.min_x;
+  const minCellY = Math.floor((bounds.minLat - base.min_lat) / cellHeight) + base.min_y;
+  const maxCellY = Math.floor((bounds.maxLat - base.min_lat) / cellHeight) + base.min_y;
+
+  return {
+    minCellX: Math.max(minCellX, base.min_x),
+    maxCellX: Math.min(maxCellX, base.max_x),
+    minCellY: Math.max(minCellY, base.min_y),
+    maxCellY: Math.min(maxCellY, base.max_y)
+  };
+}
+
+/**
+ * Get date range from time slice key
+ */
+function getTimeSliceDateRange(timeSliceKey: string): { startDate: string; endDate: string } | null {
+  const timeSlice = TIME_SLICES.find(ts => ts.key === timeSliceKey);
+  if (!timeSlice) return null;
+  return {
+    startDate: timeSlice.timeRange.start,
+    endDate: timeSlice.timeRange.end
+  };
+}
+
+/**
+ * Get features within bounds with filtering, sorting, and pagination
+ */
+export async function getFeatures(query: FeaturesQuery): Promise<FeaturesResponse> {
+  const {
+    bounds,
+    recordTypes,
+    tags: tagFilters,
+    tagOperator = 'OR',
+    timeSlice,
+    sort = 'weight',
+    sortDirection = 'desc',
+    page = 1,
+    pageSize = 50
+  } = query;
+
+  // Convert bounds to base cell range
+  const cellRange = await boundsToBaseCellRange(bounds);
+
+  // Get date range from time slice
+  const dateRange = timeSlice ? getTimeSliceDateRange(timeSlice) : null;
+
+  // Default to all record types if none specified
+  const types = recordTypes && recordTypes.length > 0
+    ? recordTypes
+    : ['image', 'text', 'person'] as RecordType[];
+
+  // Calculate offset
+  const offset = (page - 1) * pageSize;
+
+  // Get feature IDs matching tag filter (if any)
+  let tagFilteredIds: string[] | null = null;
+  if (tagFilters && tagFilters.length > 0) {
+    if (tagOperator === 'AND') {
+      const tagResult = await db.execute<{ feature_id: string }>(sql`
+        SELECT ft.feature_id
+        FROM feature_tags ft
+        JOIN tags t ON ft.tag_id = t.id
+        WHERE t.label IN ${tagFilters}
+        GROUP BY ft.feature_id
+        HAVING COUNT(DISTINCT t.id) = ${tagFilters.length}
+      `);
+      tagFilteredIds = tagResult.rows.map(r => r.feature_id);
+    } else {
+      const tagResult = await db.execute<{ feature_id: string }>(sql`
+        SELECT DISTINCT ft.feature_id
+        FROM feature_tags ft
+        JOIN tags t ON ft.tag_id = t.id
+        WHERE t.label IN ${tagFilters}
+      `);
+      tagFilteredIds = tagResult.rows.map(r => r.feature_id);
+    }
+
+    // Early return if no features match tag filter
+    if (tagFilteredIds.length === 0) {
+      return { data: [], total: 0, page, pageSize, totalPages: 0 };
+    }
+  }
+
+  // Build WHERE conditions
+  const cellCondition = sql`fc.cell_x BETWEEN ${cellRange.minCellX} AND ${cellRange.maxCellX}
+    AND fc.cell_y BETWEEN ${cellRange.minCellY} AND ${cellRange.maxCellY}`;
+
+  const typeCondition = sql`f.record_type IN ${types}`;
+
+  const dateCondition = dateRange
+    ? sql`f.start_date >= ${dateRange.startDate} AND f.end_date <= ${dateRange.endDate}`
+    : sql`TRUE`;
+
+  const tagCondition = tagFilteredIds
+    ? sql`f.id IN ${tagFilteredIds}`
+    : sql`TRUE`;
+
+  // Get total count
+  const countResult = await db.execute<CountRow>(sql`
+    SELECT COUNT(DISTINCT f.id) as count
+    FROM feature_cells fc
+    JOIN features f ON fc.feature_id = f.id
+    WHERE ${cellCondition}
+      AND ${typeCondition}
+      AND ${dateCondition}
+      AND ${tagCondition}
+  `);
+
+  const total = parseInt(countResult.rows[0].count);
+  const totalPages = Math.ceil(total / pageSize);
+
+  if (total === 0) {
+    return { data: [], total: 0, page, pageSize, totalPages: 0 };
+  }
+
+  // Build ORDER BY for window function
+  const sortDir = sortDirection === 'asc' ? sql`ASC` : sql`DESC`;
+  const secondarySortDir = sortDirection === 'asc' ? sql`DESC` : sql`ASC`;
+
+  // Main query with window function for interleaved record types
+  // Note: Using raw SQL string for window function ORDER BY since Drizzle doesn't support it well
+  const orderByWeight = sortDirection === 'desc'
+    ? 'weight DESC NULLS LAST, start_date ASC NULLS LAST'
+    : 'weight ASC NULLS LAST, start_date DESC NULLS LAST';
+
+  const orderByDate = sortDirection === 'desc'
+    ? 'start_date DESC NULLS LAST, weight DESC NULLS LAST'
+    : 'start_date ASC NULLS LAST, weight ASC NULLS LAST';
+
+  const windowOrderBy = sort === 'weight' ? orderByWeight : orderByDate;
+
+  const result = await db.execute<FeatureRow>(sql`
+    WITH filtered AS (
+      SELECT DISTINCT ON (f.id)
+        f.id,
+        f.record_type,
+        f.label,
+        f.description,
+        f.content_url,
+        f.start_date,
+        f.end_date,
+        f.weight,
+        s.label as source_label
+      FROM feature_cells fc
+      JOIN features f ON fc.feature_id = f.id
+      LEFT JOIN sources s ON f.source_id = s.id
+      WHERE ${cellCondition}
+        AND ${typeCondition}
+        AND ${dateCondition}
+        AND ${tagCondition}
+    ),
+    with_tags AS (
+      SELECT
+        f.*,
+        COALESCE(
+          ARRAY(
+            SELECT t.label
+            FROM feature_tags ft
+            JOIN tags t ON ft.tag_id = t.id
+            WHERE ft.feature_id = f.id
+          ),
+          ARRAY[]::text[]
+        ) as tags
+      FROM filtered f
+    ),
+    ranked AS (
+      SELECT *,
+        ROW_NUMBER() OVER (
+          PARTITION BY record_type
+          ORDER BY ${sql.raw(windowOrderBy)}, id ASC
+        ) as type_rank
+      FROM with_tags
+    )
+    SELECT
+      id,
+      record_type,
+      label,
+      description,
+      content_url,
+      start_date,
+      end_date,
+      weight,
+      source_label,
+      tags
+    FROM ranked
+    ORDER BY type_rank, record_type, id
+    LIMIT ${pageSize}
+    OFFSET ${offset}
+  `);
+
+  // Transform results
+  const data: FeatureResult[] = result.rows.map(row => ({
+    id: row.id,
+    recordType: row.record_type,
+    label: row.label,
+    description: row.description || undefined,
+    contentUrl: row.content_url || undefined,
+    dateRange: [
+      row.start_date ? new Date(row.start_date).getFullYear() : 0,
+      row.end_date ? new Date(row.end_date).getFullYear() : 0
+    ] as [number, number],
+    tags: row.tags || [],
+    sourceLabel: row.source_label || undefined,
+    weight: row.weight || 1
+  }));
+
+  return {
+    data,
+    total,
+    page,
+    pageSize,
+    totalPages
+  };
+}

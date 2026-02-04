@@ -28,8 +28,6 @@ export interface HeatmapResolutionConfig {
 export interface HeatmapDimensions {
   colsAmount: number;
   rowsAmount: number;
-  cellWidth: number;
-  cellHeight: number;
   minLon: number;
   maxLon: number;
   minLat: number;

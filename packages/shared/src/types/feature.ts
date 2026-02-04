@@ -1,6 +1,11 @@
 import type { Coordinates } from './spatial';
+import type { HeatmapCellBounds } from './heatmap';
+
 export type RecordType = 'image' | 'text' | 'person' | 'unknown';
 
+// ============================================================================
+// Legacy types (for preprocessor compatibility)
+// ============================================================================
 
 // Your Amsterdam API feature structure (input format)
 export interface RawFeature {
@@ -32,6 +37,55 @@ export interface MinimalFeature {
     tags: string[];
     startYear: number;
     endYear: number;
+}
+
+// ============================================================================
+// Features API types (for /api/features endpoint)
+// ============================================================================
+
+export type FeaturesSortField = 'weight' | 'date';
+export type SortDirection = 'asc' | 'desc';
+export type TagOperator = 'AND' | 'OR';
+
+/**
+ * Query parameters for fetching features
+ */
+export interface FeaturesQuery {
+  bounds: HeatmapCellBounds;
+  recordTypes?: RecordType[];
+  tags?: string[];
+  tagOperator?: TagOperator;
+  timeSlice?: string;
+  sort?: FeaturesSortField;
+  sortDirection?: SortDirection;
+  page?: number;
+  pageSize?: number;
+}
+
+/**
+ * Single feature in API response
+ */
+export interface FeatureResult {
+  id: string;
+  recordType: RecordType;
+  label: string;
+  description?: string;
+  contentUrl?: string;
+  dateRange: [number, number];
+  tags: string[];
+  sourceLabel?: string;
+  weight: number;
+}
+
+/**
+ * Paginated features response
+ */
+export interface FeaturesResponse {
+  data: FeatureResult[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 
