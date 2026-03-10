@@ -83,10 +83,13 @@ async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Promise<{
   const cellWidth = (base.max_lon - base.min_lon) / (base.max_x - base.min_x + 1);
   const cellHeight = (base.max_lat - base.min_lat) / (base.max_y - base.min_y + 1);
 
+  // Epsilon prevents floating point errors from missing boundary cells
+  const EPSILON = 1e-9;
+
   const minCellX = Math.floor((bounds.minLon - base.min_lon) / cellWidth) + base.min_x;
-  const maxCellX = Math.floor((bounds.maxLon - base.min_lon) / cellWidth) + base.min_x;
+  const maxCellX = Math.floor((bounds.maxLon - base.min_lon + EPSILON) / cellWidth) + base.min_x;
   const minCellY = Math.floor((bounds.minLat - base.min_lat) / cellHeight) + base.min_y;
-  const maxCellY = Math.floor((bounds.maxLat - base.min_lat) / cellHeight) + base.min_y;
+  const maxCellY = Math.floor((bounds.maxLat - base.min_lat + EPSILON) / cellHeight) + base.min_y;
 
   return {
     minCellX: Math.max(minCellX, base.min_x),
