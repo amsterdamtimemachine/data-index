@@ -46,7 +46,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		const tagOperator = (url.searchParams.get('tagOperator') || 'OR').toUpperCase() as TagOperator;
 		const timeSlice = url.searchParams.get('timeSlice') || undefined;
-		const sort = (url.searchParams.get('sort') || 'weight') as FeaturesSortField;
+		const sort = (url.searchParams.get('sort') || 'frequency') as FeaturesSortField;
 		const sortDirection = (url.searchParams.get('sortDirection') || 'desc') as SortDirection;
 		const page = parseInt(url.searchParams.get('page') || '1', 10);
 		const pageSize = Math.min(parseInt(url.searchParams.get('pageSize') || '50', 10), 200); // Cap at 200

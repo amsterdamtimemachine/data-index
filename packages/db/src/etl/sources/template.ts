@@ -60,10 +60,10 @@ export async function ingest(filePath: string) {
         SOURCE_ID
       ]);
 
-      // Link to adamlink location
+      // Link to place
       if (row.address_id) {
         await client.query(`
-          INSERT INTO feature_to_adamlink (feature_id, adamlink_id)
+          INSERT INTO feature_to_place (feature_id, place_id)
           VALUES ($1, $2)
           ON CONFLICT DO NOTHING
         `, [`${SOURCE_ID}:${row.id}`, row.address_id]);

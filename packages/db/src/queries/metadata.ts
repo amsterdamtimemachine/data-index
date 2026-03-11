@@ -7,7 +7,7 @@ import type {
 } from '@atm/shared';
 import { TIME_SLICES, TIME_RANGE, GRID_ROWS, GRID_COLS } from '@atm/shared';
 import { db } from '../client';
-import { adamlink, features, tags, featureTags, featureCells } from '../schema';
+import { place, features, tags, featureTags, featureCells } from '../schema';
 
 const VERSION = '2.0.0';
 
@@ -32,12 +32,12 @@ interface Bounds {
 async function getBoundsFromData(): Promise<Bounds> {
   const result = await db.execute<BoundsRow>(sql`
     SELECT
-      ST_XMin(ST_Extent(ST_Transform(${adamlink.geometry}, 4326))) as min_lon,
-      ST_XMax(ST_Extent(ST_Transform(${adamlink.geometry}, 4326))) as max_lon,
-      ST_YMin(ST_Extent(ST_Transform(${adamlink.geometry}, 4326))) as min_lat,
-      ST_YMax(ST_Extent(ST_Transform(${adamlink.geometry}, 4326))) as max_lat
-    FROM ${adamlink}
-    WHERE ${adamlink.geometry} IS NOT NULL
+      ST_XMin(ST_Extent(ST_Transform(${place.geometry}, 4326))) as min_lon,
+      ST_XMax(ST_Extent(ST_Transform(${place.geometry}, 4326))) as max_lon,
+      ST_YMin(ST_Extent(ST_Transform(${place.geometry}, 4326))) as min_lat,
+      ST_YMax(ST_Extent(ST_Transform(${place.geometry}, 4326))) as max_lat
+    FROM ${place}
+    WHERE ${place.geometry} IS NOT NULL
   `);
 
   const row = result.rows[0];

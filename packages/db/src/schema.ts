@@ -1,4 +1,4 @@
-import { pgTable, text, date, smallint, integer, real, customType, primaryKey, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, date, smallint, integer, customType, primaryKey, index } from 'drizzle-orm/pg-core';
 
 // Custom PostGIS geometry type - stored in RD (Dutch) coordinates
 // Transform to WGS84 (4326) for frontend display
@@ -19,15 +19,23 @@ export const sources = pgTable('sources', {
 });
 
 // ============================================================================
-// ADAMLINK - Locations from Adamlink (addresses, streets, districts)
+// PLACE - Geographic locations (addresses, buildings, streets, neighbourhoods)
 // ============================================================================
-export const adamlink = pgTable('adamlink', {
+export const place = pgTable('place', {
   id: text('id').primaryKey(),                    // "https://adamlink.nl/geo/address/A181758"
-  type: text('type').notNull(),                   // "address" | "street" | "district"
+  type: text('type').notNull(),                   // "address" | "building" | "street" | "neighbourhood"
   geometry: geometry('geometry')                  // POINT, LINESTRING, or POLYGON
 }, (table) => [
-  index('idx_adamlink_geometry').using('gist', table.geometry)
+  index('idx_place_geometry').using('gist', table.geometry)
 ]);
+
+// ============================================================================
+// RELATION - Describes how features relate to places
+// ============================================================================
+export const relation = pgTable('relation', {
+  id: text('id').primaryKey(),                    // "depictedIn"
+  label: text('label').notNull()                  // "Depicted In"
+});
 
 // ============================================================================
 // TAGS - Predefined tags for features
@@ -50,24 +58,22 @@ export const features = pgTable('features', {
   endDate: date('end_date'),                      // 1948-09-30
   dateCreated: text('date_created'),              // "september 1948"
   sourceId: text('source_id').references(() => sources.id),
-  geometry: geometry('geometry'),                 // Calculated from linked adamlink locations
-  cellCount: integer('cell_count'),               // Number of grid cells this feature spans
-  weight: real('weight')                          // 1/cellCount for ranking
+  frequency: integer('frequency')                  // Number of grid cells this feature spans (lower = more specific)
 }, (table) => [
-  index('idx_features_geometry').using('gist', table.geometry),
   index('idx_features_dates').on(table.startDate, table.endDate),
   index('idx_features_record_type').on(table.recordType)
 ]);
 
 // ============================================================================
-// JUNCTION: feature_to_adamlink - Links features to Adamlink locations
+// JUNCTION: feature_to_place - Links features to places with a relation
 // ============================================================================
-export const featureToAdamlink = pgTable('feature_to_adamlink', {
+export const featureToPlace = pgTable('feature_to_place', {
   featureId: text('feature_id').notNull().references(() => features.id),
-  adamlinkId: text('adamlink_id').notNull().references(() => adamlink.id)
+  placeId: text('place_id').notNull().references(() => place.id),
+  relationId: text('relation_id').references(() => relation.id)
 }, (table) => [
-  primaryKey({ columns: [table.featureId, table.adamlinkId] }),
-  index('idx_feature_to_adamlink_adamlink').on(table.adamlinkId)
+  primaryKey({ columns: [table.featureId, table.placeId] }),
+  index('idx_feature_to_place_place').on(table.placeId)
 ]);
 
 // ============================================================================
@@ -101,8 +107,11 @@ export const featureCells = pgTable('feature_cells', {
 export type Source = typeof sources.$inferSelect;
 export type NewSource = typeof sources.$inferInsert;
 
-export type Adamlink = typeof adamlink.$inferSelect;
-export type NewAdamlink = typeof adamlink.$inferInsert;
+export type Place = typeof place.$inferSelect;
+export type NewPlace = typeof place.$inferInsert;
+
+export type Relation = typeof relation.$inferSelect;
+export type NewRelation = typeof relation.$inferInsert;
 
 export type Tag = typeof tags.$inferSelect;
 export type NewTag = typeof tags.$inferInsert;
@@ -110,6 +119,6 @@ export type NewTag = typeof tags.$inferInsert;
 export type FeatureRow = typeof features.$inferSelect;
 export type NewFeature = typeof features.$inferInsert;
 
-export type FeatureToAdamlink = typeof featureToAdamlink.$inferSelect;
+export type FeatureToPlace = typeof featureToPlace.$inferSelect;
 export type FeatureTag = typeof featureTags.$inferSelect;
 export type FeatureCell = typeof featureCells.$inferSelect;

@@ -9,7 +9,7 @@ import type {
 } from '@atm/shared';
 import { TIME_SLICES } from '@atm/shared';
 import { db } from '../client';
-import { features, featureCells, featureTags, tags, sources } from '../schema';
+import { features, featureCells, featureTags, featureToPlace, place, tags, sources } from '../schema';
 
 // Query result types (internal)
 type BaseCellBoundsRow = {
@@ -31,7 +31,7 @@ type FeatureRow = {
   content_url: string | null;
   start_date: string | null;
   end_date: string | null;
-  weight: number | null;
+  frequency: number | null;
   source_label: string | null;
   tags: string[] | null;
 };
@@ -56,13 +56,14 @@ async function getBaseCellBounds(): Promise<BaseCellBoundsRow> {
       MAX(fc.cell_x) as max_x,
       MIN(fc.cell_y) as min_y,
       MAX(fc.cell_y) as max_y,
-      ST_XMin(ST_Extent(ST_Transform(f.geometry, 4326))) as min_lon,
-      ST_XMax(ST_Extent(ST_Transform(f.geometry, 4326))) as max_lon,
-      ST_YMin(ST_Extent(ST_Transform(f.geometry, 4326))) as min_lat,
-      ST_YMax(ST_Extent(ST_Transform(f.geometry, 4326))) as max_lat
+      ST_XMin(ST_Extent(ST_Transform(p.geometry, 4326))) as min_lon,
+      ST_XMax(ST_Extent(ST_Transform(p.geometry, 4326))) as max_lon,
+      ST_YMin(ST_Extent(ST_Transform(p.geometry, 4326))) as min_lat,
+      ST_YMax(ST_Extent(ST_Transform(p.geometry, 4326))) as max_lat
     FROM feature_cells fc
-    JOIN features f ON fc.feature_id = f.id
-    WHERE f.geometry IS NOT NULL
+    JOIN ${featureToPlace} fp ON fc.feature_id = fp.feature_id
+    JOIN ${place} p ON fp.place_id = p.id
+    WHERE p.geometry IS NOT NULL
   `);
 
   baseCellBoundsCache = result.rows[0];
@@ -121,7 +122,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     tags: tagFilters,
     tagOperator = 'OR',
     timeSlice,
-    sort = 'weight',
+    sort = 'frequency',
     sortDirection = 'desc',
     page = 1,
     pageSize = 50
@@ -208,15 +209,16 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
 
   // Main query with window function for interleaved record types
   // Note: Using raw SQL string for window function ORDER BY since Drizzle doesn't support it well
-  const orderByWeight = sortDirection === 'desc'
-    ? 'weight DESC NULLS LAST, start_date ASC NULLS LAST'
-    : 'weight ASC NULLS LAST, start_date DESC NULLS LAST';
+  // Lower frequency = more specific location = higher relevance
+  const orderByFrequency = sortDirection === 'desc'
+    ? 'frequency ASC NULLS LAST, start_date ASC NULLS LAST'
+    : 'frequency DESC NULLS LAST, start_date DESC NULLS LAST';
 
   const orderByDate = sortDirection === 'desc'
-    ? 'start_date DESC NULLS LAST, weight DESC NULLS LAST'
-    : 'start_date ASC NULLS LAST, weight ASC NULLS LAST';
+    ? 'start_date DESC NULLS LAST, frequency ASC NULLS LAST'
+    : 'start_date ASC NULLS LAST, frequency DESC NULLS LAST';
 
-  const windowOrderBy = sort === 'weight' ? orderByWeight : orderByDate;
+  const windowOrderBy = sort === 'frequency' ? orderByFrequency : orderByDate;
 
   const result = await db.execute<FeatureRow>(sql`
     WITH filtered AS (
@@ -228,7 +230,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         f.content_url,
         f.start_date,
         f.end_date,
-        f.weight,
+        f.frequency,
         s.label as source_label
       FROM feature_cells fc
       JOIN features f ON fc.feature_id = f.id
@@ -268,7 +270,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       content_url,
       start_date,
       end_date,
-      weight,
+      frequency,
       source_label,
       tags
     FROM ranked
@@ -290,7 +292,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     ] as [number, number],
     tags: row.tags || [],
     sourceLabel: row.source_label || undefined,
-    weight: row.weight || 1
+    frequency: row.frequency || 1
   }));
 
   return {

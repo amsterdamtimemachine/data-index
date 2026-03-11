@@ -1,123 +1,209 @@
-# Amsterdam Time Machine Data Index 
+# Amsterdam Time Machine Data Index
 
 Search heritage collections from multiple institutions in one platform with historical data across time and space for research and discovery.
+
+## Architecture
+
+Monorepo with 4 packages:
+
+```
+packages/
+  shared/       Shared TypeScript types and configuration constants
+  db/           PostgreSQL/PostGIS database layer (Drizzle ORM, ETL scripts)
+  app/          SvelteKit web application (frontend + API routes)
+  preprocessor/ Legacy binary data pipeline (deprecated)
+```
+
+### Tech stack
+
+- **Runtime**: Bun
+- **Frontend**: SvelteKit 5, Svelte 5, MapLibre GL, TailwindCSS
+- **Database**: PostgreSQL 16 + PostGIS 3.4 via Drizzle ORM
+- **Infrastructure**: Docker Compose
+
+### Data model
+
+```
+sources ──< features >── feature_to_place >── place (with PostGIS geometry)
+                │                │
+                │            relation (e.g. "depictedIn")
+                │
+           feature_tags >── tags
+                │
+           feature_cells (pre-computed 100m grid for heatmaps)
+```
+
+- **place**: Geographic locations (addresses, buildings, streets, neighbourhoods) stored in RD coordinates (EPSG:28992), transformed to WGS84 for the frontend
+- **features**: Content items (images, text, persons, video, audio) linked to places
+- **feature_cells**: Pre-computed grid cells at 100m resolution for fast heatmap aggregation, displayed at 75x75 resolution
+- **frequency**: Number of grid cells a feature spans — lower = more geographically specific = ranks higher in search results
+
+### Time slices
+
+11 periods covering 1500–2025 in 50-year windows (last period is 25 years: 2000–2025). Used for heatmap timeline, histogram, and feature filtering.
+
+## Data ingestion
+
+Data lives outside the repository in a `data/` directory (gitignored). Ingestion scripts run manually from a dev machine against the database — they are not part of the Docker deployment.
+
+### Data sources
+
+| File | Size | Contents |
+|------|------|----------|
+| `20230920-lps.csv` | 11 MB | ~105k address locations with WKT geometries (RD coordinates) from 7 historical registries (1832–1976) |
+| `beeldbank-fixed.json` | 2.5 GB | Amsterdam Stadsarchief Beeldbank — images mapped to Adamlink address URIs |
+
+**LPS (Linked Point Set)** ties together address IDs across historical registries (pw-1943, pw-1909, obelt-1920, loman-1976, bevolkingsregister-1870, wijken-1853, percelen-1832) with a single WKT coordinate per location.
+
+**Beeldbank JSON** is structured as `{ adamlinkUri: { images: [...] } }`. Each image has an `@id`, `name`, `contentUrl`, `startDate`, `endDate`, and `dateCreated`. One image can appear under multiple Adamlink URIs (depicted at multiple locations).
+
+### Running ingestion
+
+From `packages/db/`:
+
+```bash
+# 1. Import places (addresses with geometries) — must run first
+bun run db:ingest -s lps -f ../../data/20230920-lps.csv
+
+# 2. Import features (images linked to places)
+bun run db:ingest -s beeldbank -f ../../data/beeldbank-fixed.json
+
+# 3. Compute grid cells + update frequency values
+bun run db:rebuild-cells
+```
+
+Order matters: places must exist before beeldbank can link features to them.
+
+Add `--skip-cells` to the ingest commands to skip the automatic cell rebuild (useful when ingesting multiple sources before rebuilding once).
+
+### Adding a new data source
+
+Copy `packages/db/src/etl/sources/template.ts`, implement the `ingest(filePath)` function, and run:
+
+```bash
+bun run db:ingest -s <source-name> -f <file-path>
+```
+
+## API endpoints
+
+All endpoints are SvelteKit server routes in `packages/app/src/routes/api/` that query the database via `@atm/db`.
+
+| Endpoint | Purpose | Cache |
+|----------|---------|-------|
+| `GET /api/metadata` | Time slices, record types, bounds, stats | 24h |
+| `GET /api/heatmaps` | Sparse heatmap data (single or timeline) | 1h |
+| `GET /api/histogram` | Feature count distribution by time period | 1h |
+| `GET /api/features` | Paginated features within geographic bounds | 5m |
+| `GET /api/available-tags` | Tags with feature counts | 30m |
+| `GET /api/tag-combinations` | Valid tag combinations for AND/OR filtering | 30m |
+| `GET /api/geodata` | Legacy proxy to external API (to be removed) |
+
+### Features endpoint
+
+`GET /api/features?minLon=...&maxLon=...&minLat=...&maxLat=...`
+
+Optional params: `recordTypes`, `tags`, `tagOperator` (AND|OR), `timeSlice`, `sort` (frequency|date), `sortDirection` (asc|desc), `page`, `pageSize` (max 200).
+
+Results are interleaved by record type (one image, one text, one person, repeat) using window functions so the UI shows variety.
 
 ## Development
 
 ### Prerequisites
-- [Bun](https://bun.sh) (latest version)
+
+- [Bun](https://bun.sh) (latest)
+- [Docker](https://docker.com) with Docker Compose
 
 ### Setup
+
 ```bash
 bun install
 cp .env.example .env
 ```
 
-**Required**: Edit `.env` and set:
-- `PUBLIC_MAPTILER_API_KEY` - Get a free API key from [MapTiler](https://www.maptiler.com/)
+Edit `.env` and set `PUBLIC_MAPTILER_API_KEY` (get one from [MapTiler](https://www.maptiler.com/)).
 
-**Optional**: Configure preprocessor settings in `.env` (uncomment and modify any variables you want to change from defaults)
+### Start the database
 
-### Development Server
+```bash
+docker compose up -d db
+```
+
+### Push schema (first time or after schema changes)
+
+```bash
+cd packages/db
+bunx drizzle-kit generate --name <migration-name>
+bunx drizzle-kit migrate
+```
+
+### Run the dev server
+
 ```bash
 bun run dev
 ```
 
-The app will be available at `http://localhost:5175`
+App available at `http://localhost:5175`.
+
+### Drizzle Studio (database UI)
+
+```bash
+cd packages/db
+bun run db:studio
+```
 
 ## Production (Docker)
 
-### Prerequisites
-- [Docker](https://docker.com) with Docker Compose
-- [Bun](https://bun.sh) *(optional - for convenient build scripts)*
-
-### Setup
 ```bash
-cp .env.example .env
-```
-
-**Required**: Edit `.env` and set:
-- `PUBLIC_MAPTILER_API_KEY` - Get a free API key from [MapTiler](https://www.maptiler.com/)
-
-**Optional**: Configure preprocessor settings in `.env` (uncomment and modify any variables you want to change from defaults)
-
-### Quick Start
-
-**With Bun:**
-```bash
-bun run docker:up:build
-```
-
-**Without Bun:**
-```bash
+cp .env.example .env    # configure env vars
 docker compose up --build
 ```
 
-The app will be available at `http://localhost:3000`
+Runs two containers:
+- **db**: PostgreSQL 16 + PostGIS 3.4 with persistent volume
+- **app**: SvelteKit on port 3000, depends on healthy db
 
-**Note**: On first run, the system will automatically generate visualization data (~3 minutes). Subsequent runs will be much faster as the data is cached in `data/docker/`.
+Data ingestion is done separately from a dev machine (see [Data ingestion](#data-ingestion)).
 
-The container will automatically generate visualization data on startup if data/docker/visualization.bin is missing.
+### Docker commands
 
-### Docker Commands
-
-#### Starting & Stopping
 ```bash
-# With Bun
-bun run docker:up              # Start (uses existing data)
-bun run docker:up:build       # Start with rebuild
-bun run docker:down           # Stop everything
-
-# Direct Docker Compose
-docker compose up             # Start (uses existing data) 
-docker compose up --build    # Start with rebuild
-docker compose down          # Stop everything
+docker compose up -d          # start
+docker compose up --build     # rebuild and start
+docker compose down           # stop
+docker compose logs -f app    # app logs
+docker compose logs -f db     # database logs
 ```
 
-#### Data Management
-```bash
-# With Bun
-bun run docker:regenerate     # Regenerate visualization data + rebuild + start
+Adminer (database UI) available in dev profile:
 
-# Direct Docker Compose
-rm -f data/docker/visualization.bin && docker compose up --build
+```bash
+docker compose --profile dev up    # includes Adminer on port 8080
 ```
 
-#### Monitoring & Debugging
-```bash
-# Bun
-bun run docker:logs           # View all logs
-bun run docker:logs:app       # View app logs only
-bun run docker:logs:init      # View data generation logs
-bun run docker:restart        # Restart all services
-bun run docker:restart:app    # Restart just app
+## What's implemented
 
-# Docker 
-docker compose logs -f        # View all logs
-docker compose logs -f app    # View app logs only
-docker compose logs -f data-init  # View data generation logs
-docker compose restart       # Restart all services
-docker compose restart app   # Restart just app
-```
+- [x] PostgreSQL/PostGIS database with full schema (sources, places, features, relations, tags, cells)
+- [x] Drizzle ORM with typed queries for all data access
+- [x] ETL pipeline for LPS places and Beeldbank features
+- [x] Pre-computed 100m grid cells for fast heatmap aggregation
+- [x] 7 API endpoints (metadata, heatmaps, histogram, features, tags, tag-combinations)
+- [x] Features query with bounds filtering, pagination, tag AND/OR, time slices, interleaved sorting
+- [x] MapLibre GL map with heatmap cell visualization
+- [x] Interactive time period selector with histogram
+- [x] Record type toggle filtering (image, text, person)
+- [x] Tag filtering with AND/OR operator support
+- [x] Feature cards with detail modal
+- [x] Docker Compose deployment (db + app)
+- [x] Migration system via Drizzle Kit
 
-### How It Works
+## What's missing / TODO
 
-The Docker setup uses **Docker Compose** with two services:
-
-1. **data-init**: Generates visualization data from the Amsterdam database
-   - Runs once on startup if `data/docker/visualization.bin` doesn't exist
-   - Exits after successful generation
-   - Takes ~4-8 minutes on first run
-
-2. **app**: Serves the web application  
-   - Waits for data-init to complete successfully
-   - Serves the app on port 3000
-   - Automatically restarts if it crashes
-
-### Data Isolation
-- **Local development**: Uses `data/visualization.bin`
-- **Docker production**: Uses `data/docker/visualization.bin` 
-
-Each environment maintains separate data to avoid conflicts during development.
-
-
+- [ ] **Wire up FeaturesPanel to local API** — `FeaturesPanel.svelte` still calls the legacy external API (`atmbackend.create.humanities.uva.nl`) instead of the local `/api/features` endpoint
+- [ ] **Remove legacy geodata proxy** — `/api/geodata` endpoint and `externalApi.ts` utility can be removed once FeaturesPanel is migrated
+- [ ] **Street geometries** — `adamlinkstraten.geojson` (street data) is not yet ingested; only point-based addresses from LPS are imported
+- [ ] **Additional data sources** — only Beeldbank images are ingested; system supports text, person, video, audio record types
+- [ ] **Tag data** — no tags are currently ingested; tag filtering UI exists but has no data
+- [ ] **Full-text search** — `features.description` is stored but not indexed for search
+- [ ] **Update root README docker commands** — some docker scripts in root package.json reference old data-init service
+- [ ] **Clean up preprocessor package** — legacy binary pipeline is no longer used
+- [ ] **Remove unused env vars** — `PRIVATE_VISUALIZATION_BINARY_PATH`, bounds/grid env vars (now in shared config)

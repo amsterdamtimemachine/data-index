@@ -43,7 +43,7 @@ export interface MinimalFeature {
 // Features API types (for /api/features endpoint)
 // ============================================================================
 
-export type FeaturesSortField = 'weight' | 'date';
+export type FeaturesSortField = 'frequency' | 'date';
 export type SortDirection = 'asc' | 'desc';
 export type TagOperator = 'AND' | 'OR';
 
@@ -74,7 +74,7 @@ export interface FeatureResult {
   dateRange: [number, number];
   tags: string[];
   sourceLabel?: string;
-  weight: number;
+  frequency: number;
 }
 
 /**

@@ -34,7 +34,7 @@ program
         sourceModule = await import(sourcePath);
       } catch {
         console.error(`Unknown source: ${opts.source}`);
-        console.error('Available sources: beeldbank, adamlink-lps');
+        console.error('Available sources: lps, beeldbank');
         process.exit(1);
       }
 

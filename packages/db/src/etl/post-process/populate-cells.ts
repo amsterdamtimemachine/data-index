@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { CELL_SIZE_METERS } from '@atm/shared';
 import { db } from '../../client';
-import { adamlink, features, featureToAdamlink, featureCells } from '../../schema';
+import { place, features, featureToPlace, featureCells } from '../../schema';
 
 // Query result types
 type BBoxRow = { min_x: number; min_y: number; max_x: number; max_y: number };
@@ -21,11 +21,11 @@ export async function rebuildFeatureCells() {
   // Get actual bounds from data (in RD coordinates - meters)
   const bbox = await db.execute<BBoxRow>(sql`
     SELECT
-      ST_XMin(ST_Extent(${adamlink.geometry})) as min_x,
-      ST_YMin(ST_Extent(${adamlink.geometry})) as min_y,
-      ST_XMax(ST_Extent(${adamlink.geometry})) as max_x,
-      ST_YMax(ST_Extent(${adamlink.geometry})) as max_y
-    FROM ${adamlink}
+      ST_XMin(ST_Extent(${place.geometry})) as min_x,
+      ST_YMin(ST_Extent(${place.geometry})) as min_y,
+      ST_XMax(ST_Extent(${place.geometry})) as max_x,
+      ST_YMax(ST_Extent(${place.geometry})) as max_y
+    FROM ${place}
   `);
   const { min_x, min_y, max_x, max_y } = bbox.rows[0];
 
@@ -53,16 +53,30 @@ export async function rebuildFeatureCells() {
     INSERT INTO feature_cells (feature_id, cell_x, cell_y)
     SELECT DISTINCT
       ${features.id} as feature_id,
-      FLOOR((ST_X(${adamlink.geometry}) - ${min_x}) / ${CELL_SIZE_METERS})::smallint as cell_x,
-      FLOOR((ST_Y(${adamlink.geometry}) - ${min_y}) / ${CELL_SIZE_METERS})::smallint as cell_y
+      FLOOR((ST_X(${place.geometry}) - ${min_x}) / ${CELL_SIZE_METERS})::smallint as cell_x,
+      FLOOR((ST_Y(${place.geometry}) - ${min_y}) / ${CELL_SIZE_METERS})::smallint as cell_y
     FROM ${features}
-    INNER JOIN ${featureToAdamlink} ON ${features.id} = ${featureToAdamlink.featureId}
-    INNER JOIN ${adamlink} ON ${featureToAdamlink.adamlinkId} = ${adamlink.id}
+    INNER JOIN ${featureToPlace} ON ${features.id} = ${featureToPlace.featureId}
+    INNER JOIN ${place} ON ${featureToPlace.placeId} = ${place.id}
   `);
 
   console.log(`✅ Inserted ${result.rowCount} rows in ${Date.now() - t}ms`);
 
   // Stats
+  // Update frequency on features (number of cells each feature spans)
+  console.log('Updating feature frequency...');
+  const freqResult = await db.execute(sql`
+    UPDATE ${features} f
+    SET frequency = sub.cell_count
+    FROM (
+      SELECT feature_id, COUNT(*) as cell_count
+      FROM ${featureCells}
+      GROUP BY feature_id
+    ) sub
+    WHERE f.id = sub.feature_id
+  `);
+  console.log(`Updated frequency for ${freqResult.rowCount} features`);
+
   const stats = await db.execute<StatsRow>(sql`
     SELECT
       COUNT(*) as total_rows,
