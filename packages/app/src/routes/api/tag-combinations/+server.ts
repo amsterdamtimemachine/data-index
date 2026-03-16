@@ -61,7 +61,8 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		return json(result, { headers });
 	} catch (err) {
-		console.error('❌ Tag combinations API unexpected error:', err);
+		if (err && typeof err === 'object' && 'status' in err) throw err;
+		console.error('❌ Tag combinations API error:', err);
 		throw error(500, {
 			code: 'INTERNAL_ERROR',
 			message: err instanceof Error ? err.message : 'Internal server error'

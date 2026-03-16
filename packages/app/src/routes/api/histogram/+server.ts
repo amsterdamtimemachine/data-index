@@ -28,9 +28,10 @@ export const GET: RequestHandler = async ({ url }) => {
 			}
 		});
 	} catch (err) {
+		if (err && typeof err === 'object' && 'status' in err) throw err;
 		console.error('❌ Histogram API error:', err);
 		throw error(500, {
-			code: 'HISTOGRAM_ERROR',
+			code: 'INTERNAL_ERROR',
 			message: err instanceof Error ? err.message : 'Failed to load histogram data'
 		});
 	}

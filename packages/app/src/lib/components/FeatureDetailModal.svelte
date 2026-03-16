@@ -3,7 +3,7 @@
 	import { fade } from 'svelte/transition';
 	import { featureViewerState } from '$lib/state/featureState.svelte';
 	import X from 'phosphor-svelte/lib/X';
-	import type { Feature } from '@atm/shared/types';
+	import type { FeatureResult } from '@atm/shared/types';
 	import FeatureCard from '$components/FeatureCard.svelte';
 	import Button from '$components/Button.svelte';
 

@@ -16,12 +16,12 @@ export interface MasonryMemoizedInstance {
  * Extract unique identifier from masonry item element
  */
 function getFeatureId(item: HTMLElement, index: number): string | null {
-	// Use combination of feature URL and index to ensure uniqueness
-	const featureUrl = item.getAttribute('data-feature-url') || 
-		item.querySelector('[data-feature-url]')?.getAttribute('data-feature-url');
-	
-	if (featureUrl) {
-		return `${featureUrl}_${index}`;
+	// Use combination of feature ID and index to ensure uniqueness
+	const featureId = item.getAttribute('data-feature-id') ||
+		item.querySelector('[data-feature-id]')?.getAttribute('data-feature-id');
+
+	if (featureId) {
+		return `${featureId}_${index}`;
 	}
 	
 	// Fallback to index-based ID

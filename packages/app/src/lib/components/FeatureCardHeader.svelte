@@ -1,12 +1,12 @@
 <script lang="ts">
-	import type { RawFeature } from '@atm/shared/types';
+	import type { FeatureResult } from '@atm/shared/types';
 	import { mergeCss } from '$utils/utils';
 	import { formatTimePeriod } from '$utils/format';
 	import { translateContentType } from '$utils/translations';
 	import Tag from './Tag.svelte';
 
 	type Props = {
-		feature: RawFeature;
+		feature: FeatureResult;
 		class?: string;
 	};
 
@@ -20,7 +20,7 @@
 			{translateContentType(feature.recordType)}
 		</Tag>
 		<span class="text-base text-black flex-shrink-0">
-			{formatTimePeriod(feature.per)}
+			{formatTimePeriod(feature.dateRange)}
 		</span>
 	</div>
 </div>

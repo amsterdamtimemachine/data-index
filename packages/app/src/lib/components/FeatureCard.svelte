@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Feature, RawFeature, ImageFeature, TextFeature } from '@atm/shared/types';
+	import type { FeatureResult } from '@atm/shared/types';
 	import { featureViewerState } from '$lib/state/featureState.svelte';
 	import FeatureCardHeader from '$components/FeatureCardHeader.svelte';
 	import FeatureCardFooter from '$components/FeatureCardFooter.svelte';
@@ -9,7 +9,7 @@
 	import Heading from '$components/Heading.svelte';
 
 	type Props = {
-		feature: Feature;
+		feature: FeatureResult;
 		expanded?: boolean;
 	};
 
@@ -21,20 +21,10 @@
 	function handleExpand() {
 		featureViewerState.openFeature(feature);
 	}
-
-	const commonProps: RawFeature = {
-		ds: feature.ds,
-		geom: feature.geom,
-		per: feature.per,
-		tit: feature.tit,
-		url: feature.url,
-		recordType: feature.recordType,
-		tags: feature.tags
-	};
 </script>
 
 <div class="w-full border rounded-sm border-atm-sand-border bg-atm-sand min-w-0">
-	<FeatureCardHeader class="p-2" feature={commonProps} />
+	<FeatureCardHeader class="p-2" {feature} />
 	<div class={expanded ? '' : 'p-2'}>
 		<Heading
 		level={3}
@@ -42,18 +32,18 @@
 				? 'font-medium text-xl my-3 px-2'
 				: 'font-medium text-lg line-clamp-2 mb-1'}
 		>
-			{commonProps.tit}
+			{feature.label}
 		</Heading>
 		<!-- Feature-specific content -->
-		{#if feature.recordType === 'image' && 'thumbnail' in feature}
+		{#if feature.recordType === 'image' && feature.contentUrl}
 			<FeatureCardImage
-				thumbnail={feature.thumbnail}
-				alt={feature.alt}
+				thumbnail={feature.contentUrl}
+				alt={feature.description}
 				{expanded}
 				onExpand={handleExpand}
 			/>
-		{:else if (feature.recordType === 'text' || feature.recordType === 'person') && 'text' in feature}
-			<FeatureCardText text={feature.text} {expanded} />
+		{:else if (feature.recordType === 'text' || feature.recordType === 'person') && feature.description}
+			<FeatureCardText text={feature.description} {expanded} />
 		{:else}
 			<div class="{expanded ? 'px-2' : ''} text-gray-800 text-sm">
 				Unknown feature type: {feature.recordType}

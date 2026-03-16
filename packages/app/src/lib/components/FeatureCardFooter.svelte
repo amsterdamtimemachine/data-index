@@ -1,15 +1,13 @@
 <script lang="ts">
-	import type { RawFeature, Feature } from '@atm/shared/types';
+	import type { FeatureResult } from '@atm/shared/types';
 	import ArrowsOut from 'phosphor-svelte/lib/ArrowsOut';
-	import ArrowSquareOut from 'phosphor-svelte/lib/ArrowSquareOut';
-	import X from 'phosphor-svelte/lib/X';
 	import { formatDatasetTitle } from '$utils/format';
 	import { mergeCss } from '$utils/utils';
 	import Button from '$components/Button.svelte';
 	import Link from '$components/Link.svelte';
 
 	type Props = {
-		feature: Feature;
+		feature: FeatureResult;
 		class?: string;
 		onExpand: () => void;
 		expanded?: boolean;
@@ -25,9 +23,9 @@
 		className
 	)}
 >
-	{#if feature.url}
-		<Link href={feature.url} target="_blank" rel="noopener noreferrer" class="text-base">
-			{formatDatasetTitle(feature.ds)} →
+	{#if feature.id}
+		<Link href={feature.id} target="_blank" rel="noopener noreferrer" class="text-base">
+			{feature.sourceLabel ? formatDatasetTitle(feature.sourceLabel) : 'Source'} →
 		</Link>
 	{/if}
 

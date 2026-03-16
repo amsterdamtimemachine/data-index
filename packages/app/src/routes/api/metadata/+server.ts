@@ -20,6 +20,7 @@ export const GET: RequestHandler = async () => {
 
 		return json(metadata, { headers });
 	} catch (err) {
+		if (err && typeof err === 'object' && 'status' in err) throw err;
 		console.error('❌ Metadata API error:', err);
 		throw error(500, {
 			code: 'INTERNAL_ERROR',

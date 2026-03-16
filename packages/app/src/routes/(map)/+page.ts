@@ -13,11 +13,6 @@ import { getCellBoundsFromCellId } from '$utils/heatmap';
 import { translateContentType, translateContentTypes } from '$utils/translations';
 import { loadingState } from '$lib/state/loadingState.svelte';
 
-interface MetadataApiResponse extends VisualizationMetadata {
-	success: boolean;
-	message?: string;
-}
-
 // Helper functions for period validation
 function isValidPeriodFormat(period: string): boolean {
 	return /^\d{4}_\d{4}$/.test(period);
@@ -68,24 +63,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 				)
 			);
 		} else {
-			const apiResponse = (await response.json()) as MetadataApiResponse;
-
-			if (!apiResponse.success) {
-				errors.push(
-					createError(
-						'error',
-						'API Error',
-						apiResponse.message || 'API returned unsuccessful response',
-						{ response: apiResponse }
-					)
-				);
-			} else {
-				metadata = apiResponse;
-
-			//	if (metadata.resolutionDimensions) {
-			//		console.log('📐 Available resolutions:', metadata.resolutionDimensions);
-			//	}
-			}
+			metadata = (await response.json()) as VisualizationMetadata;
 		}
 	} catch (err) {
 		console.error('❌ Failed to load metadata:', err);

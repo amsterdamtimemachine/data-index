@@ -1,14 +1,14 @@
 // featureState.ts - Global state for feature detail viewing
-import type { Feature } from '@atm/shared/types';
+import type { FeatureResult } from '@atm/shared/types';
 
-let selectedFeature = $state<Feature | null>(null);
+let selectedFeature = $state<FeatureResult | null>(null);
 
 export const featureViewerState = {
 	get selectedFeature() {
 		return selectedFeature;
 	},
 
-	openFeature(feature: Feature) {
+	openFeature(feature: FeatureResult) {
 		selectedFeature = feature;
 	},
 

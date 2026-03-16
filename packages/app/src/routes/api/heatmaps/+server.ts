@@ -50,9 +50,10 @@ export const GET: RequestHandler = async ({ url }) => {
 			});
 		}
 	} catch (err) {
+		if (err && typeof err === 'object' && 'status' in err) throw err;
 		console.error('❌ Heatmaps API error:', err);
 		throw error(500, {
-			code: 'HEATMAP_ERROR',
+			code: 'INTERNAL_ERROR',
 			message: err instanceof Error ? err.message : 'Failed to load heatmap data'
 		});
 	}

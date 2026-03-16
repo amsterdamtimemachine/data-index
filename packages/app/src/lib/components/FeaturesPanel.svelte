@@ -8,8 +8,8 @@
 	import Tooltip from '$components/Tooltip.svelte';
 	import X from 'phosphor-svelte/lib/X';
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
-	import { fetchGeodataFromDatabase } from '$utils/externalApi';
 	import { formatDate } from '$utils/utils';
+	import type { FeatureResult } from '@atm/shared/types';
 	import { loadingState } from '$lib/state/loadingState.svelte';
 	import { createError, createPageErrorData } from '$utils/error';
 	import ErrorHandler from '$components/ErrorHandler.svelte';
@@ -29,7 +29,7 @@
 	let { cellId, period, bounds, recordTypes, tags, tagOperator = 'OR', onClose }: Props = $props();
 
 	// Cell data state
-	let allFeatures = $state<any[]>([]);
+	let allFeatures = $state<FeatureResult[]>([]);
 	let currentPage = $state(1);
 	let totalCount = $state(0);
 	let pageSize = $state(100); // From API response
@@ -54,36 +54,43 @@
 		loadingState.startLoading();
 
 		try {
-			// Parse period to get start and end years
-			const [startYear, endYear] = period.split('_').map((y) => parseInt(y));
-
-			// Build params for API call - only include bounds if available
-			const params: any = {
-				start_year: `${startYear}-01-01`,
-				end_year: `${endYear}-12-31`,
-				page,
-				recordTypes: recordTypes,
-				tags: tags,
-				tagOperator: tagOperator
-			};
-
-			// Only add bounds if they exist
-			if (bounds) {
-				params.min_lat = bounds.minLat;
-				params.min_lon = bounds.minLon;
-				params.max_lat = bounds.maxLat;
-				params.max_lon = bounds.maxLon;
+			if (!bounds) {
+				throw new Error('No bounds available for this cell');
 			}
 
-			const response = await fetchGeodataFromDatabase(params);
+			// Parse period to get time slice key
+			const timeSlice = period;
 
-			// Always replace features for pagination (no more appending)
-			allFeatures = response.data || [];
-			currentPage = response.page || 1;
-			totalCount = response.total || 0;
-			pageSize = response.page_size || 100;
+			// Build URL for local /api/features endpoint
+			const params = new URLSearchParams({
+				minLon: bounds.minLon.toString(),
+				maxLon: bounds.maxLon.toString(),
+				minLat: bounds.minLat.toString(),
+				maxLat: bounds.maxLat.toString(),
+				page: page.toString(),
+				timeSlice,
+				tagOperator
+			});
 
-			// Clear previous errors on successful load
+			if (recordTypes.length > 0) {
+				params.set('recordTypes', recordTypes.join(','));
+			}
+			if (tags.length > 0) {
+				params.set('tags', tags.join(','));
+			}
+
+			const response = await fetch(`/api/features?${params}`);
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}`);
+			}
+
+			const data = await response.json();
+
+			allFeatures = data.data || [];
+			currentPage = data.page || 1;
+			totalCount = data.total || 0;
+			pageSize = data.pageSize || 50;
+
 			errors = [];
 		} catch (err) {
 			console.error('Error loading cell data:', err);
