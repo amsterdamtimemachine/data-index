@@ -46,10 +46,18 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		const tagOperator = (url.searchParams.get('tagOperator') || 'OR').toUpperCase() as TagOperator;
 		const timeSlice = url.searchParams.get('timeSlice') || undefined;
-		const sort = (url.searchParams.get('sort') || 'frequency') as FeaturesSortField;
-		const sortDirection = (url.searchParams.get('sortDirection') || 'desc') as SortDirection;
-		const page = parseInt(url.searchParams.get('page') || '1', 10);
-		const pageSize = Math.min(parseInt(url.searchParams.get('pageSize') || '50', 10), 200); // Cap at 200
+		const sort = url.searchParams.get('sort') || 'frequency';
+		const sortDirection = url.searchParams.get('sortDirection') || 'desc';
+
+		if (!['frequency', 'date'].includes(sort)) {
+			throw error(400, { code: 'INVALID_SORT', message: 'Invalid sort field' });
+		}
+		if (!['asc', 'desc'].includes(sortDirection)) {
+			throw error(400, { code: 'INVALID_SORT', message: 'Invalid sort direction' });
+		}
+
+		const page = parseInt(url.searchParams.get('page') || '1', 10) || 1;
+		const pageSize = Math.min(parseInt(url.searchParams.get('pageSize') || '50', 10) || 50, 200);
 
 		console.log(
 			`📦 Features API request - bounds: [${bounds.minLon.toFixed(4)}, ${bounds.minLat.toFixed(4)}] to [${bounds.maxLon.toFixed(4)}, ${bounds.maxLat.toFixed(4)}], ` +
@@ -66,8 +74,8 @@ export const GET: RequestHandler = async ({ url }) => {
 			tags,
 			tagOperator,
 			timeSlice,
-			sort,
-			sortDirection,
+			sort: sort as FeaturesSortField,
+			sortDirection: sortDirection as SortDirection,
 			page,
 			pageSize
 		});

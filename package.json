@@ -9,11 +9,10 @@
     "packages/*"
   ],
   "scripts": {
-    "sync:env": "scripts/sync-env.sh",
     "dev": "turbo run dev --filter=@atm/app",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "build:app": "scripts/sync-env.sh && turbo run build --filter=@atm/app",
+    "build:app": "turbo run build --filter=@atm/app",
     "clean": "turbo run clean",
     "db:migrate": "cd packages/db && bunx drizzle-kit migrate",
     "db:generate": "cd packages/db && bunx drizzle-kit generate",
@@ -23,10 +22,8 @@
     "docker:up": "docker compose up",
     "docker:up:build": "docker compose up --build",
     "docker:down": "docker compose down",
-    "docker:regenerate": "rm -f data/docker/visualization.bin && docker compose up --build",
     "docker:logs": "docker compose logs -f",
     "docker:logs:app": "docker compose logs -f app",
-    "docker:logs:init": "docker compose logs -f data-init",
     "docker:restart": "docker compose restart",
     "docker:restart:app": "docker compose restart app"
   },

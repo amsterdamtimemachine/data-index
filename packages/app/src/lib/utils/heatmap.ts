@@ -1,7 +1,7 @@
 import type { Heatmap, HeatmapDimensions, HeatmapCellBounds } from '@atm/shared/types';
 
 /**
- * Calculate cell bounds for a specific cell - matches preprocessor logic exactly
+ * Calculate cell bounds for a specific cell
  */
 export function calculateCellBounds(
 	row: number,
@@ -30,7 +30,7 @@ export function calculateCellBounds(
 }
 
 /**
- * Get cellId from row/col - matches preprocessor format exactly
+ * Get cellId from row/col
  */
 export function getCellIdFromRowCol(row: number, col: number): string {
 	return `${row}_${col}`;

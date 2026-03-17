@@ -7,8 +7,6 @@ import { TIME_SLICES, TIME_RANGE } from '@atm/shared';
 import { db } from '../client';
 import { features, tags, featureTags, featureCells } from '../schema';
 
-const VERSION = '2.0.0';
-
 // Query result types
 type RecordTypeRow = { record_type: RecordType };
 type TagRow = { id: string };
@@ -83,8 +81,6 @@ export async function getMetadata(): Promise<VisualizationMetadata> {
   ]);
 
   return {
-    version: VERSION,
-    timestamp: new Date().toISOString(),
     timeSlices: TIME_SLICES,
     timeRange: TIME_RANGE,
     recordTypes,

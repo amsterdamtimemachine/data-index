@@ -4,14 +4,13 @@ Search heritage collections from multiple institutions in one platform with hist
 
 ## Architecture
 
-Monorepo with 4 packages:
+Monorepo with 3 packages:
 
 ```
 packages/
   shared/       Shared TypeScript types and configuration constants
   db/           PostgreSQL/PostGIS database layer (Drizzle ORM, ETL scripts)
   app/          SvelteKit web application (frontend + API routes)
-  preprocessor/ Legacy binary data pipeline (deprecated)
 ```
 
 ### Tech stack
@@ -19,6 +18,7 @@ packages/
 - **Runtime**: Bun
 - **Frontend**: SvelteKit 5, Svelte 5, MapLibre GL, TailwindCSS
 - **Database**: PostgreSQL 16 + PostGIS 3.4 via Drizzle ORM
+- **Map tiles**: OpenFreeMap (configurable via `PUBLIC_TILE_SOURCE_URL`)
 - **Infrastructure**: Docker Compose
 
 ### Data model
@@ -35,8 +35,12 @@ sources ──< features >── feature_to_place >── place (with PostGIS ge
 
 - **place**: Geographic locations (addresses, buildings, streets, neighbourhoods) stored in RD coordinates (EPSG:28992), transformed to WGS84 for the frontend
 - **features**: Content items (images, text, persons, video, audio) linked to places
-- **feature_cells**: Pre-computed grid cells at 100m resolution for fast heatmap aggregation, displayed at 75x75 resolution
+- **feature_cells**: Pre-computed grid cells at 100m resolution for fast heatmap aggregation
 - **frequency**: Number of grid cells a feature spans — lower = more geographically specific = ranks higher in search results
+
+### Heatmap grid
+
+The heatmap grid resolution is configurable per request via `rows` and `cols` query params on `/api/heatmaps` (default: 75, min: 10, max: 200). The API returns dimensions alongside the timeline data so the frontend can render the grid without a separate metadata call.
 
 ### Time slices
 
@@ -58,8 +62,6 @@ Data lives outside the repository in a `data/` directory (gitignored). Ingestion
 **Beeldbank JSON** is structured as `{ adamlinkUri: { images: [...] } }`. Each image has an `@id`, `name`, `contentUrl`, `startDate`, `endDate`, and `dateCreated`. One image can appear under multiple Adamlink URIs (depicted at multiple locations).
 
 ### Running ingestion
-
-From `packages/db/`:
 
 ```bash
 # 1. Import places (addresses with geometries) — must run first
@@ -90,13 +92,18 @@ All endpoints are SvelteKit server routes in `packages/app/src/routes/api/` that
 
 | Endpoint | Purpose | Cache |
 |----------|---------|-------|
-| `GET /api/metadata` | Time slices, record types, bounds, stats | 24h |
-| `GET /api/heatmaps` | Sparse heatmap data (single or timeline) | 1h |
+| `GET /api/metadata` | Time slices, record types, stats | 24h |
+| `GET /api/heatmaps` | Sparse heatmap data with grid dimensions | 1h |
 | `GET /api/histogram` | Feature count distribution by time period | 1h |
 | `GET /api/features` | Paginated features within geographic bounds | 5m |
 | `GET /api/available-tags` | Tags with feature counts | 30m |
 | `GET /api/tag-combinations` | Valid tag combinations for AND/OR filtering | 30m |
-| `GET /api/geodata` | Legacy proxy to external API (to be removed) |
+
+### Heatmaps endpoint
+
+`GET /api/heatmaps?recordTypes=image,text&rows=75&cols=75`
+
+Returns `{ dimensions: { colsAmount, rowsAmount, minLon, maxLon, minLat, maxLat }, timeline: { [timeSliceKey]: { indices, counts } } }`.
 
 ### Features endpoint
 
@@ -123,7 +130,7 @@ cp .env.example .env
 ### Start the database
 
 ```bash
-docker compose up -d db
+docker compose up -d dataindex-db
 ```
 
 ### Push schema (first time or after schema changes)
@@ -152,24 +159,35 @@ bun run db:studio
 ## Production (Docker)
 
 ```bash
-cp .env.example .env    # configure env vars
 docker compose up --build
 ```
 
 Runs two containers:
-- **db**: PostgreSQL 16 + PostGIS 3.4 with persistent volume
+- **dataindex-db**: PostgreSQL 16 + PostGIS 3.4 with persistent volume
 - **app**: SvelteKit on port 3000, depends on healthy db
 
+All environment variables are configured in `docker-compose.yml`. No `.env` file is needed inside the Docker image — all public env vars are read at runtime.
+
 Data ingestion is done separately from a dev machine (see [Data ingestion](#data-ingestion)).
+
+### Environment variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DATABASE_URL` | Yes | — | PostgreSQL connection string |
+| `PUBLIC_DEFAULT_CELL` | No | — | Default cell to select on load |
+| `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |
+| `DB_USER` | No | `atm` | PostgreSQL user (Docker) |
+| `DB_PASSWORD` | No | `atm_dev_password` | PostgreSQL password (Docker) |
 
 ### Docker commands
 
 ```bash
-docker compose up -d          # start
-docker compose up --build     # rebuild and start
-docker compose down           # stop
-docker compose logs -f app    # app logs
-docker compose logs -f db     # database logs
+docker compose up -d              # start
+docker compose up --build         # rebuild and start
+docker compose down               # stop
+docker compose logs -f app        # app logs
+docker compose logs -f dataindex-db  # database logs
 ```
 
 Adminer (database UI) available in dev profile:
@@ -184,24 +202,15 @@ docker compose --profile dev up    # includes Adminer on port 8080
 - [x] Drizzle ORM with typed queries for all data access
 - [x] ETL pipeline for LPS places and Beeldbank features
 - [x] Pre-computed 100m grid cells for fast heatmap aggregation
-- [x] 7 API endpoints (metadata, heatmaps, histogram, features, tags, tag-combinations)
+- [x] Configurable heatmap grid resolution (10–200, default 75)
+- [x] 6 API endpoints (metadata, heatmaps, histogram, features, tags, tag-combinations)
 - [x] Features query with bounds filtering, pagination, tag AND/OR, time slices, interleaved sorting
 - [x] MapLibre GL map with heatmap cell visualization
 - [x] Interactive time period selector with histogram
 - [x] Record type toggle filtering (image, text, person)
-- [x] Tag filtering with AND/OR operator support
+- [x] Tag filtering UI with AND/OR operator support
 - [x] Feature cards with detail modal
 - [x] Docker Compose deployment (db + app)
 - [x] Migration system via Drizzle Kit
+- [x] No build-time env vars — all config is runtime
 
-## What's missing / TODO
-
-- [ ] **Wire up FeaturesPanel to local API** — `FeaturesPanel.svelte` still calls the legacy external API (`atmbackend.create.humanities.uva.nl`) instead of the local `/api/features` endpoint
-- [ ] **Remove legacy geodata proxy** — `/api/geodata` endpoint and `externalApi.ts` utility can be removed once FeaturesPanel is migrated
-- [ ] **Street geometries** — `adamlinkstraten.geojson` (street data) is not yet ingested; only point-based addresses from LPS are imported
-- [ ] **Additional data sources** — only Beeldbank images are ingested; system supports text, person, video, audio record types
-- [ ] **Tag data** — no tags are currently ingested; tag filtering UI exists but has no data
-- [ ] **Full-text search** — `features.description` is stored but not indexed for search
-- [ ] **Update root README docker commands** — some docker scripts in root package.json reference old data-init service
-- [ ] **Clean up preprocessor package** — legacy binary pipeline is no longer used
-- [ ] **Remove unused env vars** — `PRIVATE_VISUALIZATION_BINARY_PATH`, bounds/grid env vars (now in shared config)

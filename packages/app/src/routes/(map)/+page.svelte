@@ -26,7 +26,7 @@
 	import NavItem from '$components/NavItem.svelte';
 	import type { PageData } from './$types';
 import type { Histogram, HeatmapTimeline } from '@atm/shared/types';
-import { PUBLIC_DEFAULT_CELL } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 
 	let { data }: { data: PageData } = $props();
@@ -102,11 +102,11 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 					controller.syncUrlParameters(lastPeriod, currentTagOperator, defaultRecordTypes);
 
 					// Set default cell selection
-					if (PUBLIC_DEFAULT_CELL && dimensions) {
+					if (env.PUBLIC_DEFAULT_CELL && dimensions) {
 						// Calculate bounds on-demand from dimensions
-						const bounds = getCellBoundsFromCellId(PUBLIC_DEFAULT_CELL, dimensions);
+						const bounds = getCellBoundsFromCellId(env.PUBLIC_DEFAULT_CELL, dimensions);
 						if (bounds) {
-							controller.selectCell(PUBLIC_DEFAULT_CELL, bounds);
+							controller.selectCell(env.PUBLIC_DEFAULT_CELL, bounds);
 						}
 					}
 				}

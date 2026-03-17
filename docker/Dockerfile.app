@@ -9,20 +9,16 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 COPY package.json bun.lockb turbo.json ./
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/app/package.json ./packages/app/
+COPY packages/db/package.json ./packages/db/
 
 # Install dependencies
 RUN bun install
 
-# Copy source code, scripts and env template
+# Copy source code
 COPY packages/ ./packages/
-COPY scripts/ ./scripts/
-COPY .env .env
 
-# Build app
+# Build app (no .env needed — all PUBLIC_ vars are dynamic at runtime)
 RUN bun run build:app
-
-# Create data directory
-RUN mkdir -p /app/data
 
 # Expose port
 EXPOSE 3000
