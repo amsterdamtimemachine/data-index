@@ -4,6 +4,8 @@ import type {
 	VisualizationMetadata,
 	Histogram,
 	HeatmapTimeline,
+	HeatmapDimensions,
+	HeatmapResponse,
 	RecordType
 } from '@atm/shared/types';
 import type { AppError } from '$types/error';
@@ -41,6 +43,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	let metadata: VisualizationMetadata | null = null;
 	let histogram: Histogram | null = null;
 	let heatmapTimeline: HeatmapTimeline | null = null;
+	let heatmapDimensions: HeatmapDimensions | null = null;
 	let availableTags: any = null;
 
 	// Parse URL parameters
@@ -250,7 +253,9 @@ export const load: PageLoad = async ({ fetch, url }) => {
 					})
 				);
 			} else {
-				heatmapTimeline = (await heatmapResponse.json()) as HeatmapTimeline;
+				const heatmapData = (await heatmapResponse.json()) as HeatmapResponse;
+				heatmapTimeline = heatmapData.timeline;
+				heatmapDimensions = heatmapData.dimensions;
 			}
 		} catch (err) {
 			console.error('❌ Failed to load heatmap timeline:', err);
@@ -323,13 +328,13 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	let validatedCell: string | null = null;
 	let cellBounds: { minLat: number; maxLat: number; minLon: number; maxLon: number } | null = null;
 
-	if (cellParam && metadata?.heatmapDimensions) {
-		const validation = validateCellId(cellParam, metadata.heatmapDimensions);
+	if (cellParam && heatmapDimensions) {
+		const validation = validateCellId(cellParam, heatmapDimensions);
 
 		if (validation.isValid) {
 			validatedCell = cellParam;
 			// Calculate cell bounds on-demand from dimensions
-			const bounds = getCellBoundsFromCellId(cellParam, metadata.heatmapDimensions);
+			const bounds = getCellBoundsFromCellId(cellParam, heatmapDimensions);
 			if (bounds) {
 				cellBounds = bounds;
 			}
@@ -457,6 +462,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		metadata,
 		histogram,
 		heatmapTimeline,
+		heatmapDimensions,
 		availableTags,
 		currentRecordTypes,
 		currentTags,

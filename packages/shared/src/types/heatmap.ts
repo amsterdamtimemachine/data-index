@@ -43,3 +43,11 @@ export interface HeatmapCellBounds {
   minLat: number;
   maxLat: number;
 }
+
+/**
+ * Complete heatmap API response — timeline data + grid dimensions
+ */
+export interface HeatmapResponse {
+  dimensions: HeatmapDimensions;
+  timeline: HeatmapTimeline;
+}

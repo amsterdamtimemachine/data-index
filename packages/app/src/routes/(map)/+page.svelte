@@ -32,7 +32,7 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 	let { data }: { data: PageData } = $props();
 
 	// Derived data from server
-	let dimensions = $derived(data?.metadata?.heatmapDimensions);
+	let dimensions = $derived(data?.heatmapDimensions);
 	let recordTypes = $derived(data?.metadata?.recordTypes || []);
 	let tags = $derived(data?.metadata?.tags);
 	let availableTagNames = $derived(

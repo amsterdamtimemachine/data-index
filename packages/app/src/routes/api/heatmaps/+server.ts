@@ -1,8 +1,16 @@
 // src/routes/api/heatmaps/+server.ts
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RecordType, HeatmapTimeline } from '@atm/shared/types';
+import type { RecordType, HeatmapResolutionConfig } from '@atm/shared/types';
+import { GRID_DEFAULT, GRID_MIN, GRID_MAX } from '@atm/shared';
 import { getHeatmap, getHeatmapTimeline } from '@atm/db/queries';
+
+function parseGridParam(value: string | null, defaultVal: number): number {
+	if (value === null) return defaultVal;
+	const parsed = parseInt(value, 10);
+	if (isNaN(parsed)) return defaultVal;
+	return Math.min(Math.max(parsed, GRID_MIN), GRID_MAX);
+}
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -14,35 +22,37 @@ export const GET: RequestHandler = async ({ url }) => {
 			? (recordTypesParam.split(',').map((t) => t.trim()) as RecordType[])
 			: undefined;
 
+		// Parse grid resolution
+		const rows = parseGridParam(url.searchParams.get('rows'), GRID_DEFAULT);
+		const cols = parseGridParam(url.searchParams.get('cols'), GRID_DEFAULT);
+		const resolution: HeatmapResolutionConfig = { rows, cols };
+
 		console.log(
-			`🔥 Heatmaps API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, timeSlice: ${timeSliceParam || 'all'}`
+			`🔥 Heatmaps API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, timeSlice: ${timeSliceParam || 'all'}, grid: ${cols}x${rows}`
 		);
 
-		// Single time slice or full timeline
 		if (timeSliceParam) {
-			const heatmap = await getHeatmap(timeSliceParam, recordTypes);
-			console.log(`✅ Heatmap for ${timeSliceParam}: ${heatmap.indices.length} cells`);
+			const heatmapResponse = await getHeatmap(timeSliceParam, resolution, recordTypes);
+			const cellCount = Object.values(heatmapResponse.timeline)[0]?.indices.length ?? 0;
+			console.log(`✅ Heatmap for ${timeSliceParam}: ${cellCount} cells`);
 
-			return json(
-				{ [timeSliceParam]: heatmap } as HeatmapTimeline,
-				{
-					headers: {
-						'Cache-Control': 'public, max-age=3600',
-						'Access-Control-Allow-Origin': '*'
-					}
+			return json(heatmapResponse, {
+				headers: {
+					'Cache-Control': 'public, max-age=3600',
+					'Access-Control-Allow-Origin': '*'
 				}
-			);
+			});
 		} else {
-			const heatmapTimeline = await getHeatmapTimeline(recordTypes);
-			const timeSliceCount = Object.keys(heatmapTimeline).length;
-			const totalCells = Object.values(heatmapTimeline).reduce(
+			const heatmapResponse = await getHeatmapTimeline(resolution, recordTypes);
+			const timeSliceCount = Object.keys(heatmapResponse.timeline).length;
+			const totalCells = Object.values(heatmapResponse.timeline).reduce(
 				(sum, h) => sum + h.indices.length,
 				0
 			);
 
 			console.log(`✅ Heatmap timeline: ${timeSliceCount} slices, ${totalCells} total cells`);
 
-			return json(heatmapTimeline, {
+			return json(heatmapResponse, {
 				headers: {
 					'Cache-Control': 'public, max-age=3600',
 					'Access-Control-Allow-Origin': '*'

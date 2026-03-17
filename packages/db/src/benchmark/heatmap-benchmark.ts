@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../client';
 import { featureCells, features } from '../schema';
-import { TIME_SLICES, GRID_ROWS, GRID_COLS } from '@atm/shared';
+import { TIME_SLICES, GRID_DEFAULT } from '@atm/shared';
 
 // Query result types
 type CellCount = { cell_x: number; cell_y: number; count: string };
@@ -14,11 +14,11 @@ const RECORD_TYPES = ['image', 'text', 'person'] as const;
  * Convert cell (x, y) at base resolution to target grid index
  */
 function cellToGridIndex(cellX: number, cellY: number, maxCellX: number, maxCellY: number): number {
-  const gridCol = Math.floor((cellX / (maxCellX + 1)) * GRID_COLS);
-  const gridRow = Math.floor((cellY / (maxCellY + 1)) * GRID_ROWS);
-  const clampedCol = Math.min(Math.max(gridCol, 0), GRID_COLS - 1);
-  const clampedRow = Math.min(Math.max(gridRow, 0), GRID_ROWS - 1);
-  return clampedRow * GRID_COLS + clampedCol;
+  const gridCol = Math.floor((cellX / (maxCellX + 1)) * GRID_DEFAULT);
+  const gridRow = Math.floor((cellY / (maxCellY + 1)) * GRID_DEFAULT);
+  const clampedCol = Math.min(Math.max(gridCol, 0), GRID_DEFAULT - 1);
+  const clampedRow = Math.min(Math.max(gridRow, 0), GRID_DEFAULT - 1);
+  return clampedRow * GRID_DEFAULT + clampedCol;
 }
 
 /**
@@ -155,7 +155,7 @@ async function benchmarkOldApproach(maxX: number, maxY: number) {
 
 async function main() {
   console.log('=== Heatmap Query Benchmark ===');
-  console.log(`Grid: ${GRID_COLS}×${GRID_ROWS}`);
+  console.log(`Grid: ${GRID_DEFAULT}×${GRID_DEFAULT}`);
   console.log(`Time slices: ${TIME_SLICES.length}`);
 
   // Get max cell coordinates for scaling

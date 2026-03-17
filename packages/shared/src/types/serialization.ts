@@ -1,4 +1,3 @@
-import { HeatmapDimensions, HeatmapResolutionConfig } from "./heatmap";
 import { TimeSlice } from "./temporal";
 import { RecordType } from "./feature";
 
@@ -8,7 +7,6 @@ import { RecordType } from "./feature";
 export interface VisualizationMetadata {
   version: string;
   timestamp: string;
-  heatmapDimensions: HeatmapDimensions;
   timeSlices: TimeSlice[];
   timeRange: {
     start: string;
@@ -16,13 +14,10 @@ export interface VisualizationMetadata {
   };
   recordTypes: RecordType[];
   tags: string[];
-  resolutions: HeatmapResolutionConfig[];
-  resolutionDimensions: Record<string, HeatmapDimensions>;
   stats?: {
     totalFeatures: number;
     featuresPerRecordType: Record<RecordType, number>;
     timeSliceCount: number;
     gridCellCount: number;
-    resolutionCount: number;
   };
 }

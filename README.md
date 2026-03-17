@@ -120,8 +120,6 @@ bun install
 cp .env.example .env
 ```
 
-Edit `.env` and set `PUBLIC_MAPTILER_API_KEY` (get one from [MapTiler](https://www.maptiler.com/)).
-
 ### Start the database
 
 ```bash

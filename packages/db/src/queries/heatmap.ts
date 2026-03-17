@@ -1,24 +1,29 @@
 import { sql } from 'drizzle-orm';
-import type { Heatmap, HeatmapTimeline, RecordType } from '@atm/shared';
-import { TIME_SLICES, GRID_ROWS, GRID_COLS } from '@atm/shared';
+import type { Heatmap, HeatmapTimeline, HeatmapResponse, HeatmapDimensions, HeatmapResolutionConfig, RecordType } from '@atm/shared';
+import { TIME_SLICES } from '@atm/shared';
 import { db } from '../client';
-import { featureCells, features } from '../schema';
+import { featureCells, features, place } from '../schema';
 
 // Query result types
 type CellCount = { cell_x: number; cell_y: number; count: string };
 type CellCountWithTime = { cell_x: number; cell_y: number; time_bin: string; count: string };
 type MaxCell = { max_x: number; max_y: number };
+type BoundsRow = { min_lon: string; max_lon: string; min_lat: string; max_lat: string };
 type RecordTypeRow = { record_type: RecordType };
 
 /**
  * Convert cell (x, y) at base resolution to target grid index
  */
-function cellToGridIndex(cellX: number, cellY: number, maxCellX: number, maxCellY: number): number {
-  const gridCol = Math.floor((cellX / (maxCellX + 1)) * GRID_COLS);
-  const gridRow = Math.floor((cellY / (maxCellY + 1)) * GRID_ROWS);
-  const clampedCol = Math.min(Math.max(gridCol, 0), GRID_COLS - 1);
-  const clampedRow = Math.min(Math.max(gridRow, 0), GRID_ROWS - 1);
-  return clampedRow * GRID_COLS + clampedCol;
+function cellToGridIndex(
+  cellX: number, cellY: number,
+  maxCellX: number, maxCellY: number,
+  gridCols: number, gridRows: number
+): number {
+  const gridCol = Math.floor((cellX / (maxCellX + 1)) * gridCols);
+  const gridRow = Math.floor((cellY / (maxCellY + 1)) * gridRows);
+  const clampedCol = Math.min(Math.max(gridCol, 0), gridCols - 1);
+  const clampedRow = Math.min(Math.max(gridRow, 0), gridRows - 1);
+  return clampedRow * gridCols + clampedCol;
 }
 
 /**
@@ -59,25 +64,62 @@ async function getMaxCellBounds(): Promise<{ maxX: number; maxY: number }> {
 }
 
 /**
+ * Get geographic bounds from actual data extent (WGS84)
+ */
+async function getBoundsFromData(): Promise<{ minLon: number; maxLon: number; minLat: number; maxLat: number }> {
+  const result = await db.execute<BoundsRow>(sql`
+    SELECT
+      ST_XMin(ST_Extent(ST_Transform(${place.geometry}, 4326))) as min_lon,
+      ST_XMax(ST_Extent(ST_Transform(${place.geometry}, 4326))) as max_lon,
+      ST_YMin(ST_Extent(ST_Transform(${place.geometry}, 4326))) as min_lat,
+      ST_YMax(ST_Extent(ST_Transform(${place.geometry}, 4326))) as max_lat
+    FROM ${place}
+    WHERE ${place.geometry} IS NOT NULL
+  `);
+  const row = result.rows[0];
+  return {
+    minLon: parseFloat(row.min_lon),
+    maxLon: parseFloat(row.max_lon),
+    minLat: parseFloat(row.min_lat),
+    maxLat: parseFloat(row.max_lat)
+  };
+}
+
+/**
+ * Build HeatmapDimensions from grid resolution and geographic bounds
+ */
+function buildDimensions(cols: number, rows: number, bounds: { minLon: number; maxLon: number; minLat: number; maxLat: number }): HeatmapDimensions {
+  return {
+    colsAmount: cols,
+    rowsAmount: rows,
+    ...bounds
+  };
+}
+
+/**
  * Get heatmap for a single time slice with combined record types
- * Optimized: 1 query regardless of how many record types
  */
 export async function getHeatmap(
   timeSliceKey: string,
-  recordTypes?: RecordType[]
-): Promise<Heatmap> {
+  resolution: HeatmapResolutionConfig,
+  recordTypes?: RecordType[],
+): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
+  const { cols: gridCols, rows: gridRows } = resolution;
   const timeSlice = TIME_SLICES.find(ts => ts.key === timeSliceKey);
 
   if (!timeSlice) {
     throw new Error(`Unknown time slice: ${timeSliceKey}`);
   }
 
-  const { maxX, maxY } = await getMaxCellBounds();
+  const [{ maxX, maxY }, bounds] = await Promise.all([
+    getMaxCellBounds(),
+    getBoundsFromData()
+  ]);
+
   const startDate = timeSlice.timeRange.start;
   const endDate = timeSlice.timeRange.end;
 
-  // Single query with IN clause for combined record types
   const result = await db.execute<CellCount>(sql`
     SELECT ${featureCells.cellX} as cell_x, ${featureCells.cellY} as cell_y, COUNT(*) as count
     FROM ${featureCells}
@@ -88,27 +130,33 @@ export async function getHeatmap(
     GROUP BY ${featureCells.cellX}, ${featureCells.cellY}
   `);
 
-  // Process into grid
   const countsMap = new Map<number, number>();
   for (const row of result.rows) {
-    const gridIndex = cellToGridIndex(Number(row.cell_x), Number(row.cell_y), maxX, maxY);
+    const gridIndex = cellToGridIndex(Number(row.cell_x), Number(row.cell_y), maxX, maxY, gridCols, gridRows);
     countsMap.set(gridIndex, (countsMap.get(gridIndex) || 0) + parseInt(row.count));
   }
 
-  return buildSparseHeatmap(countsMap);
+  return {
+    dimensions: buildDimensions(gridCols, gridRows, bounds),
+    timeline: { [timeSliceKey]: buildSparseHeatmap(countsMap) }
+  };
 }
 
 /**
  * Get heatmap timeline for all time slices with combined record types
- * Optimized: 1 query for all time slices using GROUP BY time_bin
  */
 export async function getHeatmapTimeline(
-  recordTypes?: RecordType[]
-): Promise<HeatmapTimeline> {
+  resolution: HeatmapResolutionConfig,
+  recordTypes?: RecordType[],
+): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
-  const { maxX, maxY } = await getMaxCellBounds();
+  const { cols: gridCols, rows: gridRows } = resolution;
 
-  // Single query with GROUP BY time_bin for all time slices
+  const [{ maxX, maxY }, bounds] = await Promise.all([
+    getMaxCellBounds(),
+    getBoundsFromData()
+  ]);
+
   const result = await db.execute<CellCountWithTime>(sql`
     SELECT
       ${featureCells.cellX} as cell_x,
@@ -123,7 +171,6 @@ export async function getHeatmapTimeline(
     GROUP BY ${featureCells.cellX}, ${featureCells.cellY}, time_bin
   `);
 
-  // Group results by time slice
   const countsBySlice = new Map<number, Map<number, number>>();
   for (const row of result.rows) {
     const timeBin = parseInt(row.time_bin);
@@ -131,17 +178,18 @@ export async function getHeatmapTimeline(
       countsBySlice.set(timeBin, new Map());
     }
     const countsMap = countsBySlice.get(timeBin)!;
-    const gridIndex = cellToGridIndex(Number(row.cell_x), Number(row.cell_y), maxX, maxY);
+    const gridIndex = cellToGridIndex(Number(row.cell_x), Number(row.cell_y), maxX, maxY, gridCols, gridRows);
     countsMap.set(gridIndex, (countsMap.get(gridIndex) || 0) + parseInt(row.count));
   }
 
-  // Build heatmap timeline
-  const heatmapTimeline: HeatmapTimeline = {};
-
+  const timeline: HeatmapTimeline = {};
   for (const timeSlice of TIME_SLICES) {
     const countsMap = countsBySlice.get(timeSlice.startYear) || new Map();
-    heatmapTimeline[timeSlice.key] = buildSparseHeatmap(countsMap);
+    timeline[timeSlice.key] = buildSparseHeatmap(countsMap);
   }
 
-  return heatmapTimeline;
+  return {
+    dimensions: buildDimensions(gridCols, gridRows, bounds),
+    timeline
+  };
 }

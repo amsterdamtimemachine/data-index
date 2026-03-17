@@ -1,9 +1,20 @@
 <script lang="ts">
-	import { PUBLIC_MAPTILER_API_KEY } from '$env/static/public';
-	const STYLE_URL = `https://api.maptiler.com/maps/8b292bff-5b9a-4be2-aaea-22585e67cf10/style.json?key=${PUBLIC_MAPTILER_API_KEY}`;
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { onMount, onDestroy } from 'svelte';
+	import { env } from '$env/dynamic/public';
 	import maplibre, { type Map as MapLibreMap } from 'maplibre-gl';
+
+	const tileSourceUrl = env.PUBLIC_TILE_SOURCE_URL || 'https://tiles.openfreemap.org/planet';
+	const BASE_STYLE: maplibre.StyleSpecification = {
+		version: 8,
+		sources: {
+			openmaptiles: {
+				type: 'vector',
+				url: tileSourceUrl
+			}
+		},
+		layers: []
+	};
 	import type { FeatureCollection, Feature, Polygon, GeoJsonProperties } from 'geojson';
 	import type { Heatmap, HeatmapDimensions, Coordinates } from '@atm/shared/types';
 	import { generateCellIdMap, generateCellGeometries, calculateDensity } from '$utils/heatmap';
@@ -221,7 +232,7 @@
 
 		map = new maplibre.Map({
 			container: mapContainer,
-			style: STYLE_URL,
+			style: BASE_STYLE,
 			maxBounds: [
 				[west - mapStyle.boundsPanningOffsetLon, south - mapStyle.boundsPanningOffsetLat],
 				[east + mapStyle.boundsPanningOffsetLon, north + mapStyle.boundsPanningOffsetLat]
@@ -245,16 +256,13 @@
 			const geojsonData = generateHeatmapCells(dimensions);
 
 			// Add background layer with custom color
-			mapInstance.addLayer(
-				{
-					id: 'background',
-					type: 'background',
-					paint: {
-						'background-color': mapStyle.backgroundColor
-					}
-				},
-				mapInstance.getStyle().layers[0]?.id
-			);
+			mapInstance.addLayer({
+				id: 'background',
+				type: 'background',
+				paint: {
+					'background-color': mapStyle.backgroundColor
+				}
+			});
 
 			mapInstance.addSource('heatmap', {
 				type: 'geojson',
@@ -266,7 +274,7 @@
 			mapInstance.addLayer({
 				id: 'heatmap-water-fill',
 				type: 'fill',
-				source: 'maptiler_planet',
+				source: 'openmaptiles',
 				'source-layer': 'water',
 				paint: {
 					'fill-color': mapStyle.waterFillColor,
@@ -289,7 +297,7 @@
 			mapInstance.addLayer({
 				id: 'heatmap-water-outlines',
 				type: 'line',
-				source: 'maptiler_planet',
+				source: 'openmaptiles',
 				'source-layer': 'water',
 				paint: {
 					'line-color': mapStyle.waterOutlineColor,
@@ -302,7 +310,7 @@
 			mapInstance.addLayer({
 				id: 'transportation',
 				type: 'line',
-				source: 'maptiler_planet',
+				source: 'openmaptiles',
 				'source-layer': 'transportation',
 				minzoom: 4,
 				maxzoom: 22,
