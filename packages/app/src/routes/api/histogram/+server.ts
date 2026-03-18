@@ -32,7 +32,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		console.error('❌ Histogram API error:', err);
 		throw error(500, {
 			code: 'INTERNAL_ERROR',
-			message: err instanceof Error ? err.message : 'Failed to load histogram data'
+			message: 'Failed to load histogram data'
 		});
 	}
 };

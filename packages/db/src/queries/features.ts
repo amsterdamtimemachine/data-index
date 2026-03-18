@@ -1,15 +1,14 @@
 import { sql } from 'drizzle-orm';
+import { createTTLCache } from './cache';
 import type {
   RecordType,
   FeaturesQuery,
   FeatureResult,
   FeaturesResponse,
-  FeaturesSortField,
-  SortDirection
 } from '@atm/shared';
 import { TIME_SLICES } from '@atm/shared';
 import { db } from '../client';
-import { features, featureCells, featureTags, featureToPlace, place, tags, sources } from '../schema';
+import { featureToPlace, place } from '../schema';
 
 // Query result types (internal)
 type BaseCellBoundsRow = {
@@ -38,17 +37,14 @@ type FeatureRow = {
 
 type CountRow = { count: string };
 
-// Cache for base grid bounds (doesn't change)
-let baseCellBoundsCache: BaseCellBoundsRow | null = null;
+const baseCellBoundsCache = createTTLCache<BaseCellBoundsRow>(10 * 60 * 1000);
 
 /**
  * Get the base grid cell bounds and geographic extent
- * Cached since this doesn't change
  */
 async function getBaseCellBounds(): Promise<BaseCellBoundsRow> {
-  if (baseCellBoundsCache) {
-    return baseCellBoundsCache;
-  }
+  const cached = baseCellBoundsCache.get();
+  if (cached) return cached;
 
   const result = await db.execute<BaseCellBoundsRow>(sql`
     SELECT
@@ -66,8 +62,8 @@ async function getBaseCellBounds(): Promise<BaseCellBoundsRow> {
     WHERE p.geometry IS NOT NULL
   `);
 
-  baseCellBoundsCache = result.rows[0];
-  return baseCellBoundsCache;
+  baseCellBoundsCache.set(result.rows[0]);
+  return result.rows[0];
 }
 
 /**

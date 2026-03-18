@@ -37,7 +37,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		console.error('❌ Available tags API error:', err);
 		throw error(500, {
 			code: 'INTERNAL_ERROR',
-			message: err instanceof Error ? err.message : 'Internal server error'
+			message: 'Failed to load available tags'
 		});
 	}
 };

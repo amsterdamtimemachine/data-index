@@ -65,7 +65,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		console.error('❌ Tag combinations API error:', err);
 		throw error(500, {
 			code: 'INTERNAL_ERROR',
-			message: err instanceof Error ? err.message : 'Internal server error'
+			message: 'Failed to load tag combinations'
 		});
 	}
 };

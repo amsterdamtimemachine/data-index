@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { createTTLCache } from './cache';
 import type { Heatmap, HeatmapTimeline, HeatmapResponse, HeatmapDimensions, HeatmapResolutionConfig, RecordType } from '@atm/shared';
 import { TIME_SLICES } from '@atm/shared';
 import { db } from '../client';
@@ -53,20 +54,32 @@ async function getRecordTypes(): Promise<RecordType[]> {
   return result.rows.map(r => r.record_type);
 }
 
+const maxCellBoundsCache = createTTLCache<{ maxX: number; maxY: number }>(10 * 60 * 1000);
+
 /**
  * Get max cell coordinates for scaling to grid
  */
 async function getMaxCellBounds(): Promise<{ maxX: number; maxY: number }> {
+  const cached = maxCellBoundsCache.get();
+  if (cached) return cached;
+
   const result = await db.execute<MaxCell>(
     sql`SELECT MAX(${featureCells.cellX}) as max_x, MAX(${featureCells.cellY}) as max_y FROM ${featureCells}`
   );
-  return { maxX: result.rows[0].max_x, maxY: result.rows[0].max_y };
+  const value = { maxX: result.rows[0].max_x, maxY: result.rows[0].max_y };
+  maxCellBoundsCache.set(value);
+  return value;
 }
+
+const geoBoundsCache = createTTLCache<{ minLon: number; maxLon: number; minLat: number; maxLat: number }>(10 * 60 * 1000);
 
 /**
  * Get geographic bounds from actual data extent (WGS84)
  */
 async function getBoundsFromData(): Promise<{ minLon: number; maxLon: number; minLat: number; maxLat: number }> {
+  const cached = geoBoundsCache.get();
+  if (cached) return cached;
+
   const result = await db.execute<BoundsRow>(sql`
     SELECT
       ST_XMin(ST_Extent(ST_Transform(${place.geometry}, 4326))) as min_lon,
@@ -77,12 +90,14 @@ async function getBoundsFromData(): Promise<{ minLon: number; maxLon: number; mi
     WHERE ${place.geometry} IS NOT NULL
   `);
   const row = result.rows[0];
-  return {
+  const value = {
     minLon: parseFloat(row.min_lon),
     maxLon: parseFloat(row.max_lon),
     minLat: parseFloat(row.min_lat),
     maxLat: parseFloat(row.max_lat)
   };
+  geoBoundsCache.set(value);
+  return value;
 }
 
 /**
@@ -150,12 +165,13 @@ export async function getHeatmapTimeline(
   recordTypes?: RecordType[],
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
-  const { cols: gridCols, rows: gridRows } = resolution;
-
   const [{ maxX, maxY }, bounds] = await Promise.all([
     getMaxCellBounds(),
     getBoundsFromData()
   ]);
+
+  const gridCols = Math.min(resolution.cols, maxX + 1);
+  const gridRows = Math.min(resolution.rows, maxY + 1);
 
   const result = await db.execute<CellCountWithTime>(sql`
     SELECT
