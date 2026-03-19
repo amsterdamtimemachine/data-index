@@ -6,7 +6,7 @@ import type {
   FeatureResult,
   FeaturesResponse,
 } from '@atm/shared';
-import { TIME_SLICES } from '@atm/shared';
+import { computeTimeSlices } from './time-slices';
 import { db } from '../client';
 import { featureToPlace, place } from '../schema';
 
@@ -99,8 +99,9 @@ async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Promise<{
 /**
  * Get date range from time slice key
  */
-function getTimeSliceDateRange(timeSliceKey: string): { startDate: string; endDate: string } | null {
-  const timeSlice = TIME_SLICES.find(ts => ts.key === timeSliceKey);
+async function getTimeSliceDateRange(timeSliceKey: string): Promise<{ startDate: string; endDate: string } | null> {
+  const timeSlices = await computeTimeSlices();
+  const timeSlice = timeSlices.find(ts => ts.key === timeSliceKey);
   if (!timeSlice) return null;
   return {
     startDate: timeSlice.timeRange.start,
@@ -128,7 +129,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   const cellRange = await boundsToBaseCellRange(bounds);
 
   // Get date range from time slice
-  const dateRange = timeSlice ? getTimeSliceDateRange(timeSlice) : null;
+  const dateRange = timeSlice ? await getTimeSliceDateRange(timeSlice) : null;
 
   // Default to all record types if none specified
   const types = recordTypes && recordTypes.length > 0

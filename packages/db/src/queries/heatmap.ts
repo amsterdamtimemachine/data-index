@@ -1,9 +1,10 @@
 import { sql } from 'drizzle-orm';
 import { createTTLCache } from './cache';
 import type { Heatmap, HeatmapTimeline, HeatmapResponse, HeatmapDimensions, HeatmapResolutionConfig, RecordType } from '@atm/shared';
-import { TIME_SLICES } from '@atm/shared';
+import { DEFAULT_BIN_SIZE } from '@atm/shared';
 import { db } from '../client';
 import { featureCells, features, place } from '../schema';
+import { computeTimeSlices } from './time-slices';
 
 // Query result types
 type CellCount = { cell_x: number; cell_y: number; count: string };
@@ -118,10 +119,11 @@ export async function getHeatmap(
   timeSliceKey: string,
   resolution: HeatmapResolutionConfig,
   recordTypes?: RecordType[],
+  binSizeYears: number = DEFAULT_BIN_SIZE
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
-  const { cols: gridCols, rows: gridRows } = resolution;
-  const timeSlice = TIME_SLICES.find(ts => ts.key === timeSliceKey);
+  const timeSlices = await computeTimeSlices(binSizeYears);
+  const timeSlice = timeSlices.find(ts => ts.key === timeSliceKey);
 
   if (!timeSlice) {
     throw new Error(`Unknown time slice: ${timeSliceKey}`);
@@ -131,6 +133,9 @@ export async function getHeatmap(
     getMaxCellBounds(),
     getBoundsFromData()
   ]);
+
+  const gridCols = Math.min(resolution.cols, maxX + 1);
+  const gridRows = Math.min(resolution.rows, maxY + 1);
 
   const startDate = timeSlice.timeRange.start;
   const endDate = timeSlice.timeRange.end;
@@ -163,8 +168,11 @@ export async function getHeatmap(
 export async function getHeatmapTimeline(
   resolution: HeatmapResolutionConfig,
   recordTypes?: RecordType[],
+  binSizeYears: number = DEFAULT_BIN_SIZE
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
+  const timeSlices = await computeTimeSlices(binSizeYears);
+
   const [{ maxX, maxY }, bounds] = await Promise.all([
     getMaxCellBounds(),
     getBoundsFromData()
@@ -177,7 +185,7 @@ export async function getHeatmapTimeline(
     SELECT
       ${featureCells.cellX} as cell_x,
       ${featureCells.cellY} as cell_y,
-      FLOOR(EXTRACT(YEAR FROM ${features.startDate}) / 50) * 50 as time_bin,
+      FLOOR(EXTRACT(YEAR FROM ${features.startDate}) / ${binSizeYears}) * ${binSizeYears} as time_bin,
       COUNT(*) as count
     FROM ${featureCells}
     JOIN ${features} ON ${featureCells.featureId} = ${features.id}
@@ -199,7 +207,7 @@ export async function getHeatmapTimeline(
   }
 
   const timeline: HeatmapTimeline = {};
-  for (const timeSlice of TIME_SLICES) {
+  for (const timeSlice of timeSlices) {
     const countsMap = countsBySlice.get(timeSlice.startYear) || new Map();
     timeline[timeSlice.key] = buildSparseHeatmap(countsMap);
   }

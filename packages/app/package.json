@@ -3,8 +3,8 @@
 	"version": "0.0.1",
 	"private": true,
 	"scripts": {
-		"dev": "bun --bun vite dev --port 5175",
-		"build": "vite build",
+		"dev": "bun --bun --env-file=../../.env vite dev --port 5175",
+		"build": "bun --env-file=../../.env vite build",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",

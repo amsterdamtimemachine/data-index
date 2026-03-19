@@ -2,6 +2,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { RecordType, Histogram } from '@atm/shared/types';
+import { DEFAULT_BIN_SIZE, BIN_SIZE_MIN, BIN_SIZE_MAX } from '@atm/shared';
 import { getHistogram } from '@atm/db/queries';
 
 export const GET: RequestHandler = async ({ url }) => {
@@ -13,9 +14,15 @@ export const GET: RequestHandler = async ({ url }) => {
 			? (recordTypesParam.split(',').map((t) => t.trim()) as RecordType[])
 			: undefined;
 
-		console.log(`📊 Histogram API request - recordTypes: ${recordTypes?.join(', ') || 'all'}`);
+		// Parse bin size
+		const binSizeParam = url.searchParams.get('binSize');
+		const binSize = binSizeParam
+			? Math.min(Math.max(parseInt(binSizeParam, 10) || DEFAULT_BIN_SIZE, BIN_SIZE_MIN), BIN_SIZE_MAX)
+			: DEFAULT_BIN_SIZE;
 
-		const histogram = await getHistogram(recordTypes);
+		console.log(`📊 Histogram API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, binSize: ${binSize}`);
+
+		const histogram = await getHistogram(recordTypes, binSize);
 
 		console.log(
 			`✅ Histogram: ${histogram.bins.length} bins, ${histogram.totalFeatures} total features`

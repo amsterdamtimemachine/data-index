@@ -12,8 +12,7 @@
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
     "db:ingest": "bun run src/etl/index.ts ingest",
-    "db:rebuild-cells": "bun run src/etl/index.ts rebuild-cells",
-    "benchmark:heatmap": "bun run src/benchmark/heatmap-benchmark.ts"
+    "db:rebuild-cells": "bun run src/etl/index.ts rebuild-cells"
   },
   "dependencies": {
     "@atm/shared": "workspace:*",

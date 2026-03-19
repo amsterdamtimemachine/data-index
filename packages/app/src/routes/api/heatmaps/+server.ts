@@ -2,7 +2,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { RecordType, HeatmapResolutionConfig } from '@atm/shared/types';
-import { GRID_DEFAULT, GRID_MIN, GRID_MAX } from '@atm/shared';
+import { GRID_DEFAULT, GRID_MIN, GRID_MAX, DEFAULT_BIN_SIZE, BIN_SIZE_MIN, BIN_SIZE_MAX } from '@atm/shared';
 import { getHeatmap, getHeatmapTimeline } from '@atm/db/queries';
 
 function parseGridParam(value: string | null, defaultVal: number): number {
@@ -27,12 +27,18 @@ export const GET: RequestHandler = async ({ url }) => {
 		const cols = parseGridParam(url.searchParams.get('cols'), GRID_DEFAULT);
 		const resolution: HeatmapResolutionConfig = { rows, cols };
 
+		// Parse bin size
+		const binSizeParam = url.searchParams.get('binSize');
+		const binSize = binSizeParam
+			? Math.min(Math.max(parseInt(binSizeParam, 10) || DEFAULT_BIN_SIZE, BIN_SIZE_MIN), BIN_SIZE_MAX)
+			: DEFAULT_BIN_SIZE;
+
 		console.log(
-			`🔥 Heatmaps API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, timeSlice: ${timeSliceParam || 'all'}, grid: ${cols}x${rows}`
+			`🔥 Heatmaps API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, timeSlice: ${timeSliceParam || 'all'}, grid: ${cols}x${rows}, binSize: ${binSize}`
 		);
 
 		if (timeSliceParam) {
-			const heatmapResponse = await getHeatmap(timeSliceParam, resolution, recordTypes);
+			const heatmapResponse = await getHeatmap(timeSliceParam, resolution, recordTypes, binSize);
 			const cellCount = Object.values(heatmapResponse.timeline)[0]?.indices.length ?? 0;
 			console.log(`✅ Heatmap for ${timeSliceParam}: ${cellCount} cells`);
 
@@ -43,7 +49,7 @@ export const GET: RequestHandler = async ({ url }) => {
 				}
 			});
 		} else {
-			const heatmapResponse = await getHeatmapTimeline(resolution, recordTypes);
+			const heatmapResponse = await getHeatmapTimeline(resolution, recordTypes, binSize);
 			const timeSliceCount = Object.keys(heatmapResponse.timeline).length;
 			const totalCells = Object.values(heatmapResponse.timeline).reduce(
 				(sum, h) => sum + h.indices.length,

@@ -1,8 +1,9 @@
 import { sql } from 'drizzle-orm';
 import type { Histogram, HistogramBin, RecordType } from '@atm/shared';
-import { TIME_SLICES, TIME_RANGE } from '@atm/shared';
+import { DEFAULT_BIN_SIZE } from '@atm/shared';
 import { db } from '../client';
 import { features } from '../schema';
+import { computeTimeSlices, computeTimeRange } from './time-slices';
 
 // Query result types
 type BinRow = { bin_start: string; count: string };
@@ -20,17 +21,21 @@ async function getRecordTypes(): Promise<RecordType[]> {
 
 /**
  * Get histogram data for combined record types
- * Optimized: 1 query with IN clause, returns single Histogram
  */
 export async function getHistogram(
-  recordTypes?: RecordType[]
+  recordTypes?: RecordType[],
+  binSizeYears: number = DEFAULT_BIN_SIZE
 ): Promise<Histogram> {
   const types = recordTypes || await getRecordTypes();
 
-  // Single query with IN clause for combined record types
+  const [timeSlices, timeRange] = await Promise.all([
+    computeTimeSlices(binSizeYears),
+    computeTimeRange(binSizeYears)
+  ]);
+
   const result = await db.execute<BinRow>(sql`
     SELECT
-      FLOOR(EXTRACT(YEAR FROM ${features.startDate}) / 50) * 50 as bin_start,
+      FLOOR(EXTRACT(YEAR FROM ${features.startDate}) / ${binSizeYears}) * ${binSizeYears} as bin_start,
       COUNT(*) as count
     FROM ${features}
     WHERE ${features.recordType} IN ${types}
@@ -45,8 +50,8 @@ export async function getHistogram(
     result.rows.map(r => [parseInt(r.bin_start), parseInt(r.count)])
   );
 
-  // Generate bins with full TimeSlice objects
-  const bins: HistogramBin[] = TIME_SLICES.map(ts => ({
+  // Map onto computed time slices
+  const bins: HistogramBin[] = timeSlices.map(ts => ({
     timeSlice: ts,
     count: binMap.get(ts.startYear) || 0
   }));
@@ -57,7 +62,7 @@ export async function getHistogram(
   return {
     bins,
     maxCount,
-    timeRange: TIME_RANGE,
+    timeRange,
     totalFeatures
   };
 }

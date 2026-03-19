@@ -3,7 +3,7 @@ import type {
   VisualizationMetadata,
   RecordType,
 } from '@atm/shared';
-import { TIME_SLICES, TIME_RANGE } from '@atm/shared';
+import { computeTimeSlices, computeTimeRange } from './time-slices';
 import { db } from '../client';
 import { features, tags, featureTags, featureCells } from '../schema';
 
@@ -74,21 +74,23 @@ async function getStats(): Promise<{
  * Get complete visualization metadata
  */
 export async function getMetadata(): Promise<VisualizationMetadata> {
-  const [recordTypes, availableTags, stats] = await Promise.all([
+  const [timeSlices, timeRange, recordTypes, availableTags, stats] = await Promise.all([
+    computeTimeSlices(),
+    computeTimeRange(),
     getRecordTypes(),
     getTags(),
     getStats()
   ]);
 
   return {
-    timeSlices: TIME_SLICES,
-    timeRange: TIME_RANGE,
+    timeSlices,
+    timeRange,
     recordTypes,
     tags: availableTags,
     stats: {
       totalFeatures: stats.totalFeatures,
       featuresPerRecordType: stats.featuresPerRecordType,
-      timeSliceCount: TIME_SLICES.length,
+      timeSliceCount: timeSlices.length,
       gridCellCount: stats.gridCellCount,
     }
   };

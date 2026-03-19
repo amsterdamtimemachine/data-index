@@ -99,11 +99,27 @@ All endpoints are SvelteKit server routes in `packages/app/src/routes/api/` that
 | `GET /api/available-tags` | Tags with feature counts | 30m |
 | `GET /api/tag-combinations` | Valid tag combinations for AND/OR filtering | 30m |
 
+### Time slices
+
+Time periods are computed dynamically from the data rather than hardcoded. On first request, the server queries `MIN(start_date)` and `MAX(end_date)` from features, then generates bins anchored to round boundaries (e.g. 1500, 1550, 1600). The bin size defaults to 50 years and is configurable via the `binSize` query param (min 10, max 100). Results are cached for 10 minutes.
+
+All endpoints that use time slices (`metadata`, `histogram`, `heatmaps`, `features`) call the same cached function, guaranteeing consistent periods across the API.
+
 ### Heatmaps endpoint
 
-`GET /api/heatmaps?recordTypes=image,text&rows=75&cols=75`
+`GET /api/heatmaps?recordTypes=image,text&rows=75&cols=75&binSize=50`
 
-Returns `{ dimensions: { colsAmount, rowsAmount, minLon, maxLon, minLat, maxLat }, timeline: { [timeSliceKey]: { indices, counts } } }`.
+Optional params: `recordTypes`, `timeSlice` (single slice key), `rows`/`cols` (grid resolution, default 75, clamped to data extent), `binSize` (time bin in years, default 50).
+
+Returns `{ dimensions, timeline }`. Dimensions include the actual grid size used (may be clamped below requested if it exceeds the 100m base cell resolution). Timeline maps each time slice key to sparse `{ indices, counts }` arrays.
+
+### Histogram endpoint
+
+`GET /api/histogram?recordTypes=image,text&binSize=50`
+
+Optional params: `recordTypes`, `binSize` (default 50).
+
+Returns `{ bins, maxCount, timeRange, totalFeatures }`. Each bin contains a `timeSlice` object and a `count`. The `binSize` must match the heatmap's `binSize` for the time periods to align — the frontend ensures this by passing the same value to both endpoints.
 
 ### Features endpoint
 
