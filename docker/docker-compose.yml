@@ -35,14 +35,14 @@ services:
   # Main application
   app:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile.app
     ports:
       - "3000:3000"
     environment:
       DATABASE_URL: postgresql://${DB_USER:-atm}:${DB_PASSWORD:-atm_dev_password}@dataindex-db:5432/amsterdam_time_machine
     env_file:
-      - .env
+      - ../.env
     networks:
       - atm-network
     restart: unless-stopped

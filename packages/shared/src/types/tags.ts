@@ -41,8 +41,3 @@ export interface TagValidation {
   validTags: string[];
   invalidTags: string[];
 }
-
-/**
- * Tag combinations response with validation (when validateAll=true)
- */
-export interface TagCombinationsValidated extends TagCombinations, TagValidation {}

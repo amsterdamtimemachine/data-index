@@ -24,7 +24,7 @@ export async function ingest(filePath: string) {
   // Create default relation
   await client.query(`
     INSERT INTO relation (id, label)
-    VALUES ('depictedIn', 'Depicted In')
+    VALUES ('isAbout', 'Is About')
     ON CONFLICT DO NOTHING
   `);
 
@@ -64,7 +64,7 @@ export async function ingest(filePath: string) {
 
       await client.query(`
         INSERT INTO feature_to_place (feature_id, place_id, relation_id)
-        VALUES ($1, $2, 'depictedIn')
+        VALUES ($1, $2, 'isAbout')
         ON CONFLICT DO NOTHING
       `, [featureId, adamlinkUri]);
       linkCount++;

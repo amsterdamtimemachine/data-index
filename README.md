@@ -146,7 +146,7 @@ cp .env.example .env
 ### Start the database
 
 ```bash
-docker compose up -d dataindex-db
+docker compose -f docker/docker-compose.yml up -d dataindex-db
 ```
 
 ### Push schema (first time or after schema changes)
@@ -175,7 +175,7 @@ bun run db:studio
 ## Production (Docker)
 
 ```bash
-docker compose up --build
+docker compose -f docker/docker-compose.yml up --build
 ```
 
 Runs two containers:
@@ -199,17 +199,17 @@ Data ingestion is done separately from a dev machine (see [Data ingestion](#data
 ### Docker commands
 
 ```bash
-docker compose up -d              # start
-docker compose up --build         # rebuild and start
-docker compose down               # stop
-docker compose logs -f app        # app logs
-docker compose logs -f dataindex-db  # database logs
+docker compose -f docker/docker-compose.yml up -d              # start
+docker compose -f docker/docker-compose.yml up --build         # rebuild and start
+docker compose -f docker/docker-compose.yml down               # stop
+docker compose -f docker/docker-compose.yml logs -f app        # app logs
+docker compose -f docker/docker-compose.yml logs -f dataindex-db  # database logs
 ```
 
 Adminer (database UI) available in dev profile:
 
 ```bash
-docker compose --profile dev up    # includes Adminer on port 8080
+docker compose -f docker/docker-compose.yml --profile dev up    # includes Adminer on port 8080
 ```
 
 ## What's implemented

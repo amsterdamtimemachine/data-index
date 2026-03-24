@@ -19,13 +19,13 @@
     "db:ingest": "cd packages/db && bun run src/etl/index.ts ingest",
     "db:rebuild-cells": "cd packages/db && bun run src/etl/index.ts rebuild-cells",
     "db:studio": "cd packages/db && bun run db:studio",
-    "docker:up": "docker compose up",
-    "docker:up:build": "docker compose up --build",
-    "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f",
-    "docker:logs:app": "docker compose logs -f app",
-    "docker:restart": "docker compose restart",
-    "docker:restart:app": "docker compose restart app"
+    "docker:up": "docker compose -f docker/docker-compose.yml up",
+    "docker:up:build": "docker compose -f docker/docker-compose.yml up --build",
+    "docker:down": "docker compose -f docker/docker-compose.yml down",
+    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f",
+    "docker:logs:app": "docker compose -f docker/docker-compose.yml logs -f app",
+    "docker:restart": "docker compose -f docker/docker-compose.yml restart",
+    "docker:restart:app": "docker compose -f docker/docker-compose.yml restart app"
   },
   "devDependencies": {
     "turbo": "^2.5.6"
