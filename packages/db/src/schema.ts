@@ -58,7 +58,8 @@ export const features = pgTable('features', {
   endDate: date('end_date'),                      // 1948-09-30
   dateCreated: text('date_created'),              // "september 1948"
   sourceId: text('source_id').references(() => sources.id),
-  frequency: integer('frequency')                  // Number of grid cells this feature spans (lower = more specific)
+  spatialFrequency: integer('spatial_frequency'),    // Number of grid cells this feature spans (lower = more specific)
+  temporalFrequency: integer('temporal_frequency'), // Number of base time bins this feature spans
 }, (table) => [
   index('idx_features_dates').on(table.startDate, table.endDate),
   index('idx_features_record_type').on(table.recordType)

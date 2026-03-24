@@ -33,16 +33,23 @@ export async function getHistogram(
     computeTimeRange(binSizeYears)
   ]);
 
+  const firstSlice = timeSlices[0];
+  const lastSlice = timeSlices[timeSlices.length - 1];
+
   const result = await db.execute<BinRow>(sql`
-    SELECT
-      FLOOR(EXTRACT(YEAR FROM ${features.startDate}) / ${binSizeYears}) * ${binSizeYears} as bin_start,
-      COUNT(*) as count
-    FROM ${features}
-    WHERE ${features.recordType} IN ${types}
-      AND ${features.startDate} IS NOT NULL
-      AND ${features.endDate} IS NOT NULL
-    GROUP BY bin_start
-    ORDER BY bin_start
+    WITH slices AS (
+      SELECT gs AS bin_start, gs + ${binSizeYears} AS bin_end
+      FROM generate_series(${firstSlice.startYear}, ${lastSlice.startYear}, ${binSizeYears}) AS gs
+    )
+    SELECT s.bin_start::text as bin_start, COUNT(DISTINCT f.id) as count
+    FROM ${features} f
+    JOIN slices s ON EXTRACT(YEAR FROM f.start_date) < s.bin_end
+                 AND EXTRACT(YEAR FROM f.end_date) >= s.bin_start
+    WHERE f.record_type IN ${types}
+      AND f.start_date IS NOT NULL
+      AND f.end_date IS NOT NULL
+    GROUP BY s.bin_start
+    ORDER BY s.bin_start
   `);
 
   // Build bin map from results

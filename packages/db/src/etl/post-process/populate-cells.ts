@@ -64,12 +64,11 @@ export async function rebuildFeatureCells() {
 
   console.log(`✅ Inserted ${result.rowCount} rows in ${Date.now() - t}ms`);
 
-  // Stats
-  // Update frequency on features (number of cells each feature spans)
-  console.log('Updating feature frequency...');
-  const freqResult = await db.execute(sql`
+  // Update spatial frequency (number of cells each feature spans)
+  console.log('Updating spatial frequency...');
+  const spatialResult = await db.execute(sql`
     UPDATE ${features} f
-    SET frequency = sub.cell_count
+    SET spatial_frequency = sub.cell_count
     FROM (
       SELECT feature_id, COUNT(*) as cell_count
       FROM ${featureCells}
@@ -77,7 +76,19 @@ export async function rebuildFeatureCells() {
     ) sub
     WHERE f.id = sub.feature_id
   `);
-  console.log(`Updated frequency for ${freqResult.rowCount} features`);
+  console.log(`Updated spatial frequency for ${spatialResult.rowCount} features`);
+
+  // Update temporal frequency (number of base time bins each feature spans)
+  const baseBinSize = parseInt(process.env.BASE_BIN_SIZE || '10', 10) || 10;
+  console.log(`Updating temporal frequency (base bin size: ${baseBinSize} years)...`);
+  const temporalResult = await db.execute(sql`
+    UPDATE ${features} f
+    SET temporal_frequency = GREATEST(1, CEIL(
+      (EXTRACT(YEAR FROM f.end_date) - EXTRACT(YEAR FROM f.start_date)) / ${baseBinSize}
+    ))
+    WHERE f.start_date IS NOT NULL AND f.end_date IS NOT NULL
+  `);
+  console.log(`Updated temporal frequency for ${temporalResult.rowCount} features`);
 
   const stats = await db.execute<StatsRow>(sql`
     SELECT

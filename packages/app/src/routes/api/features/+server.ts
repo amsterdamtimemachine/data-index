@@ -46,10 +46,10 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		const tagOperator = (url.searchParams.get('tagOperator') || 'OR').toUpperCase() as TagOperator;
 		const timeSlice = url.searchParams.get('timeSlice') || undefined;
-		const sort = url.searchParams.get('sort') || 'frequency';
+		const sort = url.searchParams.get('sort') || 'relevance';
 		const sortDirection = url.searchParams.get('sortDirection') || 'desc';
 
-		if (!['frequency', 'date'].includes(sort)) {
+		if (!['relevance', 'spatialFrequency', 'date'].includes(sort)) {
 			throw error(400, { code: 'INVALID_SORT', message: 'Invalid sort field' });
 		}
 		if (!['asc', 'desc'].includes(sortDirection)) {

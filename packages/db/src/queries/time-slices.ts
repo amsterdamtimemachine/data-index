@@ -17,7 +17,7 @@ function getCache(binSize: number) {
   return cacheMap.get(binSize)!;
 }
 
-function buildTimeSlice(startYear: number, endYear: number): TimeSlice {
+export function buildTimeSlice(startYear: number, endYear: number): TimeSlice {
   const duration = endYear - startYear;
   return {
     key: `${startYear}_${endYear}`,
@@ -30,6 +30,21 @@ function buildTimeSlice(startYear: number, endYear: number): TimeSlice {
       end: `${endYear}-12-31`
     }
   };
+}
+
+/**
+ * Generate time slices from year range. Pure function — no DB access.
+ * Bins are anchored to round boundaries (multiples of binSize).
+ */
+export function generateTimeSlices(minYear: number, maxYear: number, binSizeYears: number): TimeSlice[] {
+  const flooredStart = Math.floor(minYear / binSizeYears) * binSizeYears;
+  const ceiledEnd = Math.ceil((maxYear + 1) / binSizeYears) * binSizeYears;
+
+  const slices: TimeSlice[] = [];
+  for (let start = flooredStart; start < ceiledEnd; start += binSizeYears) {
+    slices.push(buildTimeSlice(start, start + binSizeYears));
+  }
+  return slices;
 }
 
 /**
@@ -53,15 +68,7 @@ export async function computeTimeSlices(binSizeYears: number = DEFAULT_BIN_SIZE)
   const minYear = parseInt(result.rows[0].min_year);
   const maxYear = parseInt(result.rows[0].max_year);
 
-  // Anchor to round boundaries
-  const flooredStart = Math.floor(minYear / binSizeYears) * binSizeYears;
-  const ceiledEnd = Math.ceil((maxYear + 1) / binSizeYears) * binSizeYears;
-
-  const slices: TimeSlice[] = [];
-  for (let start = flooredStart; start < ceiledEnd; start += binSizeYears) {
-    slices.push(buildTimeSlice(start, start + binSizeYears));
-  }
-
+  const slices = generateTimeSlices(minYear, maxYear, binSizeYears);
   cache.set(slices);
   return slices;
 }

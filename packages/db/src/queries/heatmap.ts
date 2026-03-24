@@ -145,8 +145,8 @@ export async function getHeatmap(
     FROM ${featureCells}
     JOIN ${features} ON ${featureCells.featureId} = ${features.id}
     WHERE ${features.recordType} IN ${types}
-      AND ${features.startDate} >= ${startDate}
-      AND ${features.endDate} <= ${endDate}
+      AND ${features.startDate} <= ${endDate}
+      AND ${features.endDate} >= ${startDate}
     GROUP BY ${featureCells.cellX}, ${featureCells.cellY}
   `);
 
@@ -181,18 +181,27 @@ export async function getHeatmapTimeline(
   const gridCols = Math.min(resolution.cols, maxX + 1);
   const gridRows = Math.min(resolution.rows, maxY + 1);
 
+  const firstSlice = timeSlices[0];
+  const lastSlice = timeSlices[timeSlices.length - 1];
+
   const result = await db.execute<CellCountWithTime>(sql`
+    WITH slices AS (
+      SELECT gs AS bin_start, gs + ${binSizeYears} AS bin_end
+      FROM generate_series(${firstSlice.startYear}, ${lastSlice.startYear}, ${binSizeYears}) AS gs
+    )
     SELECT
       ${featureCells.cellX} as cell_x,
       ${featureCells.cellY} as cell_y,
-      FLOOR(EXTRACT(YEAR FROM ${features.startDate}) / ${binSizeYears}) * ${binSizeYears} as time_bin,
+      s.bin_start as time_bin,
       COUNT(*) as count
     FROM ${featureCells}
     JOIN ${features} ON ${featureCells.featureId} = ${features.id}
+    JOIN slices s ON EXTRACT(YEAR FROM ${features.startDate}) < s.bin_end
+                 AND EXTRACT(YEAR FROM ${features.endDate}) >= s.bin_start
     WHERE ${features.recordType} IN ${types}
       AND ${features.startDate} IS NOT NULL
       AND ${features.endDate} IS NOT NULL
-    GROUP BY ${featureCells.cellX}, ${featureCells.cellY}, time_bin
+    GROUP BY ${featureCells.cellX}, ${featureCells.cellY}, s.bin_start
   `);
 
   const countsBySlice = new Map<number, Map<number, number>>();

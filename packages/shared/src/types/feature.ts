@@ -2,7 +2,7 @@ import type { HeatmapCellBounds } from './heatmap';
 
 export type RecordType = 'image' | 'text' | 'person' | 'unknown';
 
-export type FeaturesSortField = 'frequency' | 'date';
+export type FeaturesSortField = 'relevance' | 'spatialFrequency' | 'date';
 export type SortDirection = 'asc' | 'desc';
 export type TagOperator = 'AND' | 'OR';
 
@@ -33,7 +33,8 @@ export interface FeatureResult {
   dateRange: [number, number];
   tags: string[];
   sourceLabel?: string;
-  frequency: number;
+  spatialFrequency: number;
+  temporalFrequency: number;
 }
 
 /**

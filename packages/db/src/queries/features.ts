@@ -30,14 +30,39 @@ type FeatureRow = {
   content_url: string | null;
   start_date: string | null;
   end_date: string | null;
-  frequency: number | null;
+  spatial_frequency: number | null;
+  temporal_frequency: number | null;
   source_label: string | null;
+  relevance_score: number | null;
   tags: string[] | null;
 };
 
 type CountRow = { count: string };
+type MaxFreqRow = { max_spatial: string; max_temporal: string };
 
 const baseCellBoundsCache = createTTLCache<BaseCellBoundsRow>();
+const maxFrequenciesCache = createTTLCache<{ maxSpatial: number; maxTemporal: number }>();
+
+/**
+ * Get max spatial and temporal frequencies for normalisation
+ */
+async function getMaxFrequencies(): Promise<{ maxSpatial: number; maxTemporal: number }> {
+  const cached = maxFrequenciesCache.get();
+  if (cached) return cached;
+
+  const result = await db.execute<MaxFreqRow>(sql`
+    SELECT
+      COALESCE(MAX(spatial_frequency), 1) as max_spatial,
+      COALESCE(MAX(temporal_frequency), 1) as max_temporal
+    FROM features
+  `);
+  const value = {
+    maxSpatial: parseInt(result.rows[0].max_spatial) || 1,
+    maxTemporal: parseInt(result.rows[0].max_temporal) || 1
+  };
+  maxFrequenciesCache.set(value);
+  return value;
+}
 
 /**
  * Get the base grid cell bounds and geographic extent
@@ -119,7 +144,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     tags: tagFilters,
     tagOperator = 'OR',
     timeSlice,
-    sort = 'frequency',
+    sort = 'relevance',
     sortDirection = 'desc',
     page = 1,
     pageSize = 50
@@ -175,7 +200,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   const typeCondition = sql`f.record_type IN ${types}`;
 
   const dateCondition = dateRange
-    ? sql`f.start_date >= ${dateRange.startDate} AND f.end_date <= ${dateRange.endDate}`
+    ? sql`f.start_date <= ${dateRange.endDate} AND f.end_date >= ${dateRange.startDate}`
     : sql`TRUE`;
 
   const tagCondition = tagFilteredIds
@@ -206,16 +231,25 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
 
   // Main query with window function for interleaved record types
   // Note: Using raw SQL string for window function ORDER BY since Drizzle doesn't support it well
-  // Lower frequency = more specific location = higher relevance
-  const orderByFrequency = sortDirection === 'desc'
-    ? 'frequency ASC NULLS LAST, start_date ASC NULLS LAST'
-    : 'frequency DESC NULLS LAST, start_date DESC NULLS LAST';
+  // Get max frequencies for relevance score normalisation
+  const { maxSpatial, maxTemporal } = await getMaxFrequencies();
+
+  // Lower score = more specific = higher relevance
+  const orderByRelevance = sortDirection === 'desc'
+    ? 'relevance_score ASC NULLS LAST, start_date ASC NULLS LAST'
+    : 'relevance_score DESC NULLS LAST, start_date DESC NULLS LAST';
+
+  const orderBySpatialFrequency = sortDirection === 'desc'
+    ? 'spatial_frequency ASC NULLS LAST, start_date ASC NULLS LAST'
+    : 'spatial_frequency DESC NULLS LAST, start_date DESC NULLS LAST';
 
   const orderByDate = sortDirection === 'desc'
-    ? 'start_date DESC NULLS LAST, frequency ASC NULLS LAST'
-    : 'start_date ASC NULLS LAST, frequency DESC NULLS LAST';
+    ? 'start_date DESC NULLS LAST, relevance_score ASC NULLS LAST'
+    : 'start_date ASC NULLS LAST, relevance_score DESC NULLS LAST';
 
-  const windowOrderBy = sort === 'frequency' ? orderByFrequency : orderByDate;
+  const windowOrderBy = sort === 'relevance' ? orderByRelevance
+    : sort === 'spatialFrequency' ? orderBySpatialFrequency
+    : orderByDate;
 
   const result = await db.execute<FeatureRow>(sql`
     WITH filtered AS (
@@ -227,7 +261,10 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         f.content_url,
         f.start_date,
         f.end_date,
-        f.frequency,
+        f.spatial_frequency,
+        f.temporal_frequency,
+        (COALESCE(f.spatial_frequency::float, 0) / ${maxSpatial}
+         + COALESCE(f.temporal_frequency::float, 0) / ${maxTemporal}) as relevance_score,
         s.label as source_label
       FROM feature_cells fc
       JOIN features f ON fc.feature_id = f.id
@@ -267,7 +304,9 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       content_url,
       start_date,
       end_date,
-      frequency,
+      spatial_frequency,
+      temporal_frequency,
+      relevance_score,
       source_label,
       tags
     FROM ranked
@@ -289,7 +328,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     ] as [number, number],
     tags: row.tags || [],
     sourceLabel: row.source_label || undefined,
-    frequency: row.frequency || 1
+    spatialFrequency: row.spatial_frequency || 1,
+    temporalFrequency: row.temporal_frequency || 1
   }));
 
   return {
