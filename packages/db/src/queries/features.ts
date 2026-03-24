@@ -37,7 +37,7 @@ type FeatureRow = {
 
 type CountRow = { count: string };
 
-const baseCellBoundsCache = createTTLCache<BaseCellBoundsRow>(10 * 60 * 1000);
+const baseCellBoundsCache = createTTLCache<BaseCellBoundsRow>();
 
 /**
  * Get the base grid cell bounds and geographic extent

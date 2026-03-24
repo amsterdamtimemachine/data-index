@@ -3,8 +3,12 @@ import { CELL_SIZE_METERS } from '@atm/shared';
 import { db } from '../../client';
 import { place, features, featureToPlace, featureCells } from '../../schema';
 
-// Query result types
-type BBoxRow = { min_x: number; min_y: number; max_x: number; max_y: number };
+type BBoxRow = { 
+  min_x: number; 
+  min_y: number; 
+  max_x: number; 
+  max_y: number };
+
 type StatsRow = {
   total_rows: string;
   unique_features: string;
@@ -47,8 +51,6 @@ export async function rebuildFeatureCells() {
   console.log('Populating feature_cells...');
   const t = Date.now();
 
-  // Note: Using sql.raw for the arithmetic expressions since they reference
-  // dynamic bounds values that need to be interpolated into the query
   const result = await db.execute(sql`
     INSERT INTO feature_cells (feature_id, cell_x, cell_y)
     SELECT DISTINCT

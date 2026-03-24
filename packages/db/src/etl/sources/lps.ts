@@ -42,26 +42,38 @@ export async function ingest(filePath: string) {
   }
   console.log(`Mapped ${addrToWkt.size} address IDs`);
 
-  // Batch insert
+  // Batch insert with parameterized queries
   console.log('Inserting into place...');
-  let batch: string[] = [];
+  let batchValues: string[] = [];
+  let batchParams: any[] = [];
+  let paramIdx = 1;
   let total = 0;
 
   for (const [addrId, wkt] of addrToWkt) {
     const uri = `https://adamlink.nl/geo/address/${addrId}`;
-    batch.push(`('${uri}', 'address', ST_GeomFromText('${wkt}', 28992))`);
+    batchValues.push(`($${paramIdx}, $${paramIdx + 1}, ST_GeomFromText($${paramIdx + 2}, 28992))`);
+    batchParams.push(uri, 'address', wkt);
+    paramIdx += 3;
 
-    if (batch.length >= BATCH_SIZE) {
-      await client.query(`INSERT INTO place (id, type, geometry) VALUES ${batch.join(',')} ON CONFLICT DO NOTHING`);
-      total += batch.length;
+    if (batchValues.length >= BATCH_SIZE) {
+      await client.query(
+        `INSERT INTO place (id, type, geometry) VALUES ${batchValues.join(',')} ON CONFLICT DO NOTHING`,
+        batchParams
+      );
+      total += batchValues.length;
       process.stdout.write(`\r  ${total} inserted...`);
-      batch = [];
+      batchValues = [];
+      batchParams = [];
+      paramIdx = 1;
     }
   }
 
-  if (batch.length > 0) {
-    await client.query(`INSERT INTO place (id, type, geometry) VALUES ${batch.join(',')} ON CONFLICT DO NOTHING`);
-    total += batch.length;
+  if (batchValues.length > 0) {
+    await client.query(
+      `INSERT INTO place (id, type, geometry) VALUES ${batchValues.join(',')} ON CONFLICT DO NOTHING`,
+      batchParams
+    );
+    total += batchValues.length;
   }
 
   console.log(`\nDone: ${total} place entries`);

@@ -51,7 +51,7 @@ export function parseRowColFromCellId(cellId: string): { row: number; col: numbe
 }
 
 /**
- * Find cell bounds from cellId - convenience function
+ * Find cell bounds from cellId 
  */
 export function getCellBoundsFromCellId(
 	cellId: string,
@@ -71,7 +71,7 @@ export function getCellBoundsFromCellId(
 }
 
 /**
- * Generate cellId map (index -> cellId) - matches Map.svelte's current usage
+ * Generate cellId map (index -> cellId)
  */
 export function generateCellIdMap(dimensions: HeatmapDimensions): Map<number, string> {
 	const idMap = new Map<number, string>();

@@ -12,7 +12,7 @@ const cacheMap = new Map<number, ReturnType<typeof createTTLCache<TimeSlice[]>>>
 
 function getCache(binSize: number) {
   if (!cacheMap.has(binSize)) {
-    cacheMap.set(binSize, createTTLCache<TimeSlice[]>(10 * 60 * 1000));
+    cacheMap.set(binSize, createTTLCache<TimeSlice[]>());
   }
   return cacheMap.get(binSize)!;
 }

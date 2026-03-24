@@ -55,7 +55,7 @@ async function getRecordTypes(): Promise<RecordType[]> {
   return result.rows.map(r => r.record_type);
 }
 
-const maxCellBoundsCache = createTTLCache<{ maxX: number; maxY: number }>(10 * 60 * 1000);
+const maxCellBoundsCache = createTTLCache<{ maxX: number; maxY: number }>();
 
 /**
  * Get max cell coordinates for scaling to grid
@@ -72,7 +72,7 @@ async function getMaxCellBounds(): Promise<{ maxX: number; maxY: number }> {
   return value;
 }
 
-const geoBoundsCache = createTTLCache<{ minLon: number; maxLon: number; minLat: number; maxLat: number }>(10 * 60 * 1000);
+const geoBoundsCache = createTTLCache<{ minLon: number; maxLon: number; minLat: number; maxLat: number }>();
 
 /**
  * Get geographic bounds from actual data extent (WGS84)

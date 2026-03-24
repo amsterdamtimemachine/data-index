@@ -65,11 +65,6 @@ function getShortestColumnIndex(columns: HTMLElement[]): number {
 	let shortestIndex = 0;
 	let shortestHeight = getColumnHeight(columns[0]);
 
-	console.log('Column heights:', columns.map((col, i) => ({
-		column: i,
-		height: getColumnHeight(col),
-		childCount: col.children.length
-	})));
 
 	for (let i = 1; i < columns.length; i++) {
 		const height = getColumnHeight(columns[i]);
@@ -79,7 +74,6 @@ function getShortestColumnIndex(columns: HTMLElement[]): number {
 		}
 	}
 
-	console.log(`Shortest column: ${shortestIndex} (height: ${shortestHeight})`);
 	return shortestIndex;
 }
 
@@ -92,8 +86,6 @@ function distributeItemsWithMemory(
 	layoutMemory: Map<string, number>,
 	previousColumnCount: number | null
 ): void {
-	console.log(`Distribution: ${items.length} items, ${columns.length} columns, previous: ${previousColumnCount}`);
-	console.log(`Memory size: ${layoutMemory.size} entries`);
 	let memoryHits = 0;
 	let newPlacements = 0;
 
@@ -127,7 +119,6 @@ function distributeItemsWithMemory(
 		item.offsetHeight;
 	});
 	
-	console.log(`Distribution complete: ${memoryHits} memory hits, ${newPlacements} new placements`);
 }
 
 
@@ -153,16 +144,9 @@ export function createMasonryMemoized(
 	 * Main layout function
 	 */
 	function layout(currentColumnCount: number, forceLayout = false): void {
-		console.log('Masonry layout called:', { 
-			currentColumnCount, 
-			lastColumnCount, 
-			forceLayout,
-			willRearrange: forceLayout || currentColumnCount !== lastColumnCount
-		});
 		
 		// Only re-layout if column count changed or forced
 		if (forceLayout || currentColumnCount !== lastColumnCount) {
-			console.log(`Masonry: Re-distributing ${currentColumnCount} columns (was ${lastColumnCount})`);
 			
 			// Clear all columns
 			clearColumns(columns);
@@ -176,7 +160,6 @@ export function createMasonryMemoized(
 
 			lastColumnCount = currentColumnCount;
 		} else {
-			console.log('Masonry: No re-layout needed');
 		}
 	}
 
