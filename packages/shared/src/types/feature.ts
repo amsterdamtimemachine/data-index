@@ -10,6 +10,7 @@ export type TagOperator = 'AND' | 'OR';
  * Schema.org entity types
  */
 export interface Entity {
+  id?: string;
   type: "Person" | "MediaObject";
   label: string;
 }

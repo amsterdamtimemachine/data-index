@@ -55,11 +55,19 @@ export async function ingest(filePath: string) {
         const endDate = img.endDate || null;
         const dateCreated = img.dateCreated || '';
 
+        // Format dateCreated as date range or single date
+        let entityDateCreated: string | undefined;
+        if (startDate && endDate && startDate !== endDate) {
+          entityDateCreated = `${startDate}/${endDate}`;
+        } else if (startDate) {
+          entityDateCreated = startDate;
+        }
+
         const entity: MediaObjectEntity = {
           type: 'MediaObject',
           label: name,
           contentUrl,
-          ...(dateCreated && { dateCreated })
+          ...(entityDateCreated && { dateCreated: entityDateCreated })
         };
 
         await db.insert(features).values({
