@@ -26,57 +26,58 @@ packages/
 ```
 sources ──< features >── feature_to_place >── place (with PostGIS geometry)
                 │                │
-                │            relation (e.g. "depictedIn")
+                │            relation (e.g. "isAbout", "hadLastLivingLocation")
                 │
            feature_tags >── tags
                 │
            feature_cells (pre-computed 100m grid for heatmaps)
 ```
 
-- **place**: Geographic locations (addresses, buildings, streets, neighbourhoods) stored in RD coordinates (EPSG:28992), transformed to WGS84 for the frontend
-- **features**: Content items (images, text, persons, video, audio) linked to places
+- **place**: Geographic locations stored in RD coordinates (EPSG:28992), transformed to WGS84 for the frontend
+- **features**: Content items (images, text, persons) linked to places
 - **feature_cells**: Pre-computed grid cells at 100m resolution for fast heatmap aggregation
-- **frequency**: Number of grid cells a feature spans — lower = more geographically specific = ranks higher in search results
+- **spatial_frequency**: Number of grid cells a feature spans — lower = more geographically specific
+- **temporal_frequency**: Number of base time bins a feature spans — lower = more temporally specific
 
 ### Heatmap grid
 
-The heatmap grid resolution is configurable per request via `rows` and `cols` query params on `/api/heatmaps` (default: 75, min: 10, max: 200). The API returns dimensions alongside the timeline data so the frontend can render the grid without a separate metadata call.
+Grid resolution is configurable per request via `rows` and `cols` query params on `/api/heatmaps` (default: 75, clamped to actual data extent). The API returns dimensions alongside the timeline data so the frontend can render the grid without a separate metadata call.
 
 ### Time slices
 
-11 periods covering 1500–2025 in 50-year windows (last period is 25 years: 2000–2025). Used for heatmap timeline, histogram, and feature filtering.
+Time periods are computed dynamically from the data. The server queries `MIN(start_date)` and `MAX(end_date)` from features, then generates bins anchored to round boundaries (e.g. 1500, 1550, 1600). Bin size defaults to 50 years and is configurable via the `binSize` query param (min 10, max 100). Results are cached (TTL configurable via `CACHE_TTL_MINUTES`).
+
+Features appear in all time bins they overlap — a feature spanning 1840–1920 shows up in bins 1800, 1850, and 1900.
 
 ## Data ingestion
 
-Data lives outside the repository in a `data/` directory (gitignored). Ingestion scripts run manually from a dev machine against the database — they are not part of the Docker deployment.
+Ingestion scripts run manually against the database. They are not part of the Docker deployment.
 
 ### Data sources
 
-| File | Size | Contents |
-|------|------|----------|
-| `20230920-lps.csv` | 11 MB | ~105k address locations with WKT geometries (RD coordinates) from 7 historical registries (1832–1976) |
-| `beeldbank-fixed.json` | 2.5 GB | Amsterdam Stadsarchief Beeldbank — images mapped to Adamlink address URIs |
-
-**LPS (Linked Point Set)** ties together address IDs across historical registries (pw-1943, pw-1909, obelt-1920, loman-1976, bevolkingsregister-1870, wijken-1853, percelen-1832) with a single WKT coordinate per location.
-
-**Beeldbank JSON** is structured as `{ adamlinkUri: { images: [...] } }`. Each image has an `@id`, `name`, `contentUrl`, `startDate`, `endDate`, and `dateCreated`. One image can appear under multiple Adamlink URIs (depicted at multiple locations).
+| Source | Format | Size | Contents |
+|--------|--------|------|----------|
+| LPS | CSV | 11 MB | ~105k address locations with WKT geometries from 7 historical registries (1832–1976) |
+| Beeldbank | JSON | 2.5 GB | Amsterdam Stadsarchief — images mapped to Adamlink address URIs |
+| Joods Monument | CSV | 16 MB | ~63k Holocaust victims with last known addresses (fixed date range 1940–1945) |
 
 ### Running ingestion
 
 ```bash
-# 1. Import places (addresses with geometries) — must run first
-bun run db:ingest -s lps -f ../../data/20230920-lps.csv
+# 1. Import places (must run first — other sources link to these)
+bun run db:ingest -s lps -f <path-to-lps.csv> --skip-cells
 
-# 2. Import features (images linked to places)
-bun run db:ingest -s beeldbank -f ../../data/beeldbank-fixed.json
+# 2. Import image features
+bun run db:ingest -s beeldbank -f <path-to-beeldbank.json> --skip-cells
 
-# 3. Compute grid cells + update frequency values
+# 3. Import person features
+bun run db:ingest -s joods-monument -f <path-to-results_jm.csv> --skip-cells
+
+# 4. Rebuild grid cells + frequencies (once, after all sources)
 bun run db:rebuild-cells
 ```
 
-Order matters: places must exist before beeldbank can link features to them.
-
-Add `--skip-cells` to the ingest commands to skip the automatic cell rebuild (useful when ingesting multiple sources before rebuilding once).
+Use `--skip-cells` on each ingest to avoid redundant rebuilds between sources.
 
 ### Adding a new data source
 
@@ -99,19 +100,13 @@ All endpoints are SvelteKit server routes in `packages/app/src/routes/api/` that
 | `GET /api/available-tags` | Tags with feature counts | 30m |
 | `GET /api/tag-combinations` | Valid tag combinations for AND/OR filtering | 30m |
 
-### Time slices
-
-Time periods are computed dynamically from the data rather than hardcoded. On first request, the server queries `MIN(start_date)` and `MAX(end_date)` from features, then generates bins anchored to round boundaries (e.g. 1500, 1550, 1600). The bin size defaults to 50 years and is configurable via the `binSize` query param (min 10, max 100). Results are cached for 10 minutes.
-
-All endpoints that use time slices (`metadata`, `histogram`, `heatmaps`, `features`) call the same cached function, guaranteeing consistent periods across the API.
-
 ### Heatmaps endpoint
 
 `GET /api/heatmaps?recordTypes=image,text&rows=75&cols=75&binSize=50`
 
 Optional params: `recordTypes`, `timeSlice` (single slice key), `rows`/`cols` (grid resolution, default 75, clamped to data extent), `binSize` (time bin in years, default 50).
 
-Returns `{ dimensions, timeline }`. Dimensions include the actual grid size used (may be clamped below requested if it exceeds the 100m base cell resolution). Timeline maps each time slice key to sparse `{ indices, counts }` arrays.
+Returns `{ dimensions, timeline }`. Timeline maps each time slice key to sparse `{ indices, counts }` arrays.
 
 ### Histogram endpoint
 
@@ -119,15 +114,15 @@ Returns `{ dimensions, timeline }`. Dimensions include the actual grid size used
 
 Optional params: `recordTypes`, `binSize` (default 50).
 
-Returns `{ bins, maxCount, timeRange, totalFeatures }`. Each bin contains a `timeSlice` object and a `count`. The `binSize` must match the heatmap's `binSize` for the time periods to align — the frontend ensures this by passing the same value to both endpoints.
+Returns `{ bins, maxCount, timeRange, totalFeatures }`. The `binSize` must match the heatmap's `binSize` for time periods to align.
 
 ### Features endpoint
 
 `GET /api/features?minLon=...&maxLon=...&minLat=...&maxLat=...`
 
-Optional params: `recordTypes`, `tags`, `tagOperator` (AND|OR), `timeSlice`, `sort` (frequency|date), `sortDirection` (asc|desc), `page`, `pageSize` (max 200).
+Optional params: `recordTypes`, `tags`, `tagOperator` (AND|OR), `timeSlice`, `sort` (relevance|spatialFrequency|date), `sortDirection` (asc|desc), `page`, `pageSize` (max 200).
 
-Results are interleaved by record type (one image, one text, one person, repeat) using window functions so the UI shows variety.
+Default sort is `relevance` — a normalised score combining spatial and temporal frequency. Results are interleaved by record type using window functions.
 
 ## Development
 
@@ -143,19 +138,36 @@ bun install
 cp .env.example .env
 ```
 
-### Start the database
+### First-time setup (from scratch)
 
 ```bash
+# 1. Start the database
 docker compose -f docker/docker-compose.yml up -d dataindex-db
+
+# 2. Push schema to the database
+cd packages/db && bunx drizzle-kit push && cd ../..
+
+# 3. Ingest data (use --skip-cells to rebuild once at the end)
+bun run db:ingest -s lps -f <path-to-lps.csv> --skip-cells
+bun run db:ingest -s beeldbank -f <path-to-beeldbank.json> --skip-cells
+bun run db:ingest -s joods-monument -f <path-to-results_jm.csv> --skip-cells
+
+# 4. Rebuild grid cells + frequencies
+bun run db:rebuild-cells
 ```
 
-### Push schema (first time or after schema changes)
+Order matters: LPS places must be ingested before beeldbank and joods-monument (they link features to places by adamlink URI).
+
+### Wiping the database
 
 ```bash
-cd packages/db
-bunx drizzle-kit generate --name <migration-name>
-bunx drizzle-kit migrate
+docker rm -f dataindex-db
+docker volume rm docker_pgdata
+docker compose -f docker/docker-compose.yml up -d dataindex-db
+cd packages/db && bunx drizzle-kit push && cd ../..
 ```
+
+Then re-run the ingestion steps above.
 
 ### Run the dev server
 
@@ -182,19 +194,28 @@ Runs two containers:
 - **dataindex-db**: PostgreSQL 16 + PostGIS 3.4 with persistent volume
 - **app**: SvelteKit on port 3000, depends on healthy db
 
-All environment variables are configured in `docker-compose.yml`. No `.env` file is needed inside the Docker image — all public env vars are read at runtime.
+All environment variables are configured in `docker/docker-compose.yml`. No `.env` file is needed inside the Docker image — all public env vars are read at runtime.
 
-Data ingestion is done separately from a dev machine (see [Data ingestion](#data-ingestion)).
+Data ingestion is done separately — either from a dev machine with `DATABASE_URL` pointed at the remote DB (via SSH tunnel), or by SSH-ing into the server and running the ingest commands directly.
 
 ### Environment variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
-| `PUBLIC_DEFAULT_CELL` | No | — | Default cell to select on load |
-| `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |
 | `DB_USER` | No | `atm` | PostgreSQL user (Docker) |
 | `DB_PASSWORD` | No | `atm_dev_password` | PostgreSQL password (Docker) |
+| `PUBLIC_DEFAULT_CELL` | No | — | Default cell to select on load |
+| `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |
+| `BASE_BIN_SIZE` | No | `10` | Base time bin size for temporal frequency (years) |
+| `CELL_SIZE_METERS` | No | `100` | Base spatial cell size (meters) |
+| `GRID_DEFAULT` | No | `75` | Default heatmap grid resolution |
+| `GRID_MIN` | No | `10` | Minimum allowed grid resolution |
+| `GRID_MAX` | No | `200` | Maximum allowed grid resolution |
+| `DEFAULT_BIN_SIZE` | No | `50` | Default display bin size (years) |
+| `BIN_SIZE_MIN` | No | `10` | Minimum allowed bin size (years) |
+| `BIN_SIZE_MAX` | No | `100` | Maximum allowed bin size (years) |
+| `CACHE_TTL_MINUTES` | No | `10` | TTL for cached DB queries (minutes) |
 
 ### Docker commands
 
@@ -211,22 +232,3 @@ Adminer (database UI) available in dev profile:
 ```bash
 docker compose -f docker/docker-compose.yml --profile dev up    # includes Adminer on port 8080
 ```
-
-## What's implemented
-
-- [x] PostgreSQL/PostGIS database with full schema (sources, places, features, relations, tags, cells)
-- [x] Drizzle ORM with typed queries for all data access
-- [x] ETL pipeline for LPS places and Beeldbank features
-- [x] Pre-computed 100m grid cells for fast heatmap aggregation
-- [x] Configurable heatmap grid resolution (10–200, default 75)
-- [x] 6 API endpoints (metadata, heatmaps, histogram, features, tags, tag-combinations)
-- [x] Features query with bounds filtering, pagination, tag AND/OR, time slices, interleaved sorting
-- [x] MapLibre GL map with heatmap cell visualization
-- [x] Interactive time period selector with histogram
-- [x] Record type toggle filtering (image, text, person)
-- [x] Tag filtering UI with AND/OR operator support
-- [x] Feature cards with detail modal
-- [x] Docker Compose deployment (db + app)
-- [x] Migration system via Drizzle Kit
-- [x] No build-time env vars — all config is runtime
-
