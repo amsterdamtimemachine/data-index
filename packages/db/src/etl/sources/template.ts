@@ -1,85 +1,73 @@
 /**
  * Template for creating a new data source ingestion script
  *
- * Copy this file and customize for your data source:
- * 1. Update SOURCE_ID and SOURCE_META
- * 2. Define RawRow interface matching your CSV/JSON structure
- * 3. Implement the ingest function
+ * 1. Copy this file and rename to your source name
+ * 2. Update SOURCE_ID, source metadata, and relation
+ * 3. Define RawRow interface matching your CSV/JSON structure
+ * 4. Build the entity object with schema.org type
+ * 5. Implement the ingest function
  */
 import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
-import { pool } from '../../client';
+import { db } from '../../client';
+import { sources, relation, features, featureToPlace } from '../../schema';
 
-export const SOURCE_ID = 'my-source';
-export const SOURCE_META = {
-  id: SOURCE_ID,
-  label: 'My Data Source',
-  description: 'Description of the data source',
-  url: 'https://source-url.com'
-};
+const SOURCE_ID = 'my-source';
 
-// Define the shape of your input data
 interface RawRow {
   id: string;
   title: string;
   date_start: string;
   date_end: string;
-  address_id: string;  // Links to adamlink
-  // ... add other fields as needed
+  address_id: string;
 }
 
 export async function ingest(filePath: string) {
-  const client = await pool.connect();
+  // 1. Ensure source + relation exist
+  await db.insert(sources)
+    .values({ id: SOURCE_ID, label: 'My Data Source', url: 'https://source-url.com' })
+    .onConflictDoNothing();
 
-  try {
-    await client.query('BEGIN');
+  await db.insert(relation)
+    .values({ id: 'isAbout', label: 'Is About' })
+    .onConflictDoNothing();
 
-    // 1. Ensure source exists
-    await client.query(`
-      INSERT INTO sources (id, label, description, url)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (id) DO NOTHING
-    `, [SOURCE_META.id, SOURCE_META.label, SOURCE_META.description, SOURCE_META.url]);
+  // 2. Stream and insert rows
+  const csvParser = createReadStream(filePath).pipe(parse({ columns: true }));
 
-    // 2. Stream and insert rows
-    const parser = createReadStream(filePath).pipe(parse({ columns: true }));
+  let count = 0;
+  for await (const row of csvParser as AsyncIterable<RawRow>) {
+    const featureId = crypto.randomUUID();
 
-    let count = 0;
-    for await (const row of parser as AsyncIterable<RawRow>) {
-      // Insert feature
-      await client.query(`
-        INSERT INTO features (id, record_type, label, start_date, end_date, source_id)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (id) DO NOTHING
-      `, [
-        `${SOURCE_ID}:${row.id}`,
-        'image',  // or derive from row
-        row.title,
-        row.date_start || null,
-        row.date_end || null,
-        SOURCE_ID
-      ]);
+    // Build entity (customize per source)
+    const entity = {
+      type: 'MediaObject' as const,
+      label: row.title
+    };
 
-      // Link to place
-      if (row.address_id) {
-        await client.query(`
-          INSERT INTO feature_to_place (feature_id, place_id)
-          VALUES ($1, $2)
-          ON CONFLICT DO NOTHING
-        `, [`${SOURCE_ID}:${row.id}`, row.address_id]);
-      }
+    await db.insert(features).values({
+      id: featureId,
+      url: row.id,
+      recordType: 'image',
+      label: row.title,
+      startDate: row.date_start || null,
+      endDate: row.date_end || null,
+      sourceId: SOURCE_ID,
+      entity
+    }).onConflictDoNothing();
 
-      count++;
-      if (count % 1000 === 0) console.log(`Processed ${count} rows`);
+    // Link to place
+    if (row.address_id) {
+      await db.insert(featureToPlace).values({
+        featureId,
+        placeId: row.address_id,
+        relationId: 'isAbout'
+      }).onConflictDoNothing();
     }
 
-    await client.query('COMMIT');
-    console.log(`✅ Imported ${count} features from ${SOURCE_ID}`);
-
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
+    count++;
+    if (count % 1000 === 0) console.log(`Processed ${count} rows`);
   }
+
+  console.log(`Done: ${count} features from ${SOURCE_ID}`);
 }

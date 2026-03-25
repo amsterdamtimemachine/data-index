@@ -10,7 +10,11 @@
  */
 import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
+import { sql } from 'drizzle-orm';
+import { db } from '../../client';
 import { pool } from '../../client';
+import { sources, relation, features, featureToPlace } from '../../schema';
+import type { PersonEntity } from '@atm/shared';
 
 const SOURCE_ID = 'joods-monument';
 const START_DATE = '1940-01-01';
@@ -30,37 +34,33 @@ interface RawRow {
 }
 
 export async function ingest(filePath: string) {
+  // Create source + relation via Drizzle
+  await db.insert(sources)
+    .values({ id: SOURCE_ID, label: 'Joods Monument', url: 'https://www.joodsmonument.nl' })
+    .onConflictDoNothing();
+
+  await db.insert(relation)
+    .values({ id: 'hadLastLivingLocation', label: 'Had last living location' })
+    .onConflictDoNothing();
+
+  console.log(`Streaming ${filePath}...`);
+
+  // Raw client needed for ST_Transform (PostGIS-specific SQL)
   const client = await pool.connect();
+
+  const csvParser = createReadStream(filePath).pipe(parse({ columns: true }));
+
+  let featureCount = 0;
+  let placeCount = 0;
+  let linkCount = 0;
 
   try {
     await client.query('BEGIN');
 
-    // Create source
-    await client.query(`
-      INSERT INTO sources (id, label, url)
-      VALUES ($1, $2, $3)
-      ON CONFLICT DO NOTHING
-    `, [SOURCE_ID, 'Joods Monument', 'https://www.joodsmonument.nl']);
-
-    // Create relation
-    await client.query(`
-      INSERT INTO relation (id, label)
-      VALUES ($1, $2)
-      ON CONFLICT DO NOTHING
-    `, ['hadLastLivingLocation', 'Had last living location']);
-
-    console.log(`Streaming ${filePath}...`);
-
-    const csvParser = createReadStream(filePath).pipe(parse({ columns: true }));
-
-    let featureCount = 0;
-    let placeCount = 0;
-    let linkCount = 0;
-
     for await (const row of csvParser as AsyncIterable<RawRow>) {
       if (!row.person || !row.address) continue;
 
-      // Insert place if not exists (WGS84 → RD transform)
+      // Insert place if not exists (WGS84 → RD transform — raw SQL required)
       if (row.wkt) {
         await client.query(`
           INSERT INTO place (id, type, geometry)
@@ -70,20 +70,39 @@ export async function ingest(filePath: string) {
         placeCount++;
       }
 
-      // Insert feature
-      await client.query(`
-        INSERT INTO features (id, record_type, label, start_date, end_date, source_id)
-        VALUES ($1, 'person', $2, $3, $4, $5)
-        ON CONFLICT DO NOTHING
-      `, [row.person, row.name, START_DATE, END_DATE, SOURCE_ID]);
+      // Build entity
+      const entity: PersonEntity = {
+        type: 'Person',
+        label: row.name,
+        ...(row.birthDate && { birthDate: row.birthDate }),
+        ...(row.birthPlace && { birthPlace: row.birthPlace }),
+        ...(row.deathDate && { deathDate: row.deathDate }),
+        ...(row.deathPlace && { deathPlace: row.deathPlace })
+      };
+
+      const featureId = crypto.randomUUID();
+
+      // Insert feature via Drizzle
+      await db.insert(features).values({
+        id: featureId,
+        url: row.person,
+        recordType: 'person',
+        label: row.name,
+        startDate: START_DATE,
+        endDate: END_DATE,
+        sourceId: SOURCE_ID,
+        entity
+      }).onConflictDoNothing();
+
       featureCount++;
 
-      // Link feature to place
-      await client.query(`
-        INSERT INTO feature_to_place (feature_id, place_id, relation_id)
-        VALUES ($1, $2, 'hadLastLivingLocation')
-        ON CONFLICT DO NOTHING
-      `, [row.person, row.address]);
+      // Link feature to place via Drizzle
+      await db.insert(featureToPlace).values({
+        featureId,
+        placeId: row.address,
+        relationId: 'hadLastLivingLocation'
+      }).onConflictDoNothing();
+
       linkCount++;
 
       if (featureCount % 1000 === 0) {

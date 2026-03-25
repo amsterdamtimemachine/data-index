@@ -24,6 +24,7 @@ type BaseCellBoundsRow = {
 
 type FeatureRow = {
   id: string;
+  url: string | null;
   record_type: RecordType;
   label: string;
   description: string | null;
@@ -34,6 +35,7 @@ type FeatureRow = {
   temporal_frequency: number | null;
   source_label: string | null;
   relevance_score: number | null;
+  entity: any | null;
   tags: string[] | null;
 };
 
@@ -255,6 +257,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     WITH filtered AS (
       SELECT DISTINCT ON (f.id)
         f.id,
+        f.url,
         f.record_type,
         f.label,
         f.description,
@@ -298,6 +301,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     )
     SELECT
       id,
+      url,
       record_type,
       label,
       description,
@@ -308,6 +312,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       temporal_frequency,
       relevance_score,
       source_label,
+      entity,
       tags
     FROM ranked
     ORDER BY type_rank, record_type, id
@@ -318,6 +323,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   // Transform results
   const data: FeatureResult[] = result.rows.map(row => ({
     id: row.id,
+    url: row.url || undefined,
     recordType: row.record_type,
     label: row.label,
     description: row.description || undefined,
@@ -329,7 +335,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     tags: row.tags || [],
     sourceLabel: row.source_label || undefined,
     spatialFrequency: row.spatial_frequency || 1,
-    temporalFrequency: row.temporal_frequency || 1
+    temporalFrequency: row.temporal_frequency || 1,
+    entity: row.entity || undefined
   }));
 
   return {

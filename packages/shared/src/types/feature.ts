@@ -7,6 +7,29 @@ export type SortDirection = 'asc' | 'desc';
 export type TagOperator = 'AND' | 'OR';
 
 /**
+ * Schema.org entity types
+ */
+export interface Entity {
+  type: "Person" | "MediaObject";
+  label: string;
+}
+
+export interface PersonEntity extends Entity {
+  type: "Person";
+  birthDate?: string;
+  birthPlace?: string;
+  deathDate?: string;
+  deathPlace?: string;
+}
+
+export interface MediaObjectEntity extends Entity {
+  type: "MediaObject";
+  contentUrl: string;
+  dateCreated?: string;
+  author?: string;
+}
+
+/**
  * Query parameters for fetching features
  */
 export interface FeaturesQuery {
@@ -26,6 +49,7 @@ export interface FeaturesQuery {
  */
 export interface FeatureResult {
   id: string;
+  url?: string;
   recordType: RecordType;
   label: string;
   description?: string;
@@ -35,6 +59,7 @@ export interface FeatureResult {
   sourceLabel?: string;
   spatialFrequency: number;
   temporalFrequency: number;
+  entity?: Entity | PersonEntity | MediaObjectEntity;
 }
 
 /**
@@ -47,5 +72,3 @@ export interface FeaturesResponse {
   pageSize: number;
   totalPages: number;
 }
-
-

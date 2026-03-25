@@ -9,28 +9,25 @@
 import { createReadStream } from 'fs';
 import { parser } from 'stream-json';
 import { streamObject } from 'stream-json/streamers/StreamObject';
-import { pool } from '../../client';
+import { db } from '../../client';
+import { sources, relation, features, featureToPlace } from '../../schema';
+import type { MediaObjectEntity } from '@atm/shared';
 
 export async function ingest(filePath: string) {
-  const client = await pool.connect();
-
   // Create source
-  await client.query(`
-    INSERT INTO sources (id, label, url)
-    VALUES ('beeldbank', 'Stadsarchief Amsterdam Beeldbank', 'https://archief.amsterdam/beeldbank')
-    ON CONFLICT DO NOTHING
-  `);
+  await db.insert(sources)
+    .values({ id: 'beeldbank', label: 'Stadsarchief Amsterdam Beeldbank', url: 'https://archief.amsterdam/beeldbank' })
+    .onConflictDoNothing();
 
-  // Create default relation
-  await client.query(`
-    INSERT INTO relation (id, label)
-    VALUES ('isAbout', 'Is About')
-    ON CONFLICT DO NOTHING
-  `);
+  // Create relation
+  await db.insert(relation)
+    .values({ id: 'isAbout', label: 'Is About' })
+    .onConflictDoNothing();
 
   console.log(`Streaming ${filePath}...`);
 
-  const seenFeatures = new Set<string>();
+  // Map source URL → UUID for deduplication
+  const seenFeatures = new Map<string, string>();
   let featureCount = 0;
   let linkCount = 0;
   let entryCount = 0;
@@ -43,30 +40,49 @@ export async function ingest(filePath: string) {
     const images = (val as any).images || [];
 
     for (const img of images) {
-      const featureId = img['@id'];
-      if (!featureId) continue;
+      const sourceUrl = img['@id'];
+      if (!sourceUrl) continue;
 
-      if (!seenFeatures.has(featureId)) {
-        seenFeatures.add(featureId);
-        const name = (img.name || '').replace(/'/g, "''");
+      let featureId = seenFeatures.get(sourceUrl);
+
+      if (!featureId) {
+        featureId = crypto.randomUUID();
+        seenFeatures.set(sourceUrl, featureId);
+
+        const name = img.name || '';
         const contentUrl = img.contentUrl || '';
         const startDate = img.startDate || null;
         const endDate = img.endDate || null;
-        const dateCreated = (img.dateCreated || '').replace(/'/g, "''");
+        const dateCreated = img.dateCreated || '';
 
-        await client.query(`
-          INSERT INTO features (id, record_type, label, content_url, start_date, end_date, date_created, source_id)
-          VALUES ($1, 'image', $2, $3, $4, $5, $6, 'beeldbank')
-          ON CONFLICT DO NOTHING
-        `, [featureId, name, contentUrl, startDate, endDate, dateCreated]);
+        const entity: MediaObjectEntity = {
+          type: 'MediaObject',
+          label: name,
+          contentUrl,
+          ...(dateCreated && { dateCreated })
+        };
+
+        await db.insert(features).values({
+          id: featureId,
+          url: sourceUrl,
+          recordType: 'image',
+          label: name,
+          contentUrl,
+          startDate,
+          endDate,
+          sourceId: 'beeldbank',
+          entity
+        }).onConflictDoNothing();
+
         featureCount++;
       }
 
-      await client.query(`
-        INSERT INTO feature_to_place (feature_id, place_id, relation_id)
-        VALUES ($1, $2, 'isAbout')
-        ON CONFLICT DO NOTHING
-      `, [featureId, adamlinkUri]);
+      await db.insert(featureToPlace).values({
+        featureId,
+        placeId: adamlinkUri,
+        relationId: 'isAbout'
+      }).onConflictDoNothing();
+
       linkCount++;
     }
 
@@ -77,5 +93,4 @@ export async function ingest(filePath: string) {
   }
 
   console.log(`\nDone: ${featureCount} features, ${linkCount} links`);
-  client.release();
 }
