@@ -6,8 +6,8 @@ program
   .description('Amsterdam Time Machine database ETL tools');
 
 program
-  .command('rebuild-cells')
-  .description('Rebuild the feature_cells table for heatmap queries')
+  .command('rebuild-index')
+  .description('Rebuild feature_cells grid, spatial frequency, and temporal frequency')
   .action(async () => {
     try {
       await rebuildFeatureCells();
@@ -23,7 +23,6 @@ program
   .description('Ingest data from a source')
   .requiredOption('-s, --source <name>', 'Source name to ingest')
   .requiredOption('-f, --file <path>', 'Input file path')
-  .option('--skip-cells', 'Skip rebuilding feature_cells after ingestion')
   .action(async (opts) => {
     try {
       // Dynamically import the source module
@@ -34,7 +33,7 @@ program
         sourceModule = await import(sourcePath);
       } catch {
         console.error(`Unknown source: ${opts.source}`);
-        console.error('Available sources: lps, beeldbank');
+        console.error('Available sources: lps, beeldbank, joods-monument');
         process.exit(1);
       }
 
@@ -48,11 +47,7 @@ program
 
       await sourceModule.ingest(opts.file);
 
-      if (!opts.skipCells) {
-        console.log('\nRebuilding feature_cells...');
-        await rebuildFeatureCells();
-      }
-
+      console.log('\nRun `bun run db:rebuild-index` to compute spatial grid and temporal frequencies.');
       process.exit(0);
     } catch (error) {
       console.error('Ingestion failed:', error);

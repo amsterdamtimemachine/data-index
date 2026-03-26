@@ -12,7 +12,7 @@
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
     "db:ingest": "bun run src/etl/index.ts ingest",
-    "db:rebuild-cells": "bun run src/etl/index.ts rebuild-cells"
+    "db:rebuild-index": "bun run src/etl/index.ts rebuild-index"
   },
   "dependencies": {
     "@atm/shared": "workspace:*",

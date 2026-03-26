@@ -17,7 +17,7 @@
     "db:migrate": "cd packages/db && bunx drizzle-kit migrate",
     "db:generate": "cd packages/db && bunx drizzle-kit generate",
     "db:ingest": "cd packages/db && bun run src/etl/index.ts ingest",
-    "db:rebuild-cells": "cd packages/db && bun run src/etl/index.ts rebuild-cells",
+    "db:rebuild-index": "cd packages/db && bun run src/etl/index.ts rebuild-cells",
     "db:studio": "cd packages/db && bun run db:studio",
     "docker:up": "docker compose -f docker/docker-compose.yml up",
     "docker:up:build": "docker compose -f docker/docker-compose.yml up --build",

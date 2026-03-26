@@ -63,21 +63,21 @@ Ingestion scripts run manually against the database. They are not part of the Do
 
 ### Running ingestion
 
+Order matters — places must be ingested before features, and the index must be rebuilt after all sources.
+
 ```bash
-# 1. Import places (must run first — other sources link to these)
-bun run db:ingest -s lps -f <path-to-lps.csv> --skip-cells
+# 1. Places first (other sources link features to these by adamlink URI)
+bun run db:ingest -s lps -f <path-to-lps.csv>
 
-# 2. Import image features
-bun run db:ingest -s beeldbank -f <path-to-beeldbank.json> --skip-cells
+# 2. Features (any order between sources)
+bun run db:ingest -s beeldbank -f <path-to-beeldbank.json>
+bun run db:ingest -s joods-monument -f <path-to-results_jm.csv>
 
-# 3. Import person features
-bun run db:ingest -s joods-monument -f <path-to-results_jm.csv> --skip-cells
-
-# 4. Rebuild grid cells + frequencies (once, after all sources)
-bun run db:rebuild-cells
+# 3. Rebuild index (always run after ingestion)
+bun run db:rebuild-index
 ```
 
-Use `--skip-cells` on each ingest to avoid redundant rebuilds between sources.
+`db:rebuild-index` computes the 100m spatial grid cells, spatial frequency, and temporal frequency. Must be run after every data change.
 
 ### Adding a new data source
 
@@ -147,16 +147,14 @@ docker compose -f docker/docker-compose.yml up -d dataindex-db
 # 2. Push schema to the database
 cd packages/db && bunx drizzle-kit push && cd ../..
 
-# 3. Ingest data (use --skip-cells to rebuild once at the end)
-bun run db:ingest -s lps -f <path-to-lps.csv> --skip-cells
-bun run db:ingest -s beeldbank -f <path-to-beeldbank.json> --skip-cells
-bun run db:ingest -s joods-monument -f <path-to-results_jm.csv> --skip-cells
+# 3. Ingest data (places first, then features)
+bun run db:ingest -s lps -f <path-to-lps.csv>
+bun run db:ingest -s beeldbank -f <path-to-beeldbank.json>
+bun run db:ingest -s joods-monument -f <path-to-results_jm.csv>
 
-# 4. Rebuild grid cells + frequencies
-bun run db:rebuild-cells
+# 4. Rebuild index
+bun run db:rebuild-index
 ```
-
-Order matters: LPS places must be ingested before beeldbank and joods-monument (they link features to places by adamlink URI).
 
 ### Wiping the database
 

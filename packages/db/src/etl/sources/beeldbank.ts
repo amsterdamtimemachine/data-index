@@ -12,6 +12,9 @@ import { streamObject } from 'stream-json/streamers/StreamObject';
 import { db } from '../../client';
 import { sources, relation, features, featureToPlace } from '../../schema';
 import type { MediaObjectEntity } from '@atm/shared';
+import { formatDateRange } from '../utils';
+
+const BATCH_SIZE = 1000;
 
 export async function ingest(filePath: string) {
   // Create source
@@ -31,6 +34,20 @@ export async function ingest(filePath: string) {
   let featureCount = 0;
   let linkCount = 0;
   let entryCount = 0;
+
+  let featureBatch: any[] = [];
+  let linkBatch: { featureId: string; placeId: string; relationId: string }[] = [];
+
+  async function flush() {
+    if (featureBatch.length > 0) {
+      await db.insert(features).values(featureBatch).onConflictDoNothing();
+      featureBatch = [];
+    }
+    if (linkBatch.length > 0) {
+      await db.insert(featureToPlace).values(linkBatch).onConflictDoNothing();
+      linkBatch = [];
+    }
+  }
 
   const pipeline = createReadStream(filePath)
     .pipe(parser())
@@ -53,24 +70,16 @@ export async function ingest(filePath: string) {
         const contentUrl = img.contentUrl || '';
         const startDate = img.startDate || null;
         const endDate = img.endDate || null;
-        const dateCreated = img.dateCreated || '';
-
-        // Format dateCreated as date range or single date
-        let entityDateCreated: string | undefined;
-        if (startDate && endDate && startDate !== endDate) {
-          entityDateCreated = `${startDate}/${endDate}`;
-        } else if (startDate) {
-          entityDateCreated = startDate;
-        }
+        const dateCreatedFormatted = formatDateRange(startDate, endDate);
 
         const entity: MediaObjectEntity = {
           type: 'MediaObject',
           label: name,
           contentUrl,
-          ...(entityDateCreated && { dateCreated: entityDateCreated })
+          ...(dateCreatedFormatted && { dateCreated: dateCreatedFormatted })
         };
 
-        await db.insert(features).values({
+        featureBatch.push({
           id: featureId,
           url: sourceUrl,
           recordType: 'image',
@@ -80,18 +89,17 @@ export async function ingest(filePath: string) {
           endDate,
           sourceId: 'beeldbank',
           entity
-        }).onConflictDoNothing();
+        });
 
         featureCount++;
       }
 
-      await db.insert(featureToPlace).values({
-        featureId,
-        placeId: adamlinkUri,
-        relationId: 'isAbout'
-      }).onConflictDoNothing();
-
+      linkBatch.push({ featureId, placeId: adamlinkUri, relationId: 'isAbout' });
       linkCount++;
+
+      if (linkBatch.length >= BATCH_SIZE) {
+        await flush();
+      }
     }
 
     entryCount++;
@@ -99,6 +107,8 @@ export async function ingest(filePath: string) {
       process.stdout.write(`\r  ${entryCount} addresses, ${featureCount} features, ${linkCount} links`);
     }
   }
+
+  await flush();
 
   console.log(`\nDone: ${featureCount} features, ${linkCount} links`);
 }

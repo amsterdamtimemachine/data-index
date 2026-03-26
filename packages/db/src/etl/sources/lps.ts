@@ -8,7 +8,8 @@
  */
 import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
-import { pool } from '../../client';
+import { sql } from 'drizzle-orm';
+import { db } from '../../client';
 
 const ADDR_COLS = [
   'pw-1943',
@@ -20,11 +21,7 @@ const ADDR_COLS = [
   'percelen-1832'
 ];
 
-const BATCH_SIZE = 5000;
-
 export async function ingest(filePath: string) {
-  const client = await pool.connect();
-
   // Collect all address -> wkt mappings
   const addrToWkt = new Map<string, string>();
 
@@ -42,40 +39,22 @@ export async function ingest(filePath: string) {
   }
   console.log(`Mapped ${addrToWkt.size} address IDs`);
 
-  // Batch insert with parameterized queries
+  // Insert places
   console.log('Inserting into place...');
-  let batchValues: string[] = [];
-  let batchParams: any[] = [];
-  let paramIdx = 1;
   let total = 0;
 
   for (const [addrId, wkt] of addrToWkt) {
     const uri = `https://adamlink.nl/geo/address/${addrId}`;
-    batchValues.push(`($${paramIdx}, $${paramIdx + 1}, ST_GeomFromText($${paramIdx + 2}, 28992))`);
-    batchParams.push(uri, 'address', wkt);
-    paramIdx += 3;
-
-    if (batchValues.length >= BATCH_SIZE) {
-      await client.query(
-        `INSERT INTO place (id, type, geometry) VALUES ${batchValues.join(',')} ON CONFLICT DO NOTHING`,
-        batchParams
-      );
-      total += batchValues.length;
+    await db.execute(sql`
+      INSERT INTO place (id, type, geometry)
+      VALUES (${uri}, 'address', ST_GeomFromText(${wkt}, 28992))
+      ON CONFLICT DO NOTHING
+    `);
+    total++;
+    if (total % 1000 === 0) {
       process.stdout.write(`\r  ${total} inserted...`);
-      batchValues = [];
-      batchParams = [];
-      paramIdx = 1;
     }
   }
 
-  if (batchValues.length > 0) {
-    await client.query(
-      `INSERT INTO place (id, type, geometry) VALUES ${batchValues.join(',')} ON CONFLICT DO NOTHING`,
-      batchParams
-    );
-    total += batchValues.length;
-  }
-
   console.log(`\nDone: ${total} place entries`);
-  client.release();
 }
