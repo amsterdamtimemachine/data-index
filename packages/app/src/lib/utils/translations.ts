@@ -50,6 +50,19 @@ export function createTranslatedContentTypes(englishTypes: RecordType[]) {
 	}));
 }
 
+// Relation translations: English (server/API) → Dutch (UI display)
+const RELATION_TRANSLATIONS: Record<string, string> = {
+	isAbout: 'Gaat over',
+	hadLastLivingLocation: 'Laatste woonadres'
+} as const;
+
+/**
+ * Translate English relation ID to Dutch for UI display
+ */
+export function translateRelation(relationId: string): string {
+	return RELATION_TRANSLATIONS[relationId] || relationId;
+}
+
 // Error message translations: English → Dutch
 const ERROR_MESSAGE_TRANSLATIONS: Record<string, string> = {
 	'Invalid Content Type Removed': 'Ongeldig inhoudstype verwijderd',

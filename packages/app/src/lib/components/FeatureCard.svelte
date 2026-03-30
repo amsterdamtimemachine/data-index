@@ -5,6 +5,7 @@
 	import FeatureCardFooter from '$components/FeatureCardFooter.svelte';
 	import FeatureCardImage from '$components/FeatureCardImage.svelte';
 	import FeatureCardText from '$components/FeatureCardText.svelte';
+	import EntityDetail from '$components/EntityDetail.svelte';
 	import TagList from '$components/TagList.svelte';
 	import Heading from '$components/Heading.svelte';
 
@@ -42,12 +43,12 @@
 				{expanded}
 				onExpand={handleExpand}
 			/>
-		{:else if feature.recordType === 'text' && feature.description}
+		{/if}
+		{#if feature.description}
 			<FeatureCardText text={feature.description} {expanded} />
-		{:else if feature.recordType === 'person'}
-			{#if feature.description}
-				<FeatureCardText text={feature.description} {expanded} />
-			{/if}
+		{/if}
+		{#if expanded && feature.entity}
+			<EntityDetail entity={feature.entity} relationId={feature.relationId} class="px-2 py-2" />
 		{/if}
 
 		<!-- Tags - Temporarily disabled for launch -->

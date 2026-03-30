@@ -61,6 +61,7 @@ export interface FeatureResult {
   spatialFrequency: number;
   temporalFrequency: number;
   entity?: Entity | PersonEntity | MediaObjectEntity;
+  relationId?: string;
 }
 
 /**

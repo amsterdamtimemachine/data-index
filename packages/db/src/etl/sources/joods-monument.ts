@@ -16,7 +16,7 @@ import { sources, relation, features, featureToPlace } from '../../schema';
 import type { PersonEntity } from '@atm/shared';
 
 const SOURCE_ID = 'joods-monument';
-const START_DATE = '1940-01-01';
+const START_DATE = '1900-01-01';
 const END_DATE = '1945-12-31';
 const BATCH_SIZE = 1000;
 
