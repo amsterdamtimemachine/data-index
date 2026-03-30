@@ -122,7 +122,19 @@ Returns `{ bins, maxCount, timeRange, totalFeatures }`. The `binSize` must match
 
 Optional params: `recordTypes`, `tags`, `tagOperator` (AND|OR), `timeSlice`, `sort` (relevance|spatialFrequency|date), `sortDirection` (asc|desc), `page`, `pageSize` (max 200).
 
-Default sort is `relevance` — a normalised score combining spatial and temporal frequency. Results are interleaved by record type using window functions.
+Default sort is `relevance`. Results are interleaved by record type using window functions.
+
+### Relevance scoring
+
+Features are ranked by a normalised score combining spatial and temporal specificity:
+
+```
+relevance = (spatial_frequency / max_spatial) + (temporal_frequency / max_temporal)
+```
+
+Both terms are normalised to 0–1 using the dataset's maximum values (cached with TTL). Lower score = more specific in both space and time = ranks higher. A feature spanning 1 grid cell and 1 time bin scores lower (better) than one spanning 50 cells and 8 bins.
+
+`spatial_frequency` is the number of 100m grid cells a feature spans — computed from its linked place geometries during `rebuild-index`. `temporal_frequency` is the number of base time bins (default 10 years) its date range covers. Both are pre-computed and stored on the features table.
 
 ## Development
 

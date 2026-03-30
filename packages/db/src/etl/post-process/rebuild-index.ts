@@ -19,7 +19,7 @@ type StatsRow = {
   max_y: number;
 };
 
-export async function rebuildFeatureCells() {
+export async function rebuildIndex() {
   console.log('=== Rebuilding feature_cells at 100m resolution ===\n');
 
   // Get actual bounds from data (in RD coordinates - meters)
@@ -76,11 +76,11 @@ export async function rebuildFeatureCells() {
     ) sub
     WHERE f.id = sub.feature_id
   `);
-  console.log(`Updated spatial frequency for ${spatialResult.rowCount} features`);
+  console.log(`  ✅ ${spatialResult.rowCount} features updated`);
 
   // Update temporal frequency (number of base time bins each feature spans)
   const baseBinSize = parseInt(process.env.BASE_BIN_SIZE || '10', 10) || 10;
-  console.log(`Updating temporal frequency (base bin size: ${baseBinSize} years)...`);
+  console.log(`\nUpdating temporal frequency (base bin: ${baseBinSize} years)...`);
   const temporalResult = await db.execute(sql`
     UPDATE ${features} f
     SET temporal_frequency = GREATEST(1, CEIL(
@@ -88,8 +88,26 @@ export async function rebuildFeatureCells() {
     ))
     WHERE f.start_date IS NOT NULL AND f.end_date IS NOT NULL
   `);
-  console.log(`Updated temporal frequency for ${temporalResult.rowCount} features`);
+  console.log(`  ✅ ${temporalResult.rowCount} features updated`);
 
+  // Check coverage gaps
+  type CountRow = { total: string; missing_spatial: string; missing_temporal: string };
+  const coverage = await db.execute<CountRow>(sql`
+    SELECT
+      COUNT(*) as total,
+      COUNT(*) - COUNT(spatial_frequency) as missing_spatial,
+      COUNT(*) - COUNT(temporal_frequency) as missing_temporal
+    FROM ${features}
+  `);
+  const { total, missing_spatial, missing_temporal } = coverage.rows[0];
+  if (parseInt(missing_spatial) > 0) {
+    console.log(`  ⚠ ${missing_spatial}/${total} features have no spatial frequency (no linked place with geometry)`);
+  }
+  if (parseInt(missing_temporal) > 0) {
+    console.log(`  ⚠ ${missing_temporal}/${total} features have no temporal frequency (missing start_date or end_date)`);
+  }
+
+  // Summary
   const stats = await db.execute<StatsRow>(sql`
     SELECT
       COUNT(*) as total_rows,
@@ -99,5 +117,13 @@ export async function rebuildFeatureCells() {
       MIN(${featureCells.cellY}) as min_y, MAX(${featureCells.cellY}) as max_y
     FROM ${featureCells}
   `);
-  console.log('\nStats:', stats.rows[0]);
+  const s = stats.rows[0];
+
+  console.log(`\n=== Summary ===`);
+  console.log(`  Features:         ${total}`);
+  console.log(`  Cell assignments: ${s.total_rows}`);
+  console.log(`  Unique cells:     ${s.unique_cells}`);
+  console.log(`  Grid range:       x[${s.min_x}–${s.max_x}] y[${s.min_y}–${s.max_y}]`);
+  console.log(`  Spatial coverage:  ${parseInt(total) - parseInt(missing_spatial)}/${total} features`);
+  console.log(`  Temporal coverage: ${parseInt(total) - parseInt(missing_temporal)}/${total} features`);
 }

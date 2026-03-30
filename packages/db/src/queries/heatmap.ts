@@ -186,8 +186,8 @@ export async function getHeatmapTimeline(
 
   const result = await db.execute<CellCountWithTime>(sql`
     WITH slices AS (
-      SELECT gs AS bin_start, gs + ${binSizeYears} AS bin_end
-      FROM generate_series(${firstSlice.startYear}, ${lastSlice.startYear}, ${binSizeYears}) AS gs
+      SELECT gs AS bin_start, gs + ${binSizeYears}::int AS bin_end
+      FROM generate_series(${firstSlice.startYear}::int, ${lastSlice.startYear}::int, ${binSizeYears}::int) AS gs
     )
     SELECT
       ${featureCells.cellX} as cell_x,

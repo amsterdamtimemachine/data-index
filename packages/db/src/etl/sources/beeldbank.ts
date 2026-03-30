@@ -69,7 +69,7 @@ export async function ingest(filePath: string) {
         const name = img.name || '';
         const contentUrl = img.contentUrl || '';
         const startDate = img.startDate || null;
-        const endDate = img.endDate || null;
+        const endDate = img.endDate || startDate;
         const dateCreatedFormatted = formatDateRange(startDate, endDate);
 
         const entity: MediaObjectEntity = {

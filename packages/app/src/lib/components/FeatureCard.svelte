@@ -42,12 +42,12 @@
 				{expanded}
 				onExpand={handleExpand}
 			/>
-		{:else if (feature.recordType === 'text' || feature.recordType === 'person') && feature.description}
+		{:else if feature.recordType === 'text' && feature.description}
 			<FeatureCardText text={feature.description} {expanded} />
-		{:else}
-			<div class="{expanded ? 'px-2' : ''} text-gray-800 text-sm">
-				Unknown feature type: {feature.recordType}
-			</div>
+		{:else if feature.recordType === 'person'}
+			{#if feature.description}
+				<FeatureCardText text={feature.description} {expanded} />
+			{/if}
 		{/if}
 
 		<!-- Tags - Temporarily disabled for launch -->

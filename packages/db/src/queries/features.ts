@@ -268,7 +268,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         f.temporal_frequency,
         (COALESCE(f.spatial_frequency::float, 0) / ${maxSpatial}
          + COALESCE(f.temporal_frequency::float, 0) / ${maxTemporal}) as relevance_score,
-        s.label as source_label
+        s.label as source_label,
+        f.entity
       FROM feature_cells fc
       JOIN features f ON fc.feature_id = f.id
       LEFT JOIN sources s ON f.source_id = s.id

@@ -38,8 +38,8 @@ export async function getHistogram(
 
   const result = await db.execute<BinRow>(sql`
     WITH slices AS (
-      SELECT gs AS bin_start, gs + ${binSizeYears} AS bin_end
-      FROM generate_series(${firstSlice.startYear}, ${lastSlice.startYear}, ${binSizeYears}) AS gs
+      SELECT gs AS bin_start, gs + ${binSizeYears}::int AS bin_end
+      FROM generate_series(${firstSlice.startYear}::int, ${lastSlice.startYear}::int, ${binSizeYears}::int) AS gs
     )
     SELECT s.bin_start::text as bin_start, COUNT(DISTINCT f.id) as count
     FROM ${features} f

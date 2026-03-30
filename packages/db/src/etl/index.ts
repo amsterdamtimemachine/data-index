@@ -1,5 +1,5 @@
 import { program } from 'commander';
-import { rebuildFeatureCells } from './post-process/populate-cells';
+import { rebuildIndex } from './post-process/rebuild-index';
 
 program
   .name('atm-db')
@@ -7,10 +7,10 @@ program
 
 program
   .command('rebuild-index')
-  .description('Rebuild feature_cells grid, spatial frequency, and temporal frequency')
+  .description('Rebuild the spatial grid index and compute temporal and spatial frequencies')
   .action(async () => {
     try {
-      await rebuildFeatureCells();
+      await rebuildIndex();
       process.exit(0);
     } catch (error) {
       console.error('Failed to rebuild feature_cells:', error);
@@ -47,7 +47,7 @@ program
 
       await sourceModule.ingest(opts.file);
 
-      console.log('\nRun `bun run db:rebuild-index` to compute spatial grid and temporal frequencies.');
+      console.log('\nRun `bun run db:rebuild-index` to rebuild the spatial grid index and compute temporal and spatial frequencies.');
       process.exit(0);
     } catch (error) {
       console.error('Ingestion failed:', error);
