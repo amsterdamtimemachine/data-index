@@ -50,6 +50,44 @@ export function createTranslatedContentTypes(englishTypes: RecordType[]) {
 	}));
 }
 
+// Dataset/source translations: source ID → Dutch display label
+const DATASET_TRANSLATIONS: Record<string, string> = {
+	beeldbank: 'Beeldbank',
+	'joods-monument': 'Joods Monument'
+} as const;
+
+const REVERSE_DATASET_TRANSLATIONS: Record<string, string> = Object.fromEntries(
+	Object.entries(DATASET_TRANSLATIONS).map(([id, label]) => [label, id])
+);
+
+/**
+ * Translate source ID to Dutch label for UI display
+ */
+export function translateDataset(sourceId: string): string {
+	return DATASET_TRANSLATIONS[sourceId] || sourceId;
+}
+
+/**
+ * Translate Dutch dataset label back to source ID
+ */
+export function reverseTranslateDataset(label: string): string {
+	return REVERSE_DATASET_TRANSLATIONS[label] || label;
+}
+
+/**
+ * Translate array of source IDs to Dutch labels
+ */
+export function translateDatasets(sourceIds: string[]): string[] {
+	return sourceIds.map(translateDataset);
+}
+
+/**
+ * Translate array of Dutch dataset labels back to source IDs
+ */
+export function reverseTranslateDatasets(labels: string[]): string[] {
+	return labels.map(reverseTranslateDataset);
+}
+
 // Relation translations: English (server/API) → Dutch (UI display)
 const RELATION_TRANSLATIONS: Record<string, string> = {
 	isAbout: 'Gaat over',

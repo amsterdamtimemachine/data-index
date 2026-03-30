@@ -39,6 +39,11 @@ export const GET: RequestHandler = async ({ url }) => {
 			? (recordTypesParam.split(',').map((t) => t.trim()) as RecordType[])
 			: undefined;
 
+		const sourcesParam = url.searchParams.get('sources');
+		const sourceIds = sourcesParam
+			? sourcesParam.split(',').map((t) => t.trim())
+			: undefined;
+
 		const tagsParam = url.searchParams.get('tags');
 		const tags = tagsParam
 			? tagsParam.split(',').map((t) => t.trim()).filter((t) => t.length > 0)
@@ -71,6 +76,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		const result = await getFeatures({
 			bounds,
 			recordTypes,
+			sourceIds,
 			tags,
 			tagOperator,
 			timeSlice,

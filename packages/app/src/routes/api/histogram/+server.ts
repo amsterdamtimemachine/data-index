@@ -14,15 +14,21 @@ export const GET: RequestHandler = async ({ url }) => {
 			? (recordTypesParam.split(',').map((t) => t.trim()) as RecordType[])
 			: undefined;
 
+		// Parse sources
+		const sourcesParam = url.searchParams.get('sources');
+		const sourceIds = sourcesParam
+			? sourcesParam.split(',').map((t) => t.trim())
+			: undefined;
+
 		// Parse bin size
 		const binSizeParam = url.searchParams.get('binSize');
 		const binSize = binSizeParam
 			? Math.min(Math.max(parseInt(binSizeParam, 10) || DEFAULT_BIN_SIZE, BIN_SIZE_MIN), BIN_SIZE_MAX)
 			: DEFAULT_BIN_SIZE;
 
-		console.log(`📊 Histogram API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, binSize: ${binSize}`);
+		console.log(`📊 Histogram API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, sources: ${sourceIds?.join(', ') || 'all'}, binSize: ${binSize}`);
 
-		const histogram = await getHistogram(recordTypes, binSize);
+		const histogram = await getHistogram(recordTypes, sourceIds, binSize);
 
 		console.log(
 			`✅ Histogram: ${histogram.bins.length} bins, ${histogram.totalFeatures} total features`

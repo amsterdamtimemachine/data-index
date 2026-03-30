@@ -11,6 +11,7 @@ export interface VisualizationMetadata {
     end: string;
   };
   recordTypes: RecordType[];
+  sources: { id: string; label: string }[];
   tags: string[];
   stats?: {
     totalFeatures: number;

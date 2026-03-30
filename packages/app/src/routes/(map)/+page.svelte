@@ -9,7 +9,7 @@
 	import { loadingState } from '$lib/state/loadingState.svelte';
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
 	import Heading from '$components/Heading.svelte';
-	import Map from '$components/Map.svelte';
+	import Heatmap from '$components/Heatmap.svelte';
 	import TimePeriodSelector from '$components/TimePeriodSelector.svelte';
 	import ToggleGroup from '$components/ToggleGroup.svelte';
 	import TagsANDSelector from '$components/TagsANDSelector.svelte';
@@ -41,6 +41,8 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 	let heatmapTimeline = $derived(data?.heatmapTimeline as HeatmapTimeline | null);
 
 	let currentRecordTypes = $derived(data?.currentRecordTypes || []);
+	let sourceIds = $derived(data?.metadata?.sources?.map((s: { id: string }) => s.id) || []);
+	let currentSources = $derived(data?.currentSources || []);
 	let currentTags = $derived(data?.currentTags || []);
 	let currentTagOperator = $derived(data?.currentTagOperator || 'OR');
 	let validatedCell = $derived(data?.validatedCell);
@@ -48,9 +50,14 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 	let validatedPeriod = $derived(data?.validatedPeriod);
 	let histogram = $derived(data?.histogram as Histogram | null);
 
-	// Translated content types for UI display  
+	// Translated content types for UI display
 	let translatedRecordTypes = $derived(recordTypes ? translateContentTypes(recordTypes) : []);
 	let translatedCurrentRecordTypes = $derived(currentRecordTypes ? translateContentTypes(currentRecordTypes) : []);
+
+	// Source labels from metadata (used as toggle display + reverse lookup)
+	let sourceLookup = $derived(new Map(data?.metadata?.sources?.map((s: { id: string; label: string }) => [s.id, s.label]) || []));
+	let sourceLabels = $derived(sourceIds.map((id: string) => sourceLookup.get(id) || id));
+	let currentSourceLabels = $derived(currentSources.map((id: string) => sourceLookup.get(id) || id));
 
 	const controller = createStateController();
 	let currentPeriod = $derived(controller.currentPeriod);
@@ -135,6 +142,21 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 		goto(url.pathname + url.search);
 	}
 
+	function handleSourceChange(sources: string[] | string) {
+		const labelArray = Array.isArray(sources) ? sources : [sources];
+		// Reverse lookup: label → id
+		const reverseMap = new Map(Array.from(sourceLookup.entries()).map(([id, label]) => [label, id]));
+		const ids = labelArray.map(label => reverseMap.get(label) || label);
+
+		const url = new URL(window.location.href);
+		if (ids.length > 0) {
+			url.searchParams.set('sources', ids.join(','));
+		} else {
+			url.searchParams.delete('sources');
+		}
+		goto(url.pathname + url.search);
+	}
+
 	function handleTagsChange(tags: string | string[]) {
 		const tagArray = Array.isArray(tags) ? tags : [tags];
 		const url = new URL(window.location.href);
@@ -184,7 +206,7 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 <div class="relative flex flex-col w-screen h-screen">
 	<div class="relative flex-1">
 		{#if currentHeatmap && dimensions}
-			<Map
+			<Heatmap
 				heatmap={currentHeatmap}
 				{dimensions}
 				{selectedCellId}
@@ -209,6 +231,24 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 						items={translatedRecordTypes}
 						selectedItems={translatedCurrentRecordTypes}
 						onItemSelected={handleRecordTypeChange}
+						requireOneItemSelected={true}>
+						{#snippet children(item, isSelected, isDisabled)}
+							<Tag variant={isSelected ? 'selected-outline' : 'outline'} disabled={isDisabled} interactive={true}>
+								{item}
+							</Tag>
+						{/snippet}
+					</ToggleGroup>
+				</div>
+
+				<div class="mb-4">
+					<div class="flex mb-2">
+						<Heading level={3} class="pr-2"> Dataset </Heading>
+						<Tooltip icon={QuestionMark} text="Filter op basis van de dataset waaruit de data afkomstig is." placement="bottom" />
+					</div>
+					<ToggleGroup
+						items={sourceLabels}
+						selectedItems={currentSourceLabels}
+						onItemSelected={handleSourceChange}
 						requireOneItemSelected={true}>
 						{#snippet children(item, isSelected, isDisabled)}
 							<Tag variant={isSelected ? 'selected-outline' : 'outline'} disabled={isDisabled} interactive={true}>

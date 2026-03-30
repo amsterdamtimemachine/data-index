@@ -22,6 +22,12 @@ export const GET: RequestHandler = async ({ url }) => {
 			? (recordTypesParam.split(',').map((t) => t.trim()) as RecordType[])
 			: undefined;
 
+		// Parse sources
+		const sourcesParam = url.searchParams.get('sources');
+		const sourceIds = sourcesParam
+			? sourcesParam.split(',').map((t) => t.trim())
+			: undefined;
+
 		// Parse grid resolution
 		const rows = parseGridParam(url.searchParams.get('rows'), GRID_DEFAULT);
 		const cols = parseGridParam(url.searchParams.get('cols'), GRID_DEFAULT);
@@ -38,7 +44,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		);
 
 		if (timeSliceParam) {
-			const heatmapResponse = await getHeatmap(timeSliceParam, resolution, recordTypes, binSize);
+			const heatmapResponse = await getHeatmap(timeSliceParam, resolution, recordTypes, sourceIds, binSize);
 			const cellCount = Object.values(heatmapResponse.timeline)[0]?.indices.length ?? 0;
 			console.log(`✅ Heatmap for ${timeSliceParam}: ${cellCount} cells`);
 
@@ -49,7 +55,7 @@ export const GET: RequestHandler = async ({ url }) => {
 				}
 			});
 		} else {
-			const heatmapResponse = await getHeatmapTimeline(resolution, recordTypes, binSize);
+			const heatmapResponse = await getHeatmapTimeline(resolution, recordTypes, sourceIds, binSize);
 			const timeSliceCount = Object.keys(heatmapResponse.timeline).length;
 			const totalCells = Object.values(heatmapResponse.timeline).reduce(
 				(sum, h) => sum + h.indices.length,

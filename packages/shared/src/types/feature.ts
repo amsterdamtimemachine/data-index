@@ -36,6 +36,7 @@ export interface MediaObjectEntity extends Entity {
 export interface FeaturesQuery {
   bounds: HeatmapCellBounds;
   recordTypes?: RecordType[];
+  sourceIds?: string[];
   tags?: string[];
   tagOperator?: TagOperator;
   timeSlice?: string;

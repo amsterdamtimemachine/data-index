@@ -144,6 +144,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   const {
     bounds,
     recordTypes,
+    sourceIds,
     tags: tagFilters,
     tagOperator = 'OR',
     timeSlice,
@@ -202,6 +203,10 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
 
   const typeCondition = sql`f.record_type IN ${types}`;
 
+  const sourceCondition = sourceIds && sourceIds.length > 0
+    ? sql`f.source_id IN ${sourceIds}`
+    : sql`TRUE`;
+
   const dateCondition = dateRange
     ? sql`f.start_date <= ${dateRange.endDate} AND f.end_date >= ${dateRange.startDate}`
     : sql`TRUE`;
@@ -217,6 +222,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     JOIN features f ON fc.feature_id = f.id
     WHERE ${cellCondition}
       AND ${typeCondition}
+      AND ${sourceCondition}
       AND ${dateCondition}
       AND ${tagCondition}
   `);

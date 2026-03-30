@@ -48,6 +48,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 
 	// Parse URL parameters
 	const recordTypesParam = url.searchParams.get('recordTypes');
+	const sourcesParam = url.searchParams.get('sources');
 	const tagsParam = url.searchParams.get('tags');
 	const tagOperatorParam = url.searchParams.get('tagOperator');
 	const cellParam = url.searchParams.get('cell');
@@ -125,6 +126,21 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		}
 	}
 
+	// Determine sources to use
+	let currentSources: string[] = [];
+	if (metadata?.sources) {
+		const availableSourceIds = metadata.sources.map(s => s.id);
+		if (sourcesParam) {
+			const requestedSources = sourcesParam.split(',').map(s => s.trim());
+			currentSources = requestedSources.filter(s => availableSourceIds.includes(s));
+			if (currentSources.length === 0) {
+				currentSources = availableSourceIds;
+			}
+		} else {
+			currentSources = availableSourceIds;
+		}
+	}
+
 	// Parse tags if provided - need to validate combinations, not just existence
 	let currentTags: string[] | undefined;
 
@@ -163,11 +179,9 @@ export const load: PageLoad = async ({ fetch, url }) => {
 			if (currentRecordTypes.length > 0) {
 				histogramParams.set('recordTypes', currentRecordTypes.join(','));
 			}
-			// TODO: Re-enable tags when needed
-			// if (currentTags && currentTags.length > 0) {
-			// 	histogramParams.set('tags', currentTags.join(','));
-			// 	histogramParams.set('tagOperator', currentTagOperator);
-			// }
+			if (currentSources.length > 0) {
+				histogramParams.set('sources', currentSources.join(','));
+			}
 			if (histogramParams.toString()) {
 				histogramUrl += '?' + histogramParams.toString();
 			}
@@ -222,11 +236,9 @@ export const load: PageLoad = async ({ fetch, url }) => {
 			if (currentRecordTypes.length > 0) {
 				heatmapParams.set('recordTypes', currentRecordTypes.join(','));
 			}
-			// TODO: Re-enable tags when needed
-			// if (currentTags && currentTags.length > 0) {
-			// 	heatmapParams.set('tags', currentTags.join(','));
-			// 	heatmapParams.set('tagOperator', currentTagOperator);
-			// }
+			if (currentSources.length > 0) {
+				heatmapParams.set('sources', currentSources.join(','));
+			}
 			if (heatmapParams.toString()) {
 				heatmapUrl += '?' + heatmapParams.toString();
 			}
@@ -465,6 +477,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		heatmapDimensions,
 		availableTags,
 		currentRecordTypes,
+		currentSources,
 		currentTags,
 		currentTagOperator,
 		validatedCell,

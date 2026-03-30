@@ -5,13 +5,26 @@ import type {
 } from '@atm/shared';
 import { computeTimeSlices, computeTimeRange } from './time-slices';
 import { db } from '../client';
-import { features, tags, featureTags, featureCells } from '../schema';
+import { features, sources, tags, featureTags, featureCells } from '../schema';
 
 // Query result types
 type RecordTypeRow = { record_type: RecordType };
 type TagRow = { id: string };
 type CountRow = { count: string };
 type RecordTypeCountRow = { record_type: RecordType; count: string };
+type SourceRow = { id: string; label: string };
+
+/**
+ * Get all available sources
+ */
+async function getSources(): Promise<{ id: string; label: string }[]> {
+  const result = await db.execute<SourceRow>(sql`
+    SELECT ${sources.id} as id, ${sources.label} as label
+    FROM ${sources}
+    ORDER BY ${sources.label}
+  `);
+  return result.rows;
+}
 
 /**
  * Get all distinct record types from features table
@@ -74,10 +87,11 @@ async function getStats(): Promise<{
  * Get complete visualization metadata
  */
 export async function getMetadata(): Promise<VisualizationMetadata> {
-  const [timeSlices, timeRange, recordTypes, availableTags, stats] = await Promise.all([
+  const [timeSlices, timeRange, recordTypes, availableSources, availableTags, stats] = await Promise.all([
     computeTimeSlices(),
     computeTimeRange(),
     getRecordTypes(),
+    getSources(),
     getTags(),
     getStats()
   ]);
@@ -86,6 +100,7 @@ export async function getMetadata(): Promise<VisualizationMetadata> {
     timeSlices,
     timeRange,
     recordTypes,
+    sources: availableSources,
     tags: availableTags,
     stats: {
       totalFeatures: stats.totalFeatures,
