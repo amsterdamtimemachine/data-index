@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Entity, PersonEntity, MediaObjectEntity } from '@atm/shared/types';
-	import { translateRelation } from '$utils/translations';
+	import { t } from '$utils/translations';
+	import { formatDate, formatDateRange } from '$utils/format';
 
 	type Props = {
 		entity: Entity | PersonEntity | MediaObjectEntity;
@@ -21,35 +22,21 @@
 
 <div class="text-base text-gray-700 {className || ''}">
 	{#if relationId}
-		<p class="text-gray-500 mb-1">{translateRelation(relationId)}</p>
+		<p class="text-gray-500 mb-1">{t(relationId)}</p>
 	{/if}
 	{#if isPerson(entity)}
 		<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-			{#if entity.birthDate}
-				<dt class="text-gray-500">Born</dt>
-				<dd>{entity.birthDate}{entity.birthPlace ? `, ${entity.birthPlace}` : ''}</dd>
-			{:else if entity.birthPlace}
-				<dt class="text-gray-500">Born</dt>
-				<dd>{entity.birthPlace}</dd>
-			{/if}
-			{#if entity.deathDate}
-				<dt class="text-gray-500">Died</dt>
-				<dd>{entity.deathDate}{entity.deathPlace ? `, ${entity.deathPlace}` : ''}</dd>
-			{:else if entity.deathPlace}
-				<dt class="text-gray-500">Died</dt>
-				<dd>{entity.deathPlace}</dd>
-			{/if}
+			<dt class="text-gray-500">{t('born')}</dt>
+			<dd>{entity.birthDate ? formatDate(entity.birthDate) : t('unknown')}{entity.birthPlace ? `, ${entity.birthPlace}` : ''}</dd>
+			<dt class="text-gray-500">{t('died')}</dt>
+			<dd>{entity.deathDate ? formatDate(entity.deathDate) : t('unknown')}{entity.deathPlace ? `, ${entity.deathPlace}` : ''}</dd>
 		</dl>
 	{:else if isMediaObject(entity)}
 		<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-			{#if entity.dateCreated}
-				<dt class="text-gray-500">Date</dt>
-				<dd>{entity.dateCreated}</dd>
-			{/if}
-			{#if entity.author}
-				<dt class="text-gray-500">Author</dt>
-				<dd>{entity.author}</dd>
-			{/if}
+			<dt class="text-gray-500">{t('date')}</dt>
+			<dd>{entity.dateCreated ? formatDateRange(entity.dateCreated) : t('unknown')}</dd>
+			<dt class="text-gray-500">{t('author')}</dt>
+			<dd>{entity.author || t('unknown')}</dd>
 		</dl>
 	{/if}
 </div>
