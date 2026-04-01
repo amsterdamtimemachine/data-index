@@ -5,11 +5,10 @@
 
 	type Props = {
 		entity: Entity | PersonEntity | MediaObjectEntity;
-		relationId?: string;
 		class?: string;
 	};
 
-	let { entity, relationId, class: className }: Props = $props();
+	let { entity, class: className }: Props = $props();
 
 	function isPerson(e: Entity): e is PersonEntity {
 		return e.type === 'Person';
@@ -21,9 +20,6 @@
 </script>
 
 <div class="text-base text-gray-700 {className || ''}">
-	{#if relationId}
-		<p class="text-gray-500 mb-1">{t(relationId)}</p>
-	{/if}
 	{#if isPerson(entity)}
 		<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 			<dt class="text-gray-500">{t('born')}</dt>

@@ -54,7 +54,7 @@
 			<FeatureCardText text={feature.description} {expanded} />
 		{/if}
 		{#if expanded && feature.entity}
-			<EntityDetail entity={feature.entity} relationId={feature.relationId} class="px-2 py-2" />
+			<EntityDetail entity={feature.entity} class="px-2 py-2" />
 		{/if}
 
 		<!-- Tags - Temporarily disabled for launch -->
