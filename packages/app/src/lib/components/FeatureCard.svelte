@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { FeatureResult } from '@atm/shared/types';
+	import { t } from '$utils/translations';
 	import { featureViewerState } from '$lib/state/featureState.svelte';
 	import FeatureCardHeader from '$components/FeatureCardHeader.svelte';
 	import FeatureCardFooter from '$components/FeatureCardFooter.svelte';
@@ -31,10 +32,15 @@
 		level={3}
 			class={expanded
 				? 'font-medium text-xl my-3 px-2'
-				: 'font-medium text-lg line-clamp-2 mb-1'}
+				: 'font-medium text-lg line-clamp-2 mb-0'}
 		>
 			{feature.label}
 		</Heading>
+		{#if feature.relationId || feature.placeLabel}
+			<p class="italic text-gray-500 {expanded ? 'px-2 mb-2' : 'mb-1'} text-base">
+				{feature.relationId ? t(feature.relationId) : ''}{feature.placeLabel ? ` ${feature.placeLabel}` : ''}
+			</p>
+		{/if}
 		<!-- Feature-specific content -->
 		{#if feature.recordType === 'image' && feature.contentUrl}
 			<FeatureCardImage

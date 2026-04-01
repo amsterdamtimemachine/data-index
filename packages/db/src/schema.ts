@@ -24,6 +24,7 @@ export const sources = pgTable('sources', {
 export const place = pgTable('place', {
   id: text('id').primaryKey(),                    // "https://adamlink.nl/geo/address/A181758"
   type: text('type').notNull(),                   // "address" | "building" | "street" | "neighbourhood"
+  label: text('label'),                           // "Prins Hendrikkade 93"
   geometry: geometry('geometry')                  // POINT, LINESTRING, or POLYGON
 }, (table) => [
   index('idx_place_geometry').using('gist', table.geometry)

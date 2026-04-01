@@ -37,6 +37,7 @@ type FeatureRow = {
   relevance_score: number | null;
   entity: any | null;
   relation_id: string | null;
+  place_label: string | null;
   tags: string[] | null;
 };
 
@@ -277,11 +278,13 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
          + COALESCE(f.temporal_frequency::float, 0) / ${maxTemporal}) as relevance_score,
         s.label as source_label,
         f.entity,
-        fp.relation_id
+        fp.relation_id,
+        p.label as place_label
       FROM feature_cells fc
       JOIN features f ON fc.feature_id = f.id
       LEFT JOIN sources s ON f.source_id = s.id
       LEFT JOIN feature_to_place fp ON f.id = fp.feature_id
+      LEFT JOIN place p ON fp.place_id = p.id
       WHERE ${cellCondition}
         AND ${typeCondition}
         AND ${dateCondition}
@@ -324,6 +327,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       source_label,
       entity,
       relation_id,
+      place_label,
       tags
     FROM ranked
     ORDER BY type_rank, record_type, id
@@ -348,7 +352,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     spatialFrequency: row.spatial_frequency || 1,
     temporalFrequency: row.temporal_frequency || 1,
     entity: row.entity || undefined,
-    relationId: row.relation_id || undefined
+    relationId: row.relation_id || undefined,
+    placeLabel: row.place_label || undefined
   }));
 
   return {

@@ -33,7 +33,7 @@ program
         sourceModule = await import(sourcePath);
       } catch {
         console.error(`Unknown source: ${opts.source}`);
-        console.error('Available sources: lps, beeldbank, joods-monument');
+        console.error('Available sources: lps, adressen, beeldbank, joods-monument');
         process.exit(1);
       }
 
