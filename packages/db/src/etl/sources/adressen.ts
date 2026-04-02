@@ -22,12 +22,12 @@ interface RawRow {
 }
 
 function buildLabel(row: RawRow): string | null {
-  // Require a street name for a useful label — bare numbers aren't meaningful
-  if (!row.streetname?.trim()) return row.buildingname?.trim() || null;
-  const parts = [row.streetname.trim()];
+  const parts: string[] = [];
+  if (row.streetname) parts.push(row.streetname.trim());
   if (row.nr) parts.push(row.nr.trim());
   if (row.addition) parts.push(row.addition.trim());
-  return parts.join(' ');
+  if (parts.length === 0 && row.buildingname) return row.buildingname.trim();
+  return parts.length > 0 ? parts.join(' ') : null;
 }
 
 export async function ingest(filePath: string) {
