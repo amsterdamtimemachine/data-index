@@ -40,7 +40,8 @@ export const address = pgTable('address', {
   date: date('date'),                             // 1943-01-01
   source: text('source')                          // "pw-1943"
 }, (table) => [
-  index('idx_address_place').on(table.placeId)
+  index('idx_address_place').on(table.placeId),
+  index('idx_address_place_date').on(table.placeId, table.date)
 ]);
 
 // ============================================================================

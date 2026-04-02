@@ -38,6 +38,7 @@ type FeatureRow = {
   entity: any | null;
   relation_id: string | null;
   current_address: string | null;
+  historical_address: string | null;
   tags: string[] | null;
 };
 
@@ -128,13 +129,13 @@ async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Promise<{
 /**
  * Get date range from time slice key
  */
-async function getTimeSliceDateRange(timeSliceKey: string): Promise<{ startDate: string; endDate: string } | null> {
+async function getTimeSliceDateRange(timeSliceKey: string): Promise<{ startYear: number; endYear: number } | null> {
   const timeSlices = await computeTimeSlices();
   const timeSlice = timeSlices.find(ts => ts.key === timeSliceKey);
   if (!timeSlice) return null;
   return {
-    startDate: timeSlice.timeRange.start,
-    endDate: timeSlice.timeRange.end
+    startYear: timeSlice.startYear,
+    endYear: timeSlice.endYear
   };
 }
 
@@ -209,7 +210,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     : sql`TRUE`;
 
   const dateCondition = dateRange
-    ? sql`f.start_date <= ${dateRange.endDate} AND f.end_date >= ${dateRange.startDate}`
+    ? sql`EXTRACT(YEAR FROM f.start_date) < ${dateRange.endYear} AND EXTRACT(YEAR FROM f.end_date) >= ${dateRange.startYear}`
     : sql`TRUE`;
 
   const tagCondition = tagFilteredIds
@@ -279,7 +280,11 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         s.label as source_label,
         f.entity,
         fp.relation_id,
-        p.current_address
+        p.current_address,
+        (SELECT a.name FROM address a
+         WHERE a.place_id = fp.place_id
+           AND a.date <= f.end_date
+         ORDER BY a.date DESC LIMIT 1) as historical_address
       FROM feature_cells fc
       JOIN features f ON fc.feature_id = f.id
       LEFT JOIN sources s ON f.source_id = s.id
@@ -287,6 +292,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       LEFT JOIN place p ON fp.place_id = p.id
       WHERE ${cellCondition}
         AND ${typeCondition}
+        AND ${sourceCondition}
         AND ${dateCondition}
         AND ${tagCondition}
     ),
@@ -328,6 +334,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       entity,
       relation_id,
       current_address,
+      historical_address,
       tags
     FROM ranked
     ORDER BY type_rank, record_type, id
@@ -353,7 +360,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     temporalFrequency: row.temporal_frequency || 1,
     entity: row.entity || undefined,
     relationId: row.relation_id || undefined,
-    currentAddress: row.current_address || undefined
+    currentAddress: row.current_address || undefined,
+    historicalAddress: row.historical_address || undefined
   }));
 
   return {

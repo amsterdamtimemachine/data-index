@@ -47,7 +47,7 @@ Grid resolution is configurable per request via `rows` and `cols` query params o
 
 Time periods are computed dynamically from the data. The server queries `MIN(start_date)` and `MAX(end_date)` from features, then generates bins anchored to round boundaries (e.g. 1500, 1550, 1600). Bin size defaults to 50 years and is configurable via the `binSize` query param (min 10, max 100). Results are cached (TTL configurable via `CACHE_TTL_MINUTES`).
 
-Features appear in all time bins they overlap — a feature spanning 1840–1920 shows up in bins 1800, 1850, and 1900.
+Features appear in all time bins they overlap — a feature spanning 1840–1920 shows up in bins 1800, 1850, and 1900. Bin boundaries are left-inclusive, right-exclusive: `[1900, 1950)` means a feature with `start_date` in year 1900 belongs to this bin, not the preceding one. Entity dates (birth/death, dateCreated) are inclusive on both ends and used for display only — they don't affect bin placement.
 
 ## Data ingestion
 

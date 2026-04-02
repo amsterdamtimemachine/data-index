@@ -36,9 +36,11 @@
 		>
 			{feature.label}
 		</Heading>
-		{#if feature.relationId || feature.currentAddress}
+		{#if feature.relationId || feature.currentAddress || feature.historicalAddress}
+			{@const addressName = feature.historicalAddress || feature.currentAddress}
+			{@const showBoth = feature.historicalAddress && feature.currentAddress && feature.historicalAddress !== feature.currentAddress}
 			<p class="italic text-gray-500 {expanded ? 'px-2 mb-2' : 'mb-1'} text-base">
-				{feature.relationId ? t(feature.relationId) : ''}{feature.currentAddress ? ` ${feature.currentAddress}` : ''}
+				{feature.relationId ? t(feature.relationId) : ''}{addressName ? ` ${addressName}` : ''}{showBoth ? ` (nu ${feature.currentAddress})` : ''}
 			</p>
 		{/if}
 		<!-- Feature-specific content -->

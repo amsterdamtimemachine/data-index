@@ -445,9 +445,6 @@ export const load: PageLoad = async ({ fetch, url }) => {
 				// Update currentTags to only valid combinations
 				currentTags = validCombinations.length > 0 ? validCombinations : undefined;
 
-				console.log('INVALID COMBINATIONS:');
-				console.log(invalidCombinations);
-
 				// Add errors for invalid combinations
 				for (const invalidTag of invalidCombinations) {
 					errors.push(
@@ -469,7 +466,6 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	}
 
 	loadingState.stopLoading();
-	console.log(errors);
 	return {
 		metadata,
 		histogram,

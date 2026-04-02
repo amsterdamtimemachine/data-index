@@ -328,6 +328,7 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 					period={currentPeriod}
 					bounds={selectedCellBounds ?? undefined}
 					recordTypes={currentRecordTypes}
+					sources={currentSources}
 					tags={currentTags}
 					tagOperator={currentTagOperator as 'AND' | 'OR'}
 					onClose={handleFeaturesPanelClose}

@@ -64,6 +64,7 @@ export interface FeatureResult {
   entity?: Entity | PersonEntity | MediaObjectEntity;
   relationId?: string;
   currentAddress?: string;
+  historicalAddress?: string;
 }
 
 /**
