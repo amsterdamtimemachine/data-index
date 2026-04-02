@@ -1,17 +1,17 @@
 /**
- * Enrich places with address labels from Adamlink adressen CSV
+ * Enrich addresses with labels from Adamlink adressen CSV
  *
- * Reads the adressen CSV and updates the `place` table with human-readable
- * labels built from streetname + house number + addition.
- * Run after LPS ingestion (places must exist).
+ * Updates the `address` table with human-readable names, then sets
+ * `place.current_address` to the most recent address name per place.
+ * Run after LPS ingestion (addresses must exist).
  *
  * Usage: bun run db:ingest -s adressen -f ../../data/20230920-adressen.csv
  */
 import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { place } from '../../schema';
+import { address } from '../../schema';
 
 interface RawRow {
   adresid: string;
@@ -33,7 +33,7 @@ function buildLabel(row: RawRow): string | null {
 export async function ingest(filePath: string) {
   console.log(`Reading ${filePath}...`);
 
-  // Build adresid → label map, newer entries overwrite older ones (most recent name wins)
+  // Build adresid → label map, newer entries overwrite older ones
   const labels = new Map<string, string>();
   const csvParser = createReadStream(filePath).pipe(parse({ columns: true, relax_column_count: true }));
 
@@ -46,18 +46,32 @@ export async function ingest(filePath: string) {
   }
 
   console.log(`Parsed ${labels.size} unique address labels`);
-  console.log('Updating place labels...');
+  console.log('Updating address names...');
 
   let updated = 0;
 
-  for (const [adresid, label] of labels) {
+  for (const [adresid, name] of labels) {
     const uri = `https://adamlink.nl/geo/address/${adresid}`;
-    await db.update(place).set({ label }).where(eq(place.id, uri));
+    await db.update(address).set({ name }).where(eq(address.id, uri));
     updated++;
     if (updated % 1000 === 0) {
       process.stdout.write(`\r  ${updated} updated...`);
     }
   }
 
-  console.log(`\nDone: ${updated} place labels updated`);
+  console.log(`\n${updated} address names updated`);
+
+  // Set place.current_address to the most recent named address per place
+  console.log('Updating place current addresses...');
+  const result = await db.execute(sql`
+    UPDATE place SET current_address = sub.name
+    FROM (
+      SELECT DISTINCT ON (place_id) place_id, name
+      FROM address
+      WHERE name IS NOT NULL
+      ORDER BY place_id, date DESC
+    ) sub
+    WHERE place.id = sub.place_id
+  `);
+  console.log(`Done: ${result.rowCount} place current addresses updated`);
 }

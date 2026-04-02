@@ -37,7 +37,7 @@ type FeatureRow = {
   relevance_score: number | null;
   entity: any | null;
   relation_id: string | null;
-  place_label: string | null;
+  current_address: string | null;
   tags: string[] | null;
 };
 
@@ -279,7 +279,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         s.label as source_label,
         f.entity,
         fp.relation_id,
-        p.label as place_label
+        p.current_address
       FROM feature_cells fc
       JOIN features f ON fc.feature_id = f.id
       LEFT JOIN sources s ON f.source_id = s.id
@@ -327,7 +327,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       source_label,
       entity,
       relation_id,
-      place_label,
+      current_address,
       tags
     FROM ranked
     ORDER BY type_rank, record_type, id
@@ -353,7 +353,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     temporalFrequency: row.temporal_frequency || 1,
     entity: row.entity || undefined,
     relationId: row.relation_id || undefined,
-    placeLabel: row.place_label || undefined
+    currentAddress: row.current_address || undefined
   }));
 
   return {

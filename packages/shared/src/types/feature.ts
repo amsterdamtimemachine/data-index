@@ -63,7 +63,7 @@ export interface FeatureResult {
   temporalFrequency: number;
   entity?: Entity | PersonEntity | MediaObjectEntity;
   relationId?: string;
-  placeLabel?: string;
+  currentAddress?: string;
 }
 
 /**

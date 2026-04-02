@@ -36,9 +36,9 @@
 		>
 			{feature.label}
 		</Heading>
-		{#if feature.relationId || feature.placeLabel}
+		{#if feature.relationId || feature.currentAddress}
 			<p class="italic text-gray-500 {expanded ? 'px-2 mb-2' : 'mb-1'} text-base">
-				{feature.relationId ? t(feature.relationId) : ''}{feature.placeLabel ? ` ${feature.placeLabel}` : ''}
+				{feature.relationId ? t(feature.relationId) : ''}{feature.currentAddress ? ` ${feature.currentAddress}` : ''}
 			</p>
 		{/if}
 		<!-- Feature-specific content -->

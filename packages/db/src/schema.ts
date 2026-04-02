@@ -19,15 +19,28 @@ export const sources = pgTable('sources', {
 });
 
 // ============================================================================
-// PLACE - Geographic locations (addresses, buildings, streets, neighbourhoods)
+// PLACE - Physical geographic locations (one per LPS linked point)
 // ============================================================================
 export const place = pgTable('place', {
-  id: text('id').primaryKey(),                    // "https://adamlink.nl/geo/address/A181758"
+  id: text('id').primaryKey(),                    // "lp-1000001"
   type: text('type').notNull(),                   // "address" | "building" | "street" | "neighbourhood"
-  label: text('label'),                           // "Prins Hendrikkade 93"
+  currentAddress: text('current_address'),        // most recent address name
   geometry: geometry('geometry')                  // POINT, LINESTRING, or POLYGON
 }, (table) => [
   index('idx_place_geometry').using('gist', table.geometry)
+]);
+
+// ============================================================================
+// ADDRESS - Historical address names linked to places
+// ============================================================================
+export const address = pgTable('address', {
+  id: text('id').primaryKey(),                    // adamlink URI "https://adamlink.nl/geo/address/A1"
+  placeId: text('place_id').notNull().references(() => place.id),
+  name: text('name'),                             // "Prins Hendrikkade 93"
+  date: date('date'),                             // 1943-01-01
+  source: text('source')                          // "pw-1943"
+}, (table) => [
+  index('idx_address_place').on(table.placeId)
 ]);
 
 // ============================================================================
@@ -51,17 +64,17 @@ export const tags = pgTable('tags', {
 // ============================================================================
 export const features = pgTable('features', {
   id: uuid('id').primaryKey().defaultRandom(),
-  url: text('url'),                                // Source URL
-  recordType: text('record_type').notNull(),       // "image" | "text" | "person" | "video" | "audio"
+  url: text('url'),
+  recordType: text('record_type').notNull(),
   label: text('label').notNull(),
   description: text('description'),
-  contentUrl: text('content_url'),                 // Media URL
+  contentUrl: text('content_url'),
   startDate: date('start_date'),
   endDate: date('end_date'),
   sourceId: text('source_id').references(() => sources.id),
   spatialFrequency: integer('spatial_frequency'),
   temporalFrequency: integer('temporal_frequency'),
-  entity: jsonb('entity'),                         // Schema.org typed data
+  entity: jsonb('entity'),
 }, (table) => [
   index('idx_features_dates').on(table.startDate, table.endDate),
   index('idx_features_record_type').on(table.recordType)
@@ -112,6 +125,9 @@ export type NewSource = typeof sources.$inferInsert;
 
 export type Place = typeof place.$inferSelect;
 export type NewPlace = typeof place.$inferInsert;
+
+export type Address = typeof address.$inferSelect;
+export type NewAddress = typeof address.$inferInsert;
 
 export type Relation = typeof relation.$inferSelect;
 export type NewRelation = typeof relation.$inferInsert;

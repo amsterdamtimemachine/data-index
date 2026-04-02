@@ -57,23 +57,27 @@ Ingestion scripts run manually against the database. They are not part of the Do
 
 | Source | Format | Size | Contents |
 |--------|--------|------|----------|
-| LPS | CSV | 11 MB | ~105k address locations with WKT geometries from 7 historical registries (1832–1976) |
+| [LPS](https://adamlink.nl/downloads/20230920-lps.csv.zip) | CSV | 11 MB | ~105k linked points with WKT geometries, ~222k address IDs from 7 historical registries (1832–1976) |
+| [Adressen](https://adamlink.nl/downloads/20230920-adressen.csv.zip) | CSV | ~5 MB | ~222k address labels (street name + house number) from Adamlink |
 | Beeldbank | JSON | 2.5 GB | Amsterdam Stadsarchief — images mapped to Adamlink address URIs |
-| Joods Monument | CSV | 16 MB | ~63k Holocaust victims with last known addresses (fixed date range 1940–1945) |
+| Joods Monument | CSV | 16 MB | ~63k Holocaust victims with last known addresses (fixed date range 1900–1945) |
 
 ### Running ingestion
 
-Order matters — places must be ingested before features, and the index must be rebuilt after all sources.
+Order matters — places and addresses must be ingested before features.
 
 ```bash
-# 1. Places first (other sources link features to these by adamlink URI)
+# 1. Places (creates physical locations + address ID mappings)
 bun run db:ingest -s lps -f <path-to-lps.csv>
 
-# 2. Features (any order between sources)
+# 2. Address labels (enriches addresses with street names, sets place.current_address)
+bun run db:ingest -s adressen -f <path-to-adressen.csv>
+
+# 3. Features (any order — resolve adamlink URIs → places via address table)
 bun run db:ingest -s beeldbank -f <path-to-beeldbank.json>
 bun run db:ingest -s joods-monument -f <path-to-results_jm.csv>
 
-# 3. Rebuild index (always run after ingestion)
+# 4. Rebuild index
 bun run db:rebuild-index
 ```
 
@@ -159,8 +163,9 @@ docker compose -f docker/docker-compose.yml up -d dataindex-db
 # 2. Push schema to the database
 cd packages/db && bunx drizzle-kit push && cd ../..
 
-# 3. Ingest data (places first, then features)
+# 3. Ingest data (order matters)
 bun run db:ingest -s lps -f <path-to-lps.csv>
+bun run db:ingest -s adressen -f <path-to-adressen.csv>
 bun run db:ingest -s beeldbank -f <path-to-beeldbank.json>
 bun run db:ingest -s joods-monument -f <path-to-results_jm.csv>
 

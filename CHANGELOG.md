@@ -1,22 +1,35 @@
 # Changelog
 
+## 2026-04-02
+
+### Place + Address refactor
+- `place` now represents a physical location (one per LPS linked point, 105k rows) instead of one per address ID (was 222k)
+- New `address` table stores historical address names linked to places via FK
+- `place.current_address` holds the most recent address name
+- Features link to `place.id` (lp-based) via address → place lookup during ingestion
+- Adressen ingestion enriches address names and sets `place.current_address` from the most recent entry
+- Feature cards show relation + address name (e.g. "Gaat over Prins Hendrikkade 93")
+
+### Frontend
+- Dataset/source OR filter — ToggleGroup matching record type pattern, all selected by default
+- Source labels from DB metadata (synced with feature card footer)
+- Entity detail component with translated labels (`t()` pattern)
+- Unified `t()` translation function replacing scattered translation maps
+- Renamed `Map.svelte` → `Heatmap.svelte` (Svelte 5 naming conflict with JS `Map`)
+
 ## 2026-03-26
 
 ### Schema
 - `features.id` changed from text (source URL) to UUID (auto-generated)
-- Added `features.url` column for the source URL
-- Added `features.entity` JSONB column for schema.org typed data (Person, MediaObject)
-- Removed `features.date_created` column (moved to entity)
+- Added `features.url`, `features.entity` (JSONB), removed `features.date_created`
 - All junction table foreign keys updated from text to UUID
 
 ### ETL
-- All ETL scripts now use Drizzle ORM (`db`) exclusively — removed raw `pool`/`client` usage
-- `pool` no longer exported from db package
-- Added Joods Monument ingestion script (63k persons, fixed date range 1940–1945, WGS84→RD coordinate transform)
+- All ETL scripts use Drizzle ORM exclusively — removed raw `pool`/`client` usage
+- Added Joods Monument ingestion (63k persons, fixed date range 1900–1945)
 - Beeldbank relation changed from `depictedIn` to `isAbout`
-- Entity `dateCreated` formatted as inclusive date range (`start/end`) or single date, via shared `formatDateRange()` utility
-- Removed auto-rebuild from ingest command — `db:rebuild-index` must be run separately after all sources are ingested
-- Renamed `db:rebuild-cells` → `db:rebuild-index` (computes spatial grid, spatial frequency, and temporal frequency)
+- Batched inserts (1000/batch) for features and links
+- Renamed `db:rebuild-cells` → `db:rebuild-index`
 
 ## 2026-03-24
 

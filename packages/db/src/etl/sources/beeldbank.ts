@@ -2,37 +2,52 @@
  * Import Beeldbank (Amsterdam Stadsarchief image archive) features
  *
  * Streams a large JSON file (~2.5GB) mapping Adamlink URIs to arrays of images.
- * Inserts features, creates source/relation records, and links features to places.
+ * Resolves adamlink URIs → place IDs via the address table, then links features.
  *
  * Usage: bun run db:ingest -s beeldbank -f ../../data/beeldbank-fixed.json
  */
 import { createReadStream } from 'fs';
 import { parser } from 'stream-json';
 import { streamObject } from 'stream-json/streamers/StreamObject';
+import { sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { sources, relation, features, featureToPlace } from '../../schema';
+import { sources, relation, features, featureToPlace, address } from '../../schema';
 import type { MediaObjectEntity } from '@atm/shared';
 import { formatDateRange } from '../utils';
 
 const BATCH_SIZE = 1000;
 
+type PlaceRow = { place_id: string };
+
 export async function ingest(filePath: string) {
-  // Create source
   await db.insert(sources)
     .values({ id: 'beeldbank', label: 'Stadsarchief Amsterdam Beeldbank', url: 'https://archief.amsterdam/beeldbank' })
     .onConflictDoNothing();
 
-  // Create relation
   await db.insert(relation)
     .values({ id: 'isAbout', label: 'Is About' })
     .onConflictDoNothing();
 
   console.log(`Streaming ${filePath}...`);
 
-  // Map source URL → UUID for deduplication
+  // Cache: adamlink URI → place ID
+  const placeIdCache = new Map<string, string>();
+  async function resolvePlaceId(adamlinkUri: string): Promise<string | null> {
+    const cached = placeIdCache.get(adamlinkUri);
+    if (cached !== undefined) return cached;
+
+    const result = await db.execute<PlaceRow>(
+      sql`SELECT ${address.placeId} as place_id FROM ${address} WHERE ${address.id} = ${adamlinkUri}`
+    );
+    const placeId = result.rows[0]?.place_id || null;
+    if (placeId) placeIdCache.set(adamlinkUri, placeId);
+    return placeId;
+  }
+
   const seenFeatures = new Map<string, string>();
   let featureCount = 0;
   let linkCount = 0;
+  let skippedLinks = 0;
   let entryCount = 0;
 
   let featureBatch: any[] = [];
@@ -54,6 +69,7 @@ export async function ingest(filePath: string) {
     .pipe(streamObject());
 
   for await (const { key: adamlinkUri, value: val } of pipeline) {
+    const placeId = await resolvePlaceId(adamlinkUri);
     const images = (val as any).images || [];
 
     for (const img of images) {
@@ -94,8 +110,12 @@ export async function ingest(filePath: string) {
         featureCount++;
       }
 
-      linkBatch.push({ featureId, placeId: adamlinkUri, relationId: 'isAbout' });
-      linkCount++;
+      if (placeId) {
+        linkBatch.push({ featureId, placeId, relationId: 'isAbout' });
+        linkCount++;
+      } else {
+        skippedLinks++;
+      }
 
       if (linkBatch.length >= BATCH_SIZE) {
         await flush();
@@ -104,11 +124,11 @@ export async function ingest(filePath: string) {
 
     entryCount++;
     if (entryCount % 1000 === 0) {
-      process.stdout.write(`\r  ${entryCount} addresses, ${featureCount} features, ${linkCount} links`);
+      process.stdout.write(`\r  ${entryCount} addresses, ${featureCount} features, ${linkCount} links, ${skippedLinks} skipped`);
     }
   }
 
   await flush();
 
-  console.log(`\nDone: ${featureCount} features, ${linkCount} links`);
+  console.log(`\nDone: ${featureCount} features, ${linkCount} links, ${skippedLinks} skipped (no matching place)`);
 }
