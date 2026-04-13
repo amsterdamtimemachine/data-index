@@ -12,7 +12,7 @@ import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { sources, relation, features, featureToPlace, address } from '../../schema';
+import { organisations, datasets, relation, features, featureToPlace, address } from '../../schema';
 import type { PersonEntity } from '@atm/shared';
 
 const SOURCE_ID = 'joods-monument';
@@ -36,8 +36,12 @@ interface RawRow {
 type PlaceRow = { place_id: string };
 
 export async function ingest(filePath: string) {
-  await db.insert(sources)
-    .values({ id: SOURCE_ID, label: 'Joods Monument', url: 'https://www.joodsmonument.nl' })
+  await db.insert(organisations)
+    .values({ id: 'joods-monument', label: 'Joods Monument', url: 'https://www.joodsmonument.nl' })
+    .onConflictDoNothing();
+
+  await db.insert(datasets)
+    .values({ id: SOURCE_ID, label: 'Joods Monument', url: 'https://www.joodsmonument.nl', organisationId: 'joods-monument' })
     .onConflictDoNothing();
 
   await db.insert(relation)
@@ -132,7 +136,7 @@ export async function ingest(filePath: string) {
       label: row.name,
       startDate: START_DATE,
       endDate: END_DATE,
-      sourceId: SOURCE_ID,
+      datasetId: SOURCE_ID,
       entity
     });
 

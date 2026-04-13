@@ -25,7 +25,7 @@
 >
 	{#if feature.id}
 		<Link href={feature.id} target="_blank" rel="noopener noreferrer" class="text-base">
-			{feature.sourceLabel ? formatDatasetTitle(feature.sourceLabel) : 'Source'} →
+			{feature.datasetLabel ? formatDatasetTitle(feature.datasetLabel) : 'Source'} →
 		</Link>
 	{/if}
 

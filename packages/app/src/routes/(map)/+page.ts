@@ -48,7 +48,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 
 	// Parse URL parameters
 	const recordTypesParam = url.searchParams.get('recordTypes');
-	const sourcesParam = url.searchParams.get('sources');
+	const datasetsParam = url.searchParams.get('datasets');
 	const tagsParam = url.searchParams.get('tags');
 	const tagOperatorParam = url.searchParams.get('tagOperator');
 	const cellParam = url.searchParams.get('cell');
@@ -127,17 +127,17 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	}
 
 	// Determine sources to use
-	let currentSources: string[] = [];
-	if (metadata?.sources) {
-		const availableSourceIds = metadata.sources.map(s => s.id);
-		if (sourcesParam) {
-			const requestedSources = sourcesParam.split(',').map(s => s.trim());
-			currentSources = requestedSources.filter(s => availableSourceIds.includes(s));
-			if (currentSources.length === 0) {
-				currentSources = availableSourceIds;
+	let currentDatasets: string[] = [];
+	if (metadata?.datasets) {
+		const availableDatasetIds = metadata.datasets.map(s => s.id);
+		if (datasetsParam) {
+			const requestedDatasets = datasetsParam.split(',').map(s => s.trim());
+			currentDatasets = requestedDatasets.filter(s => availableDatasetIds.includes(s));
+			if (currentDatasets.length === 0) {
+				currentDatasets = availableDatasetIds;
 			}
 		} else {
-			currentSources = availableSourceIds;
+			currentDatasets = availableDatasetIds;
 		}
 	}
 
@@ -179,8 +179,8 @@ export const load: PageLoad = async ({ fetch, url }) => {
 			if (currentRecordTypes.length > 0) {
 				histogramParams.set('recordTypes', currentRecordTypes.join(','));
 			}
-			if (currentSources.length > 0) {
-				histogramParams.set('sources', currentSources.join(','));
+			if (currentDatasets.length > 0) {
+				histogramParams.set('datasets', currentDatasets.join(','));
 			}
 			if (histogramParams.toString()) {
 				histogramUrl += '?' + histogramParams.toString();
@@ -236,8 +236,8 @@ export const load: PageLoad = async ({ fetch, url }) => {
 			if (currentRecordTypes.length > 0) {
 				heatmapParams.set('recordTypes', currentRecordTypes.join(','));
 			}
-			if (currentSources.length > 0) {
-				heatmapParams.set('sources', currentSources.join(','));
+			if (currentDatasets.length > 0) {
+				heatmapParams.set('datasets', currentDatasets.join(','));
 			}
 			if (heatmapParams.toString()) {
 				heatmapUrl += '?' + heatmapParams.toString();
@@ -473,7 +473,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		heatmapDimensions,
 		availableTags,
 		currentRecordTypes,
-		currentSources,
+		currentDatasets,
 		currentTags,
 		currentTagOperator,
 		validatedCell,

@@ -5,7 +5,7 @@ import type {
 } from '@atm/shared';
 import { computeTimeSlices, computeTimeRange } from './time-slices';
 import { db } from '../client';
-import { features, sources, tags, featureTags, featureCells } from '../schema';
+import { features, datasets, tags, featureTags, featureCells } from '../schema';
 
 // Query result types
 type RecordTypeRow = { record_type: RecordType };
@@ -15,13 +15,13 @@ type RecordTypeCountRow = { record_type: RecordType; count: string };
 type SourceRow = { id: string; label: string };
 
 /**
- * Get all available sources
+ * Get all available datasets
  */
-async function getSources(): Promise<{ id: string; label: string }[]> {
+async function getDatasets(): Promise<{ id: string; label: string }[]> {
   const result = await db.execute<SourceRow>(sql`
-    SELECT ${sources.id} as id, ${sources.label} as label
-    FROM ${sources}
-    ORDER BY ${sources.label}
+    SELECT ${datasets.id} as id, ${datasets.label} as label
+    FROM ${datasets}
+    ORDER BY ${datasets.label}
   `);
   return result.rows;
 }
@@ -87,11 +87,11 @@ async function getStats(): Promise<{
  * Get complete visualization metadata
  */
 export async function getMetadata(): Promise<VisualizationMetadata> {
-  const [timeSlices, timeRange, recordTypes, availableSources, availableTags, stats] = await Promise.all([
+  const [timeSlices, timeRange, recordTypes, availableDatasets, availableTags, stats] = await Promise.all([
     computeTimeSlices(),
     computeTimeRange(),
     getRecordTypes(),
-    getSources(),
+    getDatasets(),
     getTags(),
     getStats()
   ]);
@@ -100,7 +100,7 @@ export async function getMetadata(): Promise<VisualizationMetadata> {
     timeSlices,
     timeRange,
     recordTypes,
-    sources: availableSources,
+    datasets: availableDatasets,
     tags: availableTags,
     stats: {
       totalFeatures: stats.totalFeatures,

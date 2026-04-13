@@ -24,64 +24,69 @@ packages/
 ### Data model
 
 ```
-sources ──< features >── feature_to_place >── place (with PostGIS geometry)
-                │                │
-                │            relation (e.g. "isAbout", "hadLastLivingLocation")
-                │
-           feature_tags >── tags
-                │
-           feature_cells (pre-computed 100m grid for heatmaps)
+organisations ──< datasets ──< features >── feature_to_place >── place
+                                   │                │
+                                   │            relation
+                                   │
+                              feature_tags >── tags
+                                   │
+                              feature_cells (pre-computed 100m grid)
+                                                    │
+                              place ──< address (historical names)
 ```
 
-- **place**: Geographic locations stored in RD coordinates (EPSG:28992), transformed to WGS84 for the frontend
-- **features**: Content items (images, text, persons) linked to places
-- **feature_cells**: Pre-computed grid cells at 100m resolution for fast heatmap aggregation
-- **spatial_frequency**: Number of grid cells a feature spans — lower = more geographically specific
-- **temporal_frequency**: Number of base time bins a feature spans — lower = more temporally specific
+- **organisations**: Institutions that provide datasets (e.g. Amsterdam Stadsarchief, Koninklijke Bibliotheek)
+- **datasets**: Data collections from organisations (e.g. Beeldbank, Delpher Kranten)
+- **place**: Physical locations (one per LPS linked point), stored in RD coordinates (EPSG:28992)
+- **address**: Historical address names linked to places, with date and registry source
+- **features**: Content items (images, text, persons) with schema.org `entity` JSONB, UUID primary key
+- **feature_cells**: Pre-computed 100m grid cells for heatmap aggregation
+- **spatial_frequency**: Grid cells a feature spans — lower = more geographically specific
+- **temporal_frequency**: Base time bins a feature spans — lower = more temporally specific
 
 ### Heatmap grid
 
-Grid resolution is configurable per request via `rows` and `cols` query params on `/api/heatmaps` (default: 75, clamped to actual data extent). The API returns dimensions alongside the timeline data so the frontend can render the grid without a separate metadata call.
+Grid resolution configurable per request via `rows`/`cols` on `/api/heatmaps` (default 75, clamped to data extent). The API returns dimensions alongside timeline data.
 
 ### Time slices
 
-Time periods are computed dynamically from the data. The server queries `MIN(start_date)` and `MAX(end_date)` from features, then generates bins anchored to round boundaries (e.g. 1500, 1550, 1600). Bin size defaults to 50 years and is configurable via the `binSize` query param (min 10, max 100). Results are cached (TTL configurable via `CACHE_TTL_MINUTES`).
+Computed dynamically from the data. Bins are anchored to round boundaries (multiples of bin size). Bin size defaults to 50 years, configurable via `binSize` param (10–100). Bin boundaries are left-inclusive, right-exclusive: `[1900, 1950)`.
 
-Features appear in all time bins they overlap — a feature spanning 1840–1920 shows up in bins 1800, 1850, and 1900. Bin boundaries are left-inclusive, right-exclusive: `[1900, 1950)` means a feature with `start_date` in year 1900 belongs to this bin, not the preceding one. Entity dates (birth/death, dateCreated) are inclusive on both ends and used for display only — they don't affect bin placement.
+Features appear in all time bins they overlap — a feature spanning 1840–1920 shows up in bins 1800, 1850, and 1900.
 
 ## Data ingestion
 
-Ingestion scripts run manually against the database. They are not part of the Docker deployment.
+Ingestion scripts run manually against the database.
 
 ### Data sources
 
 | Source | Format | Size | Contents |
 |--------|--------|------|----------|
-| [LPS](https://adamlink.nl/downloads/20230920-lps.csv.zip) | CSV | 11 MB | ~105k linked points with WKT geometries, ~222k address IDs from 7 historical registries (1832–1976) |
-| [Adressen](https://adamlink.nl/downloads/20230920-adressen.csv.zip) | CSV | ~5 MB | ~222k address labels (street name + house number) from Adamlink |
-| Beeldbank | JSON | 2.5 GB | Amsterdam Stadsarchief — images mapped to Adamlink address URIs |
-| Joods Monument | CSV | 16 MB | ~63k Holocaust victims with last known addresses (fixed date range 1900–1945) |
+| [LPS](https://adamlink.nl/downloads/20230920-lps.csv.zip) | CSV | 11 MB | ~105k linked points, ~222k address IDs from 7 registries (1832–1976) |
+| [Adressen](https://adamlink.nl/downloads/20230920-adressen.csv.zip) | CSV | ~5 MB | ~222k address labels from Adamlink |
+| Beeldbank | JSON | 2.5 GB | Amsterdam Stadsarchief images mapped to Adamlink URIs |
+| Joods Monument | CSV | 16 MB | ~63k Holocaust victims with last known addresses (1900–1945) |
+| Delpher | CSV | ~40 MB | ~142k newspaper articles matched to places by geometry (5m threshold) |
 
 ### Running ingestion
 
-Order matters — places and addresses must be ingested before features.
+Order matters — places and addresses first, then features.
 
 ```bash
-# 1. Places (creates physical locations + address ID mappings)
+# 1. Places + address mappings
 bun run db:ingest -s lps -f <path-to-lps.csv>
 
-# 2. Address labels (enriches addresses with street names, sets place.current_address)
+# 2. Address labels
 bun run db:ingest -s adressen -f <path-to-adressen.csv>
 
-# 3. Features (any order — resolve adamlink URIs → places via address table)
+# 3. Features (any order)
 bun run db:ingest -s beeldbank -f <path-to-beeldbank.json>
 bun run db:ingest -s joods-monument -f <path-to-results_jm.csv>
+bun run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
 
 # 4. Rebuild index
 bun run db:rebuild-index
 ```
-
-`db:rebuild-index` computes the 100m spatial grid cells, spatial frequency, and temporal frequency. Must be run after every data change.
 
 ### Adding a new data source
 
@@ -93,52 +98,36 @@ bun run db:ingest -s <source-name> -f <file-path>
 
 ## API endpoints
 
-All endpoints are SvelteKit server routes in `packages/app/src/routes/api/` that query the database via `@atm/db`.
-
 | Endpoint | Purpose | Cache |
 |----------|---------|-------|
-| `GET /api/metadata` | Time slices, record types, stats | 24h |
+| `GET /api/metadata` | Time slices, record types, datasets, stats | 24h |
 | `GET /api/heatmaps` | Sparse heatmap data with grid dimensions | 1h |
 | `GET /api/histogram` | Feature count distribution by time period | 1h |
 | `GET /api/features` | Paginated features within geographic bounds | 5m |
 | `GET /api/available-tags` | Tags with feature counts | 30m |
 | `GET /api/tag-combinations` | Valid tag combinations for AND/OR filtering | 30m |
 
-### Heatmaps endpoint
+### Heatmaps
 
-`GET /api/heatmaps?recordTypes=image,text&rows=75&cols=75&binSize=50`
-
-Optional params: `recordTypes`, `timeSlice` (single slice key), `rows`/`cols` (grid resolution, default 75, clamped to data extent), `binSize` (time bin in years, default 50).
+`GET /api/heatmaps?recordTypes=image,text&datasets=beeldbank&rows=75&cols=75&binSize=50`
 
 Returns `{ dimensions, timeline }`. Timeline maps each time slice key to sparse `{ indices, counts }` arrays.
 
-### Histogram endpoint
+### Histogram
 
-`GET /api/histogram?recordTypes=image,text&binSize=50`
+`GET /api/histogram?recordTypes=image,text&datasets=beeldbank&binSize=50`
 
-Optional params: `recordTypes`, `binSize` (default 50).
+Returns `{ bins, maxCount, timeRange, totalFeatures }`. Must use the same `binSize` as heatmaps.
 
-Returns `{ bins, maxCount, timeRange, totalFeatures }`. The `binSize` must match the heatmap's `binSize` for time periods to align.
-
-### Features endpoint
+### Features
 
 `GET /api/features?minLon=...&maxLon=...&minLat=...&maxLat=...`
 
-Optional params: `recordTypes`, `tags`, `tagOperator` (AND|OR), `timeSlice`, `sort` (relevance|spatialFrequency|date), `sortDirection` (asc|desc), `page`, `pageSize` (max 200).
+Optional: `recordTypes`, `datasets`, `tags`, `tagOperator` (AND|OR), `timeSlice`, `sort` (relevance|spatialFrequency|date), `sortDirection`, `page`, `pageSize` (max 200). Description truncated to 128 characters in response.
 
-Default sort is `relevance`. Results are interleaved by record type using window functions.
+Default sort is `relevance` — normalised score of `(spatial_frequency / max) + (temporal_frequency / max)`. Lower = more specific = ranks higher. Results interleaved by record type.
 
-### Relevance scoring
-
-Features are ranked by a normalised score combining spatial and temporal specificity:
-
-```
-relevance = (spatial_frequency / max_spatial) + (temporal_frequency / max_temporal)
-```
-
-Both terms are normalised to 0–1 using the dataset's maximum values (cached with TTL). Lower score = more specific in both space and time = ranks higher. A feature spanning 1 grid cell and 1 time bin scores lower (better) than one spanning 50 cells and 8 bins.
-
-`spatial_frequency` is the number of 100m grid cells a feature spans — computed from its linked place geometries during `rebuild-index`. `temporal_frequency` is the number of base time bins (default 10 years) its date range covers. Both are pre-computed and stored on the features table.
+Features include `historicalAddress` (address name at the feature's time) and `currentAddress` (most recent name). When they differ, the card shows both.
 
 ## Development
 
@@ -154,20 +143,21 @@ bun install
 cp .env.example .env
 ```
 
-### First-time setup (from scratch)
+### First-time setup
 
 ```bash
-# 1. Start the database
+# 1. Start database
 docker compose -f docker/docker-compose.yml up -d dataindex-db
 
-# 2. Push schema to the database
+# 2. Push schema
 cd packages/db && bunx drizzle-kit push && cd ../..
 
-# 3. Ingest data (order matters)
+# 3. Ingest (order matters)
 bun run db:ingest -s lps -f <path-to-lps.csv>
 bun run db:ingest -s adressen -f <path-to-adressen.csv>
 bun run db:ingest -s beeldbank -f <path-to-beeldbank.json>
 bun run db:ingest -s joods-monument -f <path-to-results_jm.csv>
+bun run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
 
 # 4. Rebuild index
 bun run db:rebuild-index
@@ -182,21 +172,16 @@ docker compose -f docker/docker-compose.yml up -d dataindex-db
 cd packages/db && bunx drizzle-kit push && cd ../..
 ```
 
-Then re-run the ingestion steps above.
-
-### Run the dev server
+### Dev server
 
 ```bash
-bun run dev
+bun run dev    # http://localhost:5175
 ```
 
-App available at `http://localhost:5175`.
-
-### Drizzle Studio (database UI)
+### Drizzle Studio
 
 ```bash
-cd packages/db
-bun run db:studio
+cd packages/db && bun run db:studio
 ```
 
 ## Production (Docker)
@@ -205,13 +190,7 @@ bun run db:studio
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-Runs two containers:
-- **dataindex-db**: PostgreSQL 16 + PostGIS 3.4 with persistent volume
-- **app**: SvelteKit on port 3000, depends on healthy db
-
-All environment variables are configured in `docker/docker-compose.yml`. No `.env` file is needed inside the Docker image — all public env vars are read at runtime.
-
-Data ingestion is done separately — either from a dev machine with `DATABASE_URL` pointed at the remote DB (via SSH tunnel), or by SSH-ing into the server and running the ingest commands directly.
+Two containers: **dataindex-db** (PostgreSQL + PostGIS) and **app** (SvelteKit on port 3000). No `.env` in the Docker image — all config is runtime.
 
 ### Environment variables
 
@@ -222,15 +201,13 @@ Data ingestion is done separately — either from a dev machine with `DATABASE_U
 | `DB_PASSWORD` | No | `atm_dev_password` | PostgreSQL password (Docker) |
 | `PUBLIC_DEFAULT_CELL` | No | — | Default cell to select on load |
 | `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |
-| `BASE_BIN_SIZE` | No | `10` | Base time bin size for temporal frequency (years) |
+| `BASE_BIN_SIZE` | No | `10` | Base time bin size (years) |
 | `CELL_SIZE_METERS` | No | `100` | Base spatial cell size (meters) |
 | `GRID_DEFAULT` | No | `75` | Default heatmap grid resolution |
-| `GRID_MIN` | No | `10` | Minimum allowed grid resolution |
-| `GRID_MAX` | No | `200` | Maximum allowed grid resolution |
+| `GRID_MIN` / `GRID_MAX` | No | `10` / `200` | Grid resolution bounds |
 | `DEFAULT_BIN_SIZE` | No | `50` | Default display bin size (years) |
-| `BIN_SIZE_MIN` | No | `10` | Minimum allowed bin size (years) |
-| `BIN_SIZE_MAX` | No | `100` | Maximum allowed bin size (years) |
-| `CACHE_TTL_MINUTES` | No | `10` | TTL for cached DB queries (minutes) |
+| `BIN_SIZE_MIN` / `BIN_SIZE_MAX` | No | `10` / `100` | Bin size bounds (years) |
+| `CACHE_TTL_MINUTES` | No | `10` | TTL for cached DB queries |
 
 ### Docker commands
 
@@ -240,10 +217,5 @@ docker compose -f docker/docker-compose.yml up --build         # rebuild and sta
 docker compose -f docker/docker-compose.yml down               # stop
 docker compose -f docker/docker-compose.yml logs -f app        # app logs
 docker compose -f docker/docker-compose.yml logs -f dataindex-db  # database logs
-```
-
-Adminer (database UI) available in dev profile:
-
-```bash
-docker compose -f docker/docker-compose.yml --profile dev up    # includes Adminer on port 8080
+docker compose -f docker/docker-compose.yml --profile dev up    # includes Adminer on :8080
 ```

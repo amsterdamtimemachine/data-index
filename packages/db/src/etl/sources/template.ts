@@ -10,7 +10,7 @@
 import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { db } from '../../client';
-import { sources, relation, features, featureToPlace } from '../../schema';
+import { organisations, datasets, relation, features, featureToPlace } from '../../schema';
 import type { MediaObjectEntity } from '@atm/shared';
 import { formatDateRange } from '../utils';
 
@@ -28,8 +28,12 @@ interface RawRow {
 
 export async function ingest(filePath: string) {
   // 1. Ensure source + relation exist
-  await db.insert(sources)
-    .values({ id: SOURCE_ID, label: 'My Data Source', url: 'https://source-url.com' })
+  await db.insert(organisations)
+    .values({ id: 'my-org', label: 'My Organisation', url: 'https://org-url.com' })
+    .onConflictDoNothing();
+
+  await db.insert(datasets)
+    .values({ id: SOURCE_ID, label: 'My Dataset', url: 'https://source-url.com', organisationId: 'my-org' })
     .onConflictDoNothing();
 
   await db.insert(relation)
@@ -74,7 +78,7 @@ export async function ingest(filePath: string) {
       contentUrl: row.content_url || null,
       startDate,
       endDate,
-      sourceId: SOURCE_ID,
+      datasetId: SOURCE_ID,
       entity
     });
 

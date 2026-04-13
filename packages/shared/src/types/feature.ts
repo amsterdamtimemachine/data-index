@@ -11,8 +11,8 @@ export type TagOperator = 'AND' | 'OR';
  */
 export interface Entity {
   id?: string;
-  type: "Person" | "MediaObject";
-  label: string;
+  type: "Person" | "CreativeWork" | "MediaObject";
+  label: string; // name
 }
 
 export interface PersonEntity extends Entity {
@@ -23,12 +23,17 @@ export interface PersonEntity extends Entity {
   deathPlace?: string;
 }
 
-export interface MediaObjectEntity extends Entity {
-  type: "MediaObject";
-  contentUrl: string;
+export interface CreativeWorkEntity extends Entity {
   dateCreated?: string;
   author?: string;
+  url?: string;
 }
+
+export interface MediaObjectEntity extends CreativeWorkEntity {
+  type: "MediaObject";
+  contentUrl: string;
+}
+
 
 /**
  * Query parameters for fetching features
@@ -36,7 +41,7 @@ export interface MediaObjectEntity extends Entity {
 export interface FeaturesQuery {
   bounds: HeatmapCellBounds;
   recordTypes?: RecordType[];
-  sourceIds?: string[];
+  datasetIds?: string[];
   tags?: string[];
   tagOperator?: TagOperator;
   timeSlice?: string;
@@ -58,7 +63,7 @@ export interface FeatureResult {
   contentUrl?: string;
   dateRange: [number, number];
   tags: string[];
-  sourceLabel?: string;
+  datasetLabel?: string;
   spatialFrequency: number;
   temporalFrequency: number;
   entity?: Entity | PersonEntity | MediaObjectEntity;

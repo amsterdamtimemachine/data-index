@@ -41,8 +41,8 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 	let heatmapTimeline = $derived(data?.heatmapTimeline as HeatmapTimeline | null);
 
 	let currentRecordTypes = $derived(data?.currentRecordTypes || []);
-	let sourceIds = $derived(data?.metadata?.sources?.map((s: { id: string }) => s.id) || []);
-	let currentSources = $derived(data?.currentSources || []);
+	let datasetIds = $derived(data?.metadata?.datasets?.map((s: { id: string }) => s.id) || []);
+	let currentDatasets = $derived(data?.currentDatasets || []);
 	let currentTags = $derived(data?.currentTags || []);
 	let currentTagOperator = $derived(data?.currentTagOperator || 'OR');
 	let validatedCell = $derived(data?.validatedCell);
@@ -55,9 +55,9 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 	let translatedCurrentRecordTypes = $derived(currentRecordTypes ? translateContentTypes(currentRecordTypes) : []);
 
 	// Source labels from metadata (used as toggle display + reverse lookup)
-	let sourceLookup = $derived(new Map(data?.metadata?.sources?.map((s: { id: string; label: string }) => [s.id, s.label]) || []));
-	let sourceLabels = $derived(sourceIds.map((id: string) => sourceLookup.get(id) || id));
-	let currentSourceLabels = $derived(currentSources.map((id: string) => sourceLookup.get(id) || id));
+	let datasetLookup = $derived(new Map(data?.metadata?.datasets?.map((s: { id: string; label: string }) => [s.id, s.label]) || []));
+	let datasetLabels = $derived(datasetIds.map((id: string) => datasetLookup.get(id) || id));
+	let currentDatasetLabels = $derived(currentDatasets.map((id: string) => datasetLookup.get(id) || id));
 
 	const controller = createStateController();
 	let currentPeriod = $derived(controller.currentPeriod);
@@ -142,17 +142,17 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 		goto(url.pathname + url.search);
 	}
 
-	function handleSourceChange(sources: string[] | string) {
-		const labelArray = Array.isArray(sources) ? sources : [sources];
+	function handleDatasetChange(datasets: string[] | string) {
+		const labelArray = Array.isArray(datasets) ? datasets : [datasets];
 		// Reverse lookup: label → id
-		const reverseMap = new Map(Array.from(sourceLookup.entries()).map(([id, label]) => [label, id]));
+		const reverseMap = new Map(Array.from(datasetLookup.entries()).map(([id, label]) => [label, id]));
 		const ids = labelArray.map(label => reverseMap.get(label) || label);
 
 		const url = new URL(window.location.href);
 		if (ids.length > 0) {
-			url.searchParams.set('sources', ids.join(','));
+			url.searchParams.set('datasets', ids.join(','));
 		} else {
-			url.searchParams.delete('sources');
+			url.searchParams.delete('datasets');
 		}
 		goto(url.pathname + url.search);
 	}
@@ -246,9 +246,9 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 						<Tooltip icon={QuestionMark} text="Filter op basis van de dataset waaruit de data afkomstig is." placement="bottom" />
 					</div>
 					<ToggleGroup
-						items={sourceLabels}
-						selectedItems={currentSourceLabels}
-						onItemSelected={handleSourceChange}
+						items={datasetLabels}
+						selectedItems={currentDatasetLabels}
+						onItemSelected={handleDatasetChange}
 						requireOneItemSelected={true}>
 						{#snippet children(item, isSelected, isDisabled)}
 							<Tag variant={isSelected ? 'selected-outline' : 'outline'} disabled={isDisabled} interactive={true}>
@@ -328,7 +328,7 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 					period={currentPeriod}
 					bounds={selectedCellBounds ?? undefined}
 					recordTypes={currentRecordTypes}
-					sources={currentSources}
+					datasets={currentDatasets}
 					tags={currentTags}
 					tagOperator={currentTagOperator as 'AND' | 'OR'}
 					onClose={handleFeaturesPanelClose}

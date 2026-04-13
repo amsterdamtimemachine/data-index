@@ -11,7 +11,7 @@ import { parser } from 'stream-json';
 import { streamObject } from 'stream-json/streamers/StreamObject';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { sources, relation, features, featureToPlace, address } from '../../schema';
+import { organisations, datasets, relation, features, featureToPlace, address } from '../../schema';
 import type { MediaObjectEntity } from '@atm/shared';
 import { formatDateRange } from '../utils';
 
@@ -20,8 +20,12 @@ const BATCH_SIZE = 1000;
 type PlaceRow = { place_id: string };
 
 export async function ingest(filePath: string) {
-  await db.insert(sources)
-    .values({ id: 'beeldbank', label: 'Stadsarchief Amsterdam Beeldbank', url: 'https://archief.amsterdam/beeldbank' })
+  await db.insert(organisations)
+    .values({ id: 'stadsarchief', label: 'Amsterdam Stadsarchief', url: 'https://archief.amsterdam' })
+    .onConflictDoNothing();
+
+  await db.insert(datasets)
+    .values({ id: 'beeldbank', label: 'Beeldbank', url: 'https://archief.amsterdam/beeldbank', organisationId: 'stadsarchief' })
     .onConflictDoNothing();
 
   await db.insert(relation)
@@ -103,7 +107,7 @@ export async function ingest(filePath: string) {
           contentUrl,
           startDate,
           endDate,
-          sourceId: 'beeldbank',
+          datasetId: 'beeldbank',
           entity
         });
 

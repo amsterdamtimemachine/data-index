@@ -24,7 +24,7 @@ async function getRecordTypes(): Promise<RecordType[]> {
  */
 export async function getHistogram(
   recordTypes?: RecordType[],
-  sourceIds?: string[],
+  datasetIds?: string[],
   binSizeYears: number = DEFAULT_BIN_SIZE
 ): Promise<Histogram> {
   const types = recordTypes || await getRecordTypes();
@@ -47,7 +47,7 @@ export async function getHistogram(
     JOIN slices s ON EXTRACT(YEAR FROM f.start_date) < s.bin_end
                  AND EXTRACT(YEAR FROM f.end_date) >= s.bin_start
     WHERE f.record_type IN ${types}
-      ${sourceIds && sourceIds.length > 0 ? sql`AND f.source_id IN ${sourceIds}` : sql``}
+      ${datasetIds && datasetIds.length > 0 ? sql`AND f.dataset_id IN ${datasetIds}` : sql``}
       AND f.start_date IS NOT NULL
       AND f.end_date IS NOT NULL
     GROUP BY s.bin_start

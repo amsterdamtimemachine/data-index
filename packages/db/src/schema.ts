@@ -9,13 +9,24 @@ const geometry = customType<{ data: string; driverData: string }>({
 });
 
 // ============================================================================
-// SOURCES - Data sources (e.g., Stadsarchief Beeldbank)
+// ORGANISATIONS - Institutions that provide datasets
 // ============================================================================
-export const sources = pgTable('sources', {
+export const organisations = pgTable('organisations', {
   id: text('id').primaryKey(),
   label: text('label').notNull(),
   description: text('description'),
   url: text('url')
+});
+
+// ============================================================================
+// DATASETS - Data collections from organisations
+// ============================================================================
+export const datasets = pgTable('datasets', {
+  id: text('id').primaryKey(),
+  label: text('label').notNull(),
+  description: text('description'),
+  url: text('url'),
+  organisationId: text('organisation_id').references(() => organisations.id)
 });
 
 // ============================================================================
@@ -72,7 +83,7 @@ export const features = pgTable('features', {
   contentUrl: text('content_url'),
   startDate: date('start_date'),
   endDate: date('end_date'),
-  sourceId: text('source_id').references(() => sources.id),
+  datasetId: text('dataset_id').references(() => datasets.id),
   spatialFrequency: integer('spatial_frequency'),
   temporalFrequency: integer('temporal_frequency'),
   entity: jsonb('entity'),
@@ -121,8 +132,11 @@ export const featureCells = pgTable('feature_cells', {
 // ============================================================================
 // TYPE EXPORTS (Drizzle-inferred types for internal use)
 // ============================================================================
-export type Source = typeof sources.$inferSelect;
-export type NewSource = typeof sources.$inferInsert;
+export type Organisation = typeof organisations.$inferSelect;
+export type NewOrganisation = typeof organisations.$inferInsert;
+
+export type Dataset = typeof datasets.$inferSelect;
+export type NewDataset = typeof datasets.$inferInsert;
 
 export type Place = typeof place.$inferSelect;
 export type NewPlace = typeof place.$inferInsert;

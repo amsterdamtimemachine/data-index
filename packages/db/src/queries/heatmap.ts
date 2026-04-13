@@ -119,7 +119,7 @@ export async function getHeatmap(
   timeSliceKey: string,
   resolution: HeatmapResolutionConfig,
   recordTypes?: RecordType[],
-  sourceIds?: string[],
+  datasetIds?: string[],
   binSizeYears: number = DEFAULT_BIN_SIZE
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
@@ -146,7 +146,7 @@ export async function getHeatmap(
     FROM ${featureCells}
     JOIN ${features} ON ${featureCells.featureId} = ${features.id}
     WHERE ${features.recordType} IN ${types}
-      ${sourceIds && sourceIds.length > 0 ? sql`AND ${features.sourceId} IN ${sourceIds}` : sql``}
+      ${datasetIds && datasetIds.length > 0 ? sql`AND ${features.datasetId} IN ${datasetIds}` : sql``}
       AND ${features.startDate} <= ${endDate}
       AND ${features.endDate} >= ${startDate}
     GROUP BY ${featureCells.cellX}, ${featureCells.cellY}
@@ -170,7 +170,7 @@ export async function getHeatmap(
 export async function getHeatmapTimeline(
   resolution: HeatmapResolutionConfig,
   recordTypes?: RecordType[],
-  sourceIds?: string[],
+  datasetIds?: string[],
   binSizeYears: number = DEFAULT_BIN_SIZE
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
@@ -202,7 +202,7 @@ export async function getHeatmapTimeline(
     JOIN slices s ON EXTRACT(YEAR FROM ${features.startDate}) < s.bin_end
                  AND EXTRACT(YEAR FROM ${features.endDate}) >= s.bin_start
     WHERE ${features.recordType} IN ${types}
-      ${sourceIds && sourceIds.length > 0 ? sql`AND ${features.sourceId} IN ${sourceIds}` : sql``}
+      ${datasetIds && datasetIds.length > 0 ? sql`AND ${features.datasetId} IN ${datasetIds}` : sql``}
       AND ${features.startDate} IS NOT NULL
       AND ${features.endDate} IS NOT NULL
     GROUP BY ${featureCells.cellX}, ${featureCells.cellY}, s.bin_start

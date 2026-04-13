@@ -33,7 +33,7 @@ type FeatureRow = {
   end_date: string | null;
   spatial_frequency: number | null;
   temporal_frequency: number | null;
-  source_label: string | null;
+  dataset_label: string | null;
   relevance_score: number | null;
   entity: any | null;
   relation_id: string | null;
@@ -146,7 +146,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   const {
     bounds,
     recordTypes,
-    sourceIds,
+    datasetIds,
     tags: tagFilters,
     tagOperator = 'OR',
     timeSlice,
@@ -205,8 +205,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
 
   const typeCondition = sql`f.record_type IN ${types}`;
 
-  const sourceCondition = sourceIds && sourceIds.length > 0
-    ? sql`f.source_id IN ${sourceIds}`
+  const datasetCondition = datasetIds && datasetIds.length > 0
+    ? sql`f.dataset_id IN ${datasetIds}`
     : sql`TRUE`;
 
   const dateCondition = dateRange
@@ -224,7 +224,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     JOIN features f ON fc.feature_id = f.id
     WHERE ${cellCondition}
       AND ${typeCondition}
-      AND ${sourceCondition}
+      AND ${datasetCondition}
       AND ${dateCondition}
       AND ${tagCondition}
   `);
@@ -277,7 +277,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         f.temporal_frequency,
         (COALESCE(f.spatial_frequency::float, 0) / ${maxSpatial}
          + COALESCE(f.temporal_frequency::float, 0) / ${maxTemporal}) as relevance_score,
-        s.label as source_label,
+        d.label as dataset_label,
         f.entity,
         fp.relation_id,
         p.current_address,
@@ -287,12 +287,12 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
          ORDER BY a.date DESC LIMIT 1) as historical_address
       FROM feature_cells fc
       JOIN features f ON fc.feature_id = f.id
-      LEFT JOIN sources s ON f.source_id = s.id
+      LEFT JOIN datasets d ON f.dataset_id = d.id
       LEFT JOIN feature_to_place fp ON f.id = fp.feature_id
       LEFT JOIN place p ON fp.place_id = p.id
       WHERE ${cellCondition}
         AND ${typeCondition}
-        AND ${sourceCondition}
+        AND ${datasetCondition}
         AND ${dateCondition}
         AND ${tagCondition}
     ),
@@ -330,7 +330,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       spatial_frequency,
       temporal_frequency,
       relevance_score,
-      source_label,
+      dataset_label,
       entity,
       relation_id,
       current_address,
@@ -348,14 +348,14 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     url: row.url || undefined,
     recordType: row.record_type,
     label: row.label,
-    description: row.description || undefined,
+    description: row.description?.slice(0, 128) || undefined,
     contentUrl: row.content_url || undefined,
     dateRange: [
       row.start_date ? new Date(row.start_date).getFullYear() : 0,
       row.end_date ? new Date(row.end_date).getFullYear() : 0
     ] as [number, number],
     tags: row.tags || [],
-    sourceLabel: row.source_label || undefined,
+    datasetLabel: row.dataset_label || undefined,
     spatialFrequency: row.spatial_frequency || 1,
     temporalFrequency: row.temporal_frequency || 1,
     entity: row.entity || undefined,

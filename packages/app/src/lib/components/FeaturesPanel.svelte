@@ -21,13 +21,13 @@
 		period: string;
 		bounds?: { minLat: number; maxLat: number; minLon: number; maxLon: number };
 		recordTypes: RecordType[];
-		sources: string[];
+		datasets: string[];
 		tags: string[];
 		tagOperator?: 'AND' | 'OR';
 		onClose?: () => void;
 	}
 
-	let { cellId, period, bounds, recordTypes, sources, tags, tagOperator = 'OR', onClose }: Props = $props();
+	let { cellId, period, bounds, recordTypes, datasets, tags, tagOperator = 'OR', onClose }: Props = $props();
 
 	// Cell data state
 	let allFeatures = $state<FeatureResult[]>([]);
@@ -76,8 +76,8 @@
 			if (recordTypes.length > 0) {
 				params.set('recordTypes', recordTypes.join(','));
 			}
-			if (sources.length > 0) {
-				params.set('sources', sources.join(','));
+			if (datasets.length > 0) {
+				params.set('datasets', datasets.join(','));
 			}
 			if (tags.length > 0) {
 				params.set('tags', tags.join(','));
