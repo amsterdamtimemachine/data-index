@@ -64,6 +64,8 @@ export interface FeatureResult {
   dateRange: [number, number];
   tags: string[];
   datasetLabel?: string;
+  organisationLabel?: string;
+  organisationUrl?: string;
   spatialFrequency: number;
   temporalFrequency: number;
   entity?: Entity | PersonEntity | MediaObjectEntity;

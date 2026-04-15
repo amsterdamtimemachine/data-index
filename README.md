@@ -63,10 +63,10 @@ Ingestion scripts run manually against the database.
 | Source | Format | Size | Contents |
 |--------|--------|------|----------|
 | [LPS](https://adamlink.nl/downloads/20230920-lps.csv.zip) | CSV | 11 MB | ~105k linked points, ~222k address IDs from 7 registries (1832–1976) |
-| [Adressen](https://adamlink.nl/downloads/20230920-adressen.csv.zip) | CSV | ~5 MB | ~222k address labels from Adamlink |
+| [Adressen](https://adamlink.nl/downloads/20230920-adressen.csv.zip) | CSV | 21 MB | ~222k address labels from Adamlink |
 | Beeldbank | JSON | 2.5 GB | Amsterdam Stadsarchief images mapped to Adamlink URIs |
 | Joods Monument | CSV | 16 MB | ~63k Holocaust victims with last known addresses (1900–1945) |
-| Delpher | CSV | ~40 MB | ~142k newspaper articles matched to places by geometry (5m threshold) |
+| Delpher | CSV | 126 MB | ~142k newspaper articles matched to places by geometry (5m threshold) |
 
 ### Running ingestion
 

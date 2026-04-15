@@ -34,6 +34,8 @@ type FeatureRow = {
   spatial_frequency: number | null;
   temporal_frequency: number | null;
   dataset_label: string | null;
+  organisation_label: string | null;
+  organisation_url: string | null;
   relevance_score: number | null;
   entity: any | null;
   relation_id: string | null;
@@ -278,6 +280,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         (COALESCE(f.spatial_frequency::float, 0) / ${maxSpatial}
          + COALESCE(f.temporal_frequency::float, 0) / ${maxTemporal}) as relevance_score,
         d.label as dataset_label,
+        o.label as organisation_label,
+        o.url as organisation_url,
         f.entity,
         fp.relation_id,
         p.current_address,
@@ -288,6 +292,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       FROM feature_cells fc
       JOIN features f ON fc.feature_id = f.id
       LEFT JOIN datasets d ON f.dataset_id = d.id
+      LEFT JOIN organisations o ON d.organisation_id = o.id
       LEFT JOIN feature_to_place fp ON f.id = fp.feature_id
       LEFT JOIN place p ON fp.place_id = p.id
       WHERE ${cellCondition}
@@ -331,6 +336,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       temporal_frequency,
       relevance_score,
       dataset_label,
+      organisation_label,
+      organisation_url,
       entity,
       relation_id,
       current_address,
@@ -356,6 +363,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     ] as [number, number],
     tags: row.tags || [],
     datasetLabel: row.dataset_label || undefined,
+    organisationLabel: row.organisation_label || undefined,
+    organisationUrl: row.organisation_url || undefined,
     spatialFrequency: row.spatial_frequency || 1,
     temporalFrequency: row.temporal_frequency || 1,
     entity: row.entity || undefined,

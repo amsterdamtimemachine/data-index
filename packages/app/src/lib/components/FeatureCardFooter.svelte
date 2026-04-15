@@ -23,11 +23,19 @@
 		className
 	)}
 >
-	{#if feature.id}
-		<Link href={feature.id} target="_blank" rel="noopener noreferrer" class="text-base">
-			{feature.datasetLabel ? formatDatasetTitle(feature.datasetLabel) : 'Source'} →
-		</Link>
-	{/if}
+	<div class="flex items-center gap-2 text-base">
+		{#if expanded && feature.organisationLabel && feature.organisationUrl}
+			<Link href={feature.organisationUrl} target="_blank" rel="noopener noreferrer">
+				{feature.organisationLabel}
+			</Link>
+			<span class="text-gray-400">›</span>
+		{/if}
+		{#if feature.url}
+			<Link href={feature.url} target="_blank" rel="noopener noreferrer">
+				{feature.datasetLabel ? formatDatasetTitle(feature.datasetLabel) : 'Source'} →
+			</Link>
+		{/if}
+	</div>
 
 	{#if !expanded}
 		<Button onclick={onExpand} icon={ArrowsOut} aria-label="View feature details">Expand</Button>
