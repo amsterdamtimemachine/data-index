@@ -150,7 +150,7 @@ cp .env.example .env
 docker compose -f docker/docker-compose.yml up -d dataindex-db
 
 # 2. Push schema
-cd packages/db && bunx drizzle-kit push && cd ../..
+bun run db:push-schema
 
 # 3. Ingest (order matters)
 bun run db:ingest -s lps -f <path-to-lps.csv>
@@ -169,7 +169,7 @@ bun run db:rebuild-index
 docker rm -f dataindex-db
 docker volume rm docker_pgdata
 docker compose -f docker/docker-compose.yml up -d dataindex-db
-cd packages/db && bunx drizzle-kit push && cd ../..
+bun run db:push-schema
 ```
 
 ### Dev server
