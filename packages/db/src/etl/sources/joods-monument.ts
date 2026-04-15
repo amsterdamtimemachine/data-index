@@ -6,7 +6,7 @@
  * Creates new places for addresses not found in LPS.
  * All features get a fixed date range of 1900–1945.
  *
- * Usage: bun run db:ingest -s joods-monument -f ../../data/results_jm.csv
+ * Usage: bun run db:ingest -s joods-monument -f <path-to-results_jm.csv>
  */
 import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';

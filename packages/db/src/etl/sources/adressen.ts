@@ -6,7 +6,7 @@
  * Then sets `place.current_address` to the most recent named address per place.
  * Run after LPS ingestion (addresses must exist).
  *
- * Usage: bun run db:ingest -s adressen -f ../../data/20230920-adressen.csv
+ * Usage: bun run db:ingest -s adressen -f <path-to-20230920-adressen.csv>
  */
 import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';

@@ -4,7 +4,7 @@
  * Creates one place per linked point (lp) with geometry, and one address
  * row per historical address ID linking to that place.
  *
- * Usage: bun run db:ingest -s lps -f ../../data/20230920-lps.csv
+ * Usage: bun run db:ingest -s lps -f <path-to-20230920-lps.csv>
  */
 import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';

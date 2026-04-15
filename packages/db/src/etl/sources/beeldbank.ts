@@ -4,7 +4,7 @@
  * Streams a large JSON file (~2.5GB) mapping Adamlink URIs to arrays of images.
  * Resolves adamlink URIs → place IDs via the address table, then links features.
  *
- * Usage: bun run db:ingest -s beeldbank -f ../../data/beeldbank-fixed.json
+ * Usage: bun run db:ingest -s beeldbank -f <path-to-beeldbank-fixed.json>
  */
 import { createReadStream } from 'fs';
 import { parser } from 'stream-json';

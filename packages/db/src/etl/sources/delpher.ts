@@ -5,7 +5,7 @@
  * Matches geometry to existing places via nearest-neighbor spatial lookup.
  * Unmatched features (no place within threshold) are skipped.
  *
- * Usage: bun run db:ingest -s delpher -f ../../data/delpher_newspapers.csv
+ * Usage: bun run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
  */
 import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
