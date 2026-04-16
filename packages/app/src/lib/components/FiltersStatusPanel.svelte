@@ -7,6 +7,8 @@
 	interface Props {
 		selectedRecordTypes: RecordType[];
 		allRecordTypes: RecordType[];
+		selectedDatasets: string[];
+		allDatasets: string[];
 		selectedTags: string[];
 		tagOperator?: 'AND' | 'OR';
 		class?: string;
@@ -15,21 +17,31 @@
 	let {
 		selectedRecordTypes,
 		allRecordTypes,
+		selectedDatasets,
+		allDatasets,
 		selectedTags,
 		tagOperator = 'OR',
 		class: className
 	}: Props = $props();
 
-	// Check if all content types are selected
 	const hasAllTypes = $derived(
 		selectedRecordTypes.length === 0 ||
 			(selectedRecordTypes.length === allRecordTypes.length &&
 				allRecordTypes.every((type) => selectedRecordTypes.includes(type)))
 	);
 
-	// Get content types to display (translated to Dutch)
+	const hasAllDatasets = $derived(
+		selectedDatasets.length === 0 ||
+			(selectedDatasets.length === allDatasets.length &&
+				allDatasets.every((ds) => selectedDatasets.includes(ds)))
+	);
+
 	const displayedRecordTypes = $derived(
 		translateContentTypes(hasAllTypes ? allRecordTypes : selectedRecordTypes)
+	);
+
+	const displayedDatasets = $derived(
+		hasAllDatasets ? allDatasets : selectedDatasets
 	);
 </script>
 
@@ -42,6 +54,13 @@
 			<Tag variant="selected-outline">{recordType}</Tag>
 			{#if index < displayedRecordTypes.length - 1}
 				<span>of</span>
+			{/if}
+		{/each}
+		<span>in</span>
+		{#each displayedDatasets as dataset, index}
+			<Tag variant="selected-outline">{dataset}</Tag>
+			{#if index < displayedDatasets.length - 1}
+				<span>en</span>
 			{/if}
 		{/each}
 		{#if selectedTags.length > 0}

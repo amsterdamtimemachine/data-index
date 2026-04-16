@@ -313,6 +313,8 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 		<FiltersStatusPanel
 			selectedRecordTypes={currentRecordTypes}
 			allRecordTypes={recordTypes}
+			selectedDatasets={currentDatasetLabels}
+			allDatasets={datasetLabels}
 			selectedTags={currentTags}
 			tagOperator={currentTagOperator as 'AND' | 'OR'}
 			class="absolute top-3 left-3"

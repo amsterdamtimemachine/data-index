@@ -1,8 +1,7 @@
-node_modules
-backend/preprocessor/temp/
-aux/cell_map/output/*
+
 
 # Assets
+node_modules/
 data/*
 !data/docker/
 data/docker/*
@@ -27,6 +26,7 @@ build/
 /build
 .svelte-kit/
 .turbo/*
+.claude
 vocabulary.json
 
 # OS
@@ -50,6 +50,9 @@ env/
 # Turbo
 .turbo/cookies/*
 .turbo
+
+# Fonts
+packages/app/static/fonts/
 
 # misc
 issue.md

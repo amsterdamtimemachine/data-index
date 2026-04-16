@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import FeaturesGrid from '$components/FeaturesGrid.svelte';
 	import Pagination from '$components/Pagination.svelte';

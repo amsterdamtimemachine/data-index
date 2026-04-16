@@ -148,9 +148,13 @@ bun run db:rebuild-index
 
 `rebuild-index` computes spatial grid cells and frequency values. Must run after every data change.
 
-### Adamlink place data
+### Place data
 
-If your dataset references [Adamlink](https://adamlink.nl) address URIs, ingest the place data first:
+The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Adamlink is a Linked Open Data service that connects historical Amsterdam address registries (1832 to 1976) to point geometries, enabling features to be linked to physical locations with historical address names.
+
+If you are deploying this for a different city, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. See the Joods Monument and Delpher ingestion scripts for examples of creating places on the fly or matching by geometry. The core requirement is that each feature links to a `place` row that has a geometry.
+
+For Amsterdam deployments, ingest the Adamlink place data first:
 
 ```bash
 # 1. Places + address mappings (must run first)
@@ -204,7 +208,7 @@ cp .env.example .env
 
 ### Font
 
-The UI is built around [Satoshi](https://www.fontshare.com/fonts/satoshi) (Light, Regular, Medium, Bold weights + italics). Font files are included in `packages/app/static/fonts/`. The app falls back to the system sans-serif if Satoshi is not available.
+The UI is built around [Satoshi](https://www.fontshare.com/fonts/satoshi) (Light, Regular, Medium, Bold weights + italics). Download it from Fontshare and convert to `woff`/`woff2` format, then place the files in `packages/app/static/fonts/`. The app falls back to the system sans-serif if Satoshi is not available.
 
 ### First-time database setup
 

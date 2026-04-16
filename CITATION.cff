@@ -7,22 +7,22 @@ license: EUPL-1.2
 authors:
   - family-names: Solčány
     given-names: Matúš
-    affiliation: Humanities Labs, University of Amsterdam
+    affiliation: The Humanities Lab, University of Amsterdam
   - family-names: Kisjes
     given-names: Ivan
-    affiliation: Amsterdam Time Machine / CREATE Lab
+    affiliation: Amsterdam Time Machine / CREATE Lab, University of Amsterdam
   - family-names: van Wissen
     given-names: Leon
-    affiliation: CREATE Lab, University of Amsterdam
-  - family-names: Verheul
-    given-names: Ingeborg
-    affiliation: University of Amsterdam
-  - family-names: Koopmans
-    given-names: Boudewijn
-    affiliation: University of Amsterdam
+    affiliation: Amsterdam Time Machine / CREATE Lab, University of Amsterdam
   - family-names: Noordegraaf
     given-names: Julia
-    affiliation: University of Amsterdam
+    affiliation: Amsterdam Time Machine / CREATE Lab, University of Amsterdam
+  - family-names: Verheul
+    given-names: Ingeborg
+    affiliation: Amsterdam Time Machine / CREATE Lab, University of Amsterdam
+  - family-names: Koopmans
+    given-names: Boudewijn
+    affiliation: Amsterdam Time Machine / CREATE Lab, University of Amsterdam
 keywords:
   - digital humanities
   - cultural heritage
