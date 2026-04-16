@@ -1,6 +1,8 @@
+![Amsterdam Time Machine Data Index](docs/data-index.jpg)
+
 # [Amsterdam Time Machine Data Index](https://data.amsterdamtimemachine.nl)
 
-The Amsterdam Time Machine Data Index provides location-based access to historical information about Amsterdam across centuries. It serves as a unified entry point to heritage collections from multiple Amsterdam and national institutions, connecting digitised sources through place and time.
+The Amsterdam Time Machine [Data Index](https://data.amsterdamtimemachine.nl) provides location-based access to historical information about Amsterdam across centuries. It serves as a unified entry point to heritage collections from multiple Amsterdam and national institutions, connecting digitised sources through place and time.
 
 The interface overlays Amsterdam with a spatial heatmap grid and a timeline spanning the 17th century to the present in configurable periods. Each grid cell shows the density of available data for that area and time period. Clicking a cell reveals the available images, texts, and person records from that neighbourhood. All results link directly to the original source at the holding institution.
 
@@ -202,7 +204,7 @@ cp .env.example .env
 
 ### Font
 
-The UI is built around [Satoshi](https://www.fontshare.com/fonts/satoshi). Download it from Fontshare and convert to `woff`/`woff2` format, then place the files in `packages/app/static/fonts/`. The app falls back to the system sans-serif if Satoshi is not available.
+The UI is built around [Satoshi](https://www.fontshare.com/fonts/satoshi) (Light, Regular, Medium, Bold weights + italics). Font files are included in `packages/app/static/fonts/`. The app falls back to the system sans-serif if Satoshi is not available.
 
 ### First-time database setup
 

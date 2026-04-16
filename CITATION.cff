@@ -4,6 +4,25 @@ message: "If you use this software, please cite it as below."
 type: software
 url: "https://data.amsterdamtimemachine.nl"
 license: EUPL-1.2
+authors:
+  - family-names: Solčány
+    given-names: Matúš
+    affiliation: Humanities Labs, University of Amsterdam
+  - family-names: Kisjes
+    given-names: Ivan
+    affiliation: Amsterdam Time Machine / CREATE Lab
+  - family-names: van Wissen
+    given-names: Leon
+    affiliation: CREATE Lab, University of Amsterdam
+  - family-names: Verheul
+    given-names: Ingeborg
+    affiliation: University of Amsterdam
+  - family-names: Koopmans
+    given-names: Boudewijn
+    affiliation: University of Amsterdam
+  - family-names: Noordegraaf
+    given-names: Julia
+    affiliation: University of Amsterdam
 keywords:
   - digital humanities
   - cultural heritage
