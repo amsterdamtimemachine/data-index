@@ -150,11 +150,11 @@ bun run db:rebuild-index
 
 ### Place data
 
-The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Adamlink is a Linked Open Data service that connects historical Amsterdam address registries (1832 to 1976) to point geometries, enabling features to be linked to physical locations with historical address names.
+The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Adamlink is a Linked Open Data service that connects historical Amsterdam address registries to point geometries, enabling features to be linked to physical locations with historical address names.
 
 If you are deploying this for a different city, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. See the Joods Monument and Delpher ingestion scripts for examples of creating places on the fly or matching by geometry. The core requirement is that each feature links to a `place` row that has a geometry.
 
-For Amsterdam deployments, ingest the Adamlink place data first:
+Ingest the Adamlink place data before any datasets:
 
 ```bash
 # 1. Places + address mappings (must run first)
