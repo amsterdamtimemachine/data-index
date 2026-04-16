@@ -1,40 +1,17 @@
-
-
-# Assets
 node_modules/
-data/*
-!data/docker/
-data/docker/*
 dist/
-public/*
-build/**
 build/
-.bin
-*.bin
-.csv
-.yalc/*
-.yalc/
-.yalc
-.geojson
-.mbt
-.pbf
 
-# Output
-.output
-.vercel
-/.svelte-kit
-/build
+# SvelteKit
 .svelte-kit/
-.turbo/*
-.claude
-vocabulary.json
 
-# OS
-.DS_Store
-Thumbs.db
+# Turbo
+.turbo/
+
+# Claude
+.claude/
 
 # Env
-
 .env
 .env.*
 !.env.example
@@ -44,15 +21,12 @@ Thumbs.db
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Python
-env/
-
-# Turbo
-.turbo/cookies/*
-.turbo
+# OS
+.DS_Store
+Thumbs.db
 
 # Fonts
 packages/app/static/fonts/
 
-# misc
-issue.md
+# Binaries
+*.bin

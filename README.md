@@ -136,9 +136,11 @@ Optional: `description`, `content_url` (media), `entity` (schema.org JSONB), `ur
 
 ### Adding a dataset
 
-1. Copy `packages/db/src/etl/sources/template.ts` and rename to your dataset name
-2. Define your organisation, dataset, and relation
-3. Map your source data fields to features
+1. Pick a template from `packages/db/src/etl/examples/`:
+   - `adamlink-template.ts` for data referencing Adamlink address URIs
+   - `geometry-template.ts` for data without Adamlink references (matches coordinates to nearest place)
+2. Copy it to `packages/db/src/etl/sources/<your-dataset>.ts`
+3. Update organisation, dataset, relation, and field mappings
 4. Run:
 
 ```bash
@@ -206,10 +208,6 @@ bun install
 cp .env.example .env
 ```
 
-### Font
-
-The UI is built around [Satoshi](https://www.fontshare.com/fonts/satoshi) (Light, Regular, Medium, Bold weights + italics). Download it from Fontshare and convert to `woff`/`woff2` format, then place the files in `packages/app/static/fonts/`. The app falls back to the system sans-serif if Satoshi is not available.
-
 ### First-time database setup
 
 ```bash
@@ -229,6 +227,10 @@ bun run db:ingest -s <dataset-name> -f <path-to-file>
 # 5. Rebuild index
 bun run db:rebuild-index
 ```
+
+### Font
+
+The UI is built around [Satoshi](https://www.fontshare.com/fonts/satoshi) (Light, Regular, Medium, Bold weights + italics). Download it from Fontshare and convert to `woff`/`woff2` format, then place the files in `packages/app/static/fonts/`. The app falls back to the system sans-serif if Satoshi is not available.
 
 ### Frontend dev server
 
