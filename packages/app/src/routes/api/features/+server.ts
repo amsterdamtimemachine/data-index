@@ -91,7 +91,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		);
 
 		const headers = {
-			'Cache-Control': 'public, max-age=300', // Cache for 5 minutes
+			'Cache-Control': 'public, max-age=3600',
 			'Access-Control-Allow-Origin': '*'
 		};
 

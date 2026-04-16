@@ -80,13 +80,6 @@ export function reverseTranslateContentTypes(types: string[]): string[] {
 	return types.map(rt);
 }
 
-export function createTranslatedContentTypes(englishTypes: RecordType[]) {
-	return englishTypes.map(type => ({
-		key: type,
-		label: t(type)
-	}));
-}
-
 export function translateErrorTitle(title: string): string {
 	return t(title);
 }

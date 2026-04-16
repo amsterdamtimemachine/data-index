@@ -65,7 +65,7 @@ export async function ingest(filePath: string) {
 
     const entity: MediaObjectEntity = {
       type: 'MediaObject',
-      label: row.title,
+      name: row.title,
       contentUrl: row.content_url,
       ...(formatDateRange(startDate, endDate) && { dateCreated: formatDateRange(startDate, endDate) })
     };

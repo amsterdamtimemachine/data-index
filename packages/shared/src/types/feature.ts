@@ -12,7 +12,7 @@ export type TagOperator = 'AND' | 'OR';
 export interface Entity {
   id?: string;
   type: "Person" | "CreativeWork" | "MediaObject";
-  label: string; // name
+  name: string;
 }
 
 export interface PersonEntity extends Entity {

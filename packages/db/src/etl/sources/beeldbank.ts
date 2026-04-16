@@ -94,7 +94,7 @@ export async function ingest(filePath: string) {
 
         const entity: MediaObjectEntity = {
           type: 'MediaObject',
-          label: name,
+          name,
           contentUrl,
           ...(dateCreatedFormatted && { dateCreated: dateCreatedFormatted })
         };

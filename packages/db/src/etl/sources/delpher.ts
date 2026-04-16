@@ -122,7 +122,7 @@ export async function ingest(filePath: string) {
 
     const entity: CreativeWorkEntity = {
       type: 'CreativeWork',
-      label: row.title || '',
+      name: row.title || '',
       url: row.url,
       ...(dateCreated && { dateCreated })
     };

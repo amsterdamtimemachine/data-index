@@ -8,7 +8,6 @@
 	import Tooltip from '$components/Tooltip.svelte';
 	import X from 'phosphor-svelte/lib/X';
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
-	import { formatDate } from '$utils/utils';
 	import type { FeatureResult } from '@atm/shared/types';
 	import { loadingState } from '$lib/state/loadingState.svelte';
 	import { createError, createPageErrorData } from '$utils/error';

@@ -120,7 +120,7 @@ export async function ingest(filePath: string) {
 
     const entity: PersonEntity = {
       type: 'Person',
-      label: row.name,
+      name: row.name,
       ...(row.birthDate && { birthDate: row.birthDate }),
       ...(row.birthPlace && { birthPlace: row.birthPlace }),
       ...(row.deathDate && { deathDate: row.deathDate }),

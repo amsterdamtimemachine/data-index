@@ -50,7 +50,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 			return json(heatmapResponse, {
 				headers: {
-					'Cache-Control': 'public, max-age=3600',
+					'Cache-Control': 'public, max-age=86400',
 					'Access-Control-Allow-Origin': '*'
 				}
 			});
@@ -66,7 +66,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 			return json(heatmapResponse, {
 				headers: {
-					'Cache-Control': 'public, max-age=3600',
+					'Cache-Control': 'public, max-age=86400',
 					'Access-Control-Allow-Origin': '*'
 				}
 			});

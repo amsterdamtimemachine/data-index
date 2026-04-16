@@ -26,7 +26,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		);
 
 		const headers = {
-			'Cache-Control': 'public, max-age=1800', // Cache for 30 minutes
+			'Cache-Control': 'public, max-age=86400',
 			'Access-Control-Allow-Origin': '*'
 		};
 
