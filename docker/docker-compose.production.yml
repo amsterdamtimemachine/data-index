@@ -1,0 +1,21 @@
+# Production environment overrides
+# Usage: docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
+
+services:
+  dataindex-db:
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+
+  app:
+    image: ghcr.io/${GITHUB_REPOSITORY:-amsterdam-humanities-labs/amsterdam-time-machine}/app:production
+    ports:
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@dataindex-db:5432/amsterdam_time_machine
+      PUBLIC_DEFAULT_CELL: ${PUBLIC_DEFAULT_CELL:-}
+      PUBLIC_TILE_SOURCE_URL: ${PUBLIC_TILE_SOURCE_URL:-}
+      CACHE_TTL_MINUTES: ${CACHE_TTL_MINUTES:-10}
+    env_file: []

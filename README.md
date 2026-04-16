@@ -122,6 +122,29 @@ erDiagram
 
 ## Data ingestion
 
+### Place data
+
+The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Adamlink is a Linked Open Data service that connects historical Amsterdam address registries to point geometries, enabling features to be linked to physical locations with historical address names.
+
+If you are deploying this for a different city, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. See the Joods Monument and Delpher ingestion scripts for examples of creating places on the fly or matching by geometry. The core requirement is that each feature links to a `place` row that has a geometry.
+
+Ingest the Adamlink place data before any datasets:
+
+```bash
+# 1. Places + address mappings (must run first)
+bun run db:ingest -s lps -f <path-to-lps.csv>
+
+# 2. Address labels (must run after lps)
+bun run db:ingest -s adressen -f <path-to-adressen.csv>
+
+# 3. Your datasets (any order)
+bun run db:ingest -s dataset1 -f <path-to-file>
+bun run db:ingest -s dataset2 -f <path-to-file>
+
+# 4. Rebuild index (must run last)
+bun run db:rebuild-index
+```
+
 ### Minimum required fields per feature
 
 Each feature needs at minimum:
@@ -149,29 +172,6 @@ bun run db:rebuild-index
 ```
 
 `rebuild-index` computes spatial grid cells and frequency values. Must run after every data change.
-
-### Place data
-
-The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Adamlink is a Linked Open Data service that connects historical Amsterdam address registries to point geometries, enabling features to be linked to physical locations with historical address names.
-
-If you are deploying this for a different city, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. See the Joods Monument and Delpher ingestion scripts for examples of creating places on the fly or matching by geometry. The core requirement is that each feature links to a `place` row that has a geometry.
-
-Ingest the Adamlink place data before any datasets:
-
-```bash
-# 1. Places + address mappings (must run first)
-bun run db:ingest -s lps -f <path-to-lps.csv>
-
-# 2. Address labels (must run after lps)
-bun run db:ingest -s adressen -f <path-to-adressen.csv>
-
-# 3. Your datasets (any order)
-bun run db:ingest -s dataset1 -f <path-to-file>
-bun run db:ingest -s dataset2 -f <path-to-file>
-
-# 4. Rebuild index (must run last)
-bun run db:rebuild-index
-```
 
 ### Current datasets
 
@@ -244,19 +244,75 @@ bun run dev    # http://localhost:5175
 bun run db:studio    # http://local.drizzle.studio
 ```
 
-## Production (Docker)
+## Production
+
+### CI/CD
+
+Pushing to `main` triggers a GitHub Actions workflow that:
+1. Runs tests and builds the app
+2. Builds a Docker image and pushes it to GitHub Container Registry (GHCR)
+3. SSHes into the VPS, pulls the new image, and restarts the app container
+
+### GitHub secrets
+
+Set these in the repo settings under Settings > Secrets and variables > Actions:
+
+| Secret | Description |
+|--------|-------------|
+| `VPS_HOST` | Server IP or hostname |
+| `VPS_USER` | SSH username |
+| `VPS_SSH_KEY` | Private SSH key for the server |
+| `VPS_DEPLOY_PATH` | Deployment directory on the server (e.g. `/home/user/atm`) |
+
+### First-time server setup
 
 ```bash
-docker compose -f docker/docker-compose.yml up --build
+# SSH into the server
+ssh user@server
+
+# Create deployment directory
+mkdir -p ~/atm/docker
+
+# Create production .env
+cat > ~/atm/docker/.env << EOF
+DB_USER=atm
+DB_PASSWORD=<strong-password>
+APP_PORT=3000
+EOF
+
+# Copy compose files (or let the first CI run do this)
+# Start database
+cd ~/atm/docker
+docker compose -f docker-compose.yml -f docker-compose.production.yml up -d dataindex-db
+
+# Install Bun (for data ingestion)
+curl -fsSL https://bun.sh/install | bash
+
+# Clone repo (for ETL scripts)
+cd ~/atm && git clone <repo-url> repo && cd repo
+bun install
+
+# Push schema
+bun run db:push-schema
+
+# Ingest data
+bun run db:ingest -s lps -f <path-to-lps.csv>
+bun run db:ingest -s adressen -f <path-to-adressen.csv>
+bun run db:ingest -s beeldbank -f <path-to-beeldbank.json>
+bun run db:ingest -s joods-monument -f <path-to-results_jm.csv>
+bun run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
+bun run db:rebuild-index
 ```
+
+After this, every push to `main` auto-deploys the app. SSH is only needed for data ingestion or index rebuilds.
 
 ### Environment variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `DATABASE_URL` | Yes | — | PostgreSQL connection string |
-| `DB_USER` | No | `atm` | PostgreSQL user (Docker) |
-| `DB_PASSWORD` | No | `atm_dev_password` | PostgreSQL password (Docker) |
+| `DB_USER` | Yes | `atm` | PostgreSQL user |
+| `DB_PASSWORD` | Yes | `atm_dev_password` | PostgreSQL password |
+| `APP_PORT` | No | `3000` | App port on host |
 | `PUBLIC_DEFAULT_CELL` | No | — | Default cell to select on load |
 | `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |
 | `BASE_BIN_SIZE` | No | `10` | Base time bin size (years) |
