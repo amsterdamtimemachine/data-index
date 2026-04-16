@@ -262,35 +262,26 @@ Set these in the repo settings under Settings > Secrets and variables > Actions:
 | `VPS_HOST` | Server IP or hostname |
 | `VPS_USER` | SSH username |
 | `VPS_SSH_KEY` | Private SSH key for the server |
-| `VPS_DEPLOY_PATH` | Deployment directory on the server (e.g. `/home/user/atm`) |
+| `VPS_DEPLOY_PATH` | Deployment directory on the server (e.g. `/home/user/data-index`) |
 
 ### First-time server setup
 
 ```bash
-# SSH into the server
 ssh user@server
 
-# Create deployment directory
-mkdir -p ~/atm/docker
-
-# Create production .env
-cat > ~/atm/docker/.env << EOF
-DB_USER=atm
-DB_PASSWORD=<strong-password>
-APP_PORT=3000
-EOF
-
-# Copy compose files (or let the first CI run do this)
-# Start database
-cd ~/atm/docker
-docker compose -f docker-compose.yml -f docker-compose.production.yml up -d dataindex-db
-
-# Install Bun (for data ingestion)
+# Install Bun
 curl -fsSL https://bun.sh/install | bash
 
-# Clone repo (for ETL scripts)
-cd ~/atm && git clone <repo-url> repo && cd repo
+# Clone repo
+git clone git@github.com:amsterdamtimemachine/data-index.git ~/data-index && cd ~/data-index
 bun install
+
+# Set up production env
+cp .env.example .env
+# Edit .env — set DB_PASSWORD
+
+# Start database
+docker compose -f docker/docker-compose.yml -f docker/docker-compose.production.yml up -d dataindex-db
 
 # Push schema
 bun run db:push-schema
