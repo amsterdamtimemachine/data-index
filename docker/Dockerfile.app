@@ -17,7 +17,7 @@ RUN bun install
 # Copy source code
 COPY packages/ ./packages/
 
-# Build app (no .env needed — all PUBLIC_ vars are dynamic at runtime)
+# Build app
 RUN bun run build:app
 
 # Expose port

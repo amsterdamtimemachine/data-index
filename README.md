@@ -192,7 +192,6 @@ bun run db:rebuild-index
 | `GET /api/histogram` | Feature count distribution by time period |
 | `GET /api/features` | Paginated features within geographic bounds |
 | `GET /api/available-tags` | Tags with feature counts |
-| `GET /api/tag-combinations` | Valid tag combinations for AND/OR filtering |
 
 ## Development
 
@@ -208,13 +207,21 @@ bun install
 cp .env.example .env
 ```
 
+### Database options
+
+The app needs a PostgreSQL + PostGIS database. You can either spin one up via Docker (self-hosted, recommended for dev) or point at an existing external database.
+
+**Self-hosted** — `.env`'s `DB_HOST` stays `localhost` so workstation CLI tools (`bun run db:push-schema`, `bun run db:ingest`) can reach the bundled container on the mapped port. The self-hosted compose overlay overrides `DB_HOST` to the compose network name for the app container only.
+
+**External DB** — set `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` in `.env` to point at your existing server. Skip the self-hosted overlay; the app container then uses the `.env` values directly.
+
 ### First-time database setup
 
 ```bash
-# 1. Start database
-docker compose -f docker/docker-compose.yml up -d dataindex-db
+# 1. Start database (self-hosted only — skip if using external DB)
+bun run docker:db:up
 
-# 2. Push schema
+# 2. Push schema (works against either self-hosted or external DB)
 bun run db:push-schema
 
 # 3. Ingest place data (if using Adamlink)
@@ -244,25 +251,32 @@ bun run dev    # http://localhost:5175
 bun run db:studio    # http://local.drizzle.studio
 ```
 
+### Testing
+
+Tests run against an isolated Postgres+PostGIS container (port `5434`, tmpfs volume — data wiped on restart, never touches the dev DB). Integration tests exercise the full pipeline end-to-end: LPS + adressen + beeldbank + Joods Monument ingestion on real-data fixtures under `packages/db/src/__tests__/fixtures/`, then the query layer (features, heatmap, timeline, histogram) and `rebuild-index`.
+
+```bash
+bun run test:db:up     # start the isolated test DB
+bun run test           # full suite (64 tests: 24 unit + 40 integration)
+bun run test:unit      # unit tests only (no DB needed)
+bun run test:db:down   # stop and wipe the test DB
+```
+
+CI runs the full suite on every push to `main` using a GitHub Actions service container with the same PostGIS image.
+
 ## Production
 
 ### CI/CD
 
 Pushing to `main` triggers a GitHub Actions workflow that:
 1. Runs tests and builds the app
-2. Builds a Docker image and pushes it to GitHub Container Registry (GHCR)
-3. SSHes into the VPS, pulls the new image, and restarts the app container
+2. Builds a Docker image and pushes it to GitHub Container Registry (GHCR) tagged as `production` and `production-<sha>`
+
+The workflow **does not** deploy to the server. Deploying the new image is a manual step performed on the VPS — see "Deploying a new image" below. This keeps the server's SSH surface private and removes the need for deployment secrets in GitHub.
 
 ### GitHub secrets
 
-Set these in the repo settings under Settings > Secrets and variables > Actions:
-
-| Secret | Description |
-|--------|-------------|
-| `VPS_HOST` | Server IP or hostname |
-| `VPS_USER` | SSH username |
-| `VPS_SSH_KEY` | Private SSH key for the server |
-| `VPS_DEPLOY_PATH` | Deployment directory on the server (e.g. `/home/user/data-index`) |
+No secrets beyond the default `GITHUB_TOKEN` (used to push to GHCR) are required.
 
 ### First-time server setup
 
@@ -276,33 +290,59 @@ curl -fsSL https://bun.sh/install | bash
 git clone git@github.com:amsterdamtimemachine/data-index.git ~/data-index && cd ~/data-index
 bun install
 
-# Set up production env
+# Set up production env — point at the existing Postgres server
 cp .env.example .env
-# Edit .env — set DB_PASSWORD
+# Edit .env — set DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME to
+# match the production database. The app does NOT manage this server —
+# assume it's already running and reachable from the VPS.
 
-# Start database
-docker compose -f docker/docker-compose.yml -f docker/docker-compose.production.yml up -d dataindex-db
+# Optional: add Satoshi font (download from https://www.fontshare.com/fonts/satoshi)
+# Place woff/woff2 files in packages/app/static/fonts/
 
-# Push schema
+# Push schema into the existing DB
 bun run db:push-schema
 
 # Ingest data
 bun run db:ingest -s lps -f <path-to-lps.csv>
 bun run db:ingest -s adressen -f <path-to-adressen.csv>
-bun run db:ingest -s beeldbank -f <path-to-beeldbank.json>
+bun run db:ingest -s beeldbank -f <path-to-beeldbank.csv>
 bun run db:ingest -s joods-monument -f <path-to-results_jm.csv>
 bun run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
 bun run db:rebuild-index
+
+# Start the app (connects to the external DB defined in .env)
+docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.production.yml up -d app
 ```
 
-After this, every push to `main` auto-deploys the app. SSH is only needed for data ingestion or index rebuilds.
+> **Note:** production uses an external Postgres (ATM's existing server). The compose files in production mode only manage the `app` container. If you instead want a single-box deploy with a bundled DB, add `-f docker/docker-compose.self-hosted.yml` to the compose commands above.
+
+### Deploying a new image
+
+Every push to `main` rebuilds the image and pushes it to GHCR. To roll it out, SSH into the VPS and pull + restart manually:
+
+```bash
+ssh user@server
+cd ~/data-index
+
+# Log in to GHCR (one-time, or when token expires)
+echo $GHCR_TOKEN | docker login ghcr.io -u <github-user> --password-stdin
+
+# Pull and restart
+docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.production.yml pull app
+docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.production.yml up -d app
+```
+
+SSH is also used for data ingestion and index rebuilds.
 
 ### Environment variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
+| `DB_HOST` | Yes | `localhost` | PostgreSQL host (use `localhost` when workstation CLI hits the self-hosted DB; use the remote host for external DB) |
+| `DB_PORT` | No | `5432` | PostgreSQL port |
 | `DB_USER` | Yes | `atm` | PostgreSQL user |
 | `DB_PASSWORD` | Yes | `atm_dev_password` | PostgreSQL password |
+| `DB_NAME` | Yes | `amsterdam_time_machine` | PostgreSQL database name |
 | `APP_PORT` | No | `3000` | App port on host |
 | `PUBLIC_DEFAULT_CELL` | No | — | Default cell to select on load |
 | `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |

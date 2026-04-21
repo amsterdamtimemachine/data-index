@@ -1,4 +1,7 @@
-// src/routes/api/tag-combinations/+server.ts
+// WIP: Not currently exposed in the UI (TAGS_FEATURE_READY = false).
+// validateTagCombination runs one COUNT query per selected tag sequentially.
+// With large feature_tags tables (1M+ rows), consider caching or replacing
+// with a single query that validates all tags at once.
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { RecordType } from '@atm/shared/types';

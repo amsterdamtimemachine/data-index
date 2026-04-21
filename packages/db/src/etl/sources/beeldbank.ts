@@ -1,14 +1,14 @@
 /**
  * Import Beeldbank (Amsterdam Stadsarchief image archive) features
  *
- * Streams a large JSON file (~2.5GB) mapping Adamlink URIs to arrays of images.
- * Resolves adamlink URIs → place IDs via the address table, then links features.
+ * Streams a CSV where each row is one (image × place-link). Same `resource`
+ * can appear on multiple rows for different linked places. Dedups features
+ * by `resource`, links to place via `address` column → adamlink URI → place.
  *
- * Usage: bun run db:ingest -s beeldbank -f <path-to-beeldbank-fixed.json>
+ * Usage: bun run db:ingest -s beeldbank -f <path-to-beeldbank.csv>
  */
 import { createReadStream } from 'fs';
-import { parser } from 'stream-json';
-import { streamObject } from 'stream-json/streamers/StreamObject';
+import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
 import { organisations, datasets, relation, features, featureToPlace, address } from '../../schema';
@@ -16,6 +16,19 @@ import type { MediaObjectEntity } from '@atm/shared';
 import { formatDateRange } from '../utils';
 
 const BATCH_SIZE = 1000;
+
+interface RawRow {
+  resource: string;
+  title: string;
+  thumbnail: string;
+  creationDateItem: string;
+  startDate: string;
+  endDate: string;
+  textDate: string;
+  pand: string;
+  address: string;
+  street: string;
+}
 
 type PlaceRow = { place_id: string };
 
@@ -34,8 +47,7 @@ export async function ingest(filePath: string) {
 
   console.log(`Streaming ${filePath}...`);
 
-  // Cache: adamlink URI → place ID
-  const placeIdCache = new Map<string, string>();
+  const placeIdCache = new Map<string, string | null>();
   async function resolvePlaceId(adamlinkUri: string): Promise<string | null> {
     const cached = placeIdCache.get(adamlinkUri);
     if (cached !== undefined) return cached;
@@ -44,15 +56,16 @@ export async function ingest(filePath: string) {
       sql`SELECT ${address.placeId} as place_id FROM ${address} WHERE ${address.id} = ${adamlinkUri}`
     );
     const placeId = result.rows[0]?.place_id || null;
-    if (placeId) placeIdCache.set(adamlinkUri, placeId);
+    placeIdCache.set(adamlinkUri, placeId);
     return placeId;
   }
 
   const seenFeatures = new Map<string, string>();
+  const seenLinks = new Set<string>();
   let featureCount = 0;
   let linkCount = 0;
   let skippedLinks = 0;
-  let entryCount = 0;
+  let rowCount = 0;
 
   let featureBatch: any[] = [];
   let linkBatch: { featureId: string; placeId: string; relationId: string }[] = [];
@@ -68,67 +81,69 @@ export async function ingest(filePath: string) {
     }
   }
 
-  const pipeline = createReadStream(filePath)
-    .pipe(parser())
-    .pipe(streamObject());
+  const csvParser = createReadStream(filePath)
+    .pipe(parse({ columns: true, relax_column_count: true, bom: true }));
 
-  for await (const { key: adamlinkUri, value: val } of pipeline) {
-    const placeId = await resolvePlaceId(adamlinkUri);
-    const images = (val as any).images || [];
+  for await (const row of csvParser as AsyncIterable<RawRow>) {
+    const sourceUrl = row.resource?.trim();
+    if (!sourceUrl) continue;
 
-    for (const img of images) {
-      const sourceUrl = img['@id'];
-      if (!sourceUrl) continue;
+    let featureId = seenFeatures.get(sourceUrl);
 
-      let featureId = seenFeatures.get(sourceUrl);
+    if (!featureId) {
+      featureId = crypto.randomUUID();
+      seenFeatures.set(sourceUrl, featureId);
 
-      if (!featureId) {
-        featureId = crypto.randomUUID();
-        seenFeatures.set(sourceUrl, featureId);
+      const name = row.title?.trim() || '';
+      const contentUrl = row.thumbnail?.trim() || '';
+      const startDate = row.startDate?.trim() || null;
+      const endDate = row.endDate?.trim() || startDate;
+      const dateCreatedFormatted = formatDateRange(startDate, endDate);
 
-        const name = img.name || '';
-        const contentUrl = img.contentUrl || '';
-        const startDate = img.startDate || null;
-        const endDate = img.endDate || startDate;
-        const dateCreatedFormatted = formatDateRange(startDate, endDate);
+      const entity: MediaObjectEntity = {
+        type: 'MediaObject',
+        name,
+        contentUrl,
+        ...(dateCreatedFormatted && { dateCreated: dateCreatedFormatted })
+      };
 
-        const entity: MediaObjectEntity = {
-          type: 'MediaObject',
-          name,
-          contentUrl,
-          ...(dateCreatedFormatted && { dateCreated: dateCreatedFormatted })
-        };
+      featureBatch.push({
+        id: featureId,
+        url: sourceUrl,
+        recordType: 'image',
+        label: name,
+        contentUrl,
+        startDate,
+        endDate,
+        datasetId: 'beeldbank',
+        entity
+      });
 
-        featureBatch.push({
-          id: featureId,
-          url: sourceUrl,
-          recordType: 'image',
-          label: name,
-          contentUrl,
-          startDate,
-          endDate,
-          datasetId: 'beeldbank',
-          entity
-        });
+      featureCount++;
+    }
 
-        featureCount++;
-      }
-
-      if (placeId) {
-        linkBatch.push({ featureId, placeId, relationId: 'isAbout' });
-        linkCount++;
-      } else {
-        skippedLinks++;
-      }
-
-      if (linkBatch.length >= BATCH_SIZE) {
-        await flush();
+    const adamlinkUri = row.address?.trim();
+    if (adamlinkUri) {
+      const linkKey = `${featureId}|${adamlinkUri}`;
+      if (!seenLinks.has(linkKey)) {
+        seenLinks.add(linkKey);
+        const placeId = await resolvePlaceId(adamlinkUri);
+        if (placeId) {
+          linkBatch.push({ featureId, placeId, relationId: 'isAbout' });
+          linkCount++;
+        } else {
+          skippedLinks++;
+        }
       }
     }
 
-    entryCount++;
-    if (entryCount % 1000 === 0) {
-      process.stdout.write(`\r  ${entryCount} addresses, ${featureCount} features, ${linkCount} links, ${skippedLinks} skipped`);
+    if (featureBatch.length >= BATCH_SIZE || linkBatch.length >= BATCH_SIZE) {
+      await flush();
+    }
+
+    rowCount++;
+    if (rowCount % 10000 === 0) {
+      process.stdout.write(`\r  ${rowCount} rows, ${featureCount} features, ${linkCount} links, ${skippedLinks} skipped`);
     }
   }
 

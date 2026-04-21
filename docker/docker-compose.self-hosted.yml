@@ -1,0 +1,38 @@
+# Self-hosted overlay: adds a bundled Postgres+PostGIS service and wires the app
+# to it. Layer on top of docker-compose.yml for local dev or single-box deploys.
+#
+#   docker compose --env-file .env \
+#     -f docker/docker-compose.yml \
+#     -f docker/docker-compose.self-hosted.yml up
+services:
+  dataindex-db:
+    image: postgis/postgis:16-3.4
+    container_name: dataindex-db
+    environment:
+      POSTGRES_USER: ${DB_USER:?DB_USER is required — copy .env.example to .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required — copy .env.example to .env}
+      POSTGRES_DB: ${DB_NAME:?DB_NAME is required — copy .env.example to .env}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - atm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    # Override .env's DB_HOST (which workstation CLI uses, e.g. localhost) so the
+    # app container reaches the bundled DB via the compose network name.
+    environment:
+      DB_HOST: dataindex-db
+      DB_PORT: 5432
+    depends_on:
+      dataindex-db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
