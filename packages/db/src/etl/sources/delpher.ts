@@ -15,14 +15,34 @@ import { organisations, datasets, relation, features, featureToPlace } from '../
 import type { CreativeWorkEntity } from '@atm/shared';
 import { formatDateRange } from '../utils';
 
-const SOURCE_ID = 'delpher';
-const BATCH_SIZE = 1000;
+// ═══════════════════════════════════════════════════════════════
+//  Organisation
+// ═══════════════════════════════════════════════════════════════
+const ORG_ID = 'kb';
+const ORG_LABEL = 'Koninklijke Bibliotheek';
+const ORG_URL = 'https://www.kb.nl';
 
-/**
- * Maximum distance in meters to match a delpher geometry to an existing place.
- * Based on dry run: 99.8% of delpher points match within 5m.
- */
+// ═══════════════════════════════════════════════════════════════
+//  Dataset
+// ═══════════════════════════════════════════════════════════════
+const DATASET_ID = 'delpher';
+const DATASET_LABEL = 'Delpher Kranten';
+const DATASET_URL = 'https://www.delpher.nl';
+
+// ═══════════════════════════════════════════════════════════════
+//  Feature metadata
+// ═══════════════════════════════════════════════════════════════
+const RECORD_TYPE = 'text';
+const RELATION_ID = 'isAbout';
+const RELATION_LABEL = 'Is About';
+
+// ═══════════════════════════════════════════════════════════════
+//  Ingestion tuning
+// ═══════════════════════════════════════════════════════════════
+/** Max distance in meters to match a Delpher point to an existing place.
+ *  Based on dry run: 99.8% of Delpher points match within 5m. */
 const MATCH_THRESHOLD_METERS = 5;
+const BATCH_SIZE = 1000;
 
 interface RawRow {
   id: string;
@@ -49,15 +69,15 @@ function parsePeriod(period: string): { startDate: string | null; endDate: strin
 
 export async function ingest(filePath: string) {
   await db.insert(organisations)
-    .values({ id: 'kb', label: 'Koninklijke Bibliotheek', url: 'https://www.kb.nl' })
+    .values({ id: ORG_ID, label: ORG_LABEL, url: ORG_URL })
     .onConflictDoNothing();
 
   await db.insert(datasets)
-    .values({ id: SOURCE_ID, label: 'Delpher Kranten', url: 'https://www.delpher.nl', organisationId: 'kb' })
+    .values({ id: DATASET_ID, label: DATASET_LABEL, url: DATASET_URL, organisationId: ORG_ID })
     .onConflictDoNothing();
 
   await db.insert(relation)
-    .values({ id: 'isAbout', label: 'Is About' })
+    .values({ id: RELATION_ID, label: RELATION_LABEL })
     .onConflictDoNothing();
 
   console.log(`Streaming ${filePath}...`);
@@ -132,17 +152,17 @@ export async function ingest(filePath: string) {
     featureBatch.push({
       id: featureId,
       url: row.url,
-      recordType: 'text',
+      recordType: RECORD_TYPE,
       label: row.title || '',
       description: row.text || null,
       contentUrl: row.url,
       startDate,
       endDate,
-      datasetId: SOURCE_ID,
+      datasetId: DATASET_ID,
       entity
     });
 
-    linkBatch.push({ featureId, placeId, relationId: 'isAbout' });
+    linkBatch.push({ featureId, placeId, relationId: RELATION_ID });
     featureCount++;
     linkCount++;
 

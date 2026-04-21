@@ -15,6 +15,27 @@ import { organisations, datasets, relation, features, featureToPlace, address } 
 import type { MediaObjectEntity } from '@atm/shared';
 import { formatDateRange } from '../utils';
 
+// ═══════════════════════════════════════════════════════════════
+//  Organisation
+// ═══════════════════════════════════════════════════════════════
+const ORG_ID = 'stadsarchief';
+const ORG_LABEL = 'Amsterdam Stadsarchief';
+const ORG_URL = 'https://archief.amsterdam';
+
+// ═══════════════════════════════════════════════════════════════
+//  Dataset
+// ═══════════════════════════════════════════════════════════════
+const DATASET_ID = 'beeldbank';
+const DATASET_LABEL = 'Beeldbank';
+const DATASET_URL = 'https://archief.amsterdam/beeldbank';
+
+// ═══════════════════════════════════════════════════════════════
+//  Feature metadata
+// ═══════════════════════════════════════════════════════════════
+const RECORD_TYPE = 'image';
+const RELATION_ID = 'isAbout';
+const RELATION_LABEL = 'Is About';
+
 const BATCH_SIZE = 1000;
 
 interface RawRow {
@@ -34,15 +55,15 @@ type PlaceRow = { place_id: string };
 
 export async function ingest(filePath: string) {
   await db.insert(organisations)
-    .values({ id: 'stadsarchief', label: 'Amsterdam Stadsarchief', url: 'https://archief.amsterdam' })
+    .values({ id: ORG_ID, label: ORG_LABEL, url: ORG_URL })
     .onConflictDoNothing();
 
   await db.insert(datasets)
-    .values({ id: 'beeldbank', label: 'Beeldbank', url: 'https://archief.amsterdam/beeldbank', organisationId: 'stadsarchief' })
+    .values({ id: DATASET_ID, label: DATASET_LABEL, url: DATASET_URL, organisationId: ORG_ID })
     .onConflictDoNothing();
 
   await db.insert(relation)
-    .values({ id: 'isAbout', label: 'Is About' })
+    .values({ id: RELATION_ID, label: RELATION_LABEL })
     .onConflictDoNothing();
 
   console.log(`Streaming ${filePath}...`);
@@ -110,12 +131,12 @@ export async function ingest(filePath: string) {
       featureBatch.push({
         id: featureId,
         url: sourceUrl,
-        recordType: 'image',
+        recordType: RECORD_TYPE,
         label: name,
         contentUrl,
         startDate,
         endDate,
-        datasetId: 'beeldbank',
+        datasetId: DATASET_ID,
         entity
       });
 
@@ -129,7 +150,7 @@ export async function ingest(filePath: string) {
         seenLinks.add(linkKey);
         const placeId = await resolvePlaceId(adamlinkUri);
         if (placeId) {
-          linkBatch.push({ featureId, placeId, relationId: 'isAbout' });
+          linkBatch.push({ featureId, placeId, relationId: RELATION_ID });
           linkCount++;
         } else {
           skippedLinks++;

@@ -87,7 +87,7 @@ erDiagram
     features {
         uuid id PK "generated UUID"
         text url  "e.g. https://archief.amsterdam/beeldbank/detail/00007c22-..."
-        text record_type  "image | text | person | video | audio | event"
+        text record_type  "image | text | person"
         text label  "e.g. Rosendaalstraat 91-97"
         text description  "e.g. Photo of street corner"
         text content_url  "e.g. https://images.memorix.nl/..."
@@ -258,7 +258,7 @@ The app needs a PostgreSQL + PostGIS database. In production there are two modes
 
 Pushing to `main` triggers a GitHub Actions workflow that runs the tests, builds the app image, and pushes it to GitHub Container Registry (GHCR) tagged `production` and `production-<sha>`. The workflow **does not** deploy to the server — pulling and restarting is a manual step (see below). This keeps the server's SSH surface private.
 
-### First time server setup
+### First time server setup (external DB)
 
 ```bash
 ssh user@server
@@ -295,6 +295,54 @@ bun run db:rebuild-index
 docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.production.yml up -d app
 ```
 
+### First time server setup (self-hosted)
+
+Use this when you want the app *and* Postgres to run in Docker on the same VPS.
+
+```bash
+ssh user@server
+
+# Install Bun
+curl -fsSL https://bun.sh/install | bash
+
+# Clone repo
+git clone git@github.com:amsterdamtimemachine/data-index.git ~/data-index && cd ~/data-index
+bun install
+
+# Set up production env — defaults target the bundled DB
+cp .env.example .env
+# Edit .env — change DB_PASSWORD (and DB_USER / DB_NAME if you want).
+# Leave DB_HOST=localhost (workstation CLI hits the mapped DB port; the
+# self-hosted overlay overrides DB_HOST for the app container internally).
+
+# Optional: install Satoshi font (download from https://www.fontshare.com/fonts/satoshi,
+# convert to woff/woff2, drop files into packages/app/static/fonts/).
+# Without it, the UI falls back to the system sans-serif.
+
+# Start the bundled Postgres + PostGIS (production overlay binds it to loopback)
+docker compose --env-file .env \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.self-hosted.yml \
+  -f docker/docker-compose.production.yml up -d dataindex-db
+
+# Push schema
+bun run db:push-schema
+
+# Ingest data
+bun run db:ingest -s lps -f <path-to-lps.csv>
+bun run db:ingest -s adressen -f <path-to-adressen.csv>
+bun run db:ingest -s beeldbank -f <path-to-beeldbank.csv>
+bun run db:ingest -s joods-monument -f <path-to-results_jm.csv>
+bun run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
+bun run db:rebuild-index
+
+# Start the app container alongside the DB
+docker compose --env-file .env \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.self-hosted.yml \
+  -f docker/docker-compose.production.yml up -d app
+```
+
 ### Deploying a new image
 
 Every push to `main` rebuilds the image and pushes it to GHCR. To roll it out, SSH into the VPS and pull + restart manually:
@@ -310,8 +358,6 @@ echo $GHCR_TOKEN | docker login ghcr.io -u <github-user> --password-stdin
 docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.production.yml pull app
 docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.production.yml up -d app
 ```
-
-SSH is also used for data ingestion and index rebuilds.
 
 ### Environment variables
 

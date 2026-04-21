@@ -15,9 +15,34 @@ import { db } from '../../client';
 import { organisations, datasets, relation, features, featureToPlace, address } from '../../schema';
 import type { PersonEntity } from '@atm/shared';
 
-const SOURCE_ID = 'joods-monument';
+// ═══════════════════════════════════════════════════════════════
+//  Organisation
+// ═══════════════════════════════════════════════════════════════
+const ORG_ID = 'joods-monument';
+const ORG_LABEL = 'Joods Monument';
+const ORG_URL = 'https://www.joodsmonument.nl';
+
+// ═══════════════════════════════════════════════════════════════
+//  Dataset
+// ═══════════════════════════════════════════════════════════════
+const DATASET_ID = 'joods-monument';
+const DATASET_LABEL = 'Joods Monument';
+const DATASET_URL = 'https://www.joodsmonument.nl';
+
+// ═══════════════════════════════════════════════════════════════
+//  Feature metadata
+// ═══════════════════════════════════════════════════════════════
+const RECORD_TYPE = 'person';
+const RELATION_ID = 'hadLastLivingLocation';
+const RELATION_LABEL = 'Had last living location';
+
+/** All Joods Monument features use this fixed date range. */
 const START_DATE = '1900-01-01';
 const END_DATE = '1945-12-31';
+
+/** Prefix for places created on-the-fly when an adamlink URI isn't in LPS. */
+const NEW_PLACE_PREFIX = 'jm-';
+
 const BATCH_SIZE = 1000;
 
 interface RawRow {
@@ -37,15 +62,15 @@ type PlaceRow = { place_id: string };
 
 export async function ingest(filePath: string) {
   await db.insert(organisations)
-    .values({ id: 'joods-monument', label: 'Joods Monument', url: 'https://www.joodsmonument.nl' })
+    .values({ id: ORG_ID, label: ORG_LABEL, url: ORG_URL })
     .onConflictDoNothing();
 
   await db.insert(datasets)
-    .values({ id: SOURCE_ID, label: 'Joods Monument', url: 'https://www.joodsmonument.nl', organisationId: 'joods-monument' })
+    .values({ id: DATASET_ID, label: DATASET_LABEL, url: DATASET_URL, organisationId: ORG_ID })
     .onConflictDoNothing();
 
   await db.insert(relation)
-    .values({ id: 'hadLastLivingLocation', label: 'Had last living location' })
+    .values({ id: RELATION_ID, label: RELATION_LABEL })
     .onConflictDoNothing();
 
   console.log(`Streaming ${filePath}...`);
@@ -72,7 +97,7 @@ export async function ingest(filePath: string) {
     // Address not in LPS — create new place + address if we have geometry
     if (wkt) {
       newPlaceCounter++;
-      const placeId = `jm-${newPlaceCounter}`;
+      const placeId = `${NEW_PLACE_PREFIX}${newPlaceCounter}`;
 
       await db.execute(sql`
         INSERT INTO place (id, type, geometry)
@@ -83,7 +108,7 @@ export async function ingest(filePath: string) {
       await db.insert(address).values({
         id: adamlinkUri,
         placeId,
-        source: SOURCE_ID
+        source: DATASET_ID
       }).onConflictDoNothing();
 
       placeIdCache.set(adamlinkUri, placeId);
@@ -132,16 +157,16 @@ export async function ingest(filePath: string) {
     featureBatch.push({
       id: featureId,
       url: row.person,
-      recordType: 'person',
+      recordType: RECORD_TYPE,
       label: row.name,
       startDate: START_DATE,
       endDate: END_DATE,
-      datasetId: SOURCE_ID,
+      datasetId: DATASET_ID,
       entity
     });
 
     if (placeId) {
-      linkBatch.push({ featureId, placeId, relationId: 'hadLastLivingLocation' });
+      linkBatch.push({ featureId, placeId, relationId: RELATION_ID });
       linkCount++;
     } else {
       skippedLinks++;

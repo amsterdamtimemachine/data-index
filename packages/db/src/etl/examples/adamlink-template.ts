@@ -8,7 +8,7 @@
  *
  * To use:
  * 1. Copy to packages/db/src/etl/sources/<your-dataset>.ts
- * 2. Update SOURCE_ID, organisation, dataset, and relation
+ * 2. Fill in the Organisation / Dataset / Feature metadata blocks at the top
  * 3. Adjust RawRow to match your CSV/JSON structure
  * 4. Adjust the entity type and field mapping
  * 5. Run: bun run db:ingest -s <your-dataset> -f <path-to-file>
@@ -21,7 +21,27 @@ import { organisations, datasets, relation, features, featureToPlace, address } 
 import type { MediaObjectEntity } from '@atm/shared';
 import { formatDateRange } from '../utils';
 
-const SOURCE_ID = 'my-dataset';
+// ═══════════════════════════════════════════════════════════════
+//  Organisation
+// ═══════════════════════════════════════════════════════════════
+const ORG_ID = 'my-org';
+const ORG_LABEL = 'My Organisation';
+const ORG_URL = 'https://org-url.com';
+
+// ═══════════════════════════════════════════════════════════════
+//  Dataset
+// ═══════════════════════════════════════════════════════════════
+const DATASET_ID = 'my-dataset';
+const DATASET_LABEL = 'My Dataset';
+const DATASET_URL = 'https://dataset-url.com';
+
+// ═══════════════════════════════════════════════════════════════
+//  Feature metadata
+// ═══════════════════════════════════════════════════════════════
+const RECORD_TYPE = 'image'; // 'image' | 'text' | 'person'
+const RELATION_ID = 'isAbout';
+const RELATION_LABEL = 'Is About';
+
 const BATCH_SIZE = 1000;
 
 interface RawRow {
@@ -37,15 +57,15 @@ type PlaceRow = { place_id: string };
 
 export async function ingest(filePath: string) {
   await db.insert(organisations)
-    .values({ id: 'my-org', label: 'My Organisation', url: 'https://org-url.com' })
+    .values({ id: ORG_ID, label: ORG_LABEL, url: ORG_URL })
     .onConflictDoNothing();
 
   await db.insert(datasets)
-    .values({ id: SOURCE_ID, label: 'My Dataset', url: 'https://dataset-url.com', organisationId: 'my-org' })
+    .values({ id: DATASET_ID, label: DATASET_LABEL, url: DATASET_URL, organisationId: ORG_ID })
     .onConflictDoNothing();
 
   await db.insert(relation)
-    .values({ id: 'isAbout', label: 'Is About' })
+    .values({ id: RELATION_ID, label: RELATION_LABEL })
     .onConflictDoNothing();
 
   // Cache: adamlink URI → place ID
@@ -98,16 +118,16 @@ export async function ingest(filePath: string) {
     featureBatch.push({
       id: featureId,
       url: row.id,
-      recordType: 'image',
+      recordType: RECORD_TYPE,
       label: row.title,
       contentUrl: row.content_url || null,
       startDate,
       endDate,
-      datasetId: SOURCE_ID,
+      datasetId: DATASET_ID,
       entity
     });
 
-    linkBatch.push({ featureId, placeId, relationId: 'isAbout' });
+    linkBatch.push({ featureId, placeId, relationId: RELATION_ID });
     count++;
 
     if (featureBatch.length >= BATCH_SIZE) await flush();

@@ -8,7 +8,8 @@
  *
  * To use:
  * 1. Copy to packages/db/src/etl/sources/<your-dataset>.ts
- * 2. Update SOURCE_ID, organisation, dataset, relation, and MATCH_THRESHOLD_METERS
+ * 2. Fill in the Organisation / Dataset / Feature metadata blocks at the top
+ *    (and tune MATCH_THRESHOLD_METERS for your data)
  * 3. Adjust RawRow to match your CSV/JSON structure
  * 4. Adjust the entity type and field mapping
  * 5. Run: bun run db:ingest -s <your-dataset> -f <path-to-file>
@@ -21,14 +22,34 @@ import { organisations, datasets, relation, features, featureToPlace } from '../
 import type { CreativeWorkEntity } from '@atm/shared';
 import { formatDateRange } from '../utils';
 
-const SOURCE_ID = 'my-dataset';
-const BATCH_SIZE = 1000;
+// ═══════════════════════════════════════════════════════════════
+//  Organisation
+// ═══════════════════════════════════════════════════════════════
+const ORG_ID = 'my-org';
+const ORG_LABEL = 'My Organisation';
+const ORG_URL = 'https://org-url.com';
 
-/**
- * Maximum distance in meters to match a geometry to an existing place.
- * Increase for less precise coordinates, decrease for denser areas.
- */
+// ═══════════════════════════════════════════════════════════════
+//  Dataset
+// ═══════════════════════════════════════════════════════════════
+const DATASET_ID = 'my-dataset';
+const DATASET_LABEL = 'My Dataset';
+const DATASET_URL = 'https://dataset-url.com';
+
+// ═══════════════════════════════════════════════════════════════
+//  Feature metadata
+// ═══════════════════════════════════════════════════════════════
+const RECORD_TYPE = 'text'; // 'image' | 'text' | 'person'
+const RELATION_ID = 'isAbout';
+const RELATION_LABEL = 'Is About';
+
+// ═══════════════════════════════════════════════════════════════
+//  Ingestion tuning
+// ═══════════════════════════════════════════════════════════════
+/** Max distance in meters to match a geometry to an existing place.
+ *  Increase for less precise coordinates, decrease for denser areas. */
 const MATCH_THRESHOLD_METERS = 5;
+const BATCH_SIZE = 1000;
 
 interface RawRow {
   id: string;
@@ -43,15 +64,15 @@ type PlaceMatch = { place_id: string };
 
 export async function ingest(filePath: string) {
   await db.insert(organisations)
-    .values({ id: 'my-org', label: 'My Organisation', url: 'https://org-url.com' })
+    .values({ id: ORG_ID, label: ORG_LABEL, url: ORG_URL })
     .onConflictDoNothing();
 
   await db.insert(datasets)
-    .values({ id: SOURCE_ID, label: 'My Dataset', url: 'https://dataset-url.com', organisationId: 'my-org' })
+    .values({ id: DATASET_ID, label: DATASET_LABEL, url: DATASET_URL, organisationId: ORG_ID })
     .onConflictDoNothing();
 
   await db.insert(relation)
-    .values({ id: 'isAbout', label: 'Is About' })
+    .values({ id: RELATION_ID, label: RELATION_LABEL })
     .onConflictDoNothing();
 
   console.log(`Match threshold: ${MATCH_THRESHOLD_METERS}m`);
@@ -120,16 +141,16 @@ export async function ingest(filePath: string) {
     featureBatch.push({
       id: featureId,
       url: row.url,
-      recordType: 'text',
+      recordType: RECORD_TYPE,
       label: row.title || '',
       contentUrl: row.url,
       startDate,
       endDate,
-      datasetId: SOURCE_ID,
+      datasetId: DATASET_ID,
       entity
     });
 
-    linkBatch.push({ featureId, placeId, relationId: 'isAbout' });
+    linkBatch.push({ featureId, placeId, relationId: RELATION_ID });
     count++;
 
     if (featureBatch.length >= BATCH_SIZE) await flush();
