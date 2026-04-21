@@ -126,24 +126,9 @@ erDiagram
 
 The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Adamlink is a Linked Open Data service that connects historical Amsterdam address registries to point geometries, enabling features to be linked to physical locations with historical address names.
 
+Adamlink place data must be ingested before any dataset — run `lps` first, then `adressen`. See the [Development](#development) or [Production](#production) sections for the full ingestion order.
+
 If you are deploying this for a different city, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. See the Joods Monument and Delpher ingestion scripts for examples of creating places on the fly or matching by geometry. The core requirement is that each feature links to a `place` row that has a geometry.
-
-Ingest the Adamlink place data before any datasets:
-
-```bash
-# 1. Places + address mappings (must run first)
-bun run db:ingest -s lps -f <path-to-lps.csv>
-
-# 2. Address labels (must run after lps)
-bun run db:ingest -s adressen -f <path-to-adressen.csv>
-
-# 3. Your datasets (any order)
-bun run db:ingest -s dataset1 -f <path-to-file>
-bun run db:ingest -s dataset2 -f <path-to-file>
-
-# 4. Rebuild index (must run last)
-bun run db:rebuild-index
-```
 
 ### Minimum required fields per feature
 
@@ -296,8 +281,6 @@ docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-com
 ```
 
 ### First time server setup (self-hosted)
-
-Use this when you want the app *and* Postgres to run in Docker on the same VPS.
 
 ```bash
 ssh user@server
