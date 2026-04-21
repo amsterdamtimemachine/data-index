@@ -200,48 +200,29 @@ bun run db:rebuild-index
 - [Bun](https://bun.sh) (latest)
 - [Docker](https://docker.com) with Docker Compose
 
-### Setup
+### First time setup
 
 ```bash
 bun install
 cp .env.example .env
-```
 
-### Database options
-
-The app needs a PostgreSQL + PostGIS database. You can either spin one up via Docker (self-hosted, recommended for dev) or point at an existing external database.
-
-**Self-hosted** — `.env`'s `DB_HOST` stays `localhost` so workstation CLI tools (`bun run db:push-schema`, `bun run db:ingest`) can reach the bundled container on the mapped port. The self-hosted compose overlay overrides `DB_HOST` to the compose network name for the app container only.
-
-**External DB** — set `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` in `.env` to point at your existing server. Skip the self-hosted overlay; the app container then uses the `.env` values directly.
-
-### First-time database setup
-
-```bash
-# 1. Start database (self-hosted only — skip if using external DB)
+# Start bundled Postgres + PostGIS
 bun run docker:db:up
 
-# 2. Push schema (works against either self-hosted or external DB)
+# Push schema
 bun run db:push-schema
 
-# 3. Ingest place data (if using Adamlink)
+# Ingest place data (required before any dataset)
 bun run db:ingest -s lps -f <path-to-lps.csv>
 bun run db:ingest -s adressen -f <path-to-adressen.csv>
 
-# 4. Ingest datasets (any order)
+# Ingest datasets (any order)
 bun run db:ingest -s <dataset-name> -f <path-to-file>
 
-# 5. Rebuild index
+# Rebuild index
 bun run db:rebuild-index
-```
 
-### Font
-
-The UI is built around [Satoshi](https://www.fontshare.com/fonts/satoshi) (Light, Regular, Medium, Bold weights + italics). Download it from Fontshare and convert to `woff`/`woff2` format, then place the files in `packages/app/static/fonts/`. The app falls back to the system sans-serif if Satoshi is not available.
-
-### Frontend dev server
-
-```bash
+# Run the frontend
 bun run dev    # http://localhost:5175
 ```
 
@@ -266,19 +247,18 @@ CI runs the full suite on every push to `main` using a GitHub Actions service co
 
 ## Production
 
+### Deployment modes
+
+The app needs a PostgreSQL + PostGIS database. In production there are two modes:
+
+- **External DB** (default for ATM) — connect to an existing Postgres server. `docker compose … -f docker-compose.yml -f docker-compose.production.yml up -d` runs only the `app` container; DB credentials come from `.env`.
+- **Self-hosted** — bundle Postgres alongside the app. Add `-f docker/docker-compose.self-hosted.yml` to the compose chain; the overlay adds a `dataindex-db` service and overrides `DB_HOST` for the app container only.
+
 ### CI/CD
 
-Pushing to `main` triggers a GitHub Actions workflow that:
-1. Runs tests and builds the app
-2. Builds a Docker image and pushes it to GitHub Container Registry (GHCR) tagged as `production` and `production-<sha>`
+Pushing to `main` triggers a GitHub Actions workflow that runs the tests, builds the app image, and pushes it to GitHub Container Registry (GHCR) tagged `production` and `production-<sha>`. The workflow **does not** deploy to the server — pulling and restarting is a manual step (see below). This keeps the server's SSH surface private.
 
-The workflow **does not** deploy to the server. Deploying the new image is a manual step performed on the VPS — see "Deploying a new image" below. This keeps the server's SSH surface private and removes the need for deployment secrets in GitHub.
-
-### GitHub secrets
-
-No secrets beyond the default `GITHUB_TOKEN` (used to push to GHCR) are required.
-
-### First-time server setup
+### First time server setup
 
 ```bash
 ssh user@server
@@ -296,8 +276,9 @@ cp .env.example .env
 # match the production database. The app does NOT manage this server —
 # assume it's already running and reachable from the VPS.
 
-# Optional: add Satoshi font (download from https://www.fontshare.com/fonts/satoshi)
-# Place woff/woff2 files in packages/app/static/fonts/
+# Optional: install Satoshi font (download from https://www.fontshare.com/fonts/satoshi,
+# convert to woff/woff2, drop files into packages/app/static/fonts/).
+# Without it, the UI falls back to the system sans-serif.
 
 # Push schema into the existing DB
 bun run db:push-schema
@@ -313,8 +294,6 @@ bun run db:rebuild-index
 # Start the app (connects to the external DB defined in .env)
 docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.production.yml up -d app
 ```
-
-> **Note:** production uses an external Postgres (ATM's existing server). The compose files in production mode only manage the `app` container. If you instead want a single-box deploy with a bundled DB, add `-f docker/docker-compose.self-hosted.yml` to the compose commands above.
 
 ### Deploying a new image
 
