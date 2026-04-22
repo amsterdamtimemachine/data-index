@@ -5,12 +5,13 @@ import type {
   FeaturesQuery,
   FeatureResult,
   FeaturesResponse,
+  Entity,
 } from '@atm/shared';
 import { computeTimeSlices } from './time-slices';
 import { db } from '../client';
 import { featureToPlace, place } from '../schema';
 
-// Query result types (internal)
+// Query result types 
 type BaseCellBoundsRow = {
   min_x: number;
   max_x: number;
@@ -37,7 +38,7 @@ type FeatureRow = {
   organisation_label: string | null;
   organisation_url: string | null;
   relevance_score: number | null;
-  entity: any | null;
+  entity: Entity | null;
   relation_id: string | null;
   current_address: string | null;
   historical_address: string | null;

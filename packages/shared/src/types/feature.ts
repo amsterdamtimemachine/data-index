@@ -9,13 +9,13 @@ export type TagOperator = 'AND' | 'OR';
 /**
  * Schema.org entity types
  */
-export interface Entity {
+export interface EntityBase {
   id?: string;
   type: "Person" | "CreativeWork" | "MediaObject";
   name: string;
 }
 
-export interface PersonEntity extends Entity {
+export interface PersonEntity extends EntityBase {
   type: "Person";
   birthDate?: string;
   birthPlace?: string;
@@ -23,7 +23,7 @@ export interface PersonEntity extends Entity {
   deathPlace?: string;
 }
 
-export interface CreativeWorkEntity extends Entity {
+export interface CreativeWorkEntity extends EntityBase {
   dateCreated?: string;
   author?: string;
   url?: string;
@@ -33,6 +33,9 @@ export interface MediaObjectEntity extends CreativeWorkEntity {
   type: "MediaObject";
   contentUrl: string;
 }
+
+/** Discriminated union of all concrete entity types. */
+export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity;
 
 
 /**
@@ -68,7 +71,7 @@ export interface FeatureResult {
   organisationUrl?: string;
   spatialFrequency: number;
   temporalFrequency: number;
-  entity?: Entity | PersonEntity | MediaObjectEntity;
+  entity?: Entity;
   relationId?: string;
   currentAddress?: string;
   historicalAddress?: string;

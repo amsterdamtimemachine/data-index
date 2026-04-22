@@ -4,7 +4,7 @@
 	import { formatDate, formatDateRange } from '$utils/format';
 
 	type Props = {
-		entity: Entity | PersonEntity | MediaObjectEntity;
+		entity: Entity;
 		class?: string;
 	};
 

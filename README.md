@@ -120,6 +120,32 @@ erDiagram
 - **spatial_frequency**: How many grid cells a feature spans. Features covering fewer cells are more geographically specific and rank higher in search results
 - **temporal_frequency**: How many base time bins a feature spans. Features covering fewer bins are more temporally specific and rank higher in search results
 
+## Indexing
+
+The data index is restricted to historical features that can be both spatially located (linked to a place with geometry) and temporally located (with a date range). `rebuild-index` precomputes a fixed-resolution spatial grid and a fixed-resolution timeline once after ingestion; the UI then aggregates those base units into coarser display grids and histogram bins on demand.
+
+### Spatial
+
+Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a single point geometry in RD coordinates (EPSG:28992, metres). `rebuild-index` overlays the city with a regular grid of `CELL_SIZE_METERS`-wide cells (default 100m) anchored to the bounding box of all geometries in the `place` table, and writes one row to `feature_cells` for each (feature, cell) pair the feature touches. A feature linked to a single place lands in one cell; a feature linked to several places spans as many cells as those places fall into. Heatmap requests then group `feature_cells` by `(cell_x, cell_y)` and count, instead of scanning every feature row.
+
+Only WKT POINT geometries are currently supported by the index. The `place.geometry` column is typed to accept LINESTRING and POLYGON as well, but indexing them (enumerating every cell a shape covers) is not yet implemented.
+
+### Temporal
+
+Each feature has `start_date` and `end_date`, both inclusive at the year level — a feature with `start_date=1900-06-15` and `end_date=1900-08-30` covers exactly the year 1900. Time is divided into base bins of `BASE_BIN_SIZE` years (default 10), each spanning `[bin_start, bin_end)` — start year inclusive, end year exclusive. A feature is assigned to every bin its year range overlaps: a feature spanning 1900–1925 with 10-year bins falls into `[1900,1910)`, `[1910,1920)`, and `[1920,1930)`. Its `temporal_frequency` is the count of those bins (3 here).
+
+The timeline (rendered as a histogram) uses the same overlap logic but at the display bin size requested by the client. Display bin size is clamped to `[BIN_SIZE_MIN, BIN_SIZE_MAX]`.
+
+### Unique features rank higher
+
+Indexing also stores two counters per feature. `spatial_frequency` counts the base cells a feature's place(s) touch. `temporal_frequency` counts the base bins its date range covers. They serve as a specificity signal: a photograph of one building on one day is more useful than a region-wide survey spanning centuries. Both are normalised by the dataset maximum and summed into a `relevance_score`:
+
+```
+relevance_score = spatial_frequency / max_spatial + temporal_frequency / max_temporal
+```
+
+Lower scores mean features more unique to the time and place.
+
 ## Data ingestion
 
 ### Place data
@@ -191,6 +217,10 @@ bun run db:rebuild-index
 bun install
 cp .env.example .env
 
+# Optional: install Satoshi font (download from https://www.fontshare.com/fonts/satoshi,
+# convert to woff/woff2, drop files into packages/app/static/fonts/).
+# Without it, the UI falls back to the system sans-serif.
+
 # Start bundled Postgres + PostGIS
 bun run docker:db:up
 
@@ -228,20 +258,14 @@ bun run test:unit      # unit tests only (no DB needed)
 bun run test:db:down   # stop and wipe the test DB
 ```
 
-CI runs the full suite on every push to `main` using a GitHub Actions service container with the same PostGIS image.
-
 ## Production
 
 ### Deployment modes
 
 The app needs a PostgreSQL + PostGIS database. In production there are two modes:
 
-- **External DB** (default for ATM) — connect to an existing Postgres server. `docker compose … -f docker-compose.yml -f docker-compose.production.yml up -d` runs only the `app` container; DB credentials come from `.env`.
+- **External DB** — connect to an existing Postgres server. `docker compose … -f docker-compose.yml -f docker-compose.production.yml up -d` runs only the `app` container; DB credentials come from `.env`.
 - **Self-hosted** — bundle Postgres alongside the app. Add `-f docker/docker-compose.self-hosted.yml` to the compose chain; the overlay adds a `dataindex-db` service and overrides `DB_HOST` for the app container only.
-
-### CI/CD
-
-Pushing to `main` triggers a GitHub Actions workflow that runs the tests, builds the app image, and pushes it to GitHub Container Registry (GHCR) tagged `production` and `production-<sha>`. The workflow **does not** deploy to the server — pulling and restarting is a manual step (see below). This keeps the server's SSH surface private.
 
 ### First time server setup (external DB)
 
@@ -326,9 +350,11 @@ docker compose --env-file .env \
   -f docker/docker-compose.production.yml up -d app
 ```
 
-### Deploying a new image
+### CI/CD
 
-Every push to `main` rebuilds the image and pushes it to GHCR. To roll it out, SSH into the VPS and pull + restart manually:
+Pushing to `main` triggers a GitHub Actions workflow that runs the full test suite (inside a PostGIS service container matching the production image), builds the app image, and pushes it to GitHub Container Registry (GHCR) tagged `production` and `production-<sha>`. The workflow **does not** deploy to the server — pulling and restarting is a manual step. This keeps the server's SSH surface private.
+
+To roll out a new image, SSH into the VPS and pull + restart manually:
 
 ```bash
 ssh user@server
