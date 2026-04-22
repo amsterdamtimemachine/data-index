@@ -276,25 +276,30 @@ git clone git@github.com:amsterdamtimemachine/data-index.git ~/data-index && cd 
 bun install
 
 # Set up production env — point at the existing Postgres server
-cp .env.example .env
-# Edit .env — set DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME to
-# match the production database. The app does NOT manage this server —
-# assume it's already running and reachable from the VPS.
+cp .env.example .env.prod
+# Edit .env.prod — set DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME to
+# match the production database, and set APP_PORT (defaults to 3000).
+# The app does NOT manage this server — assume it's already running and
+# reachable from the VPS.
 
-# Push schema into the existing DB
-bun run db:push-schema
+# Push schema into the existing DB (uses .env.prod via Bun's --env-file flag)
+bun --env-file=.env.prod run db:push-schema
 
-# Ingest data
-bun run db:ingest -s lps -f <path-to-lps.csv>
-bun run db:ingest -s adressen -f <path-to-adressen.csv>
-bun run db:ingest -s beeldbank -f <path-to-beeldbank.csv>
-bun run db:ingest -s joods-monument -f <path-to-results_jm.csv>
-bun run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
-bun run db:rebuild-index
+# Ingest data (same env file)
+bun --env-file=.env.prod run db:ingest -s lps -f <path-to-lps.csv>
+bun --env-file=.env.prod run db:ingest -s adressen -f <path-to-adressen.csv>
+bun --env-file=.env.prod run db:ingest -s beeldbank -f <path-to-beeldbank.csv>
+bun --env-file=.env.prod run db:ingest -s joods-monument -f <path-to-results_jm.csv>
+bun --env-file=.env.prod run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
+bun --env-file=.env.prod run db:rebuild-index
 
-# Start the app (connects to the external DB defined in .env)
-docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.production.yml up -d app
+# Start the app (connects to the external DB defined in .env.prod)
+docker compose --project-name atm-prod --env-file .env.prod \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.production.yml up -d app
 ```
+
+The `--project-name atm-prod` is what scopes container/network/volume names to this deployment. It's required if you also want to run a `staging` deployment alongside (see "Deploying a new image" below).
 
 ### First time server setup (self-hosted)
 
@@ -309,30 +314,30 @@ git clone git@github.com:amsterdamtimemachine/data-index.git ~/data-index && cd 
 bun install
 
 # Set up production env — defaults target the bundled DB
-cp .env.example .env
-# Edit .env — change DB_PASSWORD (and DB_USER / DB_NAME if you want).
+cp .env.example .env.prod
+# Edit .env.prod — change DB_PASSWORD (and DB_USER / DB_NAME if you want).
 # Leave DB_HOST=localhost (workstation CLI hits the mapped DB port; the
 # self-hosted overlay overrides DB_HOST for the app container internally).
 
 # Start the bundled Postgres + PostGIS (production overlay binds it to loopback)
-docker compose --env-file .env \
+docker compose --project-name atm-prod --env-file .env.prod \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.self-hosted.yml \
   -f docker/docker-compose.production.yml up -d dataindex-db
 
 # Push schema
-bun run db:push-schema
+bun --env-file=.env.prod run db:push-schema
 
 # Ingest data
-bun run db:ingest -s lps -f <path-to-lps.csv>
-bun run db:ingest -s adressen -f <path-to-adressen.csv>
-bun run db:ingest -s beeldbank -f <path-to-beeldbank.csv>
-bun run db:ingest -s joods-monument -f <path-to-results_jm.csv>
-bun run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
-bun run db:rebuild-index
+bun --env-file=.env.prod run db:ingest -s lps -f <path-to-lps.csv>
+bun --env-file=.env.prod run db:ingest -s adressen -f <path-to-adressen.csv>
+bun --env-file=.env.prod run db:ingest -s beeldbank -f <path-to-beeldbank.csv>
+bun --env-file=.env.prod run db:ingest -s joods-monument -f <path-to-results_jm.csv>
+bun --env-file=.env.prod run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
+bun --env-file=.env.prod run db:rebuild-index
 
 # Start the app container alongside the DB
-docker compose --env-file .env \
+docker compose --project-name atm-prod --env-file .env.prod \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.self-hosted.yml \
   -f docker/docker-compose.production.yml up -d app
@@ -340,9 +345,18 @@ docker compose --env-file .env \
 
 ### CI/CD
 
-Pushing to `main` triggers a GitHub Actions workflow that runs the full test suite (inside a PostGIS service container matching the production image), builds the app image, and pushes it to GitHub Container Registry (GHCR) tagged `production` and `production-<sha>`. The workflow **does not** deploy to the server — pulling and restarting is a manual step. This keeps the server's SSH surface private.
+Two workflows publish images to GitHub Container Registry (GHCR). Both run the full test suite (inside a PostGIS service container) and only push if tests pass. Neither deploys to the server — pulling and restarting is a manual step, which keeps the server's SSH surface private.
 
-To roll out a new image, SSH into the VPS and pull + restart manually:
+| Branch | Workflow | Image tags |
+|---|---|---|
+| `main` | `.github/workflows/production.yml` | `production`, `production-<sha>` |
+| `staging` | `.github/workflows/staging.yml` | `staging`, `staging-<sha>` |
+
+Use `staging` to test a build before merging to `main`: push your branch into `staging`, wait for the workflow, then pull the staging image on the VPS to verify.
+
+### Deploying a new image
+
+Each deployment is scoped by `--project-name` and reads its own `--env-file` so production and staging don't collide. The first time you set up staging, copy `.env.example` to `.env.staging` and edit it to point at the staging Postgres + a free `APP_PORT` (e.g. `3001`).
 
 ```bash
 ssh user@server
@@ -351,10 +365,24 @@ cd ~/data-index
 # Log in to GHCR (one-time, or when token expires)
 echo $GHCR_TOKEN | docker login ghcr.io -u <github-user> --password-stdin
 
-# Pull and restart
-docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.production.yml pull app
-docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.production.yml up -d app
+# Production
+docker compose --project-name atm-prod --env-file .env.prod \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.production.yml pull app
+docker compose --project-name atm-prod --env-file .env.prod \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.production.yml up -d app
+
+# Staging
+docker compose --project-name atm-staging --env-file .env.staging \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.staging.yml pull app
+docker compose --project-name atm-staging --env-file .env.staging \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.staging.yml up -d app
 ```
+
+Both can run simultaneously as long as `.env.prod` and `.env.staging` set different `APP_PORT` values (and ideally point at different databases). `--project-name` keeps each deployment's containers, networks, and volumes isolated from the other.
 
 ### Environment variables
 

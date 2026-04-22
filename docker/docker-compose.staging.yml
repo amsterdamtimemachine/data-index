@@ -1,0 +1,18 @@
+# Staging overlay: same as production overlay but pulls the `staging`-tagged
+# image instead of `production`. Use in place of docker-compose.production.yml
+# when you want to run the staging build for testing.
+#
+#   docker compose --env-file .env \
+#     -f docker/docker-compose.yml \
+#     -f docker/docker-compose.staging.yml up -d
+services:
+  app:
+    image: ghcr.io/amsterdamtimemachine/data-index/app:staging
+    ports:
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+    environment:
+      DB_HOST: ${DB_HOST:?DB_HOST is required}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER:?DB_USER is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      DB_NAME: ${DB_NAME:?DB_NAME is required}
