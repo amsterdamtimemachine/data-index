@@ -208,7 +208,7 @@ bun run db:rebuild-index
 
 ### Prerequisites
 
-- [Bun](https://bun.sh) (latest)
+- [Bun](https://bun.sh)
 - [Docker](https://docker.com) with Docker Compose
 
 ### First time setup
@@ -256,12 +256,7 @@ bun run test:db:down   # stop and wipe the test DB
 
 ## Production
 
-### Deployment modes
-
-The app needs a PostgreSQL + PostGIS database. In production there are two modes:
-
-- **External DB** — connect to an existing Postgres server. `docker compose … -f docker-compose.yml -f docker-compose.production.yml up -d` runs only the `app` container; DB credentials come from `.env`.
-- **Self-hosted** — bundle Postgres alongside the app. Add `-f docker/docker-compose.self-hosted.yml` to the compose chain; the overlay adds a `dataindex-db` service and overrides `DB_HOST` for the app container only.
+The app needs a PostgreSQL + PostGIS database. In production there is **External DB** mode where Data index connects to an existing DB, and **self-hosted** mode where a Postgres container is bundled alongside the app container.
 
 ### First time server setup (external DB)
 
@@ -299,7 +294,7 @@ docker compose --project-name data-index-prod --env-file .env.prod \
   -f docker/docker-compose.production.yml up -d app
 ```
 
-The `--project-name data-index-prod` is what scopes container names to this deployment. It's required if you also want to run a `staging` deployment alongside (see "Deploying a new image" below).
+`--project-name data-index-prod` is necessary if you're running a staging deployment alongside. See below.
 
 #### Adding staging alongside
 
@@ -401,8 +396,6 @@ docker compose --project-name data-index-staging --env-file .env.staging \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.staging.yml up -d app
 ```
-
-Both can run simultaneously as long as `.env.prod` and `.env.staging` set different `APP_PORT` values (and ideally point at different databases). `--project-name` keeps each deployment's containers isolated from the other.
 
 ### Environment variables
 
