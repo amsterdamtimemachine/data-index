@@ -154,7 +154,9 @@ The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Ada
 
 Adamlink place data must be ingested before any dataset — run `lps` first, then `adressen`. See the [Development](#development) or [Production](#production) sections for the full ingestion order.
 
-If you are deploying this for a different city, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. See the Joods Monument and Delpher ingestion scripts for examples of creating places on the fly or matching by geometry. The core requirement is that each feature links to a `place` row that has a geometry.
+Every `place` row is sourced from Adamlink. Features that can't be resolved to an existing Adamlink place are skipped at ingest — no feature row is created and nothing unlinked lands in the database.
+
+If you are deploying this for a different city, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. The `geometry-template.ts` example shows how to match incoming coordinates to existing places; for creating new places, adapt the pattern from `lps.ts`. The core requirement is that each feature links to a `place` row that has a geometry.
 
 ### Minimum required fields per feature
 

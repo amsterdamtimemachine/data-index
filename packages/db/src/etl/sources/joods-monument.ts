@@ -2,9 +2,9 @@
  * Import Joods Monument (Jewish Monument) person data
  *
  * Parses CSV of Holocaust victims with last known addresses. Resolves adamlink
- * URIs → place IDs via the address table (populated by LPS). Features whose
- * adamlink URI isn't in LPS get no spatial link and are invisible to the
- * heatmap/timeline. All features get a fixed date range of 1900–1945.
+ * URIs → place IDs via the address table (populated by LPS). Rows whose
+ * adamlink URI isn't in LPS are skipped — no feature is created. All features
+ * get a fixed date range of 1900–1945.
  *
  * Usage: bun run db:ingest -s joods-monument -f <path-to-results_jm.csv>
  */
@@ -89,7 +89,7 @@ export async function ingest(filePath: string) {
 
   let featureCount = 0;
   let linkCount = 0;
-  let skippedLinks = 0;
+  let skipped = 0;
 
   let featureBatch: any[] = [];
   let linkBatch: { featureId: string; placeId: string; relationId: string }[] = [];
@@ -109,6 +109,10 @@ export async function ingest(filePath: string) {
     if (!row.person || !row.address) continue;
 
     const placeId = await resolvePlaceId(row.address);
+    if (!placeId) {
+      skipped++;
+      continue;
+    }
 
     const entity: PersonEntity = {
       type: 'Person',
@@ -132,25 +136,20 @@ export async function ingest(filePath: string) {
       entity
     });
 
-    if (placeId) {
-      linkBatch.push({ featureId, placeId, relationId: RELATION_ID });
-      linkCount++;
-    } else {
-      skippedLinks++;
-    }
-
+    linkBatch.push({ featureId, placeId, relationId: RELATION_ID });
     featureCount++;
+    linkCount++;
 
     if (featureBatch.length >= BATCH_SIZE) {
       await flush();
     }
 
-    if (featureCount % 1000 === 0) {
-      process.stdout.write(`\r  ${featureCount} persons, ${linkCount} links, ${skippedLinks} skipped`);
+    if ((featureCount + skipped) % 1000 === 0) {
+      process.stdout.write(`\r  ${featureCount} persons, ${skipped} skipped`);
     }
   }
 
   await flush();
 
-  console.log(`\nDone: ${featureCount} persons, ${linkCount} links, ${skippedLinks} skipped (no matching place)`);
+  console.log(`\nDone: ${featureCount} features, ${linkCount} links, ${skipped} skipped (no matching place)`);
 }
