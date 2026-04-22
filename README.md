@@ -299,7 +299,27 @@ docker compose --project-name data-index-prod --env-file .env.prod \
   -f docker/docker-compose.production.yml up -d app
 ```
 
-The `--project-name data-index-prod` is what scopes container/network/volume names to this deployment. It's required if you also want to run a `staging` deployment alongside (see "Deploying a new image" below).
+The `--project-name data-index-prod` is what scopes container names to this deployment. It's required if you also want to run a `staging` deployment alongside (see "Deploying a new image" below).
+
+#### Adding staging alongside
+
+```bash
+cp .env.example .env.staging
+# Edit .env.staging:
+#   - DB_* → point at a staging Postgres (don't reuse production's DB)
+#   - APP_PORT=3001 (or any free port ≠ production's)
+
+# Push schema + ingest into the staging DB
+bun --env-file=.env.staging run db:push-schema
+bun --env-file=.env.staging run db:ingest -s lps -f <path-to-lps.csv>
+# …and the other datasets, same pattern as production…
+bun --env-file=.env.staging run db:rebuild-index
+
+# Start the staging container alongside production
+docker compose --project-name data-index-staging --env-file .env.staging \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.staging.yml up -d app
+```
 
 ### First time server setup (self-hosted)
 
@@ -356,7 +376,7 @@ Use `staging` to test a build before merging to `main`: push your branch into `s
 
 ### Deploying a new image
 
-Each deployment is scoped by `--project-name` and reads its own `--env-file` so production and staging don't collide. The first time you set up staging, copy `.env.example` to `.env.staging` and edit it to point at the staging Postgres + a free `APP_PORT` (e.g. `3001`).
+Each deployment is scoped by `--project-name` and reads its own `--env-file` so production and staging don't collide.
 
 ```bash
 ssh user@server
@@ -382,7 +402,7 @@ docker compose --project-name data-index-staging --env-file .env.staging \
   -f docker/docker-compose.staging.yml up -d app
 ```
 
-Both can run simultaneously as long as `.env.prod` and `.env.staging` set different `APP_PORT` values (and ideally point at different databases). `--project-name` keeps each deployment's containers, networks, and volumes isolated from the other.
+Both can run simultaneously as long as `.env.prod` and `.env.staging` set different `APP_PORT` values (and ideally point at different databases). `--project-name` keeps each deployment's containers isolated from the other.
 
 ### Environment variables
 
