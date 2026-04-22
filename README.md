@@ -294,12 +294,12 @@ bun --env-file=.env.prod run db:ingest -s delpher -f <path-to-delpher_newspapers
 bun --env-file=.env.prod run db:rebuild-index
 
 # Start the app (connects to the external DB defined in .env.prod)
-docker compose --project-name atm-prod --env-file .env.prod \
+docker compose --project-name data-index-prod --env-file .env.prod \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.production.yml up -d app
 ```
 
-The `--project-name atm-prod` is what scopes container/network/volume names to this deployment. It's required if you also want to run a `staging` deployment alongside (see "Deploying a new image" below).
+The `--project-name data-index-prod` is what scopes container/network/volume names to this deployment. It's required if you also want to run a `staging` deployment alongside (see "Deploying a new image" below).
 
 ### First time server setup (self-hosted)
 
@@ -320,7 +320,7 @@ cp .env.example .env.prod
 # self-hosted overlay overrides DB_HOST for the app container internally).
 
 # Start the bundled Postgres + PostGIS (production overlay binds it to loopback)
-docker compose --project-name atm-prod --env-file .env.prod \
+docker compose --project-name data-index-prod --env-file .env.prod \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.self-hosted.yml \
   -f docker/docker-compose.production.yml up -d dataindex-db
@@ -337,7 +337,7 @@ bun --env-file=.env.prod run db:ingest -s delpher -f <path-to-delpher_newspapers
 bun --env-file=.env.prod run db:rebuild-index
 
 # Start the app container alongside the DB
-docker compose --project-name atm-prod --env-file .env.prod \
+docker compose --project-name data-index-prod --env-file .env.prod \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.self-hosted.yml \
   -f docker/docker-compose.production.yml up -d app
@@ -366,18 +366,18 @@ cd ~/data-index
 echo $GHCR_TOKEN | docker login ghcr.io -u <github-user> --password-stdin
 
 # Production
-docker compose --project-name atm-prod --env-file .env.prod \
+docker compose --project-name data-index-prod --env-file .env.prod \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.production.yml pull app
-docker compose --project-name atm-prod --env-file .env.prod \
+docker compose --project-name data-index-prod --env-file .env.prod \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.production.yml up -d app
 
 # Staging
-docker compose --project-name atm-staging --env-file .env.staging \
+docker compose --project-name data-index-staging --env-file .env.staging \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.staging.yml pull app
-docker compose --project-name atm-staging --env-file .env.staging \
+docker compose --project-name data-index-staging --env-file .env.staging \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.staging.yml up -d app
 ```
