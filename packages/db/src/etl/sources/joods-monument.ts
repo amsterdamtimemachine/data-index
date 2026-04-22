@@ -1,10 +1,10 @@
 /**
  * Import Joods Monument (Jewish Monument) person data
  *
- * Parses CSV of Holocaust victims with last known addresses.
- * Resolves adamlink URIs → place IDs via the address table.
- * Creates new places for addresses not found in LPS.
- * All features get a fixed date range of 1900–1945.
+ * Parses CSV of Holocaust victims with last known addresses. Resolves adamlink
+ * URIs → place IDs via the address table (populated by LPS). Features whose
+ * adamlink URI isn't in LPS get no spatial link and are invisible to the
+ * heatmap/timeline. All features get a fixed date range of 1900–1945.
  *
  * Usage: bun run db:ingest -s joods-monument -f <path-to-results_jm.csv>
  */
@@ -12,7 +12,7 @@ import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { organisations, datasets, relation, features, featureToPlace, address } from '../../schema';
+import { organisations, datasets, relation, features, featureToPlace } from '../../schema';
 import type { PersonEntity } from '@atm/shared';
 
 // ═══════════════════════════════════════════════════════════════
@@ -40,9 +40,6 @@ const RELATION_LABEL = 'Had last living location';
 const START_DATE = '1900-01-01';
 const END_DATE = '1945-12-31';
 
-/** Prefix for places created on-the-fly when an adamlink URI isn't in LPS. */
-const NEW_PLACE_PREFIX = 'jm-';
-
 const BATCH_SIZE = 1000;
 
 interface RawRow {
@@ -55,7 +52,6 @@ interface RawRow {
   deathPlace: string;
   address: string;
   addressName: string;
-  wkt: string;
 }
 
 type PlaceRow = { place_id: string };
@@ -75,47 +71,18 @@ export async function ingest(filePath: string) {
 
   console.log(`Streaming ${filePath}...`);
 
-  // Cache: adamlink URI → place ID
-  const placeIdCache = new Map<string, string>();
-  let newPlaceCounter = 0;
+  const placeIdCache = new Map<string, string | null>();
 
-  async function resolvePlaceId(adamlinkUri: string, wkt: string | null): Promise<string | null> {
+  async function resolvePlaceId(adamlinkUri: string): Promise<string | null> {
     const cached = placeIdCache.get(adamlinkUri);
     if (cached !== undefined) return cached;
 
-    // Try to find existing address → place mapping
     const result = await db.execute<PlaceRow>(
       sql`SELECT place_id FROM address WHERE id = ${adamlinkUri}`
     );
-
-    if (result.rows[0]?.place_id) {
-      const placeId = result.rows[0].place_id;
-      placeIdCache.set(adamlinkUri, placeId);
-      return placeId;
-    }
-
-    // Address not in LPS — create new place + address if we have geometry
-    if (wkt) {
-      newPlaceCounter++;
-      const placeId = `${NEW_PLACE_PREFIX}${newPlaceCounter}`;
-
-      await db.execute(sql`
-        INSERT INTO place (id, type, geometry)
-        VALUES (${placeId}, 'address', ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992))
-        ON CONFLICT DO NOTHING
-      `);
-
-      await db.insert(address).values({
-        id: adamlinkUri,
-        placeId,
-        source: DATASET_ID
-      }).onConflictDoNothing();
-
-      placeIdCache.set(adamlinkUri, placeId);
-      return placeId;
-    }
-
-    return null;
+    const placeId = result.rows[0]?.place_id || null;
+    placeIdCache.set(adamlinkUri, placeId);
+    return placeId;
   }
 
   const csvParser = createReadStream(filePath).pipe(parse({ columns: true }));
@@ -141,7 +108,7 @@ export async function ingest(filePath: string) {
   for await (const row of csvParser as AsyncIterable<RawRow>) {
     if (!row.person || !row.address) continue;
 
-    const placeId = await resolvePlaceId(row.address, row.wkt);
+    const placeId = await resolvePlaceId(row.address);
 
     const entity: PersonEntity = {
       type: 'Person',
@@ -179,11 +146,11 @@ export async function ingest(filePath: string) {
     }
 
     if (featureCount % 1000 === 0) {
-      process.stdout.write(`\r  ${featureCount} persons, ${linkCount} links, ${newPlaceCounter} new places, ${skippedLinks} skipped`);
+      process.stdout.write(`\r  ${featureCount} persons, ${linkCount} links, ${skippedLinks} skipped`);
     }
   }
 
   await flush();
 
-  console.log(`\nDone: ${featureCount} persons, ${linkCount} links, ${newPlaceCounter} new places, ${skippedLinks} skipped`);
+  console.log(`\nDone: ${featureCount} persons, ${linkCount} links, ${skippedLinks} skipped (no matching place)`);
 }
