@@ -81,11 +81,16 @@ export async function ingest(filePath: string) {
     return placeId;
   }
 
-  const seenFeatures = new Map<string, string>();
+  // Feature data is buffered per resource until we see a row whose `address`
+  // resolves to a place. Resources that never get a resolving address (only
+  // `street`/`pand` links) stay in the pending map and never hit the DB.
+  const pendingFeatures = new Map<string, any>();
+  const committedFeatures = new Map<string, string>(); // resource → featureId
   const seenLinks = new Set<string>();
   let featureCount = 0;
   let linkCount = 0;
   let skippedLinks = 0;
+  let droppedResources = 0;
   let rowCount = 0;
 
   let featureBatch: any[] = [];
@@ -102,6 +107,32 @@ export async function ingest(filePath: string) {
     }
   }
 
+  function buildFeatureData(row: RawRow) {
+    const name = row.title?.trim() || '';
+    const contentUrl = row.thumbnail?.trim() || '';
+    const startDate = row.startDate?.trim() || null;
+    const endDate = row.endDate?.trim() || startDate;
+    const dateCreatedFormatted = formatDateRange(startDate, endDate);
+
+    const entity: MediaObjectEntity = {
+      type: 'MediaObject',
+      name,
+      contentUrl,
+      ...(dateCreatedFormatted && { dateCreated: dateCreatedFormatted })
+    };
+
+    return {
+      url: row.resource.trim(),
+      recordType: RECORD_TYPE,
+      label: name,
+      contentUrl,
+      startDate,
+      endDate,
+      datasetId: DATASET_ID,
+      entity
+    };
+  }
+
   const csvParser = createReadStream(filePath)
     .pipe(parse({ columns: true, relax_column_count: true, bom: true }));
 
@@ -109,52 +140,38 @@ export async function ingest(filePath: string) {
     const sourceUrl = row.resource?.trim();
     if (!sourceUrl) continue;
 
-    let featureId = seenFeatures.get(sourceUrl);
-
-    if (!featureId) {
-      featureId = crypto.randomUUID();
-      seenFeatures.set(sourceUrl, featureId);
-
-      const name = row.title?.trim() || '';
-      const contentUrl = row.thumbnail?.trim() || '';
-      const startDate = row.startDate?.trim() || null;
-      const endDate = row.endDate?.trim() || startDate;
-      const dateCreatedFormatted = formatDateRange(startDate, endDate);
-
-      const entity: MediaObjectEntity = {
-        type: 'MediaObject',
-        name,
-        contentUrl,
-        ...(dateCreatedFormatted && { dateCreated: dateCreatedFormatted })
-      };
-
-      featureBatch.push({
-        id: featureId,
-        url: sourceUrl,
-        recordType: RECORD_TYPE,
-        label: name,
-        contentUrl,
-        startDate,
-        endDate,
-        datasetId: DATASET_ID,
-        entity
-      });
-
-      featureCount++;
+    const adamlinkUri = row.address?.trim();
+    let placeId: string | null = null;
+    if (adamlinkUri) {
+      placeId = await resolvePlaceId(adamlinkUri);
+      if (!placeId) skippedLinks++;
     }
 
-    const adamlinkUri = row.address?.trim();
-    if (adamlinkUri) {
+    let featureId = committedFeatures.get(sourceUrl);
+
+    if (!featureId) {
+      // Not yet committed. Remember the feature data, commit only if this row
+      // (or a later one) brings a resolving address.
+      if (!pendingFeatures.has(sourceUrl)) {
+        pendingFeatures.set(sourceUrl, buildFeatureData(row));
+        droppedResources++; // provisionally — decremented on commit
+      }
+      if (!placeId) continue;
+
+      featureId = crypto.randomUUID();
+      featureBatch.push({ id: featureId, ...pendingFeatures.get(sourceUrl)! });
+      committedFeatures.set(sourceUrl, featureId);
+      pendingFeatures.delete(sourceUrl);
+      featureCount++;
+      droppedResources--;
+    }
+
+    if (placeId) {
       const linkKey = `${featureId}|${adamlinkUri}`;
       if (!seenLinks.has(linkKey)) {
         seenLinks.add(linkKey);
-        const placeId = await resolvePlaceId(adamlinkUri);
-        if (placeId) {
-          linkBatch.push({ featureId, placeId, relationId: RELATION_ID });
-          linkCount++;
-        } else {
-          skippedLinks++;
-        }
+        linkBatch.push({ featureId, placeId, relationId: RELATION_ID });
+        linkCount++;
       }
     }
 
@@ -164,11 +181,11 @@ export async function ingest(filePath: string) {
 
     rowCount++;
     if (rowCount % 10000 === 0) {
-      process.stdout.write(`\r  ${rowCount} rows, ${featureCount} features, ${linkCount} links, ${skippedLinks} skipped`);
+      process.stdout.write(`\r  ${rowCount} rows, ${featureCount} features, ${linkCount} links, ${skippedLinks} skipped, ${droppedResources} pending-unlinked`);
     }
   }
 
   await flush();
 
-  console.log(`\nDone: ${featureCount} features, ${linkCount} links, ${skippedLinks} skipped (no matching place)`);
+  console.log(`\nDone: ${featureCount} features, ${linkCount} links, ${skippedLinks} skipped (no matching place), ${droppedResources} resources dropped (no address link)`);
 }
