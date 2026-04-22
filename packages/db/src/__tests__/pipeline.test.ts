@@ -3,10 +3,13 @@
  *
  * Seeds the test DB using real ingestion scripts on fixture data, then
  * exercises the exported query functions that the API endpoints use.
+ *
+ * Direct DB inspections are kept in `dbAssertions.ts` so test bodies read
+ * like behaviour assertions instead of SQL.
  */
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import { sql } from 'drizzle-orm';
-import { db, setupTestDb, cleanTestDb, seedTestData, teardownTestDb } from './setup';
+import { setupTestDb, cleanTestDb, seedTestData, teardownTestDb } from './setup';
+import * as dbq from './dbAssertions';
 
 import { getFeatures } from '../queries/features';
 import { getHeatmap, getHeatmapTimeline } from '../queries/heatmap';
@@ -38,143 +41,84 @@ afterAll(async () => {
 
 describe('LPS ingestion', () => {
   test('creates one place per linked point', async () => {
-    const r = await db.execute<{ count: string }>(sql`SELECT COUNT(*) as count FROM place`);
-    expect(parseInt(r.rows[0].count)).toBeGreaterThanOrEqual(5);
+    expect(await dbq.placeCount()).toBeGreaterThanOrEqual(5);
   });
 
   test('places have lp- prefixed IDs', async () => {
-    const r = await db.execute<{ id: string }>(sql`SELECT id FROM place LIMIT 1`);
-    expect(r.rows[0].id).toMatch(/^lp-\d+$/);
+    expect(await dbq.firstPlaceId()).toMatch(/^lp-\d+$/);
   });
 
   test('places have RD geometry populated', async () => {
-    const r = await db.execute<{ count: string }>(
-      sql`SELECT COUNT(*) as count FROM place WHERE geometry IS NOT NULL`
-    );
-    expect(parseInt(r.rows[0].count)).toBeGreaterThan(0);
+    expect(await dbq.placesWithGeometryCount()).toBeGreaterThan(0);
   });
 
   test('addresses reference place_id', async () => {
-    const r = await db.execute<{ count: string }>(sql`
-      SELECT COUNT(*) as count FROM address a
-      WHERE NOT EXISTS (SELECT 1 FROM place p WHERE p.id = a.place_id)
-    `);
-    expect(parseInt(r.rows[0].count)).toBe(0);
+    expect(await dbq.addressesWithDanglingPlaceIdCount()).toBe(0);
   });
 
   test('address source column is populated after ingestion', async () => {
-    const r = await db.execute<{ source: string }>(
-      sql`SELECT DISTINCT source FROM address WHERE source IS NOT NULL`
-    );
-    const sources = r.rows.map(r => r.source);
-    expect(sources.length).toBeGreaterThan(0);
+    expect((await dbq.distinctAddressSources()).length).toBeGreaterThan(0);
   });
 });
 
 describe('Adressen ingestion', () => {
   test('address names are populated after adressen ingestion', async () => {
-    const r = await db.execute<{ count: string }>(
-      sql`SELECT COUNT(*) as count FROM address WHERE name IS NOT NULL`
-    );
-    expect(parseInt(r.rows[0].count)).toBeGreaterThan(0);
+    expect(await dbq.addressesWithNameCount()).toBeGreaterThan(0);
   });
 
   test('place.current_address is the most recent dated address name', async () => {
-    // Pick a place, check its current_address matches the address row with the latest date
-    const r = await db.execute<{ place_id: string; current_address: string; most_recent: string }>(sql`
-      SELECT p.id as place_id, p.current_address,
-        (SELECT a.name FROM address a
-         WHERE a.place_id = p.id AND a.name IS NOT NULL
-         ORDER BY a.date DESC LIMIT 1) as most_recent
-      FROM place p
-      WHERE p.current_address IS NOT NULL
-      LIMIT 5
-    `);
-    for (const row of r.rows) {
-      expect(row.current_address).toBe(row.most_recent);
+    const rows = await dbq.placesWithCurrentAddressAndMostRecent(5);
+    for (const row of rows) {
+      expect(row.currentAddress).toBe(row.mostRecent);
     }
   });
 
   test('address dates are updated from adressen CSV', async () => {
-    // After adressen ingestion, some addresses should have dates other than
-    // the 1943/1909/1876/1853/1832 placeholders LPS uses
-    const r = await db.execute<{ count: string }>(
-      sql`SELECT COUNT(*) as count FROM address WHERE date IS NOT NULL`
-    );
-    expect(parseInt(r.rows[0].count)).toBeGreaterThan(0);
+    expect(await dbq.addressesWithDateCount()).toBeGreaterThan(0);
   });
 });
 
 describe('Feature ingestion', () => {
   test('beeldbank features have record_type = image', async () => {
-    const r = await db.execute<{ count: string }>(
-      sql`SELECT COUNT(*) as count FROM features WHERE dataset_id = 'beeldbank' AND record_type = 'image'`
-    );
-    expect(parseInt(r.rows[0].count)).toBeGreaterThan(0);
+    expect(await dbq.featureCountByDatasetAndType('beeldbank', 'image')).toBeGreaterThan(0);
   });
 
   test('joods-monument features have record_type = person', async () => {
-    const r = await db.execute<{ count: string }>(
-      sql`SELECT COUNT(*) as count FROM features WHERE dataset_id = 'joods-monument' AND record_type = 'person'`
-    );
-    expect(parseInt(r.rows[0].count)).toBe(5);
+    expect(await dbq.featureCountByDatasetAndType('joods-monument', 'person')).toBe(5);
   });
 
   test('joods-monument features have fixed 1900-1945 date range', async () => {
-    const r = await db.execute<{ start_date: string; end_date: string }>(
-      sql`SELECT start_date, end_date FROM features WHERE dataset_id = 'joods-monument' LIMIT 1`
-    );
-    expect(r.rows[0].start_date).toBe('1900-01-01');
-    expect(r.rows[0].end_date).toBe('1945-12-31');
+    const range = await dbq.firstFeatureDateRange('joods-monument');
+    expect(range.startDate).toBe('1900-01-01');
+    expect(range.endDate).toBe('1945-12-31');
   });
 
   test('every feature is linked to at least one place', async () => {
-    const r = await db.execute<{ count: string }>(sql`
-      SELECT COUNT(*) as count FROM features f
-      WHERE NOT EXISTS (SELECT 1 FROM feature_to_place fp WHERE fp.feature_id = f.id)
-    `);
-    expect(parseInt(r.rows[0].count)).toBe(0);
+    expect(await dbq.orphanedFeatureCount()).toBe(0);
   });
 
   test('features have entity JSONB with correct schema.org type', async () => {
-    const bb = await db.execute<{ entity: any }>(
-      sql`SELECT entity FROM features WHERE dataset_id = 'beeldbank' LIMIT 1`
-    );
-    expect(bb.rows[0].entity.type).toBe('MediaObject');
-
-    const jm = await db.execute<{ entity: any }>(
-      sql`SELECT entity FROM features WHERE dataset_id = 'joods-monument' LIMIT 1`
-    );
-    expect(jm.rows[0].entity.type).toBe('Person');
+    expect((await dbq.firstFeatureEntity('beeldbank')).type).toBe('MediaObject');
+    expect((await dbq.firstFeatureEntity('joods-monument')).type).toBe('Person');
   });
 });
 
 describe('rebuild-index', () => {
   test('all features have spatial_frequency set', async () => {
-    const r = await db.execute<{ count: string }>(
-      sql`SELECT COUNT(*) as count FROM features WHERE spatial_frequency IS NULL`
-    );
-    expect(parseInt(r.rows[0].count)).toBe(0);
+    expect(await dbq.featuresMissingSpatialFrequencyCount()).toBe(0);
   });
 
   test('spatial_frequency matches distinct cell count per feature', async () => {
-    const r = await db.execute<{ matches: string }>(sql`
-      SELECT COUNT(*) as matches FROM features f
-      WHERE f.spatial_frequency = (
-        SELECT COUNT(*) FROM feature_cells fc WHERE fc.feature_id = f.id
-      )
-    `);
-    const totalR = await db.execute<{ count: string }>(sql`SELECT COUNT(*) as count FROM features`);
-    expect(parseInt(r.rows[0].matches)).toBe(parseInt(totalR.rows[0].count));
+    const matches = await dbq.featuresWithMatchingSpatialFrequencyCount();
+    const total = await dbq.featureCount();
+    expect(matches).toBe(total);
   });
 
   test('temporal_frequency reflects year span / base_bin', async () => {
     // JM features: 1900-1945 span = 45 years, base bin 10y → 5 (rounded up)
-    const r = await db.execute<{ temporal_frequency: number }>(
-      sql`SELECT temporal_frequency FROM features WHERE dataset_id = 'joods-monument' LIMIT 1`
-    );
-    expect(r.rows[0].temporal_frequency).toBeGreaterThanOrEqual(4);
-    expect(r.rows[0].temporal_frequency).toBeLessThanOrEqual(6);
+    const tf = await dbq.firstFeatureTemporalFrequency('joods-monument');
+    expect(tf).toBeGreaterThanOrEqual(4);
+    expect(tf).toBeLessThanOrEqual(6);
   });
 });
 
@@ -365,13 +309,8 @@ describe('getHistogram', () => {
   });
 
   test('feature spanning multiple bins is counted in each (COUNT DISTINCT)', async () => {
-    // Find any feature whose date range spans multiple 50-year bins
-    const r = await db.execute<{ id: string; start_date: string; end_date: string }>(sql`
-      SELECT id, start_date, end_date FROM features
-      WHERE (EXTRACT(YEAR FROM end_date) / 50)::int > (EXTRACT(YEAR FROM start_date) / 50)::int
-      LIMIT 1
-    `);
-    if (r.rows.length > 0) {
+    const spanning = await dbq.findFeatureSpanningMultipleBins(50);
+    if (spanning) {
       // Histogram must count it in each overlapping bin (no duplicate feature double-counting)
       const hist = await getHistogram(undefined, undefined, 50);
       expect(hist.totalFeatures).toBeGreaterThan(0);

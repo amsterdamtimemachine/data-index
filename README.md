@@ -211,15 +211,15 @@ bun run db:rebuild-index
 - [Bun](https://bun.sh) (latest)
 - [Docker](https://docker.com) with Docker Compose
 
+### Font
+
+The UI is set in [**Satoshi**](https://www.fontshare.com/fonts/satoshi), designed by [Indian Type Foundry](https://www.indiantypefoundry.com). Download from the link above and drop the `.woff` and `.woff2` files for the following weights (normal and italic) into `packages/app/static/fonts/`: Light (300), Regular (400), Medium (500), and Bold (700) — without them the app falls back to a system sans-serif font.
+
 ### First time setup
 
 ```bash
 bun install
 cp .env.example .env
-
-# Optional: install Satoshi font (download from https://www.fontshare.com/fonts/satoshi,
-# convert to woff/woff2, drop files into packages/app/static/fonts/).
-# Without it, the UI falls back to the system sans-serif.
 
 # Start bundled Postgres + PostGIS
 bun run docker:db:up
@@ -285,10 +285,6 @@ cp .env.example .env
 # match the production database. The app does NOT manage this server —
 # assume it's already running and reachable from the VPS.
 
-# Optional: install Satoshi font (download from https://www.fontshare.com/fonts/satoshi,
-# convert to woff/woff2, drop files into packages/app/static/fonts/).
-# Without it, the UI falls back to the system sans-serif.
-
 # Push schema into the existing DB
 bun run db:push-schema
 
@@ -321,10 +317,6 @@ cp .env.example .env
 # Edit .env — change DB_PASSWORD (and DB_USER / DB_NAME if you want).
 # Leave DB_HOST=localhost (workstation CLI hits the mapped DB port; the
 # self-hosted overlay overrides DB_HOST for the app container internally).
-
-# Optional: install Satoshi font (download from https://www.fontshare.com/fonts/satoshi,
-# convert to woff/woff2, drop files into packages/app/static/fonts/).
-# Without it, the UI falls back to the system sans-serif.
 
 # Start the bundled Postgres + PostGIS (production overlay binds it to loopback)
 docker compose --env-file .env \

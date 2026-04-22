@@ -40,7 +40,7 @@
 				class="relative flex w-[24rem] max-w-[calc(100vw-2rem)] items-center justify-between gap-4 p-5"
 			>
 				<div>
-					<h3 use:melt={$title(id)} class="flex items-center gap-2 font-semibold text-sm mb-1">
+					<h3 use:melt={$title(id)} class="flex items-center gap-2 font-bold text-sm mb-1">
 						{data.title}
 						<span
 							class="size-1.5 rounded-full"
