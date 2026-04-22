@@ -211,10 +211,6 @@ bun run db:rebuild-index
 - [Bun](https://bun.sh) (latest)
 - [Docker](https://docker.com) with Docker Compose
 
-### Font
-
-The UI is set in [**Satoshi**](https://www.fontshare.com/fonts/satoshi), designed by [Indian Type Foundry](https://www.indiantypefoundry.com). Download from the link above and drop the `.woff` and `.woff2` files for the following weights (normal and italic) into `packages/app/static/fonts/`: Light (300), Regular (400), Medium (500), and Bold (700) — without them the app falls back to a system sans-serif font.
-
 ### First time setup
 
 ```bash
