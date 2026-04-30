@@ -11,16 +11,6 @@
       "persistent": true,
       "dependsOn": ["^build"]
     },
-    "generate": {
-      "dependsOn": ["@atm/shared#build"],
-      "outputs": ["data/**/*.bin", "data/**/*.json"],
-      "inputs": ["src/**", "../shared/dist/**"]
-    },
-    "preprocess": {
-      "dependsOn": ["@atm/shared#build"],
-      "outputs": ["data/**/*.bin", "data/**/*.json"],
-      "inputs": ["src/**", "../shared/dist/**"]
-    },
     "test": {
       "dependsOn": ["^build"],
       "outputs": []

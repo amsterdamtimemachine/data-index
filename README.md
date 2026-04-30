@@ -126,15 +126,19 @@ The data index is restricted to historical features that can be both spatially l
 
 ### Spatial
 
-Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a single point geometry in RD coordinates (EPSG:28992, metres). `rebuild-index` overlays the city with a regular grid of `CELL_SIZE_METERS`-wide cells (default 100m) anchored to the bounding box of all geometries in the `place` table, and writes one row to `feature_cells` for each (feature, cell) pair the feature touches. A feature linked to a single place lands in one cell; a feature linked to several places spans as many cells as those places fall into. Heatmap requests then group `feature_cells` by `(cell_x, cell_y)` and count, instead of scanning every feature row.
+Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a single point geometry in **RD New (EPSG:28992, metres)**. Query responses reproject to **WGS84 (EPSG:4326)** before sending to the client. `rebuild-index` overlays the city with a regular grid of `CELL_SIZE_METERS`-wide cells (default 100m) anchored to the bounding box of all geometries in the `place` table, and writes one row to `feature_cells` for each (feature, cell) pair the feature touches. A feature linked to a single place lands in one cell; a feature linked to several places spans as many cells as those places fall into. Heatmap requests then group `feature_cells` by `(cell_x, cell_y)` and count, instead of scanning every feature row.
 
-Only WKT POINT geometries are currently supported by the index. The `place.geometry` column is typed to accept LINESTRING and POLYGON as well, but indexing them (enumerating every cell a shape covers) is not yet implemented.
+Heatmap density is rendered with log-normalised counts (`log(count+1) / log(maxCount+1)`).
+
+**Only WKT POINT geometries are currently supported by the index. The `place.geometry` column is typed to accept LINESTRING and POLYGON as well, but indexing them (enumerating every cell a shape covers) is not yet implemented.**
 
 ### Temporal
 
-Each feature has `start_date` and `end_date`, both inclusive at the year level — a feature with `start_date=1900-06-15` and `end_date=1900-08-30` covers exactly the year 1900. Time is divided into base bins of `BASE_BIN_SIZE` years (default 10), each spanning `[bin_start, bin_end)` — start year inclusive, end year exclusive. A feature is assigned to every bin its year range overlaps: a feature spanning 1900–1925 with 10-year bins falls into `[1900,1910)`, `[1910,1920)`, and `[1920,1930)`. Its `temporal_frequency` is the count of those bins (3 here).
+Each feature has `start_date` and `end_date`, both inclusive at the year level. A feature with `start_date=1900-06-15` and `end_date=1900-08-30` covers exactly the year 1900. Time is divided into base bins of `BASE_BIN_SIZE` years (default 10), each spanning `[bin_start, bin_end)`: start year inclusive, end year exclusive. A feature is assigned to every bin its year range overlaps: a feature spanning 1900–1925 with 10-year bins falls into `[1900,1910)`, `[1910,1920)`, and `[1920,1930)`. Its `temporal_frequency` is the count of those bins (3 here).
 
 The timeline (rendered as a histogram) uses the same overlap logic but at the display bin size requested by the client. Display bin size is clamped to `[BIN_SIZE_MIN, BIN_SIZE_MAX]`.
+
+Timeline bar heights use the same log normalisation as the heatmap.
 
 ### Unique features rank higher
 
@@ -152,9 +156,9 @@ Lower scores mean features more unique to the time and place.
 
 The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Adamlink is a Linked Open Data service that connects historical Amsterdam address registries to point geometries, enabling features to be linked to physical locations with historical address names.
 
-Adamlink place data must be ingested before any dataset — run `lps` first, then `adressen`. See the [Development](#development) or [Production](#production) sections for the full ingestion order.
+Adamlink place data must be ingested before any dataset: run `lps` first, then `adressen`. See the [Development](#development) or [Production](#production) sections for the full ingestion order.
 
-Every `place` row is sourced from Adamlink. Features that can't be resolved to an existing Adamlink place are skipped at ingest — no feature row is created and nothing unlinked lands in the database.
+Every `place` row is sourced from Adamlink. Features that can't be resolved to an existing Adamlink place are skipped at ingest; no feature row is created and nothing unlinked lands in the database.
 
 If you are deploying this for a different city, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. The `geometry-template.ts` example shows how to match incoming coordinates to existing places; for creating new places, adapt the pattern from `lps.ts`. The core requirement is that each feature links to a `place` row that has a geometry.
 
@@ -165,8 +169,8 @@ Each feature needs at minimum:
 - **record_type**: One of `image`, `text`, `person` (the frontend renders each type differently)
 - **start_date** / **end_date**: Date range for temporal placement on the histogram
 - **place link**: Each feature must be linked to a physical location. Two methods are supported:
-  - **Adamlink URI** — if your data references Adamlink address IDs, the ingestion script resolves them to places via the `address` table (requires LPS + adressen data to be ingested first)
-  - **WKT geometry point** — if your data only has coordinates, the ingestion script finds the nearest existing place within a configurable distance threshold (e.g. 5 meters)
+  - **Adamlink URI**: if your data references Adamlink address IDs, the ingestion script resolves them to places via the `address` table (requires LPS + adressen data to be ingested first)
+  - **WKT geometry point**: if your data only has coordinates, the ingestion script finds the nearest existing place within a configurable distance threshold (e.g. 5 meters)
 
 Optional: `description`, `content_url` (media), `entity` (schema.org JSONB), `url` (source link).
 
@@ -190,7 +194,7 @@ bun run db:rebuild-index
 
 | Dataset | Description | Access |
 |---------|-------------|--------|
-| [LPS](https://adamlink.nl/downloads/20230920-lps.csv.zip) | Linked point set — historical address-to-geometry mappings from 7 Amsterdam registries (1832–1976) | Public |
+| [LPS](https://adamlink.nl/downloads/20230920-lps.csv.zip) | Linked point set: historical address-to-geometry mappings from 7 Amsterdam registries (1832–1976) | Public |
 | [Adressen](https://adamlink.nl/downloads/20230920-adressen.csv.zip) | Address labels (street name + house number) for Adamlink address IDs | Public |
 | Beeldbank | Historical images from Amsterdam Stadsarchief | Private |
 | Joods Monument | Holocaust victims with last known Amsterdam addresses | Private |
@@ -247,7 +251,7 @@ bun run db:studio    # http://local.drizzle.studio
 
 ### Testing
 
-Tests run against an isolated Postgres+PostGIS container (port `5434`, tmpfs volume — data wiped on restart, never touches the dev DB). Integration tests exercise the full pipeline end-to-end: LPS + adressen + beeldbank + Joods Monument ingestion on real-data fixtures under `packages/db/src/__tests__/fixtures/`, then the query layer (features, heatmap, timeline, histogram) and `rebuild-index`.
+Tests run against an isolated Postgres+PostGIS container (port `5434`, tmpfs volume, data wiped on restart, never touches the dev DB). Integration tests exercise the full pipeline end-to-end: LPS + adressen + beeldbank + Joods Monument ingestion on real-data fixtures under `packages/db/src/__tests__/fixtures/`, then the query layer (features, heatmap, timeline, histogram) and `rebuild-index`.
 
 ```bash
 bun run test:db:up     # start the isolated test DB
@@ -272,11 +276,11 @@ curl -fsSL https://bun.sh/install | bash
 git clone git@github.com:amsterdamtimemachine/data-index.git ~/data-index && cd ~/data-index
 bun install
 
-# Set up production env — point at the existing Postgres server
+# Set up production env (point at the existing Postgres server)
 cp .env.example .env.prod
-# Edit .env.prod — set DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME to
+# Edit .env.prod: set DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME to
 # match the production database, and set APP_PORT (defaults to 3000).
-# The app does NOT manage this server — assume it's already running and
+# The app does NOT manage this server; assume it's already running and
 # reachable from the VPS.
 
 # Push schema into the existing DB (uses .env.prod via Bun's --env-file flag)
@@ -330,9 +334,9 @@ curl -fsSL https://bun.sh/install | bash
 git clone git@github.com:amsterdamtimemachine/data-index.git ~/data-index && cd ~/data-index
 bun install
 
-# Set up production env — defaults target the bundled DB
+# Set up production env (defaults target the bundled DB)
 cp .env.example .env.prod
-# Edit .env.prod — change DB_PASSWORD (and DB_USER / DB_NAME if you want).
+# Edit .env.prod: change DB_PASSWORD (and DB_USER / DB_NAME if you want).
 # Leave DB_HOST=localhost (workstation CLI hits the mapped DB port; the
 # self-hosted overlay overrides DB_HOST for the app container internally).
 
@@ -362,7 +366,7 @@ docker compose --project-name data-index-prod --env-file .env.prod \
 
 ### CI/CD
 
-Two workflows publish images to GitHub Container Registry (GHCR). Both run the full test suite (inside a PostGIS service container) and only push if tests pass. Neither deploys to the server — pulling and restarting is a manual step, which keeps the server's SSH surface private.
+Two workflows publish images to GitHub Container Registry (GHCR). Both run the full test suite (inside a PostGIS service container) and only push if tests pass. Neither deploys to the server. Pulling and restarting is a manual step, which keeps the server's SSH surface private.
 
 | Branch | Workflow | Image tags |
 |---|---|---|
@@ -409,7 +413,7 @@ docker compose --project-name data-index-staging --env-file .env.staging \
 | `DB_PASSWORD` | Yes | `atm_dev_password` | PostgreSQL password |
 | `DB_NAME` | Yes | `amsterdam_time_machine` | PostgreSQL database name |
 | `APP_PORT` | No | `3000` | App port on host |
-| `PUBLIC_DEFAULT_CELL` | No | — | Default cell to select on load |
+| `PUBLIC_DEFAULT_CELL` | No | - | Default cell to select on load |
 | `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |
 | `BASE_BIN_SIZE` | No | `10` | Base time bin size (years) |
 | `CELL_SIZE_METERS` | No | `100` | Base spatial cell size (meters) |
