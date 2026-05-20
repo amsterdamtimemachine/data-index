@@ -38,13 +38,13 @@ export async function setupTestDb() {
   `);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_geometry ON place USING gist(geometry)`);
   await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS address (
+    CREATE TABLE IF NOT EXISTS place_name (
       id TEXT PRIMARY KEY, place_id TEXT NOT NULL REFERENCES place(id),
-      name TEXT, date DATE, source TEXT
+      name TEXT, since DATE, until DATE, source TEXT
     )
   `);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_address_place ON address(place_id)`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_address_place_date ON address(place_id, date)`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_name_place ON place_name(place_id)`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_name_place_since ON place_name(place_id, since)`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS relation (id TEXT PRIMARY KEY, label TEXT NOT NULL)`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS tags (id TEXT PRIMARY KEY, label TEXT NOT NULL)`);
   await db.execute(sql`
@@ -83,7 +83,7 @@ export async function setupTestDb() {
 }
 
 export async function cleanTestDb() {
-  await db.execute(sql`TRUNCATE feature_cells, feature_tags, feature_to_place, features, address, place, relation, tags, datasets, organisations CASCADE`);
+  await db.execute(sql`TRUNCATE feature_cells, feature_tags, feature_to_place, features, place_name, place, relation, tags, datasets, organisations CASCADE`);
 }
 
 export async function teardownTestDb() {
@@ -97,7 +97,7 @@ export async function teardownTestDb() {
  * Seed via real ingestion scripts on fixture data.
  * After this runs, the DB has:
  *  - 15 places (LPS linked points)
- *  - ~50 historical addresses (enriched with street names + dates from adressen)
+ *  - ~50 historical place names (enriched with street names + dates from adressen)
  *  - 5 person features (Joods Monument, 1900-1945)
  *  - ~9 image features (Beeldbank, various dates)
  */

@@ -42,17 +42,18 @@ export const place = pgTable('place', {
 ]);
 
 // ============================================================================
-// ADDRESS - Historical address names linked to places
+// PLACE_NAME - Historical names for places (addresses, streets, buildings)
 // ============================================================================
-export const address = pgTable('address', {
+export const placeName = pgTable('place_name', {
   id: text('id').primaryKey(),                    // adamlink URI "https://adamlink.nl/geo/address/A1"
   placeId: text('place_id').notNull().references(() => place.id),
   name: text('name'),                             // "Prins Hendrikkade 93"
-  date: date('date'),                             // 1943-01-01
+  since: date('since'),                           // name valid from this date
+  until: date('until'),                           // name valid until this date
   source: text('source')                          // "pw-1943"
 }, (table) => [
-  index('idx_address_place').on(table.placeId),
-  index('idx_address_place_date').on(table.placeId, table.date)
+  index('idx_place_name_place').on(table.placeId),
+  index('idx_place_name_place_since').on(table.placeId, table.since)
 ]);
 
 // ============================================================================
@@ -141,8 +142,8 @@ export type NewDataset = typeof datasets.$inferInsert;
 export type Place = typeof place.$inferSelect;
 export type NewPlace = typeof place.$inferInsert;
 
-export type Address = typeof address.$inferSelect;
-export type NewAddress = typeof address.$inferInsert;
+export type PlaceName = typeof placeName.$inferSelect;
+export type NewPlaceName = typeof placeName.$inferInsert;
 
 export type Relation = typeof relation.$inferSelect;
 export type NewRelation = typeof relation.$inferInsert;

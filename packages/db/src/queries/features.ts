@@ -286,10 +286,10 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         f.entity,
         fp.relation_id,
         p.current_address,
-        (SELECT a.name FROM address a
+        (SELECT a.name FROM place_name a
          WHERE a.place_id = fp.place_id
-           AND a.date <= f.end_date
-         ORDER BY a.date DESC LIMIT 1) as historical_address
+           AND a.since <= f.end_date
+         ORDER BY a.since DESC LIMIT 1) as historical_address
       FROM feature_cells fc
       JOIN features f ON fc.feature_id = f.id
       LEFT JOIN datasets d ON f.dataset_id = d.id

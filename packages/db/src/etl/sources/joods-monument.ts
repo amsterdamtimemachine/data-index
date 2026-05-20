@@ -2,7 +2,7 @@
  * Import Joods Monument (Jewish Monument) person data
  *
  * Parses CSV of Holocaust victims with last known addresses. Resolves adamlink
- * URIs → place IDs via the address table (populated by LPS). Rows whose
+ * URIs → place IDs via the place_name table (populated by LPS). Rows whose
  * adamlink URI isn't in LPS are skipped — no feature is created. All features
  * get a fixed date range of 1900–1945.
  *
@@ -78,7 +78,7 @@ export async function ingest(filePath: string) {
     if (cached !== undefined) return cached;
 
     const result = await db.execute<PlaceRow>(
-      sql`SELECT place_id FROM address WHERE id = ${adamlinkUri}`
+      sql`SELECT place_id FROM place_name WHERE id = ${adamlinkUri}`
     );
     const placeId = result.rows[0]?.place_id || null;
     placeIdCache.set(adamlinkUri, placeId);

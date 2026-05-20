@@ -11,7 +11,7 @@ import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { organisations, datasets, relation, features, featureToPlace, address } from '../../schema';
+import { organisations, datasets, relation, features, featureToPlace, placeName } from '../../schema';
 import type { MediaObjectEntity } from '@atm/shared';
 import { formatDateRange } from '../utils';
 
@@ -74,7 +74,7 @@ export async function ingest(filePath: string) {
     if (cached !== undefined) return cached;
 
     const result = await db.execute<PlaceRow>(
-      sql`SELECT ${address.placeId} as place_id FROM ${address} WHERE ${address.id} = ${adamlinkUri}`
+      sql`SELECT ${placeName.placeId} as place_id FROM ${placeName} WHERE ${placeName.id} = ${adamlinkUri}`
     );
     const placeId = result.rows[0]?.place_id || null;
     placeIdCache.set(adamlinkUri, placeId);

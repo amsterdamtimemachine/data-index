@@ -3,7 +3,7 @@
  *
  * Use this template when your source data links to places via Adamlink URIs
  * (e.g. https://adamlink.nl/geo/address/A12345). The script resolves each URI
- * to a place ID via the address table. Requires LPS + adressen data to be
+ * to a place ID via the place_name table. Requires LPS + adressen data to be
  * ingested first.
  *
  * To use:
@@ -17,7 +17,7 @@ import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { organisations, datasets, relation, features, featureToPlace, address } from '../../schema';
+import { organisations, datasets, relation, features, featureToPlace, placeName } from '../../schema';
 import type { MediaObjectEntity } from '@atm/shared';
 import { formatDateRange } from '../utils';
 
@@ -75,7 +75,7 @@ export async function ingest(filePath: string) {
     if (placeCache.has(adamlinkUri)) return placeCache.get(adamlinkUri)!;
 
     const result = await db.execute<PlaceRow>(
-      sql`SELECT ${address.placeId} as place_id FROM ${address} WHERE ${address.id} = ${adamlinkUri}`
+      sql`SELECT ${placeName.placeId} as place_id FROM ${placeName} WHERE ${placeName.id} = ${adamlinkUri}`
     );
     const placeId = result.rows[0]?.place_id || null;
     if (placeId) placeCache.set(adamlinkUri, placeId);

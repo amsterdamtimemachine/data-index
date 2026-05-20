@@ -33,38 +33,38 @@ export async function placesWithGeometryCount(): Promise<number> {
   return parseInt(r.rows[0].count);
 }
 
-// ─── address ────────────────────────────────────────────────────────────────
+// ─── place_name ─────────────────────────────────────────────────────────────
 
-export async function addressesWithDanglingPlaceIdCount(): Promise<number> {
+export async function placeNamesWithDanglingPlaceIdCount(): Promise<number> {
   const r = await db.execute<{ count: string }>(sql`
-    SELECT COUNT(*) as count FROM address a
-    WHERE NOT EXISTS (SELECT 1 FROM place p WHERE p.id = a.place_id)
+    SELECT COUNT(*) as count FROM place_name pn
+    WHERE NOT EXISTS (SELECT 1 FROM place p WHERE p.id = pn.place_id)
   `);
   return parseInt(r.rows[0].count);
 }
 
-export async function distinctAddressSources(): Promise<string[]> {
+export async function distinctPlaceNameSources(): Promise<string[]> {
   const r = await db.execute<{ source: string }>(
-    sql`SELECT DISTINCT source FROM address WHERE source IS NOT NULL`
+    sql`SELECT DISTINCT source FROM place_name WHERE source IS NOT NULL`
   );
   return r.rows.map(row => row.source);
 }
 
-export async function addressesWithNameCount(): Promise<number> {
+export async function placeNamesWithNameCount(): Promise<number> {
   const r = await db.execute<{ count: string }>(
-    sql`SELECT COUNT(*) as count FROM address WHERE name IS NOT NULL`
+    sql`SELECT COUNT(*) as count FROM place_name WHERE name IS NOT NULL`
   );
   return parseInt(r.rows[0].count);
 }
 
-export async function addressesWithDateCount(): Promise<number> {
+export async function placeNamesWithDateCount(): Promise<number> {
   const r = await db.execute<{ count: string }>(
-    sql`SELECT COUNT(*) as count FROM address WHERE date IS NOT NULL`
+    sql`SELECT COUNT(*) as count FROM place_name WHERE since IS NOT NULL`
   );
   return parseInt(r.rows[0].count);
 }
 
-// ─── place ↔ address consistency ────────────────────────────────────────────
+// ─── place ↔ place_name consistency ─────────────────────────────────────────
 
 export interface PlaceCurrentVsMostRecent {
   placeId: string;
@@ -77,9 +77,9 @@ export async function placesWithCurrentAddressAndMostRecent(
 ): Promise<PlaceCurrentVsMostRecent[]> {
   const r = await db.execute<{ place_id: string; current_address: string; most_recent: string }>(sql`
     SELECT p.id as place_id, p.current_address,
-      (SELECT a.name FROM address a
-       WHERE a.place_id = p.id AND a.name IS NOT NULL
-       ORDER BY a.date DESC LIMIT 1) as most_recent
+      (SELECT pn.name FROM place_name pn
+       WHERE pn.place_id = p.id AND pn.name IS NOT NULL
+       ORDER BY pn.since DESC LIMIT 1) as most_recent
     FROM place p
     WHERE p.current_address IS NOT NULL
     LIMIT ${limit}

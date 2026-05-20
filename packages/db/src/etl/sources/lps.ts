@@ -1,7 +1,7 @@
 /**
  * Import place data from LPS (Linked Point Set) CSV
  *
- * Creates one place per linked point (lp) with geometry, and one address
+ * Creates one place per linked point (lp) with geometry, and one place_name
  * row per historical address ID linking to that place.
  *
  * Usage: bun run db:ingest -s lps -f <path-to-20230920-lps.csv>
@@ -10,7 +10,7 @@ import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { address } from '../../schema';
+import { placeName } from '../../schema';
 
 const ADDR_COLS: { col: string; source: string; date: string }[] = [
   { col: 'pw-1943', source: 'pw-1943', date: '1943-01-01' },
@@ -30,12 +30,12 @@ export async function ingest(filePath: string) {
 
   let placeCount = 0;
   let addressCount = 0;
-  let addressBatch: { id: string; placeId: string; date: string; source: string }[] = [];
+  let nameBatch: { id: string; placeId: string; since: string; source: string }[] = [];
 
-  async function flushAddresses() {
-    if (addressBatch.length === 0) return;
-    await db.insert(address).values(addressBatch).onConflictDoNothing();
-    addressBatch = [];
+  async function flushNames() {
+    if (nameBatch.length === 0) return;
+    await db.insert(placeName).values(nameBatch).onConflictDoNothing();
+    nameBatch = [];
   }
 
   for await (const row of csvParser) {
@@ -53,16 +53,16 @@ export async function ingest(filePath: string) {
     `);
     placeCount++;
 
-    // Collect address rows for each registry column
+    // Collect place_name rows for each registry column
     for (const { col, source, date } of ADDR_COLS) {
       const addrId = row[col]?.trim();
       if (addrId) {
         const uri = `https://adamlink.nl/geo/address/${addrId}`;
-        addressBatch.push({ id: uri, placeId, date, source });
+        nameBatch.push({ id: uri, placeId, since: date, source });
         addressCount++;
 
-        if (addressBatch.length >= BATCH_SIZE) {
-          await flushAddresses();
+        if (nameBatch.length >= BATCH_SIZE) {
+          await flushNames();
         }
       }
     }
@@ -72,6 +72,6 @@ export async function ingest(filePath: string) {
     }
   }
 
-  await flushAddresses();
+  await flushNames();
   console.log(`\nDone: ${placeCount} places, ${addressCount} addresses`);
 }

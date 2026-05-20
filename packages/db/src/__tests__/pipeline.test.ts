@@ -52,29 +52,29 @@ describe('LPS ingestion', () => {
     expect(await dbq.placesWithGeometryCount()).toBeGreaterThan(0);
   });
 
-  test('addresses reference place_id', async () => {
-    expect(await dbq.addressesWithDanglingPlaceIdCount()).toBe(0);
+  test('place names reference valid place_id', async () => {
+    expect(await dbq.placeNamesWithDanglingPlaceIdCount()).toBe(0);
   });
 
-  test('address source column is populated after ingestion', async () => {
-    expect((await dbq.distinctAddressSources()).length).toBeGreaterThan(0);
+  test('place name source column is populated after ingestion', async () => {
+    expect((await dbq.distinctPlaceNameSources()).length).toBeGreaterThan(0);
   });
 });
 
 describe('Adressen ingestion', () => {
-  test('address names are populated after adressen ingestion', async () => {
-    expect(await dbq.addressesWithNameCount()).toBeGreaterThan(0);
+  test('place names are populated after adressen ingestion', async () => {
+    expect(await dbq.placeNamesWithNameCount()).toBeGreaterThan(0);
   });
 
-  test('place.current_address is the most recent dated address name', async () => {
+  test('place.current_address is the most recent dated place name', async () => {
     const rows = await dbq.placesWithCurrentAddressAndMostRecent(5);
     for (const row of rows) {
       expect(row.currentAddress).toBe(row.mostRecent);
     }
   });
 
-  test('address dates are updated from adressen CSV', async () => {
-    expect(await dbq.addressesWithDateCount()).toBeGreaterThan(0);
+  test('place name dates are updated from adressen CSV', async () => {
+    expect(await dbq.placeNamesWithDateCount()).toBeGreaterThan(0);
   });
 });
 
