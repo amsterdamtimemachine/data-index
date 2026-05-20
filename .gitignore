@@ -28,5 +28,9 @@ Thumbs.db
 # Fonts
 packages/app/static/fonts/
 
+# Plans
+geom_plan.md
+super_entity_plan.md
+
 # Binaries
 *.bin

@@ -51,15 +51,17 @@ export async function rebuildIndex() {
   console.log('Populating feature_cells...');
   const t = Date.now();
 
+  const halfCell = CELL_SIZE_METERS / 2;
   const result = await db.execute(sql`
     INSERT INTO feature_cells (feature_id, cell_x, cell_y)
     SELECT DISTINCT
       ${features.id} as feature_id,
-      FLOOR((ST_X(${place.geometry}) - ${min_x}) / ${CELL_SIZE_METERS})::smallint as cell_x,
-      FLOOR((ST_Y(${place.geometry}) - ${min_y}) / ${CELL_SIZE_METERS})::smallint as cell_y
+      FLOOR((ST_X((dp).geom) - ${min_x}) / ${CELL_SIZE_METERS})::smallint as cell_x,
+      FLOOR((ST_Y((dp).geom) - ${min_y}) / ${CELL_SIZE_METERS})::smallint as cell_y
     FROM ${features}
     INNER JOIN ${featureToPlace} ON ${features.id} = ${featureToPlace.featureId}
     INNER JOIN ${place} ON ${featureToPlace.placeId} = ${place.id}
+    CROSS JOIN LATERAL ST_DumpPoints(ST_Segmentize(${place.geometry}, ${halfCell})) dp
   `);
 
   console.log(`✅ Inserted ${result.rowCount} rows in ${Date.now() - t}ms`);
