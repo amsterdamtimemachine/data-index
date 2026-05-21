@@ -6,7 +6,8 @@ import type {
 	HeatmapTimeline,
 	HeatmapDimensions,
 	HeatmapResponse,
-	RecordType
+	RecordType,
+	PlaceType
 } from '@atm/shared/types';
 import type { AppError } from '$types/error';
 import { createPageErrorData, createError, createValidationError, createPeriodNotFoundError } from '$utils/error';
@@ -49,6 +50,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	// Parse URL parameters
 	const recordTypesParam = url.searchParams.get('recordTypes');
 	const datasetsParam = url.searchParams.get('datasets');
+	const placeTypesParam = url.searchParams.get('placeTypes');
 	const tagsParam = url.searchParams.get('tags');
 	const tagOperatorParam = url.searchParams.get('tagOperator');
 	const cellParam = url.searchParams.get('cell');
@@ -138,6 +140,20 @@ export const load: PageLoad = async ({ fetch, url }) => {
 			}
 		} else {
 			currentDatasets = availableDatasetIds;
+		}
+	}
+
+	// Determine place types to use
+	let currentPlaceTypes: PlaceType[] = [];
+	if (metadata?.placeTypes) {
+		if (placeTypesParam) {
+			const requestedPlaceTypes = placeTypesParam.split(',').map(t => t.trim()) as PlaceType[];
+			currentPlaceTypes = requestedPlaceTypes.filter(t => metadata.placeTypes.includes(t));
+			if (currentPlaceTypes.length === 0) {
+				currentPlaceTypes = metadata.placeTypes;
+			}
+		} else {
+			currentPlaceTypes = metadata.placeTypes;
 		}
 	}
 
@@ -473,6 +489,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		heatmapDimensions,
 		availableTags,
 		currentRecordTypes,
+		currentPlaceTypes,
 		currentDatasets,
 		currentTags,
 		currentTagOperator,

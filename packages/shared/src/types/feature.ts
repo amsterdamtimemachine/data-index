@@ -41,10 +41,13 @@ export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity;
 /**
  * Query parameters for fetching features
  */
+export type PlaceType = 'address' | 'street' | 'neighbourhood';
+
 export interface FeaturesQuery {
   bounds: HeatmapCellBounds;
   recordTypes?: RecordType[];
   datasetIds?: string[];
+  placeTypes?: PlaceType[];
   tags?: string[];
   tagOperator?: TagOperator;
   timeSlice?: string;

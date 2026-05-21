@@ -7,6 +7,8 @@
 	interface Props {
 		selectedRecordTypes: RecordType[];
 		allRecordTypes: RecordType[];
+		selectedPlaceTypes?: string[];
+		allPlaceTypes?: string[];
 		selectedDatasets: string[];
 		allDatasets: string[];
 		selectedTags: string[];
@@ -17,6 +19,8 @@
 	let {
 		selectedRecordTypes,
 		allRecordTypes,
+		selectedPlaceTypes = [],
+		allPlaceTypes = [],
 		selectedDatasets,
 		allDatasets,
 		selectedTags,
@@ -30,6 +34,12 @@
 				allRecordTypes.every((type) => selectedRecordTypes.includes(type)))
 	);
 
+	const hasAllPlaceTypes = $derived(
+		selectedPlaceTypes.length === 0 ||
+			(selectedPlaceTypes.length === allPlaceTypes.length &&
+				allPlaceTypes.every((pt) => selectedPlaceTypes.includes(pt)))
+	);
+
 	const hasAllDatasets = $derived(
 		selectedDatasets.length === 0 ||
 			(selectedDatasets.length === allDatasets.length &&
@@ -38,6 +48,10 @@
 
 	const displayedRecordTypes = $derived(
 		translateContentTypes(hasAllTypes ? allRecordTypes : selectedRecordTypes)
+	);
+
+	const displayedPlaceTypes = $derived(
+		hasAllPlaceTypes ? [] : selectedPlaceTypes
 	);
 
 	const displayedDatasets = $derived(
@@ -56,6 +70,15 @@
 				<span>of</span>
 			{/if}
 		{/each}
+		{#if displayedPlaceTypes.length > 0}
+			<span>op</span>
+			{#each displayedPlaceTypes as placeType, index}
+				<Tag variant="selected-outline">{placeType}</Tag>
+				{#if index < displayedPlaceTypes.length - 1}
+					<span>of</span>
+				{/if}
+			{/each}
+		{/if}
 		<span>in</span>
 		{#each displayedDatasets as dataset, index}
 			<Tag variant="selected-outline">{dataset}</Tag>

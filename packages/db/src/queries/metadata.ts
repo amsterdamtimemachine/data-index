@@ -2,13 +2,15 @@ import { sql } from 'drizzle-orm';
 import type {
   VisualizationMetadata,
   RecordType,
+  PlaceType,
 } from '@atm/shared';
 import { computeTimeSlices, computeTimeRange } from './time-slices';
 import { db } from '../client';
-import { features, datasets, tags, featureTags, featureCells } from '../schema';
+import { features, datasets, tags, featureTags, featureCells, featureToPlace, place } from '../schema';
 
 // Query result types
 type RecordTypeRow = { record_type: RecordType };
+type PlaceTypeRow = { place_type: PlaceType };
 type TagRow = { id: string };
 type CountRow = { count: string };
 type RecordTypeCountRow = { record_type: RecordType; count: string };
@@ -37,6 +39,19 @@ async function getRecordTypes(): Promise<RecordType[]> {
     ORDER BY ${features.recordType}
   `);
   return result.rows.map(r => r.record_type);
+}
+
+/**
+ * Get distinct place types that have features linked to them
+ */
+async function getPlaceTypes(): Promise<PlaceType[]> {
+  const result = await db.execute<PlaceTypeRow>(sql`
+    SELECT DISTINCT ${place.type} as place_type
+    FROM ${place}
+    JOIN ${featureToPlace} ON ${place.id} = ${featureToPlace.placeId}
+    ORDER BY ${place.type}
+  `);
+  return result.rows.map(r => r.place_type);
 }
 
 /**
@@ -87,10 +102,11 @@ async function getStats(): Promise<{
  * Get complete visualization metadata
  */
 export async function getMetadata(): Promise<VisualizationMetadata> {
-  const [timeSlices, timeRange, recordTypes, availableDatasets, availableTags, stats] = await Promise.all([
+  const [timeSlices, timeRange, recordTypes, placeTypes, availableDatasets, availableTags, stats] = await Promise.all([
     computeTimeSlices(),
     computeTimeRange(),
     getRecordTypes(),
+    getPlaceTypes(),
     getDatasets(),
     getTags(),
     getStats()
@@ -100,6 +116,7 @@ export async function getMetadata(): Promise<VisualizationMetadata> {
     timeSlices,
     timeRange,
     recordTypes,
+    placeTypes,
     datasets: availableDatasets,
     tags: availableTags,
     stats: {

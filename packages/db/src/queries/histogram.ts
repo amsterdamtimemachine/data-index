@@ -30,7 +30,7 @@ export async function getHistogram(
   const types = recordTypes || await getRecordTypes();
 
   if (types.length === 0) {
-    return { bins: [], maxCount: 0, timeRange: { start: 0, end: 0 }, totalFeatures: 0 };
+    return { bins: [], maxCount: 0, timeRange: { start: '', end: '' }, totalFeatures: 0 };
   }
 
   const [timeSlices, timeRange] = await Promise.all([

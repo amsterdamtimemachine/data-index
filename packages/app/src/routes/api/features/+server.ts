@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RecordType, FeaturesSortField, SortDirection, TagOperator } from '@atm/shared/types';
+import type { RecordType, PlaceType, FeaturesSortField, SortDirection, TagOperator } from '@atm/shared/types';
 import { getFeatures } from '@atm/db';
 
 export const GET: RequestHandler = async ({ url }) => {
@@ -44,6 +44,11 @@ export const GET: RequestHandler = async ({ url }) => {
 			? datasetsParam.split(',').map((t) => t.trim())
 			: undefined;
 
+		const placeTypesParam = url.searchParams.get('placeTypes');
+		const placeTypes = placeTypesParam
+			? (placeTypesParam.split(',').map((t) => t.trim()) as PlaceType[])
+			: undefined;
+
 		const tagsParam = url.searchParams.get('tags');
 		const tags = tagsParam
 			? tagsParam.split(',').map((t) => t.trim()).filter((t) => t.length > 0)
@@ -77,6 +82,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			bounds,
 			recordTypes,
 			datasetIds,
+			placeTypes,
 			tags,
 			tagOperator,
 			timeSlice,

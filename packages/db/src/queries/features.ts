@@ -150,6 +150,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     bounds,
     recordTypes,
     datasetIds,
+    placeTypes,
     tags: tagFilters,
     tagOperator = 'OR',
     timeSlice,
@@ -212,6 +213,10 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     ? sql`f.dataset_id IN ${datasetIds}`
     : sql`TRUE`;
 
+  const placeTypeCondition = placeTypes && placeTypes.length > 0
+    ? sql`p.type IN ${placeTypes}`
+    : sql`TRUE`;
+
   const dateCondition = dateRange
     ? sql`EXTRACT(YEAR FROM f.start_date) < ${dateRange.endYear} AND EXTRACT(YEAR FROM f.end_date) >= ${dateRange.startYear}`
     : sql`TRUE`;
@@ -225,11 +230,13 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     SELECT COUNT(DISTINCT f.id) as count
     FROM feature_cells fc
     JOIN features f ON fc.feature_id = f.id
+    ${placeTypes && placeTypes.length > 0 ? sql`JOIN feature_to_place fp2 ON f.id = fp2.feature_id JOIN place p2 ON fp2.place_id = p2.id` : sql``}
     WHERE ${cellCondition}
       AND ${typeCondition}
       AND ${datasetCondition}
       AND ${dateCondition}
       AND ${tagCondition}
+      ${placeTypes && placeTypes.length > 0 ? sql`AND p2.type IN ${placeTypes}` : sql``}
   `);
 
   const total = parseInt(countResult.rows[0].count);
@@ -301,6 +308,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         AND ${datasetCondition}
         AND ${dateCondition}
         AND ${tagCondition}
+        AND ${placeTypeCondition}
     ),
     with_tags AS (
       SELECT
