@@ -29,10 +29,18 @@ export async function getHistogram(
 ): Promise<Histogram> {
   const types = recordTypes || await getRecordTypes();
 
+  if (types.length === 0) {
+    return { bins: [], maxCount: 0, timeRange: { start: 0, end: 0 }, totalFeatures: 0 };
+  }
+
   const [timeSlices, timeRange] = await Promise.all([
     computeTimeSlices(binSizeYears),
     computeTimeRange(binSizeYears)
   ]);
+
+  if (timeSlices.length === 0) {
+    return { bins: [], maxCount: 0, timeRange, totalFeatures: 0 };
+  }
 
   const firstSlice = timeSlices[0];
   const lastSlice = timeSlices[timeSlices.length - 1];

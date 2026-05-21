@@ -78,6 +78,9 @@ export async function computeTimeSlices(binSizeYears: number = DEFAULT_BIN_SIZE)
  */
 export async function computeTimeRange(binSizeYears: number = DEFAULT_BIN_SIZE): Promise<TimeRange> {
   const slices = await computeTimeSlices(binSizeYears);
+  if (slices.length === 0) {
+    return { start: 0, end: 0 };
+  }
   return {
     start: slices[0].timeRange.start,
     end: slices[slices.length - 1].timeRange.end

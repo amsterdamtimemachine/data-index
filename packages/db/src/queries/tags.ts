@@ -42,6 +42,10 @@ export async function getAvailableTags(
 ): Promise<AvailableTags> {
   const types = recordTypes || await getRecordTypes();
 
+  if (types.length === 0) {
+    return { tags: [], recordTypes: [] };
+  }
+
   // Single query that gets tag stats with record types array
   const result = await db.execute<TagStatsRow>(sql`
     SELECT

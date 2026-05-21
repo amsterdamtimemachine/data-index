@@ -44,16 +44,17 @@ erDiagram
 
     place {
         text id PK "e.g. lp-1000001"
-        text type  "address | building | street | neighbourhood"
-        text current_address  "e.g. Prins Hendrikkade 93"
-        geometry geometry  "e.g. POINT(4.923899 52.3446)"
+        text type  "address | street | neighbourhood"
+        text preferred_label  "e.g. Prins Hendrikkade 93"
+        geometry geometry  "POINT, LINESTRING, or POLYGON"
     }
 
-    address {
+    place_name {
         text id PK "e.g. https://adamlink.nl/geo/address/A1"
         text place_id FK "e.g. lp-1000001"
         text name  "e.g. Prins Hendrikkade 93"
-        date date  "e.g. 1943-01-01"
+        date since  "e.g. 1943-01-01"
+        date until  "e.g. 1976-01-01"
         text source  "e.g. pw-1943"
     }
 
@@ -101,7 +102,7 @@ erDiagram
 
     organisations||--o{datasets:"has datasets"
     datasets||--o{features:"has"
-    place||--o{address:"has historical names"
+    place||--o{place_name:"has historical names"
     features||--o{feature_to_place:"located at"
     place||--o{feature_to_place:"links"
     relation||--o{feature_to_place:"describes"
@@ -113,7 +114,7 @@ erDiagram
 - **organisations**: Institutions that provide datasets
 - **datasets**: Data collections from organisations
 - **place**: Physical locations stored in RD coordinates (EPSG:28992)
-- **address**: Historical address names linked to places, used to show what a location was called at a given time
+- **place_name**: Historical names linked to places (addresses, streets), used to show what a location was called at a given time
 - **tags**: Thematic categories (e.g. Nature, Transport, Living) assigned to features. Work in progress, generated via AI classification across datasets
 - **features**: Images, texts, persons, or other content items linked to places and displayed in the UI
 - **feature_cells**: Pre-computed spatial grid that powers the heatmap. Each feature is mapped to the 100m cells it covers, so the heatmap can render without scanning all features per request
@@ -126,11 +127,9 @@ The data index is restricted to historical features that can be both spatially l
 
 ### Spatial
 
-Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a single point geometry in **RD New (EPSG:28992, metres)**. Query responses reproject to **WGS84 (EPSG:4326)** before sending to the client. `rebuild-index` overlays the city with a regular grid of `CELL_SIZE_METERS`-wide cells (default 100m) anchored to the bounding box of all geometries in the `place` table, and writes one row to `feature_cells` for each (feature, cell) pair the feature touches. A feature linked to a single place lands in one cell; a feature linked to several places spans as many cells as those places fall into. Heatmap requests then group `feature_cells` by `(cell_x, cell_y)` and count, instead of scanning every feature row.
+Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a geometry (POINT, LINESTRING, or POLYGON) in **RD New (EPSG:28992, metres)**. Query responses reproject to **WGS84 (EPSG:4326)** before sending to the client. `rebuild-index` overlays the city with a regular grid of `CELL_SIZE_METERS`-wide cells (default 100m) anchored to the bounding box of all geometries in the `place` table, and writes one row to `feature_cells` for each (feature, cell) pair the feature touches. A feature linked to a single point place lands in one cell; a feature linked to a street or neighbourhood spans as many cells as that geometry covers. Heatmap requests then group `feature_cells` by `(cell_x, cell_y)` and count, instead of scanning every feature row.
 
 Heatmap density is rendered with log-normalised counts (`log(count+1) / log(maxCount+1)`).
-
-**Only WKT POINT geometries are currently supported by the index. The `place.geometry` column is typed to accept LINESTRING and POLYGON as well, but indexing them (enumerating every cell a shape covers) is not yet implemented.**
 
 ### Temporal
 
@@ -156,7 +155,7 @@ Lower scores mean features more unique to the time and place.
 
 The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Adamlink is a Linked Open Data service that connects historical Amsterdam address registries to point geometries, enabling features to be linked to physical locations with historical address names.
 
-Adamlink place data must be ingested before any dataset: run `lps` first, then `adressen`. See the [Development](#development) or [Production](#production) sections for the full ingestion order.
+Adamlink place data must be ingested before any dataset: run `districts` and `streets` first (from TTL files), then `lps` and `adressen` (from CSVs). See the [Development](#development) or [Production](#production) sections for the full ingestion order.
 
 Every `place` row is sourced from Adamlink. Features that can't be resolved to an existing Adamlink place are skipped at ingest; no feature row is created and nothing unlinked lands in the database.
 
@@ -169,7 +168,7 @@ Each feature needs at minimum:
 - **record_type**: One of `image`, `text`, `person` (the frontend renders each type differently)
 - **start_date** / **end_date**: Date range for temporal placement on the histogram
 - **place link**: Each feature must be linked to a physical location. Two methods are supported:
-  - **Adamlink URI**: if your data references Adamlink address IDs, the ingestion script resolves them to places via the `address` table (requires LPS + adressen data to be ingested first)
+  - **Adamlink URI**: if your data references Adamlink address or street IDs, the ingestion script resolves them to places via the `place_name` table or `place` table (requires place data to be ingested first)
   - **WKT geometry point**: if your data only has coordinates, the ingestion script finds the nearest existing place within a configurable distance threshold (e.g. 5 meters)
 
 Optional: `description`, `content_url` (media), `entity` (schema.org JSONB), `url` (source link).
@@ -194,6 +193,8 @@ bun run db:rebuild-index
 
 | Dataset | Description | Access |
 |---------|-------------|--------|
+| [Districts](https://adamlink.nl/geo/districts) | Historical neighbourhood/district polygons (wijken1600, buurten1850, buurten1909) from Adamlink TTL | Public |
+| [Streets](https://adamlink.nl/data) | Street geometries (LineString) with historical name variants from Adamlink TTL | Public |
 | [LPS](https://adamlink.nl/downloads/20230920-lps.csv.zip) | Linked point set: historical address-to-geometry mappings from 7 Amsterdam registries (1832–1976) | Public |
 | [Adressen](https://adamlink.nl/downloads/20230920-adressen.csv.zip) | Address labels (street name + house number) for Adamlink address IDs | Public |
 | Beeldbank | Historical images from Amsterdam Stadsarchief | Private |
@@ -230,6 +231,8 @@ bun run docker:db:up
 bun run db:push-schema
 
 # Ingest place data (required before any dataset)
+bun run db:ingest -s districts -f <path-to-adamlinkbuurten.ttl>
+bun run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
 bun run db:ingest -s lps -f <path-to-lps.csv>
 bun run db:ingest -s adressen -f <path-to-adressen.csv>
 
@@ -286,9 +289,13 @@ cp .env.example .env.prod
 # Push schema into the existing DB (uses .env.prod via Bun's --env-file flag)
 bun --env-file=.env.prod run db:push-schema
 
-# Ingest data (same env file)
+# Ingest place data (same env file)
+bun --env-file=.env.prod run db:ingest -s districts -f <path-to-adamlinkbuurten.ttl>
+bun --env-file=.env.prod run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
 bun --env-file=.env.prod run db:ingest -s lps -f <path-to-lps.csv>
 bun --env-file=.env.prod run db:ingest -s adressen -f <path-to-adressen.csv>
+
+# Ingest feature datasets
 bun --env-file=.env.prod run db:ingest -s beeldbank -f <path-to-beeldbank.csv>
 bun --env-file=.env.prod run db:ingest -s joods-monument -f <path-to-results_jm.csv>
 bun --env-file=.env.prod run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
@@ -312,6 +319,8 @@ cp .env.example .env.staging
 
 # Push schema + ingest into the staging DB
 bun --env-file=.env.staging run db:push-schema
+bun --env-file=.env.staging run db:ingest -s districts -f <path-to-adamlinkbuurten.ttl>
+bun --env-file=.env.staging run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
 bun --env-file=.env.staging run db:ingest -s lps -f <path-to-lps.csv>
 # …and the other datasets, same pattern as production…
 bun --env-file=.env.staging run db:rebuild-index
@@ -349,9 +358,13 @@ docker compose --project-name data-index-prod --env-file .env.prod \
 # Push schema
 bun --env-file=.env.prod run db:push-schema
 
-# Ingest data
+# Ingest place data
+bun --env-file=.env.prod run db:ingest -s districts -f <path-to-adamlinkbuurten.ttl>
+bun --env-file=.env.prod run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
 bun --env-file=.env.prod run db:ingest -s lps -f <path-to-lps.csv>
 bun --env-file=.env.prod run db:ingest -s adressen -f <path-to-adressen.csv>
+
+# Ingest feature datasets
 bun --env-file=.env.prod run db:ingest -s beeldbank -f <path-to-beeldbank.csv>
 bun --env-file=.env.prod run db:ingest -s joods-monument -f <path-to-results_jm.csv>
 bun --env-file=.env.prod run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>

@@ -3,7 +3,7 @@ import { createTTLCache } from './cache';
 import type { Heatmap, HeatmapTimeline, HeatmapResponse, HeatmapDimensions, HeatmapResolutionConfig, RecordType } from '@atm/shared';
 import { DEFAULT_BIN_SIZE } from '@atm/shared';
 import { db } from '../client';
-import { featureCells, features, place } from '../schema';
+import { featureCells, features, featureToPlace, place } from '../schema';
 import { computeTimeSlices } from './time-slices';
 
 // Query result types
@@ -83,12 +83,13 @@ async function getBoundsFromData(): Promise<{ minLon: number; maxLon: number; mi
 
   const result = await db.execute<BoundsRow>(sql`
     SELECT
-      ST_XMin(ST_Extent(ST_Transform(${place.geometry}, 4326))) as min_lon,
-      ST_XMax(ST_Extent(ST_Transform(${place.geometry}, 4326))) as max_lon,
-      ST_YMin(ST_Extent(ST_Transform(${place.geometry}, 4326))) as min_lat,
-      ST_YMax(ST_Extent(ST_Transform(${place.geometry}, 4326))) as max_lat
-    FROM ${place}
-    WHERE ${place.geometry} IS NOT NULL
+      ST_XMin(ST_Extent(ST_Transform(p.geometry, 4326))) as min_lon,
+      ST_XMax(ST_Extent(ST_Transform(p.geometry, 4326))) as max_lon,
+      ST_YMin(ST_Extent(ST_Transform(p.geometry, 4326))) as min_lat,
+      ST_YMax(ST_Extent(ST_Transform(p.geometry, 4326))) as max_lat
+    FROM ${place} p
+    WHERE p.geometry IS NOT NULL
+      AND EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = p.id)
   `);
   const row = result.rows[0];
   const value = {
@@ -175,6 +176,13 @@ export async function getHeatmapTimeline(
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
   const timeSlices = await computeTimeSlices(binSizeYears);
+
+  if (types.length === 0 || timeSlices.length === 0) {
+    return {
+      dimensions: buildDimensions(0, 0, { minLon: 0, maxLon: 0, minLat: 0, maxLat: 0 }),
+      timeline: {}
+    };
+  }
 
   const [{ maxX, maxY }, bounds] = await Promise.all([
     getMaxCellBounds(),
