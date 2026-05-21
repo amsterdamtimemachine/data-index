@@ -73,8 +73,8 @@ export interface FeatureResult {
   temporalFrequency: number;
   entity?: Entity;
   relationId?: string;
-  currentAddress?: string;
-  historicalAddress?: string;
+  preferredLabel?: string;
+  historicalLabel?: string;
 }
 
 /**

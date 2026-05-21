@@ -33,7 +33,7 @@ export async function setupTestDb() {
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS place (
       id TEXT PRIMARY KEY, type TEXT NOT NULL,
-      current_address TEXT, geometry geometry(Geometry, 28992)
+      preferred_label TEXT, geometry geometry(Geometry, 28992)
     )
   `);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_geometry ON place USING gist(geometry)`);

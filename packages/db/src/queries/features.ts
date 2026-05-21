@@ -40,8 +40,8 @@ type FeatureRow = {
   relevance_score: number | null;
   entity: Entity | null;
   relation_id: string | null;
-  current_address: string | null;
-  historical_address: string | null;
+  preferred_label: string | null;
+  historical_label: string | null;
   tags: string[] | null;
 };
 
@@ -285,11 +285,11 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         o.url as organisation_url,
         f.entity,
         fp.relation_id,
-        p.current_address,
+        p.preferred_label,
         (SELECT a.name FROM place_name a
          WHERE a.place_id = fp.place_id
            AND a.since <= f.end_date
-         ORDER BY a.since DESC LIMIT 1) as historical_address
+         ORDER BY a.since DESC LIMIT 1) as historical_label
       FROM feature_cells fc
       JOIN features f ON fc.feature_id = f.id
       LEFT JOIN datasets d ON f.dataset_id = d.id
@@ -341,8 +341,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       organisation_url,
       entity,
       relation_id,
-      current_address,
-      historical_address,
+      preferred_label,
+      historical_label,
       tags
     FROM ranked
     ORDER BY type_rank, record_type, id
@@ -370,8 +370,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     temporalFrequency: row.temporal_frequency || 1,
     entity: row.entity || undefined,
     relationId: row.relation_id || undefined,
-    currentAddress: row.current_address || undefined,
-    historicalAddress: row.historical_address || undefined
+    preferredLabel: row.preferred_label || undefined,
+    historicalLabel: row.historical_label || undefined
   }));
 
   return {

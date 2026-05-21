@@ -87,14 +87,14 @@ export async function ingest(filePath: string) {
   let inserted = 0;
   for (const d of districts) {
     await db.execute(sql`
-      INSERT INTO place (id, type, current_address, geometry)
+      INSERT INTO place (id, type, preferred_label, geometry)
       VALUES (
         ${d.uri},
         'neighbourhood',
         ${d.label},
         ST_Transform(ST_GeomFromText(${d.wkt}, 4326), 28992)
       )
-      ON CONFLICT (id) DO UPDATE SET type = 'neighbourhood', current_address = ${d.label}
+      ON CONFLICT (id) DO UPDATE SET type = 'neighbourhood', preferred_label = ${d.label}
     `);
     inserted++;
     if (inserted % 50 === 0) {

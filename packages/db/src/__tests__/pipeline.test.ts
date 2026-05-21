@@ -66,10 +66,10 @@ describe('Adressen ingestion', () => {
     expect(await dbq.placeNamesWithNameCount()).toBeGreaterThan(0);
   });
 
-  test('place.current_address is the most recent dated place name', async () => {
-    const rows = await dbq.placesWithCurrentAddressAndMostRecent(5);
+  test('place.preferred_label is the most recent dated place name', async () => {
+    const rows = await dbq.placesWithPreferredLabelAndMostRecent(5);
     for (const row of rows) {
-      expect(row.currentAddress).toBe(row.mostRecent);
+      expect(row.preferredLabel).toBe(row.mostRecent);
     }
   });
 
@@ -181,12 +181,12 @@ describe('getFeatures', () => {
     }
   });
 
-  test('returns currentAddress and historicalAddress', async () => {
+  test('returns preferredLabel and historicalLabel', async () => {
     const r = await getFeatures({ bounds: BOUNDS, pageSize: 50 });
-    const withAddress = r.data.find(f => f.currentAddress);
-    expect(withAddress).toBeDefined();
-    // historicalAddress should also be populated for features within the registry date range
-    const withHistorical = r.data.find(f => f.historicalAddress);
+    const withLabel = r.data.find(f => f.preferredLabel);
+    expect(withLabel).toBeDefined();
+    // historicalLabel should also be populated for features within the registry date range
+    const withHistorical = r.data.find(f => f.historicalLabel);
     expect(withHistorical).toBeDefined();
   });
 

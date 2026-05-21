@@ -35,7 +35,7 @@ export const datasets = pgTable('datasets', {
 export const place = pgTable('place', {
   id: text('id').primaryKey(),                    // "lp-1000001"
   type: text('type').notNull(),                   // "address" | "building" | "street" | "neighbourhood"
-  currentAddress: text('current_address'),        // most recent address name
+  preferredLabel: text('preferred_label'),         // preferred display name (most recent place_name entry)
   geometry: geometry('geometry')                  // POINT, LINESTRING, or POLYGON
 }, (table) => [
   index('idx_place_geometry').using('gist', table.geometry)

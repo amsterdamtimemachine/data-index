@@ -3,7 +3,7 @@
  *
  * Updates the `place_name` table with human-readable names and the actual
  * registry date (which can be more granular than the LPS column dates).
- * Then sets `place.current_address` to the most recent named entry per place.
+ * Then sets `place.preferred_label` to the most recent named entry per place.
  * Run after LPS ingestion (place_name rows must exist).
  *
  * Usage: bun run db:ingest -s adressen -f <path-to-20230920-adressen.csv>
@@ -69,10 +69,10 @@ export async function ingest(filePath: string) {
 
   console.log(`\n${updated} address entries updated`);
 
-  // Set place.current_address to the most recent named entry per place
-  console.log('Updating place current addresses...');
+  // Set place.preferred_label to the most recent named entry per place
+  console.log('Updating place preferred labels...');
   const result = await db.execute(sql`
-    UPDATE place SET current_address = sub.name
+    UPDATE place SET preferred_label = sub.name
     FROM (
       SELECT DISTINCT ON (place_id) place_id, name
       FROM place_name
@@ -81,5 +81,5 @@ export async function ingest(filePath: string) {
     ) sub
     WHERE place.id = sub.place_id
   `);
-  console.log(`Done: ${result.rowCount} place current addresses updated`);
+  console.log(`Done: ${result.rowCount} place preferred labels updated`);
 }

@@ -66,27 +66,27 @@ export async function placeNamesWithDateCount(): Promise<number> {
 
 // ─── place ↔ place_name consistency ─────────────────────────────────────────
 
-export interface PlaceCurrentVsMostRecent {
+export interface PlacePreferredVsMostRecent {
   placeId: string;
-  currentAddress: string;
+  preferredLabel: string;
   mostRecent: string;
 }
 
-export async function placesWithCurrentAddressAndMostRecent(
+export async function placesWithPreferredLabelAndMostRecent(
   limit: number = 5
-): Promise<PlaceCurrentVsMostRecent[]> {
-  const r = await db.execute<{ place_id: string; current_address: string; most_recent: string }>(sql`
-    SELECT p.id as place_id, p.current_address,
+): Promise<PlacePreferredVsMostRecent[]> {
+  const r = await db.execute<{ place_id: string; preferred_label: string; most_recent: string }>(sql`
+    SELECT p.id as place_id, p.preferred_label,
       (SELECT pn.name FROM place_name pn
        WHERE pn.place_id = p.id AND pn.name IS NOT NULL
        ORDER BY pn.since DESC LIMIT 1) as most_recent
     FROM place p
-    WHERE p.current_address IS NOT NULL
+    WHERE p.preferred_label IS NOT NULL
     LIMIT ${limit}
   `);
   return r.rows.map(row => ({
     placeId: row.place_id,
-    currentAddress: row.current_address,
+    preferredLabel: row.preferred_label,
     mostRecent: row.most_recent,
   }));
 }
