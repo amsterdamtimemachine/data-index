@@ -1,29 +1,19 @@
 // src/routes/api/available-tags/+server.ts
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RecordType, PlaceType } from '@atm/shared/types';
 import { getAvailableTags } from '@atm/db';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
-		// Parse query parameters
-		const recordTypesParam = url.searchParams.get('recordTypes');
+		const recordTypes = parseRecordTypes(url);
+		const datasetIds = parseDatasets(url);
+		const placeTypes = parsePlaceTypes(url);
 
-		// Parse recordTypes - default to all available recordTypes if none specified
-		const recordTypes = recordTypesParam
-			? (recordTypesParam.split(',').map((t) => t.trim()) as RecordType[])
-			: undefined;
-
-		// Parse place types
-		const placeTypesParam = url.searchParams.get('placeTypes');
-		const placeTypes = placeTypesParam
-			? (placeTypesParam.split(',').map((t) => t.trim()) as PlaceType[])
-			: undefined;
-
-		console.log(`🏷️ Available tags API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}`);
+		console.log(`🏷️ Available tags API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}`);
 
 		// Get available tags from database
-		const result = await getAvailableTags(recordTypes, placeTypes);
+		const result = await getAvailableTags(recordTypes, datasetIds, placeTypes);
 
 		const tagCount = result.tags.length;
 		const totalFeatures = result.tags.reduce((sum, tag) => sum + tag.totalFeatures, 0);

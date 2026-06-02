@@ -2,9 +2,12 @@ import { sql } from 'drizzle-orm';
 import type { Heatmap, HeatmapTimeline, HeatmapResponse, HeatmapDimensions, HeatmapResolutionConfig, RecordType, PlaceType } from '@atm/shared';
 import { DEFAULT_BIN_SIZE } from '@atm/shared';
 import { db } from '../client';
-import { placeCells, features, featureToPlace, place, gridConfig } from '../schema';
+import { placeCells, features, featureToPlace, place } from '../schema';
 import { computeTimeSlices } from './time-slices';
 import { getRecordTypes } from './record-types';
+import { getGridConfig } from './grid-config';
+import { featureYearOverlap, slicesCTE } from './time-filter';
+import { andIn } from './filters';
 
 // Query result types
 type GridCellCount = { grid_col: number; grid_row: number; count: string };
@@ -24,9 +27,6 @@ function gridRowExpr(gridRows: number, maxY: number) {
 }
 
 /**
- * Convert cell (x, y) at base resolution to target grid index
- */
-/**
  * Build sparse heatmap from counts map
  */
 function buildSparseHeatmap(countsMap: Map<number, number>): Heatmap {
@@ -41,44 +41,6 @@ function buildSparseHeatmap(countsMap: Map<number, number>): Heatmap {
   }
 
   return { indices, counts };
-}
-
-/**
- * Read pre-computed grid config from rebuild-index.
- * Single indexed-row read — not cached, so it always reflects the latest
- * rebuild-index without a staleness window.
- */
-async function getGridConfig(): Promise<{ maxX: number; maxY: number; bounds: { minLon: number; maxLon: number; minLat: number; maxLat: number } }> {
-  const result = await db.execute<{
-    max_cell_x: number; max_cell_y: number;
-    min_lon: number; max_lon: number;
-    min_lat: number; max_lat: number;
-  }>(sql`SELECT * FROM ${gridConfig} WHERE id = 'current'`);
-
-  const row = result.rows[0];
-  if (!row) {
-    return { maxX: 0, maxY: 0, bounds: { minLon: 0, maxLon: 0, minLat: 0, maxLat: 0 } };
-  }
-
-  return {
-    maxX: row.max_cell_x,
-    maxY: row.max_cell_y,
-    bounds: {
-      minLon: row.min_lon,
-      maxLon: row.max_lon,
-      minLat: row.min_lat,
-      maxLat: row.max_lat,
-    }
-  };
-}
-
-async function getMaxCellBounds(): Promise<{ maxX: number; maxY: number }> {
-  const config = await getGridConfig();
-  return { maxX: config.maxX, maxY: config.maxY };
-}
-
-async function getBoundsFromData(): Promise<{ minLon: number; maxLon: number; minLat: number; maxLat: number }> {
-  return (await getGridConfig()).bounds;
 }
 
 /**
@@ -104,6 +66,16 @@ export async function getHeatmap(
   binSizeYears: number = DEFAULT_BIN_SIZE
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
+
+  // No record types means no data — return an empty heatmap rather than emitting
+  // `record_type IN ()`. Matches getHeatmapTimeline / getHistogram / getFeatures.
+  if (types.length === 0) {
+    return {
+      dimensions: buildDimensions(0, 0, { minLon: 0, maxLon: 0, minLat: 0, maxLat: 0 }),
+      timeline: { [timeSliceKey]: buildSparseHeatmap(new Map()) }
+    };
+  }
+
   const timeSlices = await computeTimeSlices(binSizeYears);
   const timeSlice = timeSlices.find(ts => ts.key === timeSliceKey);
 
@@ -111,10 +83,10 @@ export async function getHeatmap(
     throw new Error(`Unknown time slice: ${timeSliceKey}`);
   }
 
-  const [{ maxX, maxY }, bounds] = await Promise.all([
-    getMaxCellBounds(),
-    getBoundsFromData()
-  ]);
+  const config = await getGridConfig();
+  const maxX = config.maxCellX;
+  const maxY = config.maxCellY;
+  const bounds = { minLon: config.minLon, maxLon: config.maxLon, minLat: config.minLat, maxLat: config.maxLat };
 
   const gridCols = Math.min(resolution.cols, maxX + 1);
   const gridRows = Math.min(resolution.rows, maxY + 1);
@@ -134,10 +106,9 @@ export async function getHeatmap(
     JOIN ${features} ON ${featureToPlace.featureId} = ${features.id}
     JOIN ${place} ON ${placeCells.placeId} = ${place.id}
     WHERE ${features.recordType} IN ${types}
-      ${datasetIds && datasetIds.length > 0 ? sql`AND ${features.datasetId} IN ${datasetIds}` : sql``}
-      ${placeTypes && placeTypes.length > 0 ? sql`AND ${place.type} IN ${placeTypes}` : sql``}
-      AND EXTRACT(YEAR FROM ${features.startDate}) < ${endYear}
-      AND EXTRACT(YEAR FROM ${features.endDate}) >= ${startYear}
+      ${andIn(sql`${features.datasetId}`, datasetIds)}
+      ${andIn(sql`${place.type}`, placeTypes)}
+      AND ${featureYearOverlap(sql`${features.startDate}`, sql`${features.endDate}`, startYear, endYear)}
     GROUP BY grid_col, grid_row
   `);
 
@@ -173,10 +144,10 @@ export async function getHeatmapTimeline(
     };
   }
 
-  const [{ maxX, maxY }, bounds] = await Promise.all([
-    getMaxCellBounds(),
-    getBoundsFromData()
-  ]);
+  const config = await getGridConfig();
+  const maxX = config.maxCellX;
+  const maxY = config.maxCellY;
+  const bounds = { minLon: config.minLon, maxLon: config.maxLon, minLat: config.minLat, maxLat: config.maxLat };
 
   const gridCols = Math.min(resolution.cols, maxX + 1);
   const gridRows = Math.min(resolution.rows, maxY + 1);
@@ -185,10 +156,7 @@ export async function getHeatmapTimeline(
   const lastSlice = timeSlices[timeSlices.length - 1];
 
   const result = await db.execute<GridCellCountWithTime>(sql`
-    WITH slices AS (
-      SELECT gs AS bin_start, gs + ${binSizeYears}::int AS bin_end
-      FROM generate_series(${firstSlice.startYear}::int, ${lastSlice.startYear}::int, ${binSizeYears}::int) AS gs
-    )
+    WITH ${slicesCTE(firstSlice.startYear, lastSlice.startYear, binSizeYears)}
     SELECT
       ${gridColExpr(gridCols, maxX)} as grid_col,
       ${gridRowExpr(gridRows, maxY)} as grid_row,
@@ -198,13 +166,10 @@ export async function getHeatmapTimeline(
     JOIN ${featureToPlace} ON ${placeCells.placeId} = ${featureToPlace.placeId}
     JOIN ${features} ON ${featureToPlace.featureId} = ${features.id}
     JOIN ${place} ON ${placeCells.placeId} = ${place.id}
-    JOIN slices s ON EXTRACT(YEAR FROM ${features.startDate}) < s.bin_end
-                 AND EXTRACT(YEAR FROM ${features.endDate}) >= s.bin_start
+    JOIN slices s ON ${featureYearOverlap(sql`${features.startDate}`, sql`${features.endDate}`, sql`s.bin_start`, sql`s.bin_end`)}
     WHERE ${features.recordType} IN ${types}
-      ${datasetIds && datasetIds.length > 0 ? sql`AND ${features.datasetId} IN ${datasetIds}` : sql``}
-      ${placeTypes && placeTypes.length > 0 ? sql`AND ${place.type} IN ${placeTypes}` : sql``}
-      AND ${features.startDate} IS NOT NULL
-      AND ${features.endDate} IS NOT NULL
+      ${andIn(sql`${features.datasetId}`, datasetIds)}
+      ${andIn(sql`${place.type}`, placeTypes)}
     GROUP BY grid_col, grid_row, s.bin_start
   `);
 

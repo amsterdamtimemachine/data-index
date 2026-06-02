@@ -8,9 +8,8 @@
  */
 import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
-import { sql } from 'drizzle-orm';
-import { db } from '../../client';
-import { placeName } from '../../schema';
+import type { NewPlaceName } from '../../schema';
+import { insertPlaces, createNameWriter, adamlinkAddressUri, type PlaceInsert } from '../helpers';
 
 const ADDR_COLS: { col: string; source: string; date: string }[] = [
   { col: 'pw-1943', source: 'pw-1943', date: '1943-01-01' },
@@ -22,21 +21,13 @@ const ADDR_COLS: { col: string; source: string; date: string }[] = [
   { col: 'percelen-1832', source: 'percelen-1832', date: '1832-01-01' },
 ];
 
-const BATCH_SIZE = 1000;
-
 export async function ingest(filePath: string) {
   console.log(`Parsing ${filePath}...`);
   const csvParser = createReadStream(filePath).pipe(parse({ columns: true }));
 
-  let placeCount = 0;
-  let addressCount = 0;
-  let nameBatch: { id: string; placeId: string; since: string; source: string }[] = [];
-
-  async function flushNames() {
-    if (nameBatch.length === 0) return;
-    await db.insert(placeName).values(nameBatch).onConflictDoNothing();
-    nameBatch = [];
-  }
+  // Buffer rows, then insert places before names (place_name has an FK to place).
+  const placeRows: PlaceInsert[] = [];
+  const nameRows: NewPlaceName[] = [];
 
   for await (const row of csvParser) {
     const lp = row.lp?.trim();
@@ -44,34 +35,28 @@ export async function ingest(filePath: string) {
     if (!lp || !wkt) continue;
 
     const placeId = `lp-${lp}`;
+    placeRows.push({ id: placeId, type: 'address', wkt });
 
-    // Insert place (one per linked point)
-    await db.execute(sql`
-      INSERT INTO place (id, type, geometry)
-      VALUES (${placeId}, 'address', ST_GeomFromText(${wkt}, 28992))
-      ON CONFLICT DO NOTHING
-    `);
-    placeCount++;
-
-    // Collect place_name rows for each registry column
     for (const { col, source, date } of ADDR_COLS) {
       const addrId = row[col]?.trim();
       if (addrId) {
-        const uri = `https://adamlink.nl/geo/address/${addrId}`;
-        nameBatch.push({ id: uri, placeId, since: date, source });
-        addressCount++;
-
-        if (nameBatch.length >= BATCH_SIZE) {
-          await flushNames();
-        }
+        nameRows.push({ id: adamlinkAddressUri(addrId), placeId, since: date, source });
       }
-    }
-
-    if (placeCount % 1000 === 0) {
-      process.stdout.write(`\r  ${placeCount} places, ${addressCount} addresses`);
     }
   }
 
-  await flushNames();
-  console.log(`\nDone: ${placeCount} places, ${addressCount} addresses`);
+  // LPS geometry is already RD (28992). Don't clobber preferred_label on re-ingest
+  // (the adressen step sets it), so DO NOTHING on conflict.
+  console.log(`Inserting ${placeRows.length} places...`);
+  const placeCount = await insertPlaces(placeRows, { sourceSrid: 28992, onConflict: 'nothing' });
+
+  console.log(`Inserting ${nameRows.length} place names...`);
+  const names = createNameWriter();
+  for (const name of nameRows) {
+    names.add(name);
+    await names.flushIfFull();
+  }
+  await names.flush();
+
+  console.log(`\nDone: ${placeCount} places, ${nameRows.length} addresses`);
 }

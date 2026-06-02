@@ -2,9 +2,11 @@ import { sql } from 'drizzle-orm';
 import type { Histogram, HistogramBin, RecordType, PlaceType } from '@atm/shared';
 import { DEFAULT_BIN_SIZE } from '@atm/shared';
 import { db } from '../client';
-import { features, featureToPlace, place } from '../schema';
+import { features } from '../schema';
 import { computeTimeSlices, computeTimeRange } from './time-slices';
 import { getRecordTypes } from './record-types';
+import { featureYearOverlap, slicesCTE } from './time-filter';
+import { andIn, placeTypeJoin } from './filters';
 
 // Query result types
 type BinRow = { bin_start: string; count: string };
@@ -37,22 +39,14 @@ export async function getHistogram(
   const lastSlice = timeSlices[timeSlices.length - 1];
 
   const result = await db.execute<BinRow>(sql`
-    WITH slices AS (
-      SELECT gs AS bin_start, gs + ${binSizeYears}::int AS bin_end
-      FROM generate_series(${firstSlice.startYear}::int, ${lastSlice.startYear}::int, ${binSizeYears}::int) AS gs
-    )
+    WITH ${slicesCTE(firstSlice.startYear, lastSlice.startYear, binSizeYears)}
     SELECT s.bin_start::text as bin_start, COUNT(DISTINCT f.id) as count
     FROM ${features} f
-    ${placeTypes && placeTypes.length > 0
-      ? sql`JOIN ${featureToPlace} fp ON fp.feature_id = f.id JOIN ${place} p ON fp.place_id = p.id`
-      : sql``}
-    JOIN slices s ON EXTRACT(YEAR FROM f.start_date) < s.bin_end
-                 AND EXTRACT(YEAR FROM f.end_date) >= s.bin_start
+    ${placeTypeJoin(placeTypes, sql`f.id`)}
+    JOIN slices s ON ${featureYearOverlap(sql`f.start_date`, sql`f.end_date`, sql`s.bin_start`, sql`s.bin_end`)}
     WHERE f.record_type IN ${types}
-      ${datasetIds && datasetIds.length > 0 ? sql`AND f.dataset_id IN ${datasetIds}` : sql``}
-      ${placeTypes && placeTypes.length > 0 ? sql`AND p.type IN ${placeTypes}` : sql``}
-      AND f.start_date IS NOT NULL
-      AND f.end_date IS NOT NULL
+      ${andIn(sql`f.dataset_id`, datasetIds)}
+      ${andIn(sql`p.type`, placeTypes)}
     GROUP BY s.bin_start
     ORDER BY s.bin_start
   `);
@@ -68,7 +62,18 @@ export async function getHistogram(
     count: binMap.get(ts.startYear) || 0
   }));
 
-  const totalFeatures = bins.reduce((sum, b) => sum + b.count, 0);
+  // True distinct total. Summing bin counts would over-count any feature whose
+  // date range spans multiple bins (COUNT DISTINCT counts it once per bin).
+  const totalResult = await db.execute<{ count: string }>(sql`
+    SELECT COUNT(DISTINCT f.id) as count
+    FROM ${features} f
+    ${placeTypeJoin(placeTypes, sql`f.id`)}
+    WHERE f.record_type IN ${types}
+      ${andIn(sql`f.dataset_id`, datasetIds)}
+      ${andIn(sql`p.type`, placeTypes)}
+      AND ${featureYearOverlap(sql`f.start_date`, sql`f.end_date`, firstSlice.startYear, lastSlice.endYear)}
+  `);
+  const totalFeatures = parseInt(totalResult.rows[0].count);
   const maxCount = Math.max(...bins.map(b => b.count), 0);
 
   return {

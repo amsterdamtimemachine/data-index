@@ -12,9 +12,10 @@ import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { organisations, datasets, relation, features, featureToPlace, placeName } from '../../schema';
+import { placeName } from '../../schema';
 import type { MediaObjectEntity } from '@atm/shared';
 import { formatDateRange } from '../utils';
+import { upsertSource, createFeatureWriter, createCachedResolver } from '../helpers';
 
 // ═══════════════════════════════════════════════════════════════
 //  Organisation
@@ -55,45 +56,28 @@ interface RawRow {
 type PlaceRow = { place_id: string };
 
 export async function ingest(filePath: string) {
-  await db.insert(organisations)
-    .values({ id: ORG_ID, label: ORG_LABEL, url: ORG_URL })
-    .onConflictDoNothing();
-
-  await db.insert(datasets)
-    .values({ id: DATASET_ID, label: DATASET_LABEL, url: DATASET_URL, organisationId: ORG_ID })
-    .onConflictDoNothing();
-
-  await db.insert(relation)
-    .values({ id: RELATION_ID, label: RELATION_LABEL })
-    .onConflictDoNothing();
+  await upsertSource({
+    organisation: { id: ORG_ID, label: ORG_LABEL, url: ORG_URL },
+    dataset: { id: DATASET_ID, label: DATASET_LABEL, url: DATASET_URL },
+    relation: { id: RELATION_ID, label: RELATION_LABEL },
+  });
 
   console.log(`Streaming ${filePath}...`);
 
-  const placeIdCache = new Map<string, string | null>();
-
-  async function resolveByAddress(adamlinkUri: string): Promise<string | null> {
-    const cached = placeIdCache.get(adamlinkUri);
-    if (cached !== undefined) return cached;
-
+  // Address and street resolvers keep separate caches; their URI key spaces don't overlap.
+  const resolveByAddress = createCachedResolver(async (adamlinkUri) => {
     const result = await db.execute<PlaceRow>(
       sql`SELECT ${placeName.placeId} as place_id FROM ${placeName} WHERE ${placeName.id} = ${adamlinkUri}`
     );
-    const placeId = result.rows[0]?.place_id || null;
-    placeIdCache.set(adamlinkUri, placeId);
-    return placeId;
-  }
+    return result.rows[0]?.place_id ?? null;
+  });
 
-  async function resolveByStreet(streetUri: string): Promise<string | null> {
-    const cached = placeIdCache.get(streetUri);
-    if (cached !== undefined) return cached;
-
+  const resolveByStreet = createCachedResolver(async (streetUri) => {
     const result = await db.execute<PlaceRow>(
       sql`SELECT id as place_id FROM place WHERE id = ${streetUri} AND type = 'street'`
     );
-    const placeId = result.rows[0]?.place_id || null;
-    placeIdCache.set(streetUri, placeId);
-    return placeId;
-  }
+    return result.rows[0]?.place_id ?? null;
+  });
 
   const pendingFeatures = new Map<string, any>();
   const pendingStreetUris = new Map<string, Set<string>>();
@@ -106,19 +90,7 @@ export async function ingest(filePath: string) {
   let droppedResources = 0;
   let rowCount = 0;
 
-  let featureBatch: any[] = [];
-  let linkBatch: { featureId: string; placeId: string; relationId: string }[] = [];
-
-  async function flush() {
-    if (featureBatch.length > 0) {
-      await db.insert(features).values(featureBatch).onConflictDoNothing();
-      featureBatch = [];
-    }
-    if (linkBatch.length > 0) {
-      await db.insert(featureToPlace).values(linkBatch).onConflictDoNothing();
-      linkBatch = [];
-    }
-  }
+  const writer = createFeatureWriter(BATCH_SIZE);
 
   function buildFeatureData(row: RawRow) {
     const name = row.title?.trim() || '';
@@ -177,7 +149,7 @@ export async function ingest(filePath: string) {
       if (!placeId) continue;
 
       featureId = crypto.randomUUID();
-      featureBatch.push({ id: featureId, ...pendingFeatures.get(sourceUrl)! });
+      writer.addFeature({ id: featureId, ...pendingFeatures.get(sourceUrl)! });
       committedFeatures.set(sourceUrl, featureId);
       pendingFeatures.delete(sourceUrl);
       pendingStreetUris.delete(sourceUrl);
@@ -188,14 +160,12 @@ export async function ingest(filePath: string) {
       const linkKey = `${featureId}|${adamlinkUri}`;
       if (!seenLinks.has(linkKey)) {
         seenLinks.add(linkKey);
-        linkBatch.push({ featureId, placeId, relationId: RELATION_ID });
+        writer.addLink({ featureId, placeId, relationId: RELATION_ID });
         linkCount++;
       }
     }
 
-    if (featureBatch.length >= BATCH_SIZE || linkBatch.length >= BATCH_SIZE) {
-      await flush();
-    }
+    await writer.flushIfFull();
 
     rowCount++;
     if (rowCount % 10000 === 0) {
@@ -203,7 +173,7 @@ export async function ingest(filePath: string) {
     }
   }
 
-  await flush();
+  await writer.flush();
 
   // Street fallback: try to resolve pending features via their street URIs
   console.log(`\n\nStreet fallback: ${pendingFeatures.size} resources to try...`);
@@ -221,15 +191,13 @@ export async function ingest(filePath: string) {
 
     if (resolvedPlaceId) {
       const featureId = crypto.randomUUID();
-      featureBatch.push({ id: featureId, ...featureData });
-      linkBatch.push({ featureId, placeId: resolvedPlaceId, relationId: RELATION_ID });
+      writer.addFeature({ id: featureId, ...featureData });
+      writer.addLink({ featureId, placeId: resolvedPlaceId, relationId: RELATION_ID });
       featureCount++;
       streetLinkCount++;
       streetResolved++;
 
-      if (featureBatch.length >= BATCH_SIZE || linkBatch.length >= BATCH_SIZE) {
-        await flush();
-      }
+      await writer.flushIfFull();
     }
 
     if (streetResolved % 1000 === 0 && streetResolved > 0) {
@@ -237,7 +205,7 @@ export async function ingest(filePath: string) {
     }
   }
 
-  await flush();
+  await writer.flush();
 
   droppedResources = pendingFeatures.size - streetResolved;
 

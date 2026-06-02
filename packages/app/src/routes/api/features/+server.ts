@@ -1,7 +1,8 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RecordType, PlaceType, FeaturesSortField, SortDirection, TagOperator } from '@atm/shared/types';
+import type { FeaturesSortField, SortDirection, TagOperator } from '@atm/shared/types';
 import { getFeatures } from '@atm/db';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -34,25 +35,10 @@ export const GET: RequestHandler = async ({ url }) => {
 		}
 
 		// Parse optional parameters
-		const recordTypesParam = url.searchParams.get('recordTypes');
-		const recordTypes = recordTypesParam
-			? (recordTypesParam.split(',').map((t) => t.trim()) as RecordType[])
-			: undefined;
-
-		const datasetsParam = url.searchParams.get('datasets');
-		const datasetIds = datasetsParam
-			? datasetsParam.split(',').map((t) => t.trim())
-			: undefined;
-
-		const placeTypesParam = url.searchParams.get('placeTypes');
-		const placeTypes = placeTypesParam
-			? (placeTypesParam.split(',').map((t) => t.trim()) as PlaceType[])
-			: undefined;
-
-		const tagsParam = url.searchParams.get('tags');
-		const tags = tagsParam
-			? tagsParam.split(',').map((t) => t.trim()).filter((t) => t.length > 0)
-			: undefined;
+		const recordTypes = parseRecordTypes(url);
+		const datasetIds = parseDatasets(url);
+		const placeTypes = parsePlaceTypes(url);
+		const tags = parseList(url, 'tags');
 
 		const tagOperator = (url.searchParams.get('tagOperator') || 'OR').toUpperCase() as TagOperator;
 		const timeSlice = url.searchParams.get('timeSlice') || undefined;

@@ -316,6 +316,9 @@ export const load: PageLoad = async ({ fetch, url }) => {
 			if (currentRecordTypes.length > 0) {
 				tagsParams.set('recordTypes', currentRecordTypes.join(','));
 			}
+			if (currentDatasets.length > 0) {
+				tagsParams.set('datasets', currentDatasets.join(','));
+			}
 			if (currentPlaceTypes.length > 0) {
 				tagsParams.set('placeTypes', currentPlaceTypes.join(','));
 			}

@@ -8,21 +8,12 @@ import type {
 } from '@atm/shared';
 import { computeTimeSlices } from './time-slices';
 import { getRecordTypes } from './record-types';
+import { getGridConfig } from './grid-config';
+import { featureYearOverlap } from './time-filter';
 import { db } from '../client';
-import { featureToPlace, place, placeCells, gridConfig } from '../schema';
+import { featureToPlace, place, placeCells } from '../schema';
 
-// Query result types 
-type BaseCellBoundsRow = {
-  min_x: number;
-  max_x: number;
-  min_y: number;
-  max_y: number;
-  min_lon: number;
-  max_lon: number;
-  min_lat: number;
-  max_lat: number;
-};
-
+// Query result types
 type FeatureRow = {
   id: string;
   url: string | null;
@@ -46,51 +37,6 @@ type FeatureRow = {
 };
 
 type CountRow = { count: string };
-
-/**
- * Read pre-computed grid config from rebuild-index.
- * Single indexed-row read — not cached, so it always reflects the latest
- * rebuild-index without a staleness window.
- */
-async function getGridConfig(): Promise<{ bounds: BaseCellBoundsRow; maxSpatial: number; maxTemporal: number }> {
-  const result = await db.execute<{
-    min_cell_x: number; max_cell_x: number;
-    min_cell_y: number; max_cell_y: number;
-    min_lon: number; max_lon: number;
-    min_lat: number; max_lat: number;
-    max_spatial_frequency: number;
-    max_temporal_frequency: number;
-  }>(sql`SELECT * FROM ${gridConfig} WHERE id = 'current'`);
-
-  const row = result.rows[0];
-  if (!row) {
-    throw new Error('Grid config not found. Run rebuild-index first.');
-  }
-
-  return {
-    bounds: {
-      min_x: row.min_cell_x,
-      max_x: row.max_cell_x,
-      min_y: row.min_cell_y,
-      max_y: row.max_cell_y,
-      min_lon: row.min_lon,
-      max_lon: row.max_lon,
-      min_lat: row.min_lat,
-      max_lat: row.max_lat,
-    },
-    maxSpatial: row.max_spatial_frequency || 1,
-    maxTemporal: row.max_temporal_frequency || 1,
-  };
-}
-
-async function getBaseCellBounds(): Promise<BaseCellBoundsRow> {
-  return (await getGridConfig()).bounds;
-}
-
-async function getMaxFrequencies(): Promise<{ maxSpatial: number; maxTemporal: number }> {
-  const config = await getGridConfig();
-  return { maxSpatial: config.maxSpatial, maxTemporal: config.maxTemporal };
-}
 
 /**
  * Convert a display-cell's geographic bounds to the exact set of base cells
@@ -119,12 +65,12 @@ async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Promise<{
   minCellY: number;
   maxCellY: number;
 }> {
-  const base = await getBaseCellBounds();
+  const config = await getGridConfig();
 
-  const minLon = Math.max(bounds.minLon, base.min_lon);
-  const maxLon = Math.min(bounds.maxLon, base.max_lon);
-  const minLat = Math.max(bounds.minLat, base.min_lat);
-  const maxLat = Math.min(bounds.maxLat, base.max_lat);
+  const minLon = Math.max(bounds.minLon, config.minLon);
+  const maxLon = Math.min(bounds.maxLon, config.maxLon);
+  const minLat = Math.max(bounds.minLat, config.minLat);
+  const maxLat = Math.min(bounds.maxLat, config.maxLat);
 
   // Width/height of one display cell in WGS84.
   const cellW = maxLon - minLon;
@@ -136,15 +82,15 @@ async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Promise<{
   }
 
   // Recover the display grid resolution and this cell's column/row.
-  const gridCols = Math.max(1, Math.round((base.max_lon - base.min_lon) / cellW));
-  const gridRows = Math.max(1, Math.round((base.max_lat - base.min_lat) / cellH));
-  const col = Math.round((minLon - base.min_lon) / cellW);
-  const row = Math.round((minLat - base.min_lat) / cellH);
+  const gridCols = Math.max(1, Math.round((config.maxLon - config.minLon) / cellW));
+  const gridRows = Math.max(1, Math.round((config.maxLat - config.minLat) / cellH));
+  const col = Math.round((minLon - config.minLon) / cellW);
+  const row = Math.round((minLat - config.minLat) / cellH);
 
   // Base cells are 0-indexed (cell_x = floor((x - min_x) / cellSize)), so the
   // index span is [0, maxN]; the partition divisor is maxN + 1 — matching getHeatmap.
-  const spanX = base.max_x + 1;
-  const spanY = base.max_y + 1;
+  const spanX = config.maxCellX + 1;
+  const spanY = config.maxCellY + 1;
 
   const minCellX = Math.ceil((col * spanX) / gridCols);
   const maxCellX = Math.ceil(((col + 1) * spanX) / gridCols) - 1;
@@ -153,9 +99,9 @@ async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Promise<{
 
   return {
     minCellX: Math.max(minCellX, 0),
-    maxCellX: Math.min(maxCellX, base.max_x),
+    maxCellX: Math.min(maxCellX, config.maxCellX),
     minCellY: Math.max(minCellY, 0),
-    maxCellY: Math.min(maxCellY, base.max_y)
+    maxCellY: Math.min(maxCellY, config.maxCellY)
   };
 }
 
@@ -253,7 +199,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     : sql`TRUE`;
 
   const dateCondition = dateRange
-    ? sql`EXTRACT(YEAR FROM f.start_date) < ${dateRange.endYear} AND EXTRACT(YEAR FROM f.end_date) >= ${dateRange.startYear}`
+    ? featureYearOverlap(sql`f.start_date`, sql`f.end_date`, dateRange.startYear, dateRange.endYear)
     : sql`TRUE`;
 
   const tagCondition = tagFilteredIds
@@ -289,7 +235,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   // Main query with window function for interleaved record types
   // Note: Using raw SQL string for window function ORDER BY since Drizzle doesn't support it well
   // Get max frequencies for relevance score normalisation
-  const { maxSpatial, maxTemporal } = await getMaxFrequencies();
+  const { maxSpatialFrequency: maxSpatial, maxTemporalFrequency: maxTemporal } = await getGridConfig();
 
   // Lower score = more specific = higher relevance
   const orderByRelevance = sortDirection === 'desc'

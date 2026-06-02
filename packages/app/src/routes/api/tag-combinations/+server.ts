@@ -4,34 +4,20 @@
 // with a single query that validates all tags at once.
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RecordType, PlaceType } from '@atm/shared/types';
 import { getTagCombinations, validateTagCombination } from '@atm/db';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
-		// Parse query parameters
-		const recordTypesParam = url.searchParams.get('recordTypes');
-		const selectedParam = url.searchParams.get('selected');
 		const validateAllParam = url.searchParams.get('validateAll');
 
-		// Parse recordTypes - default to all available recordTypes if none specified
-		const recordTypes = recordTypesParam
-			? (recordTypesParam.split(',').map((t) => t.trim()) as RecordType[])
-			: undefined;
-
-		// Parse place types
-		const placeTypesParam = url.searchParams.get('placeTypes');
-		const placeTypes = placeTypesParam
-			? (placeTypesParam.split(',').map((t) => t.trim()) as PlaceType[])
-			: undefined;
-
-		// Parse selected tags
-		const selectedTags = selectedParam
-			? selectedParam.split(',').map((t) => t.trim()).filter((t) => t.length > 0)
-			: [];
+		const recordTypes = parseRecordTypes(url);
+		const datasetIds = parseDatasets(url);
+		const placeTypes = parsePlaceTypes(url);
+		const selectedTags = parseList(url, 'selected') ?? [];
 
 		console.log(
-			`🔗 Tag combinations API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, selected: ${selectedTags.join(', ') || 'none'}, validateAll: ${validateAllParam}`
+			`🔗 Tag combinations API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, selected: ${selectedTags.join(', ') || 'none'}, validateAll: ${validateAllParam}`
 		);
 
 		const headers = {
@@ -41,7 +27,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		// Handle validation mode
 		if (validateAllParam === 'true' && selectedTags.length > 0) {
-			const validationResult = await validateTagCombination(recordTypes, selectedTags, placeTypes);
+			const validationResult = await validateTagCombination(recordTypes, datasetIds, placeTypes, selectedTags);
 
 			console.log(
 				`✅ Tag validation complete - valid: ${validationResult.validTags.join(', ')}, invalid: ${validationResult.invalidTags.join(', ')}`
@@ -60,7 +46,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		}
 
 		// Normal mode: get available next tags
-		const result = await getTagCombinations(recordTypes, selectedTags, placeTypes);
+		const result = await getTagCombinations(recordTypes, datasetIds, placeTypes, selectedTags);
 
 		const tagCount = result.availableTags.length;
 		const totalFeatures = result.availableTags.reduce((sum, tag) => sum + tag.totalFeatures, 0);

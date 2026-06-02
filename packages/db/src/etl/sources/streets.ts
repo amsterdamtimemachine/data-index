@@ -13,9 +13,7 @@
  */
 import { readFileSync } from 'fs';
 import { Parser } from 'n3';
-import { sql } from 'drizzle-orm';
-import { db } from '../../client';
-import { placeName } from '../../schema';
+import { insertPlaces, createNameWriter } from '../helpers';
 
 const BATCH_SIZE = 100;
 
@@ -126,40 +124,21 @@ export async function ingest(filePath: string) {
   console.log(`Resolved ${streets.length} streets with geometry (${skippedNoGeom} skipped without geometry, ${multiGeom} with multiple geometry versions)`);
   console.log(`Found ${datedNames} dated name variants across ${streets.filter(s => s.names.length > 0).length} streets`);
 
-  // Insert place rows
-  let placeCount = 0;
-  for (const s of streets) {
-    await db.execute(sql`
-      INSERT INTO place (id, type, preferred_label, geometry)
-      VALUES (
-        ${s.uri},
-        'street',
-        ${s.prefLabel},
-        ST_Transform(ST_GeomFromText(${s.wkt}, 4326), 28992)
-      )
-      ON CONFLICT (id) DO NOTHING
-    `);
-    placeCount++;
-    if (placeCount % 500 === 0) {
-      process.stdout.write(`\r  ${placeCount} / ${streets.length} places`);
-    }
-  }
-  console.log(`\n  ${placeCount} street places created`);
+  // Insert place rows (geometry transformed from WGS84 to RD)
+  const placeCount = await insertPlaces(
+    streets.map(s => ({ id: s.uri, type: 'street', label: s.prefLabel, wkt: s.wkt })),
+    { sourceSrid: 4326, onConflict: 'update' }
+  );
+  console.log(`  ${placeCount} street places created`);
 
   // Insert place_name entries for dated name variants
   let nameCount = 0;
-  let nameBatch: { id: string; placeId: string; name: string; since: string | null; until: string | null; source: string }[] = [];
-
-  async function flushNames() {
-    if (nameBatch.length === 0) return;
-    await db.insert(placeName).values(nameBatch).onConflictDoNothing();
-    nameBatch = [];
-  }
+  const names = createNameWriter(BATCH_SIZE);
 
   for (const s of streets) {
     for (let i = 0; i < s.names.length; i++) {
       const n = s.names[i];
-      nameBatch.push({
+      names.add({
         id: `${s.uri}#name-${i}`,
         placeId: s.uri,
         name: n.label,
@@ -168,13 +147,10 @@ export async function ingest(filePath: string) {
         source: 'adamlink-straten',
       });
       nameCount++;
-
-      if (nameBatch.length >= BATCH_SIZE) {
-        await flushNames();
-      }
+      await names.flushIfFull();
     }
   }
-  await flushNames();
+  await names.flush();
 
   console.log(`  ${nameCount} place_name entries created`);
   console.log(`\nDone: ${placeCount} streets, ${nameCount} name variants`);

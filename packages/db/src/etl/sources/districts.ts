@@ -9,10 +9,7 @@
  */
 import { readFileSync } from 'fs';
 import { Parser } from 'n3';
-import { sql } from 'drizzle-orm';
-import { db } from '../../client';
-
-const BATCH_SIZE = 100;
+import { insertPlaces } from '../helpers';
 
 interface District {
   uri: string;
@@ -84,23 +81,10 @@ export async function ingest(filePath: string) {
 
   console.log(`Resolved ${districts.length} neighbourhoods (${skippedCbs} CBS skipped)`);
 
-  let inserted = 0;
-  for (const d of districts) {
-    await db.execute(sql`
-      INSERT INTO place (id, type, preferred_label, geometry)
-      VALUES (
-        ${d.uri},
-        'neighbourhood',
-        ${d.label},
-        ST_Transform(ST_GeomFromText(${d.wkt}, 4326), 28992)
-      )
-      ON CONFLICT (id) DO UPDATE SET type = 'neighbourhood', preferred_label = ${d.label}
-    `);
-    inserted++;
-    if (inserted % 50 === 0) {
-      process.stdout.write(`\r  ${inserted} / ${districts.length} inserted`);
-    }
-  }
+  const inserted = await insertPlaces(
+    districts.map(d => ({ id: d.uri, type: 'neighbourhood', label: d.label, wkt: d.wkt })),
+    { sourceSrid: 4326, onConflict: 'update' }
+  );
 
   console.log(`\nDone: ${inserted} neighbourhood places`);
 }

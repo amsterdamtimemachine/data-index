@@ -1,9 +1,10 @@
 // src/routes/api/heatmaps/+server.ts
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RecordType, PlaceType, HeatmapResolutionConfig } from '@atm/shared/types';
+import type { HeatmapResolutionConfig } from '@atm/shared/types';
 import { GRID_DEFAULT, GRID_MIN, GRID_MAX, DEFAULT_BIN_SIZE, BIN_SIZE_MIN, BIN_SIZE_MAX } from '@atm/shared';
 import { getHeatmap, getHeatmapTimeline } from '@atm/db/queries';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes } from '$lib/server/query-params';
 
 function parseGridParam(value: string | null, defaultVal: number): number {
 	if (value === null) return defaultVal;
@@ -14,25 +15,10 @@ function parseGridParam(value: string | null, defaultVal: number): number {
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
-		const recordTypesParam = url.searchParams.get('recordTypes');
 		const timeSliceParam = url.searchParams.get('timeSlice');
-
-		// Parse recordTypes
-		const recordTypes: RecordType[] | undefined = recordTypesParam
-			? (recordTypesParam.split(',').map((t) => t.trim()) as RecordType[])
-			: undefined;
-
-		// Parse datasets
-		const datasetsParam = url.searchParams.get('datasets');
-		const datasetIds = datasetsParam
-			? datasetsParam.split(',').map((t) => t.trim())
-			: undefined;
-
-		// Parse place types
-		const placeTypesParam = url.searchParams.get('placeTypes');
-		const placeTypes = placeTypesParam
-			? (placeTypesParam.split(',').map((t) => t.trim()) as PlaceType[])
-			: undefined;
+		const recordTypes = parseRecordTypes(url);
+		const datasetIds = parseDatasets(url);
+		const placeTypes = parsePlaceTypes(url);
 
 		// Parse grid resolution
 		const rows = parseGridParam(url.searchParams.get('rows'), GRID_DEFAULT);
