@@ -1,9 +1,7 @@
-import { sql } from 'drizzle-orm';
+import { isNotNull } from 'drizzle-orm';
 import type { RecordType } from '@atm/shared';
 import { db } from '../client';
 import { features } from '../schema';
-
-type RecordTypeRow = { record_type: RecordType };
 
 /**
  * All distinct record types present in the features table, ordered.
@@ -14,11 +12,10 @@ type RecordTypeRow = { record_type: RecordType };
  * what made hover counts disagree with the per-cell feature list.
  */
 export async function getRecordTypes(): Promise<RecordType[]> {
-  const result = await db.execute<RecordTypeRow>(sql`
-    SELECT DISTINCT ${features.recordType} as record_type
-    FROM ${features}
-    WHERE ${features.recordType} IS NOT NULL
-    ORDER BY ${features.recordType}
-  `);
-  return result.rows.map(r => r.record_type);
+  const rows = await db
+    .selectDistinct({ recordType: features.recordType })
+    .from(features)
+    .where(isNotNull(features.recordType))
+    .orderBy(features.recordType);
+  return rows.map(r => r.recordType as RecordType);
 }

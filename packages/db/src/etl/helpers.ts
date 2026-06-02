@@ -16,6 +16,7 @@ import {
   features,
   featureToPlace,
   placeName,
+  place,
   type NewFeature,
   type NewPlaceName,
 } from '../schema';
@@ -126,10 +127,10 @@ export async function insertPlaces(
   opts: { sourceSrid: number; onConflict: 'nothing' | 'update'; batchSize?: number }
 ): Promise<number> {
   const batchSize = opts.batchSize ?? 500;
-  const conflict = opts.onConflict === 'update'
-    ? sql`ON CONFLICT (id) DO UPDATE SET type = EXCLUDED.type, preferred_label = EXCLUDED.preferred_label, geometry = EXCLUDED.geometry`
-    : sql`ON CONFLICT (id) DO NOTHING`;
 
+  // Geometry is PostGIS, so the column value is a sql ST_* expression; the rest
+  // of the insert goes through Drizzle's builder. RD (28992) is stored as-is;
+  // any other SRID is transformed to RD.
   const geom = (wkt: string) => opts.sourceSrid === 28992
     ? sql`ST_GeomFromText(${wkt}, 28992)`
     : sql`ST_Transform(ST_GeomFromText(${wkt}, ${opts.sourceSrid}), 28992)`;
@@ -137,12 +138,26 @@ export async function insertPlaces(
   let inserted = 0;
   for (let i = 0; i < rows.length; i += batchSize) {
     const chunk = rows.slice(i, i + batchSize);
-    const values = chunk.map(r => sql`(${r.id}, ${r.type}, ${r.label ?? null}, ${geom(r.wkt)})`);
-    await db.execute(sql`
-      INSERT INTO place (id, type, preferred_label, geometry)
-      VALUES ${sql.join(values, sql`, `)}
-      ${conflict}
-    `);
+    const values = chunk.map(r => ({
+      id: r.id,
+      type: r.type,
+      preferredLabel: r.label ?? null,
+      geometry: geom(r.wkt),
+    }));
+
+    const query = db.insert(place).values(values);
+    if (opts.onConflict === 'update') {
+      await query.onConflictDoUpdate({
+        target: place.id,
+        set: {
+          type: sql`excluded.type`,
+          preferredLabel: sql`excluded.preferred_label`,
+          geometry: sql`excluded.geometry`,
+        },
+      });
+    } else {
+      await query.onConflictDoNothing();
+    }
     inserted += chunk.length;
   }
   return inserted;

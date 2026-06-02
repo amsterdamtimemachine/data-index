@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '../client';
 import { gridConfig } from '../schema';
 
@@ -20,15 +20,6 @@ export interface GridConfig {
   maxTemporalFrequency: number;
 }
 
-type GridConfigRow = {
-  min_cell_x: number; max_cell_x: number;
-  min_cell_y: number; max_cell_y: number;
-  min_lon: number; max_lon: number;
-  min_lat: number; max_lat: number;
-  max_spatial_frequency: number;
-  max_temporal_frequency: number;
-};
-
 /**
  * Read the pre-computed grid config. Single indexed-row read — not cached, so it
  * always reflects the latest rebuild-index without a staleness window.
@@ -40,25 +31,26 @@ type GridConfigRow = {
  * empty time slices / record types before they reach here.
  */
 export async function getGridConfig(): Promise<GridConfig> {
-  const result = await db.execute<GridConfigRow>(
-    sql`SELECT * FROM ${gridConfig} WHERE id = 'current'`
-  );
+  const [row] = await db
+    .select()
+    .from(gridConfig)
+    .where(eq(gridConfig.id, 'current'))
+    .limit(1);
 
-  const row = result.rows[0];
   if (!row) {
     throw new Error('Grid config not found. Run rebuild-index first.');
   }
 
   return {
-    minCellX: row.min_cell_x,
-    maxCellX: row.max_cell_x,
-    minCellY: row.min_cell_y,
-    maxCellY: row.max_cell_y,
-    minLon: row.min_lon,
-    maxLon: row.max_lon,
-    minLat: row.min_lat,
-    maxLat: row.max_lat,
-    maxSpatialFrequency: row.max_spatial_frequency || 1,
-    maxTemporalFrequency: row.max_temporal_frequency || 1,
+    minCellX: row.minCellX,
+    maxCellX: row.maxCellX,
+    minCellY: row.minCellY,
+    maxCellY: row.maxCellY,
+    minLon: row.minLon,
+    maxLon: row.maxLon,
+    minLat: row.minLat,
+    maxLat: row.maxLat,
+    maxSpatialFrequency: row.maxSpatialFrequency || 1,
+    maxTemporalFrequency: row.maxTemporalFrequency || 1,
   };
 }
