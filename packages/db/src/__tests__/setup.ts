@@ -33,7 +33,8 @@ export async function setupTestDb() {
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS place (
       id TEXT PRIMARY KEY, type TEXT NOT NULL,
-      preferred_label TEXT, geometry geometry(Geometry, 28992)
+      preferred_label TEXT, geometry geometry(Geometry, 28992),
+      spatial_frequency INTEGER
     )
   `);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_geometry ON place USING gist(geometry)`);
@@ -53,7 +54,7 @@ export async function setupTestDb() {
       url TEXT, record_type TEXT NOT NULL, label TEXT NOT NULL,
       description TEXT, content_url TEXT, start_date DATE, end_date DATE,
       dataset_id TEXT REFERENCES datasets(id),
-      spatial_frequency INTEGER, temporal_frequency INTEGER, entity JSONB
+      temporal_frequency INTEGER, entity JSONB
     )
   `);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_features_dates ON features(start_date, end_date)`);
@@ -74,16 +75,27 @@ export async function setupTestDb() {
     )
   `);
   await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS feature_cells (
-      feature_id UUID NOT NULL REFERENCES features(id),
+    CREATE TABLE IF NOT EXISTS place_cells (
+      place_id TEXT NOT NULL REFERENCES place(id),
       cell_x SMALLINT NOT NULL, cell_y SMALLINT NOT NULL,
-      PRIMARY KEY (feature_id, cell_x, cell_y)
+      PRIMARY KEY (place_id, cell_x, cell_y)
+    )
+  `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS grid_config (
+      id TEXT PRIMARY KEY,
+      min_cell_x SMALLINT NOT NULL, max_cell_x SMALLINT NOT NULL,
+      min_cell_y SMALLINT NOT NULL, max_cell_y SMALLINT NOT NULL,
+      min_lon REAL NOT NULL, max_lon REAL NOT NULL,
+      min_lat REAL NOT NULL, max_lat REAL NOT NULL,
+      max_spatial_frequency INTEGER NOT NULL,
+      max_temporal_frequency INTEGER NOT NULL
     )
   `);
 }
 
 export async function cleanTestDb() {
-  await db.execute(sql`TRUNCATE feature_cells, feature_tags, feature_to_place, features, place_name, place, relation, tags, datasets, organisations CASCADE`);
+  await db.execute(sql`TRUNCATE grid_config, place_cells, feature_tags, feature_to_place, features, place_name, place, relation, tags, datasets, organisations CASCADE`);
 }
 
 export async function teardownTestDb() {

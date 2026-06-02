@@ -104,13 +104,13 @@ describe('Feature ingestion', () => {
 });
 
 describe('rebuild-index', () => {
-  test('all features have spatial_frequency set', async () => {
-    expect(await dbq.featuresMissingSpatialFrequencyCount()).toBe(0);
+  test('all featured places have spatial_frequency set', async () => {
+    expect(await dbq.featuredPlacesMissingSpatialFrequencyCount()).toBe(0);
   });
 
-  test('spatial_frequency matches distinct cell count per feature', async () => {
-    const matches = await dbq.featuresWithMatchingSpatialFrequencyCount();
-    const total = await dbq.featureCount();
+  test('spatial_frequency matches distinct cell count per place', async () => {
+    const matches = await dbq.placesWithMatchingSpatialFrequencyCount();
+    const total = await dbq.featuredPlaceCount();
     expect(matches).toBe(total);
   });
 

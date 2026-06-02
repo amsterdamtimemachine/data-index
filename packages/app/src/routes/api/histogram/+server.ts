@@ -1,7 +1,7 @@
 // src/routes/api/histogram/+server.ts
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RecordType, Histogram } from '@atm/shared/types';
+import type { RecordType, PlaceType, Histogram } from '@atm/shared/types';
 import { DEFAULT_BIN_SIZE, BIN_SIZE_MIN, BIN_SIZE_MAX } from '@atm/shared';
 import { getHistogram } from '@atm/db/queries';
 
@@ -20,15 +20,21 @@ export const GET: RequestHandler = async ({ url }) => {
 			? datasetsParam.split(',').map((t) => t.trim())
 			: undefined;
 
+		// Parse place types
+		const placeTypesParam = url.searchParams.get('placeTypes');
+		const placeTypes = placeTypesParam
+			? (placeTypesParam.split(',').map((t) => t.trim()) as PlaceType[])
+			: undefined;
+
 		// Parse bin size
 		const binSizeParam = url.searchParams.get('binSize');
 		const binSize = binSizeParam
 			? Math.min(Math.max(parseInt(binSizeParam, 10) || DEFAULT_BIN_SIZE, BIN_SIZE_MIN), BIN_SIZE_MAX)
 			: DEFAULT_BIN_SIZE;
 
-		console.log(`📊 Histogram API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, binSize: ${binSize}`);
+		console.log(`📊 Histogram API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, binSize: ${binSize}`);
 
-		const histogram = await getHistogram(recordTypes, datasetIds, binSize);
+		const histogram = await getHistogram(recordTypes, datasetIds, placeTypes, binSize);
 
 		console.log(
 			`✅ Histogram: ${histogram.bins.length} bins, ${histogram.totalFeatures} total features`
@@ -36,7 +42,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		return json(histogram, {
 			headers: {
-				'Cache-Control': 'public, max-age=86400',
+				'Cache-Control': 'no-cache',
 				'Access-Control-Allow-Origin': '*'
 			}
 		});

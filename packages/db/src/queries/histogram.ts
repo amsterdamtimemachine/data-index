@@ -1,8 +1,8 @@
 import { sql } from 'drizzle-orm';
-import type { Histogram, HistogramBin, RecordType } from '@atm/shared';
+import type { Histogram, HistogramBin, RecordType, PlaceType } from '@atm/shared';
 import { DEFAULT_BIN_SIZE } from '@atm/shared';
 import { db } from '../client';
-import { features } from '../schema';
+import { features, featureToPlace, place } from '../schema';
 import { computeTimeSlices, computeTimeRange } from './time-slices';
 
 // Query result types
@@ -25,6 +25,7 @@ async function getRecordTypes(): Promise<RecordType[]> {
 export async function getHistogram(
   recordTypes?: RecordType[],
   datasetIds?: string[],
+  placeTypes?: PlaceType[],
   binSizeYears: number = DEFAULT_BIN_SIZE
 ): Promise<Histogram> {
   const types = recordTypes || await getRecordTypes();
@@ -52,10 +53,14 @@ export async function getHistogram(
     )
     SELECT s.bin_start::text as bin_start, COUNT(DISTINCT f.id) as count
     FROM ${features} f
+    ${placeTypes && placeTypes.length > 0
+      ? sql`JOIN ${featureToPlace} fp ON fp.feature_id = f.id JOIN ${place} p ON fp.place_id = p.id`
+      : sql``}
     JOIN slices s ON EXTRACT(YEAR FROM f.start_date) < s.bin_end
                  AND EXTRACT(YEAR FROM f.end_date) >= s.bin_start
     WHERE f.record_type IN ${types}
       ${datasetIds && datasetIds.length > 0 ? sql`AND f.dataset_id IN ${datasetIds}` : sql``}
+      ${placeTypes && placeTypes.length > 0 ? sql`AND p.type IN ${placeTypes}` : sql``}
       AND f.start_date IS NOT NULL
       AND f.end_date IS NOT NULL
     GROUP BY s.bin_start

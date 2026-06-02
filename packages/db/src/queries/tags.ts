@@ -1,13 +1,14 @@
 import { sql } from 'drizzle-orm';
 import type {
   RecordType,
+  PlaceType,
   TagStats,
   AvailableTags,
   TagCombinations,
   TagValidation
 } from '@atm/shared';
 import { db } from '../client';
-import { features, tags, featureTags } from '../schema';
+import { features, tags, featureTags, featureToPlace, place } from '../schema';
 
 // Query result types (internal)
 type TagStatsRow = {
@@ -38,7 +39,8 @@ async function getRecordTypes(): Promise<RecordType[]> {
  * Optionally filter by record types
  */
 export async function getAvailableTags(
-  recordTypes?: RecordType[]
+  recordTypes?: RecordType[],
+  placeTypes?: PlaceType[]
 ): Promise<AvailableTags> {
   const types = recordTypes || await getRecordTypes();
 
@@ -56,7 +58,11 @@ export async function getAvailableTags(
     FROM ${tags}
     JOIN ${featureTags} ON ${tags.id} = ${featureTags.tagId}
     JOIN ${features} ON ${featureTags.featureId} = ${features.id}
+    ${placeTypes && placeTypes.length > 0
+      ? sql`JOIN ${featureToPlace} ON ${features.id} = ${featureToPlace.featureId} JOIN ${place} ON ${featureToPlace.placeId} = ${place.id}`
+      : sql``}
     WHERE ${features.recordType} IN ${types}
+      ${placeTypes && placeTypes.length > 0 ? sql`AND ${place.type} IN ${placeTypes}` : sql``}
     GROUP BY ${tags.id}, ${tags.label}
     ORDER BY total_features DESC
   `);
@@ -79,9 +85,16 @@ export async function getAvailableTags(
  */
 export async function getTagCombinations(
   recordTypes?: RecordType[],
-  selectedTags: string[] = []
+  selectedTags: string[] = [],
+  placeTypes?: PlaceType[]
 ): Promise<TagCombinations> {
   const types = recordTypes || await getRecordTypes();
+  const placeJoin = placeTypes && placeTypes.length > 0
+    ? sql`JOIN ${featureToPlace} ON ${features.id} = ${featureToPlace.featureId} JOIN ${place} ON ${featureToPlace.placeId} = ${place.id}`
+    : sql``;
+  const placeFilter = placeTypes && placeTypes.length > 0
+    ? sql`AND ${place.type} IN ${placeTypes}`
+    : sql``;
 
   if (selectedTags.length === 0) {
     // No selection - return all tags
@@ -92,7 +105,9 @@ export async function getTagCombinations(
       FROM ${tags}
       JOIN ${featureTags} ON ${tags.id} = ${featureTags.tagId}
       JOIN ${features} ON ${featureTags.featureId} = ${features.id}
+      ${placeJoin}
       WHERE ${features.recordType} IN ${types}
+        ${placeFilter}
       GROUP BY ${tags.id}, ${tags.label}
       ORDER BY total_features DESC
     `);
@@ -115,8 +130,12 @@ export async function getTagCombinations(
       FROM ${featureTags} ft
       JOIN ${features} f ON ft.feature_id = f.id
       JOIN ${tags} t ON ft.tag_id = t.id
+      ${placeTypes && placeTypes.length > 0
+        ? sql`JOIN ${featureToPlace} fp ON f.id = fp.feature_id JOIN ${place} p ON fp.place_id = p.id`
+        : sql``}
       WHERE f.record_type IN ${types}
         AND t.label IN ${selectedTags}
+        ${placeTypes && placeTypes.length > 0 ? sql`AND p.type IN ${placeTypes}` : sql``}
       GROUP BY ft.feature_id
       HAVING COUNT(DISTINCT t.id) = ${selectedTags.length}
     )
@@ -147,7 +166,8 @@ export async function getTagCombinations(
  */
 export async function validateTagCombination(
   recordTypes?: RecordType[],
-  selectedTags: string[] = []
+  selectedTags: string[] = [],
+  placeTypes?: PlaceType[]
 ): Promise<TagValidation> {
   if (selectedTags.length === 0) {
     return { validTags: [], invalidTags: [] };
@@ -171,8 +191,12 @@ export async function validateTagCombination(
         FROM ${featureTags} ft
         JOIN ${features} f ON ft.feature_id = f.id
         JOIN ${tags} t ON ft.tag_id = t.id
+        ${placeTypes && placeTypes.length > 0
+          ? sql`JOIN ${featureToPlace} fp ON f.id = fp.feature_id JOIN ${place} p ON fp.place_id = p.id`
+          : sql``}
         WHERE f.record_type IN ${types}
           AND t.label IN ${tagsToCheck}
+          ${placeTypes && placeTypes.length > 0 ? sql`AND p.type IN ${placeTypes}` : sql``}
         GROUP BY ft.feature_id
         HAVING COUNT(DISTINCT t.id) = ${tagsToCheck.length}
         LIMIT 1

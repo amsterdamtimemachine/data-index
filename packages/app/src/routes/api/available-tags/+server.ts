@@ -1,7 +1,7 @@
 // src/routes/api/available-tags/+server.ts
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RecordType } from '@atm/shared/types';
+import type { RecordType, PlaceType } from '@atm/shared/types';
 import { getAvailableTags } from '@atm/db';
 
 export const GET: RequestHandler = async ({ url }) => {
@@ -14,10 +14,16 @@ export const GET: RequestHandler = async ({ url }) => {
 			? (recordTypesParam.split(',').map((t) => t.trim()) as RecordType[])
 			: undefined;
 
-		console.log(`🏷️ Available tags API request - recordTypes: ${recordTypes?.join(', ') || 'all'}`);
+		// Parse place types
+		const placeTypesParam = url.searchParams.get('placeTypes');
+		const placeTypes = placeTypesParam
+			? (placeTypesParam.split(',').map((t) => t.trim()) as PlaceType[])
+			: undefined;
+
+		console.log(`🏷️ Available tags API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}`);
 
 		// Get available tags from database
-		const result = await getAvailableTags(recordTypes);
+		const result = await getAvailableTags(recordTypes, placeTypes);
 
 		const tagCount = result.tags.length;
 		const totalFeatures = result.tags.reduce((sum, tag) => sum + tag.totalFeatures, 0);
@@ -27,7 +33,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		// Set appropriate cache headers
 		const headers = {
-			'Cache-Control': 'public, max-age=86400',
+			'Cache-Control': 'no-cache',
 			'Access-Control-Allow-Origin': '*'
 		};
 

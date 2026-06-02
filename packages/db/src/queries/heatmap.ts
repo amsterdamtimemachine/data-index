@@ -1,16 +1,13 @@
 import { sql } from 'drizzle-orm';
-import { createTTLCache } from './cache';
-import type { Heatmap, HeatmapTimeline, HeatmapResponse, HeatmapDimensions, HeatmapResolutionConfig, RecordType } from '@atm/shared';
+import type { Heatmap, HeatmapTimeline, HeatmapResponse, HeatmapDimensions, HeatmapResolutionConfig, RecordType, PlaceType } from '@atm/shared';
 import { DEFAULT_BIN_SIZE } from '@atm/shared';
 import { db } from '../client';
-import { featureCells, features, featureToPlace, place } from '../schema';
+import { placeCells, features, featureToPlace, place, gridConfig } from '../schema';
 import { computeTimeSlices } from './time-slices';
 
 // Query result types
 type CellCount = { cell_x: number; cell_y: number; count: string };
 type CellCountWithTime = { cell_x: number; cell_y: number; time_bin: string; count: string };
-type MaxCell = { max_x: number; max_y: number };
-type BoundsRow = { min_lon: string; max_lon: string; min_lat: string; max_lat: string };
 type RecordTypeRow = { record_type: RecordType };
 
 /**
@@ -55,51 +52,42 @@ async function getRecordTypes(): Promise<RecordType[]> {
   return result.rows.map(r => r.record_type);
 }
 
-const maxCellBoundsCache = createTTLCache<{ maxX: number; maxY: number }>();
-
 /**
- * Get max cell coordinates for scaling to grid
+ * Read pre-computed grid config from rebuild-index.
+ * Single indexed-row read — not cached, so it always reflects the latest
+ * rebuild-index without a staleness window.
  */
-async function getMaxCellBounds(): Promise<{ maxX: number; maxY: number }> {
-  const cached = maxCellBoundsCache.get();
-  if (cached) return cached;
+async function getGridConfig(): Promise<{ maxX: number; maxY: number; bounds: { minLon: number; maxLon: number; minLat: number; maxLat: number } }> {
+  const result = await db.execute<{
+    max_cell_x: number; max_cell_y: number;
+    min_lon: number; max_lon: number;
+    min_lat: number; max_lat: number;
+  }>(sql`SELECT * FROM ${gridConfig} WHERE id = 'current'`);
 
-  const result = await db.execute<MaxCell>(
-    sql`SELECT MAX(${featureCells.cellX}) as max_x, MAX(${featureCells.cellY}) as max_y FROM ${featureCells}`
-  );
-  const value = { maxX: result.rows[0].max_x, maxY: result.rows[0].max_y };
-  maxCellBoundsCache.set(value);
-  return value;
+  const row = result.rows[0];
+  if (!row) {
+    return { maxX: 0, maxY: 0, bounds: { minLon: 0, maxLon: 0, minLat: 0, maxLat: 0 } };
+  }
+
+  return {
+    maxX: row.max_cell_x,
+    maxY: row.max_cell_y,
+    bounds: {
+      minLon: row.min_lon,
+      maxLon: row.max_lon,
+      minLat: row.min_lat,
+      maxLat: row.max_lat,
+    }
+  };
 }
 
-const geoBoundsCache = createTTLCache<{ minLon: number; maxLon: number; minLat: number; maxLat: number }>();
+async function getMaxCellBounds(): Promise<{ maxX: number; maxY: number }> {
+  const config = await getGridConfig();
+  return { maxX: config.maxX, maxY: config.maxY };
+}
 
-/**
- * Get geographic bounds from actual data extent (WGS84)
- */
 async function getBoundsFromData(): Promise<{ minLon: number; maxLon: number; minLat: number; maxLat: number }> {
-  const cached = geoBoundsCache.get();
-  if (cached) return cached;
-
-  const result = await db.execute<BoundsRow>(sql`
-    SELECT
-      ST_XMin(ST_Extent(ST_Transform(p.geometry, 4326))) as min_lon,
-      ST_XMax(ST_Extent(ST_Transform(p.geometry, 4326))) as max_lon,
-      ST_YMin(ST_Extent(ST_Transform(p.geometry, 4326))) as min_lat,
-      ST_YMax(ST_Extent(ST_Transform(p.geometry, 4326))) as max_lat
-    FROM ${place} p
-    WHERE p.geometry IS NOT NULL
-      AND EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = p.id)
-  `);
-  const row = result.rows[0];
-  const value = {
-    minLon: parseFloat(row.min_lon),
-    maxLon: parseFloat(row.max_lon),
-    minLat: parseFloat(row.min_lat),
-    maxLat: parseFloat(row.max_lat)
-  };
-  geoBoundsCache.set(value);
-  return value;
+  return (await getGridConfig()).bounds;
 }
 
 /**
@@ -121,6 +109,7 @@ export async function getHeatmap(
   resolution: HeatmapResolutionConfig,
   recordTypes?: RecordType[],
   datasetIds?: string[],
+  placeTypes?: PlaceType[],
   binSizeYears: number = DEFAULT_BIN_SIZE
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
@@ -143,14 +132,17 @@ export async function getHeatmap(
   const endDate = timeSlice.timeRange.end;
 
   const result = await db.execute<CellCount>(sql`
-    SELECT ${featureCells.cellX} as cell_x, ${featureCells.cellY} as cell_y, COUNT(*) as count
-    FROM ${featureCells}
-    JOIN ${features} ON ${featureCells.featureId} = ${features.id}
+    SELECT ${placeCells.cellX} as cell_x, ${placeCells.cellY} as cell_y, COUNT(DISTINCT ${features.id}) as count
+    FROM ${placeCells}
+    JOIN ${featureToPlace} ON ${placeCells.placeId} = ${featureToPlace.placeId}
+    JOIN ${features} ON ${featureToPlace.featureId} = ${features.id}
+    JOIN ${place} ON ${placeCells.placeId} = ${place.id}
     WHERE ${features.recordType} IN ${types}
       ${datasetIds && datasetIds.length > 0 ? sql`AND ${features.datasetId} IN ${datasetIds}` : sql``}
+      ${placeTypes && placeTypes.length > 0 ? sql`AND ${place.type} IN ${placeTypes}` : sql``}
       AND ${features.startDate} <= ${endDate}
       AND ${features.endDate} >= ${startDate}
-    GROUP BY ${featureCells.cellX}, ${featureCells.cellY}
+    GROUP BY ${placeCells.cellX}, ${placeCells.cellY}
   `);
 
   const countsMap = new Map<number, number>();
@@ -172,6 +164,7 @@ export async function getHeatmapTimeline(
   resolution: HeatmapResolutionConfig,
   recordTypes?: RecordType[],
   datasetIds?: string[],
+  placeTypes?: PlaceType[],
   binSizeYears: number = DEFAULT_BIN_SIZE
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
@@ -201,19 +194,22 @@ export async function getHeatmapTimeline(
       FROM generate_series(${firstSlice.startYear}::int, ${lastSlice.startYear}::int, ${binSizeYears}::int) AS gs
     )
     SELECT
-      ${featureCells.cellX} as cell_x,
-      ${featureCells.cellY} as cell_y,
+      ${placeCells.cellX} as cell_x,
+      ${placeCells.cellY} as cell_y,
       s.bin_start as time_bin,
-      COUNT(*) as count
-    FROM ${featureCells}
-    JOIN ${features} ON ${featureCells.featureId} = ${features.id}
+      COUNT(DISTINCT ${features.id}) as count
+    FROM ${placeCells}
+    JOIN ${featureToPlace} ON ${placeCells.placeId} = ${featureToPlace.placeId}
+    JOIN ${features} ON ${featureToPlace.featureId} = ${features.id}
+    JOIN ${place} ON ${placeCells.placeId} = ${place.id}
     JOIN slices s ON EXTRACT(YEAR FROM ${features.startDate}) < s.bin_end
                  AND EXTRACT(YEAR FROM ${features.endDate}) >= s.bin_start
     WHERE ${features.recordType} IN ${types}
       ${datasetIds && datasetIds.length > 0 ? sql`AND ${features.datasetId} IN ${datasetIds}` : sql``}
+      ${placeTypes && placeTypes.length > 0 ? sql`AND ${place.type} IN ${placeTypes}` : sql``}
       AND ${features.startDate} IS NOT NULL
       AND ${features.endDate} IS NOT NULL
-    GROUP BY ${featureCells.cellX}, ${featureCells.cellY}, s.bin_start
+    GROUP BY ${placeCells.cellX}, ${placeCells.cellY}, s.bin_start
   `);
 
   const countsBySlice = new Map<number, Map<number, number>>();

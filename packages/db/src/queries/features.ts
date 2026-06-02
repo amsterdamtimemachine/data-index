@@ -1,5 +1,4 @@
 import { sql } from 'drizzle-orm';
-import { createTTLCache } from './cache';
 import type {
   RecordType,
   FeaturesQuery,
@@ -9,7 +8,7 @@ import type {
 } from '@atm/shared';
 import { computeTimeSlices } from './time-slices';
 import { db } from '../client';
-import { featureToPlace, place } from '../schema';
+import { featureToPlace, place, placeCells, gridConfig } from '../schema';
 
 // Query result types 
 type BaseCellBoundsRow = {
@@ -46,57 +45,50 @@ type FeatureRow = {
 };
 
 type CountRow = { count: string };
-type MaxFreqRow = { max_spatial: string; max_temporal: string };
-
-const baseCellBoundsCache = createTTLCache<BaseCellBoundsRow>();
-const maxFrequenciesCache = createTTLCache<{ maxSpatial: number; maxTemporal: number }>();
 
 /**
- * Get max spatial and temporal frequencies for normalisation
+ * Read pre-computed grid config from rebuild-index.
+ * Single indexed-row read — not cached, so it always reflects the latest
+ * rebuild-index without a staleness window.
  */
-async function getMaxFrequencies(): Promise<{ maxSpatial: number; maxTemporal: number }> {
-  const cached = maxFrequenciesCache.get();
-  if (cached) return cached;
+async function getGridConfig(): Promise<{ bounds: BaseCellBoundsRow; maxSpatial: number; maxTemporal: number }> {
+  const result = await db.execute<{
+    min_cell_x: number; max_cell_x: number;
+    min_cell_y: number; max_cell_y: number;
+    min_lon: number; max_lon: number;
+    min_lat: number; max_lat: number;
+    max_spatial_frequency: number;
+    max_temporal_frequency: number;
+  }>(sql`SELECT * FROM ${gridConfig} WHERE id = 'current'`);
 
-  const result = await db.execute<MaxFreqRow>(sql`
-    SELECT
-      COALESCE(MAX(spatial_frequency), 1) as max_spatial,
-      COALESCE(MAX(temporal_frequency), 1) as max_temporal
-    FROM features
-  `);
-  const value = {
-    maxSpatial: parseInt(result.rows[0].max_spatial) || 1,
-    maxTemporal: parseInt(result.rows[0].max_temporal) || 1
+  const row = result.rows[0];
+  if (!row) {
+    throw new Error('Grid config not found. Run rebuild-index first.');
+  }
+
+  return {
+    bounds: {
+      min_x: row.min_cell_x,
+      max_x: row.max_cell_x,
+      min_y: row.min_cell_y,
+      max_y: row.max_cell_y,
+      min_lon: row.min_lon,
+      max_lon: row.max_lon,
+      min_lat: row.min_lat,
+      max_lat: row.max_lat,
+    },
+    maxSpatial: row.max_spatial_frequency || 1,
+    maxTemporal: row.max_temporal_frequency || 1,
   };
-  maxFrequenciesCache.set(value);
-  return value;
 }
 
-/**
- * Get the base grid cell bounds and geographic extent
- */
 async function getBaseCellBounds(): Promise<BaseCellBoundsRow> {
-  const cached = baseCellBoundsCache.get();
-  if (cached) return cached;
+  return (await getGridConfig()).bounds;
+}
 
-  const result = await db.execute<BaseCellBoundsRow>(sql`
-    SELECT
-      MIN(fc.cell_x) as min_x,
-      MAX(fc.cell_x) as max_x,
-      MIN(fc.cell_y) as min_y,
-      MAX(fc.cell_y) as max_y,
-      ST_XMin(ST_Extent(ST_Transform(p.geometry, 4326))) as min_lon,
-      ST_XMax(ST_Extent(ST_Transform(p.geometry, 4326))) as max_lon,
-      ST_YMin(ST_Extent(ST_Transform(p.geometry, 4326))) as min_lat,
-      ST_YMax(ST_Extent(ST_Transform(p.geometry, 4326))) as max_lat
-    FROM feature_cells fc
-    JOIN ${featureToPlace} fp ON fc.feature_id = fp.feature_id
-    JOIN ${place} p ON fp.place_id = p.id
-    WHERE p.geometry IS NOT NULL
-  `);
-
-  baseCellBoundsCache.set(result.rows[0]);
-  return result.rows[0];
+async function getMaxFrequencies(): Promise<{ maxSpatial: number; maxTemporal: number }> {
+  const config = await getGridConfig();
+  return { maxSpatial: config.maxSpatial, maxTemporal: config.maxTemporal };
 }
 
 /**
@@ -204,8 +196,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   }
 
   // Build WHERE conditions
-  const cellCondition = sql`fc.cell_x BETWEEN ${cellRange.minCellX} AND ${cellRange.maxCellX}
-    AND fc.cell_y BETWEEN ${cellRange.minCellY} AND ${cellRange.maxCellY}`;
+  const cellCondition = sql`pc.cell_x BETWEEN ${cellRange.minCellX} AND ${cellRange.maxCellX}
+    AND pc.cell_y BETWEEN ${cellRange.minCellY} AND ${cellRange.maxCellY}`;
 
   const typeCondition = sql`f.record_type IN ${types}`;
 
@@ -228,15 +220,16 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   // Get total count
   const countResult = await db.execute<CountRow>(sql`
     SELECT COUNT(DISTINCT f.id) as count
-    FROM feature_cells fc
-    JOIN features f ON fc.feature_id = f.id
-    ${placeTypes && placeTypes.length > 0 ? sql`JOIN feature_to_place fp2 ON f.id = fp2.feature_id JOIN place p2 ON fp2.place_id = p2.id` : sql``}
+    FROM ${placeCells} pc
+    JOIN ${featureToPlace} fp ON pc.place_id = fp.place_id
+    JOIN features f ON fp.feature_id = f.id
+    JOIN ${place} p ON pc.place_id = p.id
     WHERE ${cellCondition}
       AND ${typeCondition}
       AND ${datasetCondition}
       AND ${dateCondition}
       AND ${tagCondition}
-      ${placeTypes && placeTypes.length > 0 ? sql`AND p2.type IN ${placeTypes}` : sql``}
+      AND ${placeTypeCondition}
   `);
 
   const total = parseInt(countResult.rows[0].count);
@@ -283,9 +276,9 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         f.content_url,
         f.start_date,
         f.end_date,
-        f.spatial_frequency,
+        p.spatial_frequency,
         f.temporal_frequency,
-        (COALESCE(f.spatial_frequency::float, 0) / ${maxSpatial}
+        (COALESCE(p.spatial_frequency::float, 0) / ${maxSpatial}
          + COALESCE(f.temporal_frequency::float, 0) / ${maxTemporal}) as relevance_score,
         d.label as dataset_label,
         o.label as organisation_label,
@@ -297,12 +290,12 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
          WHERE a.place_id = fp.place_id
            AND a.since <= f.end_date
          ORDER BY a.since DESC LIMIT 1) as historical_label
-      FROM feature_cells fc
-      JOIN features f ON fc.feature_id = f.id
+      FROM ${placeCells} pc
+      JOIN ${featureToPlace} fp ON pc.place_id = fp.place_id
+      JOIN features f ON fp.feature_id = f.id
+      JOIN ${place} p ON pc.place_id = p.id
       LEFT JOIN datasets d ON f.dataset_id = d.id
       LEFT JOIN organisations o ON d.organisation_id = o.id
-      LEFT JOIN feature_to_place fp ON f.id = fp.feature_id
-      LEFT JOIN place p ON fp.place_id = p.id
       WHERE ${cellCondition}
         AND ${typeCondition}
         AND ${datasetCondition}

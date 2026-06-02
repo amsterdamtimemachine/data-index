@@ -47,6 +47,7 @@ erDiagram
         text type  "address | street | neighbourhood"
         text preferred_label  "e.g. Prins Hendrikkade 93"
         geometry geometry  "POINT, LINESTRING, or POLYGON"
+        integer spatial_frequency  "e.g. 47 # cells spanned"
     }
 
     place_name {
@@ -79,8 +80,8 @@ erDiagram
         text tag_id FK "links to tags"
     }
 
-    feature_cells {
-        uuid feature_id FK "links to features"
+    place_cells {
+        text place_id FK "links to place"
         smallint cell_x  "0-199"
         smallint cell_y  "0-199"
     }
@@ -95,7 +96,6 @@ erDiagram
         date start_date  "e.g. 1948-09-01 (histogram placement)"
         date end_date  "e.g. 1948-09-30 (histogram placement)"
         text dataset_id FK "e.g. stadsarchief-beeldbank"
-        integer spatial_frequency  "e.g. 47 # spatial cells spanned"
         integer temporal_frequency  "e.g. 2 # base time bins spanned"
         jsonb entity  "e.g. Person | CreativeWork | MediaObject"
     }
@@ -103,12 +103,12 @@ erDiagram
     organisations||--o{datasets:"has datasets"
     datasets||--o{features:"has"
     place||--o{place_name:"has historical names"
+    place||--o{place_cells:"spans cells"
     features||--o{feature_to_place:"located at"
     place||--o{feature_to_place:"links"
     relation||--o{feature_to_place:"describes"
     features||--o{feature_tags:"tagged"
     tags||--o{feature_tags:"links"
-    features||--o{feature_cells:"spans"
 ```
 
 - **organisations**: Institutions that provide datasets
@@ -117,9 +117,9 @@ erDiagram
 - **place_name**: Historical names linked to places (addresses, streets), used to show what a location was called at a given time
 - **tags**: Thematic categories (e.g. Nature, Transport, Living) assigned to features. Work in progress, generated via AI classification across datasets
 - **features**: Images, texts, persons, or other content items linked to places and displayed in the UI
-- **feature_cells**: Pre-computed spatial grid that powers the heatmap. Each feature is mapped to the 100m cells it covers, so the heatmap can render without scanning all features per request
-- **spatial_frequency**: How many grid cells a feature spans. Features covering fewer cells are more geographically specific and rank higher in search results
-- **temporal_frequency**: How many base time bins a feature spans. Features covering fewer bins are more temporally specific and rank higher in search results
+- **place_cells**: Pre-computed spatial grid that powers the heatmap. Each place is mapped to the 100m cells its geometry covers (one cell for a point, many for a street or neighbourhood). Features inherit cell coverage through their place link, so cell assignments are stored once per place rather than duplicated per feature.
+- **spatial_frequency**: How many grid cells a place spans. Stored on `place`, inherited by all features linked to it. Features at more specific locations (fewer cells) rank higher in search results.
+- **temporal_frequency**: How many base time bins a feature spans. Stored on `features` (each feature has its own date range). Features covering fewer bins are more temporally specific and rank higher in search results.
 
 ## Indexing
 

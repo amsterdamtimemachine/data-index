@@ -138,21 +138,31 @@ export async function orphanedFeatureCount(): Promise<number> {
 
 // ─── rebuild-index outputs ──────────────────────────────────────────────────
 
-export async function featuresMissingSpatialFrequencyCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(
-    sql`SELECT COUNT(*) as count FROM features WHERE spatial_frequency IS NULL`
-  );
+export async function featuredPlacesMissingSpatialFrequencyCount(): Promise<number> {
+  const r = await db.execute<{ count: string }>(sql`
+    SELECT COUNT(*) as count FROM place p
+    WHERE p.spatial_frequency IS NULL
+      AND EXISTS (SELECT 1 FROM feature_to_place fp WHERE fp.place_id = p.id)
+  `);
   return parseInt(r.rows[0].count);
 }
 
-export async function featuresWithMatchingSpatialFrequencyCount(): Promise<number> {
+export async function placesWithMatchingSpatialFrequencyCount(): Promise<number> {
   const r = await db.execute<{ matches: string }>(sql`
-    SELECT COUNT(*) as matches FROM features f
-    WHERE f.spatial_frequency = (
-      SELECT COUNT(*) FROM feature_cells fc WHERE fc.feature_id = f.id
+    SELECT COUNT(*) as matches FROM place p
+    WHERE p.spatial_frequency = (
+      SELECT COUNT(*) FROM place_cells pc WHERE pc.place_id = p.id
     )
+    AND EXISTS (SELECT 1 FROM feature_to_place fp WHERE fp.place_id = p.id)
   `);
   return parseInt(r.rows[0].matches);
+}
+
+export async function featuredPlaceCount(): Promise<number> {
+  const r = await db.execute<{ count: string }>(sql`
+    SELECT COUNT(DISTINCT fp.place_id) as count FROM feature_to_place fp
+  `);
+  return parseInt(r.rows[0].count);
 }
 
 export async function firstFeatureTemporalFrequency(datasetId: string): Promise<number> {

@@ -6,7 +6,7 @@ import type {
 } from '@atm/shared';
 import { computeTimeSlices, computeTimeRange } from './time-slices';
 import { db } from '../client';
-import { features, datasets, tags, featureTags, featureCells, featureToPlace, place } from '../schema';
+import { features, datasets, tags, featureTags, placeCells, featureToPlace, place } from '../schema';
 
 // Query result types
 type RecordTypeRow = { record_type: RecordType };
@@ -83,7 +83,7 @@ async function getStats(): Promise<{
       WHERE ${features.recordType} IS NOT NULL
       GROUP BY ${features.recordType}
     `),
-    db.execute<CountRow>(sql`SELECT COUNT(DISTINCT (${featureCells.cellX}, ${featureCells.cellY})) as count FROM ${featureCells}`)
+    db.execute<CountRow>(sql`SELECT COUNT(DISTINCT (${placeCells.cellX}, ${placeCells.cellY})) as count FROM ${placeCells}`)
   ]);
 
   const featuresPerRecordType: Record<string, number> = {};

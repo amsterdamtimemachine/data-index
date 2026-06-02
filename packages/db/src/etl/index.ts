@@ -13,7 +13,7 @@ program
       await rebuildIndex();
       process.exit(0);
     } catch (error) {
-      console.error('Failed to rebuild feature_cells:', error);
+      console.error('Failed to rebuild place_cells:', error);
       process.exit(1);
     }
   });
