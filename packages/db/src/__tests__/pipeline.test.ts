@@ -303,7 +303,7 @@ describe('getHeatmapTimeline', () => {
 
 describe('getHistogram', () => {
   test('returns bins covering the data range', async () => {
-    const r = await getHistogram(undefined, undefined, 50);
+    const r = await getHistogram(undefined, undefined, undefined, 50);
     expect(r.bins.length).toBeGreaterThan(0);
     expect(r.totalFeatures).toBeGreaterThan(0);
   });
@@ -312,26 +312,26 @@ describe('getHistogram', () => {
     const spanning = await dbq.findFeatureSpanningMultipleBins(50);
     if (spanning) {
       // Histogram must count it in each overlapping bin (no duplicate feature double-counting)
-      const hist = await getHistogram(undefined, undefined, 50);
+      const hist = await getHistogram(undefined, undefined, undefined, 50);
       expect(hist.totalFeatures).toBeGreaterThan(0);
     }
   });
 
   test('different binSize produces different bin count', async () => {
-    const bins50 = await getHistogram(undefined, undefined, 50);
-    const bins25 = await getHistogram(undefined, undefined, 25);
+    const bins50 = await getHistogram(undefined, undefined, undefined, 50);
+    const bins25 = await getHistogram(undefined, undefined, undefined, 25);
     expect(bins25.bins.length).toBeGreaterThanOrEqual(bins50.bins.length);
   });
 
   test('maxCount equals max of bin counts', async () => {
-    const r = await getHistogram(undefined, undefined, 50);
+    const r = await getHistogram(undefined, undefined, undefined, 50);
     const actualMax = Math.max(0, ...r.bins.map(b => b.count));
     expect(r.maxCount).toBe(actualMax);
   });
 
   test('filter by datasetIds reduces total', async () => {
-    const all = await getHistogram(undefined, undefined, 50);
-    const jmOnly = await getHistogram(undefined, ['joods-monument'], 50);
+    const all = await getHistogram(undefined, undefined, undefined, 50);
+    const jmOnly = await getHistogram(undefined, ['joods-monument'], undefined, 50);
     expect(jmOnly.totalFeatures).toBeLessThanOrEqual(all.totalFeatures);
   });
 });

@@ -7,6 +7,7 @@ import type {
   Entity,
 } from '@atm/shared';
 import { computeTimeSlices } from './time-slices';
+import { getRecordTypes } from './record-types';
 import { db } from '../client';
 import { featureToPlace, place, placeCells, gridConfig } from '../schema';
 
@@ -92,7 +93,25 @@ async function getMaxFrequencies(): Promise<{ maxSpatial: number; maxTemporal: n
 }
 
 /**
- * Convert geographic bounds to base cell range
+ * Convert a display-cell's geographic bounds to the exact set of base cells
+ * the heatmap folded into that display cell.
+ *
+ * The frontend builds the bounds it sends here from calculateCellBounds(), which
+ * uniformly divides the grid_config bounds into colsAmount × rowsAmount display
+ * cells (colsAmount === the heatmap's gridCols). So the display resolution and
+ * this cell's (col, row) are recoverable from the bounds; round() absorbs the
+ * float4 precision of the grid_config bounds.
+ *
+ * getHeatmap assigns base cell -> display cell with the forward partition
+ *   display = floor(cell * gridN / (maxN + 1)).
+ * This is its exact inverse:
+ *   cell ∈ [ceil(col * (maxN+1) / gridN), ceil((col+1) * (maxN+1) / gridN) - 1]
+ * so getFeatures counts exactly the base cells getHeatmap counted — the hover
+ * count and the per-cell feature total always agree.
+ *
+ * Bounds are first clamped to the data's WGS84 extent. Every real display cell
+ * already lies inside the extent, so for them the clamp is a no-op; a viewport
+ * wider than the data simply collapses to the full base-cell range.
  */
 async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Promise<{
   minCellX: number;
@@ -102,21 +121,40 @@ async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Promise<{
 }> {
   const base = await getBaseCellBounds();
 
-  const cellWidth = (base.max_lon - base.min_lon) / (base.max_x - base.min_x + 1);
-  const cellHeight = (base.max_lat - base.min_lat) / (base.max_y - base.min_y + 1);
+  const minLon = Math.max(bounds.minLon, base.min_lon);
+  const maxLon = Math.min(bounds.maxLon, base.max_lon);
+  const minLat = Math.max(bounds.minLat, base.min_lat);
+  const maxLat = Math.min(bounds.maxLat, base.max_lat);
 
-  // Epsilon prevents floating point errors from missing boundary cells
-  const EPSILON = 1e-9;
+  // Width/height of one display cell in WGS84.
+  const cellW = maxLon - minLon;
+  const cellH = maxLat - minLat;
 
-  const minCellX = Math.floor((bounds.minLon - base.min_lon) / cellWidth) + base.min_x;
-  const maxCellX = Math.floor((bounds.maxLon - base.min_lon + EPSILON) / cellWidth) + base.min_x;
-  const minCellY = Math.floor((bounds.minLat - base.min_lat) / cellHeight) + base.min_y;
-  const maxCellY = Math.floor((bounds.maxLat - base.min_lat + EPSILON) / cellHeight) + base.min_y;
+  // Bounds entirely outside the data extent → empty range.
+  if (cellW <= 0 || cellH <= 0) {
+    return { minCellX: 0, maxCellX: -1, minCellY: 0, maxCellY: -1 };
+  }
+
+  // Recover the display grid resolution and this cell's column/row.
+  const gridCols = Math.max(1, Math.round((base.max_lon - base.min_lon) / cellW));
+  const gridRows = Math.max(1, Math.round((base.max_lat - base.min_lat) / cellH));
+  const col = Math.round((minLon - base.min_lon) / cellW);
+  const row = Math.round((minLat - base.min_lat) / cellH);
+
+  // Base cells are 0-indexed (cell_x = floor((x - min_x) / cellSize)), so the
+  // index span is [0, maxN]; the partition divisor is maxN + 1 — matching getHeatmap.
+  const spanX = base.max_x + 1;
+  const spanY = base.max_y + 1;
+
+  const minCellX = Math.ceil((col * spanX) / gridCols);
+  const maxCellX = Math.ceil(((col + 1) * spanX) / gridCols) - 1;
+  const minCellY = Math.ceil((row * spanY) / gridRows);
+  const maxCellY = Math.ceil(((row + 1) * spanY) / gridRows) - 1;
 
   return {
-    minCellX: Math.max(minCellX, base.min_x),
+    minCellX: Math.max(minCellX, 0),
     maxCellX: Math.min(maxCellX, base.max_x),
-    minCellY: Math.max(minCellY, base.min_y),
+    minCellY: Math.max(minCellY, 0),
     maxCellY: Math.min(maxCellY, base.max_y)
   };
 }
@@ -158,10 +196,15 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   // Get date range from time slice
   const dateRange = timeSlice ? await getTimeSliceDateRange(timeSlice) : null;
 
-  // Default to all record types if none specified
+  // Default to every record type in the data — same fallback as the heatmap and
+  // histogram, so an unfiltered feature list always matches an unfiltered heatmap.
   const types = recordTypes && recordTypes.length > 0
     ? recordTypes
-    : ['image', 'text', 'person'] as RecordType[];
+    : await getRecordTypes();
+
+  if (types.length === 0) {
+    return { data: [], total: 0, page, pageSize, totalPages: 0 };
+  }
 
   // Calculate offset
   const offset = (page - 1) * pageSize;

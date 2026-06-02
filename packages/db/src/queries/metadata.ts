@@ -5,11 +5,11 @@ import type {
   PlaceType,
 } from '@atm/shared';
 import { computeTimeSlices, computeTimeRange } from './time-slices';
+import { getRecordTypes } from './record-types';
 import { db } from '../client';
 import { features, datasets, tags, featureTags, placeCells, featureToPlace, place } from '../schema';
 
 // Query result types
-type RecordTypeRow = { record_type: RecordType };
 type PlaceTypeRow = { place_type: PlaceType };
 type TagRow = { id: string };
 type CountRow = { count: string };
@@ -26,19 +26,6 @@ async function getDatasets(): Promise<{ id: string; label: string }[]> {
     ORDER BY ${datasets.label}
   `);
   return result.rows;
-}
-
-/**
- * Get all distinct record types from features table
- */
-async function getRecordTypes(): Promise<RecordType[]> {
-  const result = await db.execute<RecordTypeRow>(sql`
-    SELECT DISTINCT ${features.recordType} as record_type
-    FROM ${features}
-    WHERE ${features.recordType} IS NOT NULL
-    ORDER BY ${features.recordType}
-  `);
-  return result.rows.map(r => r.record_type);
 }
 
 /**

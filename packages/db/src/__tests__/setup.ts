@@ -99,10 +99,10 @@ export async function cleanTestDb() {
 }
 
 export async function teardownTestDb() {
-  const client = (db as any).$client;
-  if (client && typeof client.end === 'function') {
-    await client.end();
-  }
+  // The pg pool in ../client is a module singleton shared across every test file
+  // (bun reuses it process-wide). Ending it here would break any DB test file that
+  // runs afterwards, so we intentionally leave it open — bun force-exits the
+  // process when the run finishes, which closes the connections.
 }
 
 /**

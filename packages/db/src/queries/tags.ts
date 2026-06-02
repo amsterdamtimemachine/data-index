@@ -8,6 +8,7 @@ import type {
   TagValidation
 } from '@atm/shared';
 import { db } from '../client';
+import { getRecordTypes } from './record-types';
 import { features, tags, featureTags, featureToPlace, place } from '../schema';
 
 // Query result types (internal)
@@ -21,18 +22,7 @@ type SimpleTagStatsRow = {
   tag_label: string;
   total_features: string;
 };
-type RecordTypeRow = { record_type: RecordType };
 type CountRow = { count: string };
-
-/**
- * Get all available record types from the database
- */
-async function getRecordTypes(): Promise<RecordType[]> {
-  const result = await db.execute<RecordTypeRow>(
-    sql`SELECT DISTINCT ${features.recordType} as record_type FROM ${features} WHERE ${features.recordType} IS NOT NULL`
-  );
-  return result.rows.map(r => r.record_type);
-}
 
 /**
  * Get available tags with feature counts and associated record types

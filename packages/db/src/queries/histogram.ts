@@ -4,20 +4,10 @@ import { DEFAULT_BIN_SIZE } from '@atm/shared';
 import { db } from '../client';
 import { features, featureToPlace, place } from '../schema';
 import { computeTimeSlices, computeTimeRange } from './time-slices';
+import { getRecordTypes } from './record-types';
 
 // Query result types
 type BinRow = { bin_start: string; count: string };
-type RecordTypeRow = { record_type: RecordType };
-
-/**
- * Get all available record types from the database
- */
-async function getRecordTypes(): Promise<RecordType[]> {
-  const result = await db.execute<RecordTypeRow>(
-    sql`SELECT DISTINCT ${features.recordType} as record_type FROM ${features} WHERE ${features.recordType} IS NOT NULL`
-  );
-  return result.rows.map(r => r.record_type);
-}
 
 /**
  * Get histogram data for combined record types

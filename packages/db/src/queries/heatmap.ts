@@ -4,27 +4,28 @@ import { DEFAULT_BIN_SIZE } from '@atm/shared';
 import { db } from '../client';
 import { placeCells, features, featureToPlace, place, gridConfig } from '../schema';
 import { computeTimeSlices } from './time-slices';
+import { getRecordTypes } from './record-types';
 
 // Query result types
-type CellCount = { cell_x: number; cell_y: number; count: string };
-type CellCountWithTime = { cell_x: number; cell_y: number; time_bin: string; count: string };
-type RecordTypeRow = { record_type: RecordType };
+type GridCellCount = { grid_col: number; grid_row: number; count: string };
+type GridCellCountWithTime = { grid_col: number; grid_row: number; time_bin: string; count: string };
+
+/**
+ * SQL expressions that map a base cell (place_cells) to a display grid cell.
+ * Forward partition: display = floor(cell * gridN / (maxN + 1)), clamped.
+ * getFeatures uses the exact inverse of this partition, so heatmap counts and
+ * the per-cell feature list always agree.
+ */
+function gridColExpr(gridCols: number, maxX: number) {
+  return sql`LEAST(FLOOR(${placeCells.cellX}::numeric * ${gridCols} / ${maxX + 1})::int, ${gridCols - 1})`;
+}
+function gridRowExpr(gridRows: number, maxY: number) {
+  return sql`LEAST(FLOOR(${placeCells.cellY}::numeric * ${gridRows} / ${maxY + 1})::int, ${gridRows - 1})`;
+}
 
 /**
  * Convert cell (x, y) at base resolution to target grid index
  */
-function cellToGridIndex(
-  cellX: number, cellY: number,
-  maxCellX: number, maxCellY: number,
-  gridCols: number, gridRows: number
-): number {
-  const gridCol = Math.floor((cellX / (maxCellX + 1)) * gridCols);
-  const gridRow = Math.floor((cellY / (maxCellY + 1)) * gridRows);
-  const clampedCol = Math.min(Math.max(gridCol, 0), gridCols - 1);
-  const clampedRow = Math.min(Math.max(gridRow, 0), gridRows - 1);
-  return clampedRow * gridCols + clampedCol;
-}
-
 /**
  * Build sparse heatmap from counts map
  */
@@ -40,16 +41,6 @@ function buildSparseHeatmap(countsMap: Map<number, number>): Heatmap {
   }
 
   return { indices, counts };
-}
-
-/**
- * Get all available record types from the database
- */
-async function getRecordTypes(): Promise<RecordType[]> {
-  const result = await db.execute<RecordTypeRow>(
-    sql`SELECT DISTINCT ${features.recordType} as record_type FROM ${features} WHERE ${features.recordType} IS NOT NULL`
-  );
-  return result.rows.map(r => r.record_type);
 }
 
 /**
@@ -128,11 +119,16 @@ export async function getHeatmap(
   const gridCols = Math.min(resolution.cols, maxX + 1);
   const gridRows = Math.min(resolution.rows, maxY + 1);
 
-  const startDate = timeSlice.timeRange.start;
-  const endDate = timeSlice.timeRange.end;
+  // Half-open, year-based window — identical to getFeatures and getHeatmapTimeline,
+  // so slices don't overlap on boundary years and per-cell counts agree across all three.
+  const startYear = timeSlice.startYear;
+  const endYear = timeSlice.endYear;
 
-  const result = await db.execute<CellCount>(sql`
-    SELECT ${placeCells.cellX} as cell_x, ${placeCells.cellY} as cell_y, COUNT(DISTINCT ${features.id}) as count
+  const result = await db.execute<GridCellCount>(sql`
+    SELECT
+      ${gridColExpr(gridCols, maxX)} as grid_col,
+      ${gridRowExpr(gridRows, maxY)} as grid_row,
+      COUNT(DISTINCT ${features.id}) as count
     FROM ${placeCells}
     JOIN ${featureToPlace} ON ${placeCells.placeId} = ${featureToPlace.placeId}
     JOIN ${features} ON ${featureToPlace.featureId} = ${features.id}
@@ -140,15 +136,15 @@ export async function getHeatmap(
     WHERE ${features.recordType} IN ${types}
       ${datasetIds && datasetIds.length > 0 ? sql`AND ${features.datasetId} IN ${datasetIds}` : sql``}
       ${placeTypes && placeTypes.length > 0 ? sql`AND ${place.type} IN ${placeTypes}` : sql``}
-      AND ${features.startDate} <= ${endDate}
-      AND ${features.endDate} >= ${startDate}
-    GROUP BY ${placeCells.cellX}, ${placeCells.cellY}
+      AND EXTRACT(YEAR FROM ${features.startDate}) < ${endYear}
+      AND EXTRACT(YEAR FROM ${features.endDate}) >= ${startYear}
+    GROUP BY grid_col, grid_row
   `);
 
   const countsMap = new Map<number, number>();
   for (const row of result.rows) {
-    const gridIndex = cellToGridIndex(Number(row.cell_x), Number(row.cell_y), maxX, maxY, gridCols, gridRows);
-    countsMap.set(gridIndex, (countsMap.get(gridIndex) || 0) + parseInt(row.count));
+    const gridIndex = Number(row.grid_row) * gridCols + Number(row.grid_col);
+    countsMap.set(gridIndex, parseInt(row.count));
   }
 
   return {
@@ -188,14 +184,14 @@ export async function getHeatmapTimeline(
   const firstSlice = timeSlices[0];
   const lastSlice = timeSlices[timeSlices.length - 1];
 
-  const result = await db.execute<CellCountWithTime>(sql`
+  const result = await db.execute<GridCellCountWithTime>(sql`
     WITH slices AS (
       SELECT gs AS bin_start, gs + ${binSizeYears}::int AS bin_end
       FROM generate_series(${firstSlice.startYear}::int, ${lastSlice.startYear}::int, ${binSizeYears}::int) AS gs
     )
     SELECT
-      ${placeCells.cellX} as cell_x,
-      ${placeCells.cellY} as cell_y,
+      ${gridColExpr(gridCols, maxX)} as grid_col,
+      ${gridRowExpr(gridRows, maxY)} as grid_row,
       s.bin_start as time_bin,
       COUNT(DISTINCT ${features.id}) as count
     FROM ${placeCells}
@@ -209,7 +205,7 @@ export async function getHeatmapTimeline(
       ${placeTypes && placeTypes.length > 0 ? sql`AND ${place.type} IN ${placeTypes}` : sql``}
       AND ${features.startDate} IS NOT NULL
       AND ${features.endDate} IS NOT NULL
-    GROUP BY ${placeCells.cellX}, ${placeCells.cellY}, s.bin_start
+    GROUP BY grid_col, grid_row, s.bin_start
   `);
 
   const countsBySlice = new Map<number, Map<number, number>>();
@@ -219,8 +215,8 @@ export async function getHeatmapTimeline(
       countsBySlice.set(timeBin, new Map());
     }
     const countsMap = countsBySlice.get(timeBin)!;
-    const gridIndex = cellToGridIndex(Number(row.cell_x), Number(row.cell_y), maxX, maxY, gridCols, gridRows);
-    countsMap.set(gridIndex, (countsMap.get(gridIndex) || 0) + parseInt(row.count));
+    const gridIndex = Number(row.grid_row) * gridCols + Number(row.grid_col);
+    countsMap.set(gridIndex, parseInt(row.count));
   }
 
   const timeline: HeatmapTimeline = {};
