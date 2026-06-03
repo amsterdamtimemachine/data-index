@@ -48,12 +48,16 @@ export async function rebuildIndex() {
   console.log('Clearing existing place_cells...');
   await db.execute(sql`TRUNCATE ${placeCells}`);
 
-  // Populate place_cells (one set of cells per place, not per feature)
+  // Populate place_cells. Points and lines keep the proven dumppoints path; only
+  // polygons need the fill below.
   console.log('Populating place_cells...');
   const t = Date.now();
 
   const halfCell = CELL_SIZE_METERS / 2;
-  const result = await db.execute(sql`
+
+  // Points & lines: walk densified vertices — a point lands in one cell, a line in
+  // every cell it crosses.
+  const lineResult = await db.execute(sql`
     INSERT INTO place_cells (place_id, cell_x, cell_y)
     SELECT DISTINCT
       p.id as place_id,
@@ -61,10 +65,47 @@ export async function rebuildIndex() {
       FLOOR((ST_Y((dp).geom) - ${min_y}) / ${CELL_SIZE_METERS})::smallint as cell_y
     FROM ${place} p
     CROSS JOIN LATERAL ST_DumpPoints(ST_Segmentize(p.geometry, ${halfCell})) dp
-    WHERE EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = p.id)
+    WHERE GeometryType(p.geometry) IN ('POINT', 'MULTIPOINT', 'LINESTRING', 'MULTILINESTRING')
+      AND EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = p.id)
   `);
 
-  console.log(`✅ Inserted ${result.rowCount} rows in ${Date.now() - t}ms`);
+  // Polygons: rasterise/fill — keep every grid cell whose rectangle intersects the
+  // polygon, so the interior is covered, not just the boundary ring. (ST_DumpPoints
+  // walked only edge vertices, leaving polygon interiors empty.) The grid origin and
+  // cell size are cast to float8 so the cell-envelope arithmetic stays floating point.
+  const polyResult = await db.execute(sql`
+    WITH featured AS (
+      SELECT p.id, p.geometry
+      FROM ${place} p
+      WHERE p.geometry IS NOT NULL
+        AND GeometryType(p.geometry) NOT IN ('POINT', 'MULTIPOINT', 'LINESTRING', 'MULTILINESTRING')
+        AND EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = p.id)
+    )
+    INSERT INTO place_cells (place_id, cell_x, cell_y)
+    SELECT f.id, gx::smallint, gy::smallint
+    FROM featured f
+    CROSS JOIN LATERAL generate_series(
+      FLOOR((ST_XMin(f.geometry) - ${min_x}::float8) / ${CELL_SIZE_METERS}::float8)::int,
+      FLOOR((ST_XMax(f.geometry) - ${min_x}::float8) / ${CELL_SIZE_METERS}::float8)::int
+    ) AS gx
+    CROSS JOIN LATERAL generate_series(
+      FLOOR((ST_YMin(f.geometry) - ${min_y}::float8) / ${CELL_SIZE_METERS}::float8)::int,
+      FLOOR((ST_YMax(f.geometry) - ${min_y}::float8) / ${CELL_SIZE_METERS}::float8)::int
+    ) AS gy
+    WHERE ST_Intersects(
+      f.geometry,
+      ST_MakeEnvelope(
+        ${min_x}::float8 + gx * ${CELL_SIZE_METERS}::float8,
+        ${min_y}::float8 + gy * ${CELL_SIZE_METERS}::float8,
+        ${min_x}::float8 + (gx + 1) * ${CELL_SIZE_METERS}::float8,
+        ${min_y}::float8 + (gy + 1) * ${CELL_SIZE_METERS}::float8,
+        28992
+      )
+    )
+  `);
+
+  const rowCount = (lineResult.rowCount ?? 0) + (polyResult.rowCount ?? 0);
+  console.log(`✅ Inserted ${rowCount} rows in ${Date.now() - t}ms`);
 
   // Update spatial frequency on place (number of cells each place spans)
   console.log('Updating spatial frequency...');

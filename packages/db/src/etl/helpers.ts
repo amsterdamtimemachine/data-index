@@ -7,7 +7,8 @@
  * geometry transform. These are factored out here so the source files only
  * contain what is genuinely source-specific (parsing + how a row maps to a place).
  */
-import { sql } from 'drizzle-orm';
+import { sql, inArray } from 'drizzle-orm';
+import { createHash } from 'crypto';
 import { db } from '../client';
 import {
   organisations,
@@ -22,6 +23,29 @@ import {
 } from '../schema';
 
 type Link = { featureId: string; placeId: string; relationId: string };
+
+// Fixed namespace for deriving deterministic feature ids. Arbitrary constant —
+// it only needs to stay the same across runs.
+const FEATURE_ID_NAMESPACE = '9f1a7b2c-3d4e-5f60-8a9b-0c1d2e3f4a5b';
+
+/** RFC 4122 name-based (v5) UUID from a namespace UUID + a name string. */
+function uuidv5(name: string, namespace: string): string {
+  const nsBytes = Uint8Array.from(Buffer.from(namespace.replace(/-/g, ''), 'hex'));
+  const bytes = createHash('sha1').update(nsBytes).update(name, 'utf8').digest().subarray(0, 16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x50; // version 5
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 10x
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+/**
+ * Deterministic feature UUID derived from the source URL (the feature's stable
+ * natural key). Same URL always yields the same id, so re-ingesting a file
+ * upserts the existing rows instead of creating duplicates with fresh random ids.
+ */
+export function featureUuid(url: string): string {
+  return uuidv5(url, FEATURE_ID_NAMESPACE);
+}
 
 /**
  * Upsert a source's organisation, dataset and (optionally) relation rows.
@@ -45,15 +69,46 @@ export async function upsertSource(opts: {
  * Batched writer for features and their feature_to_place links. Owns its batches
  * so callers just add() and let it flush at the size threshold (and once at the
  * end). Replaces the byte-identical flush() each feature source carried.
+ *
+ * Idempotent re-ingest (features carry a deterministic id from featureId()):
+ *  - features upsert (onConflictDoUpdate) so a corrected file refreshes content
+ *    in place — but NOT temporal_frequency, which rebuild-index owns.
+ *  - links are reconciled: the first time a feature is seen this run its existing
+ *    feature_to_place rows are deleted, so a corrected place assignment replaces
+ *    the old link instead of accumulating a second one. The delete happens once
+ *    per feature per run, so links added across multiple flushes still accrue.
  */
 export function createFeatureWriter(batchSize = 1000) {
   let featureBatch: NewFeature[] = [];
   let linkBatch: Link[] = [];
+  const linksCleared = new Set<string>(); // features whose stale links were already deleted this run
+  let pendingLinkDeletes: string[] = [];
 
   async function flush(): Promise<void> {
     if (featureBatch.length > 0) {
-      await db.insert(features).values(featureBatch).onConflictDoNothing();
+      // No intra-batch dedup here: a source must not emit the same feature id twice
+      // in one batch (Postgres rejects DO UPDATE touching a row twice). Sources that
+      // can repeat a feature dedup at the source (see joods-monument / beeldbank).
+      await db.insert(features).values(featureBatch).onConflictDoUpdate({
+        target: features.id,
+        set: {
+          url: sql`excluded.url`,
+          recordType: sql`excluded.record_type`,
+          label: sql`excluded.label`,
+          description: sql`excluded.description`,
+          contentUrl: sql`excluded.content_url`,
+          startDate: sql`excluded.start_date`,
+          endDate: sql`excluded.end_date`,
+          datasetId: sql`excluded.dataset_id`,
+          entity: sql`excluded.entity`,
+        },
+      });
       featureBatch = [];
+    }
+    // Clear old links for re-seen features before inserting this run's links.
+    if (pendingLinkDeletes.length > 0) {
+      await db.delete(featureToPlace).where(inArray(featureToPlace.featureId, pendingLinkDeletes));
+      pendingLinkDeletes = [];
     }
     if (linkBatch.length > 0) {
       await db.insert(featureToPlace).values(linkBatch).onConflictDoNothing();
@@ -63,7 +118,13 @@ export function createFeatureWriter(batchSize = 1000) {
 
   return {
     addFeature(feature: NewFeature): void { featureBatch.push(feature); },
-    addLink(link: Link): void { linkBatch.push(link); },
+    addLink(link: Link): void {
+      if (!linksCleared.has(link.featureId)) {
+        linksCleared.add(link.featureId);
+        pendingLinkDeletes.push(link.featureId);
+      }
+      linkBatch.push(link);
+    },
     /** Flush when either batch reaches the threshold. */
     async flushIfFull(): Promise<void> {
       if (featureBatch.length >= batchSize || linkBatch.length >= batchSize) await flush();
@@ -114,17 +175,24 @@ export interface PlaceInsert {
 }
 
 /**
+ * How an existing place row is refreshed when a re-ingest hits its id:
+ *  - 'replaceAll'      : type + preferred_label + geometry (sources that own the
+ *                        label — streets / neighbourhoods, from their TTL prefLabel).
+ *  - 'replaceGeometry' : type + geometry only, preserving preferred_label
+ *                        (LPS — the label is owned by the later adressen enrichment).
+ */
+export type PlaceConflict = 'replaceAll' | 'replaceGeometry';
+
+/**
  * Batch-insert place rows with a geometry transform to RD (28992).
  *
  * `sourceSrid` is the SRID of the incoming WKT: 28992 is inserted as-is, anything
- * else (e.g. 4326) is wrapped in ST_Transform. `onConflict: 'update'` refreshes
- * type / label / geometry on re-ingest; 'nothing' leaves existing rows untouched
- * (used by LPS, whose preferred_label is set later by the adressen enrichment).
- * Returns the number of rows inserted.
+ * else (e.g. 4326) is wrapped in ST_Transform. `onConflict` selects which columns
+ * a re-ingest refreshes (see PlaceConflict). Returns the number of rows inserted.
  */
 export async function insertPlaces(
   rows: PlaceInsert[],
-  opts: { sourceSrid: number; onConflict: 'nothing' | 'update'; batchSize?: number }
+  opts: { sourceSrid: number; onConflict: PlaceConflict; batchSize?: number }
 ): Promise<number> {
   const batchSize = opts.batchSize ?? 500;
 
@@ -146,7 +214,15 @@ export async function insertPlaces(
     }));
 
     const query = db.insert(place).values(values);
-    if (opts.onConflict === 'update') {
+    if (opts.onConflict === 'replaceGeometry') {
+      await query.onConflictDoUpdate({
+        target: place.id,
+        set: {
+          type: sql`excluded.type`,
+          geometry: sql`excluded.geometry`,
+        },
+      });
+    } else {
       await query.onConflictDoUpdate({
         target: place.id,
         set: {
@@ -155,8 +231,6 @@ export async function insertPlaces(
           geometry: sql`excluded.geometry`,
         },
       });
-    } else {
-      await query.onConflictDoNothing();
     }
     inserted += chunk.length;
   }
@@ -166,4 +240,19 @@ export async function insertPlaces(
 /** Adamlink address URI for a registry address id. */
 export function adamlinkAddressUri(adresId: string): string {
   return `https://adamlink.nl/geo/address/${adresId}`;
+}
+
+/**
+ * Format a date range for an entity's dateCreated field.
+ * Both ends are inclusive: "1948-09-01/1948-09-30" means Sep 1 through Sep 30.
+ * Returns "start/end" for ranges, "start" for single dates, undefined if no dates.
+ */
+export function formatDateRange(startDate: string | null, endDate: string | null): string | undefined {
+  if (startDate && endDate && startDate !== endDate) {
+    return `${startDate}/${endDate}`;
+  }
+  if (startDate) {
+    return startDate;
+  }
+  return undefined;
 }

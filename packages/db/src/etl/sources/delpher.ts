@@ -12,8 +12,7 @@ import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
 import type { CreativeWorkEntity } from '@atm/shared';
-import { formatDateRange } from '../utils';
-import { upsertSource, createFeatureWriter, createCachedResolver } from '../helpers';
+import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers';
 
 // ═══════════════════════════════════════════════════════════════
 //  Organisation
@@ -121,7 +120,7 @@ export async function ingest(filePath: string) {
       ...(dateCreated && { dateCreated })
     };
 
-    const featureId = crypto.randomUUID();
+    const featureId = featureUuid(row.url);
 
     writer.addFeature({
       id: featureId,

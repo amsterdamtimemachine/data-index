@@ -13,7 +13,7 @@ import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
 import type { PersonEntity } from '@atm/shared';
-import { upsertSource, createFeatureWriter, createCachedResolver } from '../helpers';
+import { upsertSource, createFeatureWriter, createCachedResolver, featureUuid } from '../helpers';
 
 // ═══════════════════════════════════════════════════════════════
 //  Organisation
@@ -75,9 +75,15 @@ export async function ingest(filePath: string) {
   const csvParser = createReadStream(filePath).pipe(parse({ columns: true }));
 
   const writer = createFeatureWriter(BATCH_SIZE);
+  // The source lists some people on several rows — identical except for a jittered
+  // `wkt` we don't use (jm links by the adamlink address URI). Dedup by person URL
+  // so we don't emit the same feature id twice (which the upsert would reject).
+  const committedPersons = new Set<string>();
+  const seenLinks = new Set<string>();
   let featureCount = 0;
   let linkCount = 0;
   let skipped = 0;
+  let duplicates = 0;
 
   for await (const row of csvParser as AsyncIterable<RawRow>) {
     if (!row.person || !row.address) continue;
@@ -88,39 +94,48 @@ export async function ingest(filePath: string) {
       continue;
     }
 
-    const entity: PersonEntity = {
-      type: 'Person',
-      name: row.name,
-      ...(row.birthDate && { birthDate: row.birthDate }),
-      ...(row.birthPlace && { birthPlace: row.birthPlace }),
-      ...(row.deathDate && { deathDate: row.deathDate }),
-      ...(row.deathPlace && { deathPlace: row.deathPlace })
-    };
+    const featureId = featureUuid(row.person);
 
-    const featureId = crypto.randomUUID();
+    if (committedPersons.has(row.person)) {
+      duplicates++;
+    } else {
+      committedPersons.add(row.person);
+      const entity: PersonEntity = {
+        type: 'Person',
+        name: row.name,
+        ...(row.birthDate && { birthDate: row.birthDate }),
+        ...(row.birthPlace && { birthPlace: row.birthPlace }),
+        ...(row.deathDate && { deathDate: row.deathDate }),
+        ...(row.deathPlace && { deathPlace: row.deathPlace })
+      };
+      writer.addFeature({
+        id: featureId,
+        url: row.person,
+        recordType: RECORD_TYPE,
+        label: row.name,
+        startDate: START_DATE,
+        endDate: END_DATE,
+        datasetId: DATASET_ID,
+        entity
+      });
+      featureCount++;
+    }
 
-    writer.addFeature({
-      id: featureId,
-      url: row.person,
-      recordType: RECORD_TYPE,
-      label: row.name,
-      startDate: START_DATE,
-      endDate: END_DATE,
-      datasetId: DATASET_ID,
-      entity
-    });
-    writer.addLink({ featureId, placeId, relationId: RELATION_ID });
-    featureCount++;
-    linkCount++;
+    const linkKey = `${featureId}|${placeId}`;
+    if (!seenLinks.has(linkKey)) {
+      seenLinks.add(linkKey);
+      writer.addLink({ featureId, placeId, relationId: RELATION_ID });
+      linkCount++;
+    }
 
     await writer.flushIfFull();
 
-    if ((featureCount + skipped) % 1000 === 0) {
-      process.stdout.write(`\r  ${featureCount} persons, ${skipped} skipped`);
+    if ((featureCount + duplicates + skipped) % 1000 === 0) {
+      process.stdout.write(`\r  ${featureCount} persons, ${duplicates} duplicates, ${skipped} skipped`);
     }
   }
 
   await writer.flush();
 
-  console.log(`\nDone: ${featureCount} features, ${linkCount} links, ${skipped} skipped (no matching place)`);
+  console.log(`\nDone: ${featureCount} features, ${linkCount} links, ${duplicates} duplicate rows skipped, ${skipped} skipped (no matching place)`);
 }

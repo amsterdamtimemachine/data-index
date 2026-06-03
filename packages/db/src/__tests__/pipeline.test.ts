@@ -83,7 +83,10 @@ describe('Feature ingestion', () => {
     expect(await dbq.featureCountByDatasetAndType('beeldbank', 'image')).toBeGreaterThan(0);
   });
 
-  test('joods-monument features have record_type = person', async () => {
+  test('joods-monument dedups duplicate person rows (6 fixture rows, 5 distinct persons)', async () => {
+    // The fixture repeats one person on a second row (differing only in wkt, which
+    // jm ignores). Without source dedup the seed would error on the upsert; with it
+    // the person count stays 5.
     expect(await dbq.featureCountByDatasetAndType('joods-monument', 'person')).toBe(5);
   });
 

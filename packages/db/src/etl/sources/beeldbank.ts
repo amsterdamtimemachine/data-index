@@ -14,8 +14,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../../client';
 import { placeName } from '../../schema';
 import type { MediaObjectEntity } from '@atm/shared';
-import { formatDateRange } from '../utils';
-import { upsertSource, createFeatureWriter, createCachedResolver } from '../helpers';
+import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers';
 
 // ═══════════════════════════════════════════════════════════════
 //  Organisation
@@ -148,7 +147,7 @@ export async function ingest(filePath: string) {
 
       if (!placeId) continue;
 
-      featureId = crypto.randomUUID();
+      featureId = featureUuid(sourceUrl);
       writer.addFeature({ id: featureId, ...pendingFeatures.get(sourceUrl)! });
       committedFeatures.set(sourceUrl, featureId);
       pendingFeatures.delete(sourceUrl);
@@ -190,7 +189,7 @@ export async function ingest(filePath: string) {
     }
 
     if (resolvedPlaceId) {
-      const featureId = crypto.randomUUID();
+      const featureId = featureUuid(sourceUrl);
       writer.addFeature({ id: featureId, ...featureData });
       writer.addLink({ featureId, placeId: resolvedPlaceId, relationId: RELATION_ID });
       featureCount++;

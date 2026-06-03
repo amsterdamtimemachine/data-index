@@ -83,7 +83,7 @@ export async function ingest(filePath: string) {
 
   const inserted = await insertPlaces(
     districts.map(d => ({ id: d.uri, type: 'neighbourhood', label: d.label, wkt: d.wkt })),
-    { sourceSrid: 4326, onConflict: 'update' }
+    { sourceSrid: 4326, onConflict: 'replaceAll' }
   );
 
   console.log(`\nDone: ${inserted} neighbourhood places`);

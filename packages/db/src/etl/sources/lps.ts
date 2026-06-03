@@ -45,10 +45,10 @@ export async function ingest(filePath: string) {
     }
   }
 
-  // LPS geometry is already RD (28992). Don't clobber preferred_label on re-ingest
-  // (the adressen step sets it), so DO NOTHING on conflict.
+  // LPS geometry is already RD (28992). Re-ingest refreshes geometry but preserves
+  // preferred_label, which the later adressen enrichment owns.
   console.log(`Inserting ${placeRows.length} places...`);
-  const placeCount = await insertPlaces(placeRows, { sourceSrid: 28992, onConflict: 'nothing' });
+  const placeCount = await insertPlaces(placeRows, { sourceSrid: 28992, onConflict: 'replaceGeometry' });
 
   console.log(`Inserting ${nameRows.length} place names...`);
   const names = createNameWriter();

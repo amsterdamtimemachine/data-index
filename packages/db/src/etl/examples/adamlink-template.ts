@@ -17,9 +17,9 @@ import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { organisations, datasets, relation, features, featureToPlace, placeName } from '../../schema';
+import { placeName } from '../../schema';
 import type { MediaObjectEntity } from '@atm/shared';
-import { formatDateRange } from '../utils';
+import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers';
 
 // ═══════════════════════════════════════════════════════════════
 //  Organisation
@@ -56,66 +56,43 @@ interface RawRow {
 type PlaceRow = { place_id: string };
 
 export async function ingest(filePath: string) {
-  await db.insert(organisations)
-    .values({ id: ORG_ID, label: ORG_LABEL, url: ORG_URL })
-    .onConflictDoNothing();
+  await upsertSource({
+    organisation: { id: ORG_ID, label: ORG_LABEL, url: ORG_URL },
+    dataset: { id: DATASET_ID, label: DATASET_LABEL, url: DATASET_URL },
+    relation: { id: RELATION_ID, label: RELATION_LABEL },
+  });
 
-  await db.insert(datasets)
-    .values({ id: DATASET_ID, label: DATASET_LABEL, url: DATASET_URL, organisationId: ORG_ID })
-    .onConflictDoNothing();
-
-  await db.insert(relation)
-    .values({ id: RELATION_ID, label: RELATION_LABEL })
-    .onConflictDoNothing();
-
-  // Cache: adamlink URI → place ID
-  const placeCache = new Map<string, string | null>();
-
-  async function resolvePlaceId(adamlinkUri: string): Promise<string | null> {
-    if (placeCache.has(adamlinkUri)) return placeCache.get(adamlinkUri)!;
-
+  // Resolve an Adamlink URI to a place id via place_name (cached per run).
+  const resolvePlaceId = createCachedResolver(async (adamlinkUri) => {
     const result = await db.execute<PlaceRow>(
       sql`SELECT ${placeName.placeId} as place_id FROM ${placeName} WHERE ${placeName.id} = ${adamlinkUri}`
     );
-    const placeId = result.rows[0]?.place_id || null;
-    if (placeId) placeCache.set(adamlinkUri, placeId);
-    return placeId;
-  }
+    return result.rows[0]?.place_id ?? null;
+  });
 
   const csvParser = createReadStream(filePath).pipe(parse({ columns: true }));
 
-  let featureBatch: any[] = [];
-  let linkBatch: { featureId: string; placeId: string; relationId: string }[] = [];
+  const writer = createFeatureWriter(BATCH_SIZE);
   let count = 0;
   let skipped = 0;
-
-  async function flush() {
-    if (featureBatch.length > 0) {
-      await db.insert(features).values(featureBatch).onConflictDoNothing();
-      featureBatch = [];
-    }
-    if (linkBatch.length > 0) {
-      await db.insert(featureToPlace).values(linkBatch).onConflictDoNothing();
-      linkBatch = [];
-    }
-  }
 
   for await (const row of csvParser as AsyncIterable<RawRow>) {
     const placeId = await resolvePlaceId(row.adamlink_uri);
     if (!placeId) { skipped++; continue; }
 
-    const featureId = crypto.randomUUID();
+    const featureId = featureUuid(row.id);
     const startDate = row.date_start || null;
     const endDate = row.date_end || null;
+    const dateCreated = formatDateRange(startDate, endDate);
 
     const entity: MediaObjectEntity = {
       type: 'MediaObject',
       name: row.title,
       contentUrl: row.content_url,
-      ...(formatDateRange(startDate, endDate) && { dateCreated: formatDateRange(startDate, endDate) })
+      ...(dateCreated && { dateCreated })
     };
 
-    featureBatch.push({
+    writer.addFeature({
       id: featureId,
       url: row.id,
       recordType: RECORD_TYPE,
@@ -126,14 +103,13 @@ export async function ingest(filePath: string) {
       datasetId: DATASET_ID,
       entity
     });
-
-    linkBatch.push({ featureId, placeId, relationId: RELATION_ID });
+    writer.addLink({ featureId, placeId, relationId: RELATION_ID });
     count++;
 
-    if (featureBatch.length >= BATCH_SIZE) await flush();
+    await writer.flushIfFull();
     if (count % 1000 === 0) process.stdout.write(`\r  ${count} ingested, ${skipped} skipped`);
   }
 
-  await flush();
+  await writer.flush();
   console.log(`\nDone: ${count} features, ${skipped} skipped (no matching place)`);
 }
