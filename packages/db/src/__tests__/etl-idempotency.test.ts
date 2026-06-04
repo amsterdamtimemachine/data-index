@@ -16,6 +16,7 @@ import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
 import { featureUuid, createFeatureWriter, insertPlaces, upsertSource } from '../etl/helpers';
+import type { PlaceIdRow } from '../row-types';
 
 async function placeRow(id: string) {
   const r = await db.execute<{ label: string | null; x: number }>(
@@ -30,7 +31,7 @@ async function featureCountByUrl(url: string) {
 }
 
 async function linkedPlaces(featureId: string) {
-  const r = await db.execute<{ place_id: string }>(
+  const r = await db.execute<PlaceIdRow>(
     sql`SELECT place_id FROM feature_to_place WHERE feature_id = ${featureId} ORDER BY place_id`
   );
   return r.rows.map(x => x.place_id);

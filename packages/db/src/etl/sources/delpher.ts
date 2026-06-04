@@ -11,6 +11,7 @@ import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
+import type { PlaceIdRow } from '../../row-types';
 import type { CreativeWorkEntity } from '@atm/shared';
 import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers';
 
@@ -54,8 +55,6 @@ interface RawRow {
   tags: string;
 }
 
-type PlaceMatch = { place_id: string };
-
 /**
  * Parse PostgreSQL range format "[1974-10-25,1974-10-26)" to start/end dates
  */
@@ -78,7 +77,7 @@ export async function ingest(filePath: string) {
 
   // Nearest place within threshold, cached by WKT (many articles share a point).
   const resolvePlaceId = createCachedResolver(async (wkt) => {
-    const result = await db.execute<PlaceMatch>(sql`
+    const result = await db.execute<PlaceIdRow>(sql`
       SELECT p.id as place_id
       FROM place p
       WHERE ST_DWithin(

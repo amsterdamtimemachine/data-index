@@ -8,11 +8,11 @@ import { computeTimeSlices, computeTimeRange } from './time-slices';
 import { getRecordTypes } from './record-types';
 import { db } from '../client';
 import { features, datasets, tags, featureTags, placeCells, featureToPlace, place } from '../schema';
+import type { CountRow } from '../row-types';
 
 // Query result types
 type PlaceTypeRow = { place_type: PlaceType };
 type TagRow = { id: string };
-type CountRow = { count: string };
 type RecordTypeCountRow = { record_type: RecordType; count: string };
 type SourceRow = { id: string; label: string };
 

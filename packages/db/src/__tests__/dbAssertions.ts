@@ -9,11 +9,12 @@
 import { sql } from 'drizzle-orm';
 import type { Entity } from '@atm/shared';
 import { db } from './setup';
+import type { CountRow } from '../row-types';
 
 // ─── place ──────────────────────────────────────────────────────────────────
 
 export async function placeCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(
+  const r = await db.execute<CountRow>(
     sql`SELECT COUNT(*) as count FROM place`
   );
   return parseInt(r.rows[0].count);
@@ -27,7 +28,7 @@ export async function firstPlaceId(): Promise<string> {
 }
 
 export async function placesWithGeometryCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(
+  const r = await db.execute<CountRow>(
     sql`SELECT COUNT(*) as count FROM place WHERE geometry IS NOT NULL`
   );
   return parseInt(r.rows[0].count);
@@ -36,7 +37,7 @@ export async function placesWithGeometryCount(): Promise<number> {
 // ─── place_name ─────────────────────────────────────────────────────────────
 
 export async function placeNamesWithDanglingPlaceIdCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(sql`
+  const r = await db.execute<CountRow>(sql`
     SELECT COUNT(*) as count FROM place_name pn
     WHERE NOT EXISTS (SELECT 1 FROM place p WHERE p.id = pn.place_id)
   `);
@@ -51,14 +52,14 @@ export async function distinctPlaceNameSources(): Promise<string[]> {
 }
 
 export async function placeNamesWithNameCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(
+  const r = await db.execute<CountRow>(
     sql`SELECT COUNT(*) as count FROM place_name WHERE name IS NOT NULL`
   );
   return parseInt(r.rows[0].count);
 }
 
 export async function placeNamesWithDateCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(
+  const r = await db.execute<CountRow>(
     sql`SELECT COUNT(*) as count FROM place_name WHERE since IS NOT NULL`
   );
   return parseInt(r.rows[0].count);
@@ -94,7 +95,7 @@ export async function placesWithPreferredLabelAndMostRecent(
 // ─── features ───────────────────────────────────────────────────────────────
 
 export async function featureCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(
+  const r = await db.execute<CountRow>(
     sql`SELECT COUNT(*) as count FROM features`
   );
   return parseInt(r.rows[0].count);
@@ -104,7 +105,7 @@ export async function featureCountByDatasetAndType(
   datasetId: string,
   recordType: string
 ): Promise<number> {
-  const r = await db.execute<{ count: string }>(sql`
+  const r = await db.execute<CountRow>(sql`
     SELECT COUNT(*) as count FROM features
     WHERE dataset_id = ${datasetId} AND record_type = ${recordType}
   `);
@@ -129,7 +130,7 @@ export async function firstFeatureEntity(datasetId: string): Promise<Entity> {
 }
 
 export async function orphanedFeatureCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(sql`
+  const r = await db.execute<CountRow>(sql`
     SELECT COUNT(*) as count FROM features f
     WHERE NOT EXISTS (SELECT 1 FROM feature_to_place fp WHERE fp.feature_id = f.id)
   `);
@@ -139,7 +140,7 @@ export async function orphanedFeatureCount(): Promise<number> {
 // ─── rebuild-index outputs ──────────────────────────────────────────────────
 
 export async function featuredPlacesMissingSpatialFrequencyCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(sql`
+  const r = await db.execute<CountRow>(sql`
     SELECT COUNT(*) as count FROM place p
     WHERE p.spatial_frequency IS NULL
       AND EXISTS (SELECT 1 FROM feature_to_place fp WHERE fp.place_id = p.id)
@@ -159,7 +160,7 @@ export async function placesWithMatchingSpatialFrequencyCount(): Promise<number>
 }
 
 export async function featuredPlaceCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(sql`
+  const r = await db.execute<CountRow>(sql`
     SELECT COUNT(DISTINCT fp.place_id) as count FROM feature_to_place fp
   `);
   return parseInt(r.rows[0].count);

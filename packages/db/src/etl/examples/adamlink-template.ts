@@ -18,6 +18,7 @@ import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
 import { placeName } from '../../schema';
+import type { PlaceIdRow } from '../../row-types';
 import type { MediaObjectEntity } from '@atm/shared';
 import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers';
 
@@ -53,8 +54,6 @@ interface RawRow {
   adamlink_uri: string;    // e.g. https://adamlink.nl/geo/address/A12345
 }
 
-type PlaceRow = { place_id: string };
-
 export async function ingest(filePath: string) {
   await upsertSource({
     organisation: { id: ORG_ID, label: ORG_LABEL, url: ORG_URL },
@@ -64,7 +63,7 @@ export async function ingest(filePath: string) {
 
   // Resolve an Adamlink URI to a place id via place_name (cached per run).
   const resolvePlaceId = createCachedResolver(async (adamlinkUri) => {
-    const result = await db.execute<PlaceRow>(
+    const result = await db.execute<PlaceIdRow>(
       sql`SELECT ${placeName.placeId} as place_id FROM ${placeName} WHERE ${placeName.id} = ${adamlinkUri}`
     );
     return result.rows[0]?.place_id ?? null;

@@ -12,6 +12,7 @@ import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
+import type { PlaceIdRow } from '../../row-types';
 import type { PersonEntity } from '@atm/shared';
 import { upsertSource, createFeatureWriter, createCachedResolver, featureUuid } from '../helpers';
 
@@ -54,8 +55,6 @@ interface RawRow {
   addressName: string;
 }
 
-type PlaceRow = { place_id: string };
-
 export async function ingest(filePath: string) {
   await upsertSource({
     organisation: { id: ORG_ID, label: ORG_LABEL, url: ORG_URL },
@@ -66,7 +65,7 @@ export async function ingest(filePath: string) {
   console.log(`Streaming ${filePath}...`);
 
   const resolvePlaceId = createCachedResolver(async (adamlinkUri) => {
-    const result = await db.execute<PlaceRow>(
+    const result = await db.execute<PlaceIdRow>(
       sql`SELECT place_id FROM place_name WHERE id = ${adamlinkUri}`
     );
     return result.rows[0]?.place_id ?? null;

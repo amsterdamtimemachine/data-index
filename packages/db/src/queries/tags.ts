@@ -8,6 +8,7 @@ import type {
   TagValidation
 } from '@atm/shared';
 import { db } from '../client';
+import type { CountRow } from '../row-types';
 import { getRecordTypes } from './record-types';
 import { andIn, placeTypeJoin } from './filters';
 import { features, tags, featureTags } from '../schema';
@@ -23,7 +24,6 @@ type SimpleTagStatsRow = {
   tag_label: string;
   total_features: string;
 };
-type CountRow = { count: string };
 
 /**
  * Get available tags with feature counts and associated record types.

@@ -18,6 +18,7 @@ import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
+import type { PlaceIdRow } from '../../row-types';
 import type { CreativeWorkEntity } from '@atm/shared';
 import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers';
 
@@ -59,8 +60,6 @@ interface RawRow {
   geom_wkt: string;     // e.g. "POINT(4.901959 52.376688)" in WGS84
 }
 
-type PlaceMatch = { place_id: string };
-
 export async function ingest(filePath: string) {
   await upsertSource({
     organisation: { id: ORG_ID, label: ORG_LABEL, url: ORG_URL },
@@ -72,7 +71,7 @@ export async function ingest(filePath: string) {
 
   // Nearest place within threshold (PostGIS), cached by WKT (rows often share one).
   const resolvePlaceId = createCachedResolver(async (wkt) => {
-    const result = await db.execute<PlaceMatch>(sql`
+    const result = await db.execute<PlaceIdRow>(sql`
       SELECT p.id as place_id
       FROM place p
       WHERE ST_DWithin(

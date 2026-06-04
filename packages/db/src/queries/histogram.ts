@@ -3,6 +3,7 @@ import type { Histogram, HistogramBin, RecordType, PlaceType } from '@atm/shared
 import { DEFAULT_BIN_SIZE } from '@atm/shared';
 import { db } from '../client';
 import { features } from '../schema';
+import type { CountRow } from '../row-types';
 import { computeTimeSlices, computeTimeRange } from './time-slices';
 import { getRecordTypes } from './record-types';
 import { featureYearOverlap, slicesCTE } from './time-filter';
@@ -64,7 +65,7 @@ export async function getHistogram(
 
   // True distinct total. Summing bin counts would over-count any feature whose
   // date range spans multiple bins (COUNT DISTINCT counts it once per bin).
-  const totalResult = await db.execute<{ count: string }>(sql`
+  const totalResult = await db.execute<CountRow>(sql`
     SELECT COUNT(DISTINCT f.id) as count
     FROM ${features} f
     ${placeTypeJoin(placeTypes, sql`f.id`)}

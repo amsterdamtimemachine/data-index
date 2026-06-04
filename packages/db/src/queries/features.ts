@@ -12,6 +12,7 @@ import { getGridConfig } from './grid-config';
 import { featureYearOverlap } from './time-filter';
 import { db } from '../client';
 import { featureToPlace, place, placeCells } from '../schema';
+import type { CountRow } from '../row-types';
 
 // Query result types
 type FeatureRow = {
@@ -35,8 +36,6 @@ type FeatureRow = {
   historical_label: string | null;
   tags: string[] | null;
 };
-
-type CountRow = { count: string };
 
 /**
  * Convert a display-cell's geographic bounds to the exact set of base cells

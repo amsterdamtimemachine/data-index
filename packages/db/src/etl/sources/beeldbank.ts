@@ -13,6 +13,7 @@ import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
 import { placeName } from '../../schema';
+import type { PlaceIdRow } from '../../row-types';
 import type { MediaObjectEntity } from '@atm/shared';
 import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers';
 
@@ -52,8 +53,6 @@ interface RawRow {
   street: string;
 }
 
-type PlaceRow = { place_id: string };
-
 export async function ingest(filePath: string) {
   await upsertSource({
     organisation: { id: ORG_ID, label: ORG_LABEL, url: ORG_URL },
@@ -65,14 +64,14 @@ export async function ingest(filePath: string) {
 
   // Address and street resolvers keep separate caches; their URI key spaces don't overlap.
   const resolveByAddress = createCachedResolver(async (adamlinkUri) => {
-    const result = await db.execute<PlaceRow>(
+    const result = await db.execute<PlaceIdRow>(
       sql`SELECT ${placeName.placeId} as place_id FROM ${placeName} WHERE ${placeName.id} = ${adamlinkUri}`
     );
     return result.rows[0]?.place_id ?? null;
   });
 
   const resolveByStreet = createCachedResolver(async (streetUri) => {
-    const result = await db.execute<PlaceRow>(
+    const result = await db.execute<PlaceIdRow>(
       sql`SELECT id as place_id FROM place WHERE id = ${streetUri} AND type = 'street'`
     );
     return result.rows[0]?.place_id ?? null;
