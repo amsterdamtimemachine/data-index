@@ -461,8 +461,8 @@ docker compose --project-name data-index-staging --env-file .env.staging \
 | `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |
 | `BASE_BIN_SIZE` | No | `10` | Base time bin size (years) |
 | `CELL_SIZE_METERS` | No | `100` | Base spatial cell size (meters) |
-| `GRID_DEFAULT` | No | `75` | Default heatmap grid resolution |
-| `GRID_MIN` / `GRID_MAX` | No | `10` / `200` | Grid resolution bounds |
+| `GRID_DEFAULT` | No | `75` | Default heatmap grid width (columns); rows are derived from the data's aspect ratio so cells are square |
+| `GRID_MIN` / `GRID_MAX` | No | `10` / `200` | Grid width (column count) bounds |
 | `DEFAULT_BIN_SIZE` | No | `50` | Default display bin size (years) |
 | `BIN_SIZE_MIN` / `BIN_SIZE_MAX` | No | `10` / `100` | Bin size bounds (years) |
 | `CACHE_TTL_MINUTES` | No | `10` | TTL for cached DB queries |
