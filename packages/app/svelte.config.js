@@ -1,4 +1,4 @@
-//import adapter from '@sveltejs/adapter-auto';
+// Deploying to a non-Bun host? `bun add -d @sveltejs/adapter-auto` and swap the import below.
 import adapter from "svelte-adapter-bun";
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { preprocessMeltUI, sequence } from '@melt-ui/pp';
