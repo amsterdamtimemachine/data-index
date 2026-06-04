@@ -127,7 +127,7 @@ The data index is restricted to historical features that can be both spatially l
 
 ### Spatial
 
-Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a geometry (POINT, LINESTRING, or POLYGON) in **RD New (EPSG:28992, metres)**. Query responses reproject to **WGS84 (EPSG:4326)** before sending to the client. `rebuild-index` overlays the city with a regular grid of `CELL_SIZE_METERS`-wide cells (default 100m) anchored to the bounding box of all geometries in the `place` table, and writes one row to `feature_cells` for each (feature, cell) pair the feature touches. A feature linked to a single point place lands in one cell; a feature linked to a street or neighbourhood spans as many cells as that geometry covers. Heatmap requests then group `feature_cells` by `(cell_x, cell_y)` and count, instead of scanning every feature row.
+Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a geometry (POINT, LINESTRING, or POLYGON) in **RD New (EPSG:28992, metres)**. Query responses reproject to **WGS84 (EPSG:4326)** before sending to the client. `rebuild-index` overlays the city with a regular grid of `CELL_SIZE_METERS`-wide cells (default 100m) anchored to the bounding box of all geometries in the `place` table, and writes the cells each place covers to `place_cells` — one set of cells per place, not per feature. A point lands in one cell, a line in the cells it crosses, and a polygon is filled (its interior, not just its outline). Features inherit cell coverage through their place link. Heatmap requests join `place_cells` → `feature_to_place` → `features` and count distinct features per cell, instead of scanning every feature row.
 
 Heatmap density is rendered with log-normalised counts (`log(count+1) / log(maxCount+1)`).
 
@@ -167,7 +167,7 @@ Each feature needs at minimum:
 - **label**: Display name
 - **record_type**: One of `image`, `text`, `person` (the frontend renders each type differently)
 - **start_date** / **end_date**: Date range for temporal placement on the histogram
-- **place link**: Each feature must be linked to a physical location. Two methods are supported:
+- **place link**: Each feature must be linked to one or more physical locations (e.g. a journal entry mentioning several places links to each). Two methods are supported:
   - **Adamlink URI**: if your data references Adamlink address or street IDs, the ingestion script resolves them to places via the `place_name` table or `place` table (requires place data to be ingested first)
   - **WKT geometry point**: if your data only has coordinates, the ingestion script finds the nearest existing place within a configurable distance threshold (e.g. 5 meters)
 
@@ -188,6 +188,16 @@ bun run db:rebuild-index
 ```
 
 `rebuild-index` computes spatial grid cells and frequency values. Must run after every data change.
+
+### Re-ingesting and corrections
+
+Ingestion is idempotent. A feature's id is derived from its source URL, so re-running a source updates existing rows in place rather than creating duplicates. To apply a correction, fix the source file, re-ingest that source, then run `rebuild-index`:
+
+- Feature content is upserted, and a corrected place link replaces the old one instead of adding a second.
+- Place geometry is refreshed on re-ingest — streets and neighbourhoods also refresh their label from the source, while addresses keep the label derived by `adressen`.
+- Sources that list the same item more than once dedup it by its natural key.
+
+Re-running the same file is a no-op.
 
 ### Current datasets
 
@@ -210,6 +220,8 @@ bun run db:rebuild-index
 | `GET /api/histogram` | Feature count distribution by time period |
 | `GET /api/features` | Paginated features within geographic bounds |
 | `GET /api/available-tags` | Tags with feature counts |
+
+Heatmaps, histogram, features, and available-tags accept `recordTypes`, `datasets`, and `placeTypes` (`address` / `street` / `neighbourhood`) query parameters to filter results.
 
 ## Development
 

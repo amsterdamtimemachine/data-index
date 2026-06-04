@@ -38,3 +38,4 @@ reingest.sh
 
 # Binaries
 *.bin
+bench-cells.ts

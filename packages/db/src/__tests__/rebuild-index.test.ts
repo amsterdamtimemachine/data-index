@@ -1,10 +1,10 @@
 /**
- * Regression: rebuild-index must FILL polygon places, not just trace their outline.
+ * Regression: rebuild-index rasterises lines and polygons onto the grid via
+ * ST_Intersects (keep a cell if it intersects the geometry).
  *
- * The old cell population walked geometry vertices (ST_DumpPoints + ST_Segmentize),
- * so a polygon only got its boundary cells — interior cells were missing and a
- * neighbourhood rendered as a hollow ring. rebuild-index now rasterises each
- * geometry onto the grid (keep a cell if it intersects the geometry), filling polygons.
+ * - Polygons are FILLED (interior included), not just their boundary ring — the old
+ *   ST_DumpPoints walked only edge vertices, leaving interiors empty (a hollow ring).
+ * - Lines get every cell they cross (also exact; dumppoints could miss brief clips).
  */
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
@@ -13,9 +13,11 @@ import { upsertSource } from '../etl/helpers';
 import { rebuildIndex } from '../etl/post-process/rebuild-index';
 
 const POLY_ID = 'poly-fill';
+const LINE_ID = 'line-cover';
 const FID = '11111111-1111-1111-1111-1111111111aa';
+const FID2 = '11111111-1111-1111-1111-1111111111bb';
 
-describe('rebuild-index polygon fill', () => {
+describe('rebuild-index line + polygon rasterisation', () => {
   beforeAll(async () => {
     await setupTestDb();
     await cleanTestDb();
@@ -36,6 +38,19 @@ describe('rebuild-index polygon fill', () => {
       VALUES (${FID}, 'image', 'poly feature', '1950-01-01', '1950-12-31', 'ri-ds')
     `);
     await db.execute(sql`INSERT INTO feature_to_place (feature_id, place_id, relation_id) VALUES (${FID}, ${POLY_ID}, 'isAbout')`);
+
+    // A line up-and-right of the polygon (so it doesn't move the min_x/min_y anchor),
+    // mid-cell endpoints → it crosses exactly 3 cells in one row: (10,10),(11,10),(12,10).
+    await db.execute(sql`
+      INSERT INTO place (id, type, geometry) VALUES (${LINE_ID}, 'street',
+        ST_GeomFromText('LINESTRING(121030.5 486050.5, 121270.5 486050.5)', 28992))
+    `);
+    await db.execute(sql`
+      INSERT INTO features (id, record_type, label, start_date, end_date, dataset_id)
+      VALUES (${FID2}, 'image', 'line feature', '1950-01-01', '1950-12-31', 'ri-ds')
+    `);
+    await db.execute(sql`INSERT INTO feature_to_place (feature_id, place_id, relation_id) VALUES (${FID2}, ${LINE_ID}, 'isAbout')`);
+
     await rebuildIndex();
   });
 
@@ -61,5 +76,14 @@ describe('rebuild-index polygon fill', () => {
       sql`SELECT spatial_frequency FROM place WHERE id = ${POLY_ID}`
     );
     expect(r.rows[0].spatial_frequency).toBe(9);
+  });
+
+  test('line is assigned every cell it crosses', async () => {
+    const cells = await db.execute<{ cell_x: number; cell_y: number }>(
+      sql`SELECT cell_x, cell_y FROM place_cells WHERE place_id = ${LINE_ID}`
+    );
+    const set = new Set(cells.rows.map(r => `${r.cell_x},${r.cell_y}`));
+    expect(cells.rows.length).toBe(3);
+    for (const c of ['10,10', '11,10', '12,10']) expect(set.has(c)).toBe(true);
   });
 });

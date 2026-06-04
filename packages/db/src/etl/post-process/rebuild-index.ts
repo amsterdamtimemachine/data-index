@@ -48,37 +48,35 @@ export async function rebuildIndex() {
   console.log('Clearing existing place_cells...');
   await db.execute(sql`TRUNCATE ${placeCells}`);
 
-  // Populate place_cells. Points and lines keep the proven dumppoints path; only
-  // polygons need the fill below.
+  // Populate place_cells. Points keep the dumppoints path; lines and polygons use the
+  // intersect-fill below (exact, and benchmarked faster than dumppoints on streets).
   console.log('Populating place_cells...');
   const t = Date.now();
 
-  const halfCell = CELL_SIZE_METERS / 2;
-
-  // Points & lines: walk densified vertices — a point lands in one cell, a line in
-  // every cell it crosses.
-  const lineResult = await db.execute(sql`
+  // Points: each point lands in exactly one cell.
+  const pointResult = await db.execute(sql`
     INSERT INTO place_cells (place_id, cell_x, cell_y)
     SELECT DISTINCT
       p.id as place_id,
       FLOOR((ST_X((dp).geom) - ${min_x}) / ${CELL_SIZE_METERS})::smallint as cell_x,
       FLOOR((ST_Y((dp).geom) - ${min_y}) / ${CELL_SIZE_METERS})::smallint as cell_y
     FROM ${place} p
-    CROSS JOIN LATERAL ST_DumpPoints(ST_Segmentize(p.geometry, ${halfCell})) dp
-    WHERE GeometryType(p.geometry) IN ('POINT', 'MULTIPOINT', 'LINESTRING', 'MULTILINESTRING')
+    CROSS JOIN LATERAL ST_DumpPoints(p.geometry) dp
+    WHERE GeometryType(p.geometry) IN ('POINT', 'MULTIPOINT')
       AND EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = p.id)
   `);
 
-  // Polygons: rasterise/fill — keep every grid cell whose rectangle intersects the
-  // polygon, so the interior is covered, not just the boundary ring. (ST_DumpPoints
-  // walked only edge vertices, leaving polygon interiors empty.) The grid origin and
+  // Lines and polygons: rasterise — keep every grid cell whose rectangle intersects
+  // the geometry (a line's crossed cells, a polygon's filled interior). Exact, unlike
+  // dumppoints (which can miss cells a line briefly clips, and left polygon interiors
+  // empty), and benchmarked faster than dumppoints on real street data. Origin and
   // cell size are cast to float8 so the cell-envelope arithmetic stays floating point.
-  const polyResult = await db.execute(sql`
+  const fillResult = await db.execute(sql`
     WITH featured AS (
       SELECT p.id, p.geometry
       FROM ${place} p
       WHERE p.geometry IS NOT NULL
-        AND GeometryType(p.geometry) NOT IN ('POINT', 'MULTIPOINT', 'LINESTRING', 'MULTILINESTRING')
+        AND GeometryType(p.geometry) NOT IN ('POINT', 'MULTIPOINT')
         AND EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = p.id)
     )
     INSERT INTO place_cells (place_id, cell_x, cell_y)
@@ -104,7 +102,7 @@ export async function rebuildIndex() {
     )
   `);
 
-  const rowCount = (lineResult.rowCount ?? 0) + (polyResult.rowCount ?? 0);
+  const rowCount = (pointResult.rowCount ?? 0) + (fillResult.rowCount ?? 0);
   console.log(`✅ Inserted ${rowCount} rows in ${Date.now() - t}ms`);
 
   // Update spatial frequency on place (number of cells each place spans)
