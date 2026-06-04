@@ -4,14 +4,17 @@ import { gridConfig } from '../schema';
 
 /**
  * Pre-computed grid metadata written by rebuild-index (single 'current' row):
- * the base-cell index extent, the WGS84 bounds of the data, and the max spatial
- * / temporal frequencies used to normalise relevance scores.
+ * the base-cell index extent, the RD/28992 grid origin (min_x, min_y), the WGS84
+ * bounds of the cell-grid rectangle (grid-aligned, not the data envelope), and the
+ * max spatial / temporal frequencies used to normalise relevance scores.
  */
 export interface GridConfig {
   minCellX: number;
   maxCellX: number;
   minCellY: number;
   maxCellY: number;
+  minX: number;
+  minY: number;
   minLon: number;
   maxLon: number;
   minLat: number;
@@ -46,6 +49,8 @@ export async function getGridConfig(): Promise<GridConfig> {
     maxCellX: row.maxCellX,
     minCellY: row.minCellY,
     maxCellY: row.maxCellY,
+    minX: row.minX,
+    minY: row.minY,
     minLon: row.minLon,
     maxLon: row.maxLon,
     minLat: row.minLat,

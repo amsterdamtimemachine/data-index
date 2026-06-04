@@ -1,4 +1,4 @@
-import { pgTable, text, date, smallint, integer, uuid, jsonb, real, customType, primaryKey, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, date, smallint, integer, uuid, jsonb, real, doublePrecision, customType, primaryKey, index } from 'drizzle-orm/pg-core';
 
 // Custom PostGIS geometry type - stored in RD (Dutch) coordinates
 // Transform to WGS84 (4326) for frontend display
@@ -131,15 +131,23 @@ export const placeCells = pgTable('place_cells', {
 ]);
 
 // ============================================================================
-// GRID_CONFIG - Pre-computed grid bounds from rebuild-index
-// Single row, updated each time rebuild-index runs
+// GRID_CONFIG - Pre-computed grid metadata from rebuild-index
+// Single row (id = 'current'), upserted each time rebuild-index runs
 // ============================================================================
 export const gridConfig = pgTable('grid_config', {
   id: text('id').primaryKey(),                    // always 'current'
+  // Base-cell index extent (place_cells are 0-indexed from the RD origin).
   minCellX: smallint('min_cell_x').notNull(),
   maxCellX: smallint('max_cell_x').notNull(),
   minCellY: smallint('min_cell_y').notNull(),
   maxCellY: smallint('max_cell_y').notNull(),
+  // RD/28992 grid origin in metres — the (min_x, min_y) the cell math floors
+  // against: cell_x = floor((X - min_x) / cellSize).
+  minX: doublePrecision('min_x').notNull(),
+  minY: doublePrecision('min_y').notNull(),
+  // WGS84 bounds of the *cell-grid rectangle* (origin + (maxCell+1) cells), NOT
+  // the data envelope — so the frontend's linear cell interpolation tiles the
+  // exact grid the heatmap counts against.
   minLon: real('min_lon').notNull(),
   maxLon: real('max_lon').notNull(),
   minLat: real('min_lat').notNull(),

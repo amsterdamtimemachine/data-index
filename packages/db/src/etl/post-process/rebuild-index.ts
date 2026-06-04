@@ -169,20 +169,34 @@ export async function rebuildIndex() {
   `);
   const s = stats.rows[0];
 
-  // Pre-compute grid bounds for fast query-time lookup
+  // Pre-compute grid bounds for fast query-time lookup.
+  //
+  // The display grid the frontend draws must tile the *same* base-cell grid the
+  // heatmap counts against. That grid is the RD rectangle anchored at the origin
+  // (min_x, min_y) spanning (maxCellX+1) × (maxCellY+1) cells — NOT the data
+  // envelope, whose WGS84 corners are different physical points and a slightly
+  // different size. We transform that rectangle to WGS84 and store its bbox, so
+  // the frontend's linear interpolation lands cells where the counts actually are.
   console.log('\nPre-computing grid bounds...');
+  const gridMaxX = min_x + (s.max_x + 1) * CELL_SIZE_METERS;
+  const gridMaxY = min_y + (s.max_y + 1) * CELL_SIZE_METERS;
   type BoundsRow = { min_lon: string; max_lon: string; min_lat: string; max_lat: string };
   type MaxFreqRow = { max_spatial: string; max_temporal: string };
 
   const [boundsResult, freqResult] = await Promise.all([
     db.execute<BoundsRow>(sql`
+      WITH grid AS (
+        SELECT ST_Transform(
+          ST_MakeEnvelope(${min_x}, ${min_y}, ${gridMaxX}, ${gridMaxY}, 28992),
+          4326
+        ) AS g
+      )
       SELECT
-        ST_XMin(ST_Extent(ST_Transform(p.geometry, 4326)))::text as min_lon,
-        ST_XMax(ST_Extent(ST_Transform(p.geometry, 4326)))::text as max_lon,
-        ST_YMin(ST_Extent(ST_Transform(p.geometry, 4326)))::text as min_lat,
-        ST_YMax(ST_Extent(ST_Transform(p.geometry, 4326)))::text as max_lat
-      FROM ${placeCells} pc
-      JOIN ${place} p ON pc.place_id = p.id
+        ST_XMin(g)::text as min_lon,
+        ST_XMax(g)::text as max_lon,
+        ST_YMin(g)::text as min_lat,
+        ST_YMax(g)::text as max_lat
+      FROM grid
     `),
     db.execute<MaxFreqRow>(sql`
       SELECT
@@ -204,6 +218,8 @@ export async function rebuildIndex() {
       maxCellX: s.max_x,
       minCellY: s.min_y,
       maxCellY: s.max_y,
+      minX: min_x,
+      minY: min_y,
       minLon: parseFloat(bounds.min_lon),
       maxLon: parseFloat(bounds.max_lon),
       minLat: parseFloat(bounds.min_lat),
@@ -218,6 +234,8 @@ export async function rebuildIndex() {
         maxCellX: s.max_x,
         minCellY: s.min_y,
         maxCellY: s.max_y,
+        minX: min_x,
+        minY: min_y,
         minLon: parseFloat(bounds.min_lon),
         maxLon: parseFloat(bounds.max_lon),
         minLat: parseFloat(bounds.min_lat),
@@ -234,7 +252,8 @@ export async function rebuildIndex() {
   console.log(`  Cell assignments: ${s.total_rows}`);
   console.log(`  Unique cells:     ${s.unique_cells}`);
   console.log(`  Grid range:       x[${s.min_x}–${s.max_x}] y[${s.min_y}–${s.max_y}]`);
-  console.log(`  Geo bounds:       lon[${bounds.min_lon}–${bounds.max_lon}] lat[${bounds.min_lat}–${bounds.max_lat}]`);
+  console.log(`  RD origin:        (${min_x.toFixed(0)}, ${min_y.toFixed(0)}) → (${gridMaxX.toFixed(0)}, ${gridMaxY.toFixed(0)})`);
+  console.log(`  Grid bounds (WGS84): lon[${bounds.min_lon}–${bounds.max_lon}] lat[${bounds.min_lat}–${bounds.max_lat}]`);
   console.log(`  Max frequencies:  spatial=${freq.max_spatial} temporal=${freq.max_temporal}`);
   console.log(`  Temporal coverage: ${parseInt(total) - parseInt(missing_temporal)}/${total} features`);
 }

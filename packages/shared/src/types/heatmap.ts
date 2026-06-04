@@ -23,7 +23,11 @@ export interface HeatmapResolutionConfig {
 }
 
 /**
- * Grid dimensions with geographic bounds (from metadata API)
+ * Grid dimensions with geographic bounds (from the heatmap API).
+ *
+ * The bounds are the WGS84 envelope of the cell-grid rectangle (grid-aligned),
+ * NOT the data envelope — so uniformly dividing [minLon, maxLon] × [minLat,
+ * maxLat] into colsAmount × rowsAmount tiles the exact grid the heatmap counts.
  */
 export interface HeatmapDimensions {
   colsAmount: number;

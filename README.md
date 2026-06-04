@@ -86,6 +86,22 @@ erDiagram
         smallint cell_y  "0-199"
     }
 
+    grid_config {
+        text id PK "always 'current'"
+        smallint min_cell_x  "0"
+        smallint max_cell_x  "e.g. 199"
+        smallint min_cell_y  "0"
+        smallint max_cell_y  "e.g. 199"
+        double min_x  "RD grid origin X (EPSG:28992 m)"
+        double min_y  "RD grid origin Y (EPSG:28992 m)"
+        real min_lon  "grid-aligned WGS84 bounds"
+        real max_lon
+        real min_lat
+        real max_lat
+        integer max_spatial_frequency  "relevance normaliser"
+        integer max_temporal_frequency  "relevance normaliser"
+    }
+
     features {
         uuid id PK "generated UUID"
         text url  "e.g. https://archief.amsterdam/beeldbank/detail/00007c22-..."
@@ -118,6 +134,7 @@ erDiagram
 - **tags**: Thematic categories (e.g. Nature, Transport, Living) assigned to features. Work in progress, generated via AI classification across datasets
 - **features**: Images, texts, persons, or other content items linked to places and displayed in the UI
 - **place_cells**: Pre-computed spatial grid that powers the heatmap. Each place is mapped to the 100m cells its geometry covers (one cell for a point, many for a street or neighbourhood). Features inherit cell coverage through their place link, so cell assignments are stored once per place rather than duplicated per feature.
+- **grid_config**: Single row (`id = 'current'`) of grid metadata written by `rebuild-index`: the RD/28992 grid origin (`min_x`, `min_y`), the base-cell index extent, the WGS84 bounds of the cell grid (grid-aligned, so the rendered heatmap cells tile the exact grid the counts use — not the looser data envelope), and the max spatial/temporal frequencies used to normalise relevance. Read once per heatmap/feature request.
 - **spatial_frequency**: How many grid cells a place spans. Stored on `place`, inherited by all features linked to it. Features at more specific locations (fewer cells) rank higher in search results.
 - **temporal_frequency**: How many base time bins a feature spans. Stored on `features` (each feature has its own date range). Features covering fewer bins are more temporally specific and rank higher in search results.
 
@@ -127,7 +144,9 @@ The data index is restricted to historical features that can be both spatially l
 
 ### Spatial
 
-Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a geometry (POINT, LINESTRING, or POLYGON) in **RD New (EPSG:28992, metres)**. Query responses reproject to **WGS84 (EPSG:4326)** before sending to the client. `rebuild-index` overlays the city with a regular grid of `CELL_SIZE_METERS`-wide cells (default 100m) anchored to the bounding box of all geometries in the `place` table, and writes the cells each place covers to `place_cells` — one set of cells per place, not per feature. A point lands in one cell, a line in the cells it crosses, and a polygon is filled (its interior, not just its outline). Features inherit cell coverage through their place link. Heatmap requests join `place_cells` → `feature_to_place` → `features` and count distinct features per cell, instead of scanning every feature row.
+Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a geometry (POINT, LINESTRING, or POLYGON) in **RD New (EPSG:28992, metres)**. Query responses reproject to **WGS84 (EPSG:4326)** before sending to the client. `rebuild-index` overlays the city with a regular grid of `CELL_SIZE_METERS`-wide cells (default 100m) whose origin is the south-west corner of the bounding box of all feature-linked `place` geometries, and writes the cells each place covers to `place_cells` — one set of cells per place, not per feature. A point lands in one cell, a line in the cells it crosses, and a polygon is filled (its interior, not just its outline). Features inherit cell coverage through their place link. Heatmap requests join `place_cells` → `feature_to_place` → `features` and count distinct features per cell, instead of scanning every feature row.
+
+The grid lives in RD metres: a cell index is `floor((coord − origin) / CELL_SIZE_METERS)`, so cell `(0,0)` is the 100m square at the origin. `rebuild-index` persists that origin (`min_x`, `min_y`) and the cell extent to the single-row `grid_config` table, together with the **WGS84 bounds of the grid rectangle** — the origin extended by `(maxCell + 1)` cells, reprojected to EPSG:4326. The frontend divides those grid-aligned bounds into display cells, so what it draws tiles the exact grid the counts were computed on rather than the looser data envelope; the reverse lookup (click a cell → list its features) inverts the same bounds, keeping hover counts and feature lists in agreement. (Cells are drawn as axis-aligned WGS84 rectangles, so the ~0.4° RD↔WGS84 rotation is not modelled — a cosmetic skew that grows toward the edges of the extent.)
 
 Heatmap density is rendered with log-normalised counts (`log(count+1) / log(maxCount+1)`).
 

@@ -54,9 +54,10 @@ type FeatureRow = {
  * so getFeatures counts exactly the base cells getHeatmap counted — the hover
  * count and the per-cell feature total always agree.
  *
- * Bounds are first clamped to the data's WGS84 extent. Every real display cell
- * already lies inside the extent, so for them the clamp is a no-op; a viewport
- * wider than the data simply collapses to the full base-cell range.
+ * Bounds are first clamped to the grid's WGS84 extent (the grid-aligned bounds
+ * in grid_config). Every real display cell already lies inside the grid, so for
+ * them the clamp is a no-op; a viewport wider than the grid simply collapses to
+ * the full base-cell range.
  */
 async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Promise<{
   minCellX: number;
