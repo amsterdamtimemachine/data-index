@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { Heatmap, HeatmapTimeline, HeatmapResponse, HeatmapDimensions, HeatmapResolutionConfig, RecordType, PlaceType } from '@atm/shared';
-import { DEFAULT_BIN_SIZE } from '@atm/shared';
+import { DEFAULT_BIN_SIZE, CELL_SIZE_METERS } from '@atm/shared';
 import { db } from '../client';
 import { placeCells, features, featureToPlace, place } from '../schema';
 import { computeTimeSlices } from './time-slices';
@@ -46,12 +46,51 @@ function buildSparseHeatmap(countsMap: Map<number, number>): Heatmap {
 /**
  * Build HeatmapDimensions from grid resolution and geographic bounds
  */
-function buildDimensions(cols: number, rows: number, bounds: { minLon: number; maxLon: number; minLat: number; maxLat: number }): HeatmapDimensions {
+function buildDimensions(
+  cols: number,
+  rows: number,
+  bounds: { minLon: number; maxLon: number; minLat: number; maxLat: number },
+  rd?: { originX: number; originY: number; cellWidth: number; cellHeight: number }
+): HeatmapDimensions {
   return {
     colsAmount: cols,
     rowsAmount: rows,
-    ...bounds
+    ...bounds,
+    ...(rd && {
+      rdOriginX: rd.originX,
+      rdOriginY: rd.originY,
+      rdCellWidth: rd.cellWidth,
+      rdCellHeight: rd.cellHeight
+    })
   };
+}
+
+/**
+ * RD/28992 geometry of the display grid: origin + metres-per-display-cell. Lets
+ * the client reproject cells to their true WGS84 footprint (see HeatmapDimensions).
+ */
+function buildRd(minX: number, minY: number, maxCellX: number, maxCellY: number, gridCols: number, gridRows: number) {
+  return {
+    originX: minX,
+    originY: minY,
+    cellWidth: ((maxCellX + 1) * CELL_SIZE_METERS) / gridCols,
+    cellHeight: ((maxCellY + 1) * CELL_SIZE_METERS) / gridRows
+  };
+}
+
+/**
+ * Derive the display grid from a width (cols) only. Rows follow the data's
+ * aspect ratio — (maxCellY+1)/(maxCellX+1) — so each display cell is square in RD
+ * metres (and, since Web Mercator is conformal, square on screen). Both axes are
+ * capped at the base-cell resolution.
+ */
+function deriveGrid(cols: number, maxCellX: number, maxCellY: number): { gridCols: number; gridRows: number } {
+  const gridCols = Math.min(cols, maxCellX + 1);
+  const gridRows = Math.min(
+    Math.max(1, Math.round((gridCols * (maxCellY + 1)) / (maxCellX + 1))),
+    maxCellY + 1
+  );
+  return { gridCols, gridRows };
 }
 
 /**
@@ -88,8 +127,7 @@ export async function getHeatmap(
   const maxY = config.maxCellY;
   const bounds = { minLon: config.minLon, maxLon: config.maxLon, minLat: config.minLat, maxLat: config.maxLat };
 
-  const gridCols = Math.min(resolution.cols, maxX + 1);
-  const gridRows = Math.min(resolution.rows, maxY + 1);
+  const { gridCols, gridRows } = deriveGrid(resolution.cols, maxX, maxY);
 
   // Half-open, year-based window — identical to getFeatures and getHeatmapTimeline,
   // so slices don't overlap on boundary years and per-cell counts agree across all three.
@@ -118,8 +156,10 @@ export async function getHeatmap(
     countsMap.set(gridIndex, parseInt(row.count));
   }
 
+  const rd = buildRd(config.minX, config.minY, maxX, maxY, gridCols, gridRows);
+
   return {
-    dimensions: buildDimensions(gridCols, gridRows, bounds),
+    dimensions: buildDimensions(gridCols, gridRows, bounds, rd),
     timeline: { [timeSliceKey]: buildSparseHeatmap(countsMap) }
   };
 }
@@ -149,8 +189,7 @@ export async function getHeatmapTimeline(
   const maxY = config.maxCellY;
   const bounds = { minLon: config.minLon, maxLon: config.maxLon, minLat: config.minLat, maxLat: config.maxLat };
 
-  const gridCols = Math.min(resolution.cols, maxX + 1);
-  const gridRows = Math.min(resolution.rows, maxY + 1);
+  const { gridCols, gridRows } = deriveGrid(resolution.cols, maxX, maxY);
 
   const firstSlice = timeSlices[0];
   const lastSlice = timeSlices[timeSlices.length - 1];
@@ -190,8 +229,10 @@ export async function getHeatmapTimeline(
     timeline[timeSlice.key] = buildSparseHeatmap(countsMap);
   }
 
+  const rd = buildRd(config.minX, config.minY, maxX, maxY, gridCols, gridRows);
+
   return {
-    dimensions: buildDimensions(gridCols, gridRows, bounds),
+    dimensions: buildDimensions(gridCols, gridRows, bounds, rd),
     timeline
   };
 }

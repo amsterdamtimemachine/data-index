@@ -20,10 +20,10 @@ export const GET: RequestHandler = async ({ url }) => {
 		const datasetIds = parseDatasets(url);
 		const placeTypes = parsePlaceTypes(url);
 
-		// Parse grid resolution
-		const rows = parseGridParam(url.searchParams.get('rows'), GRID_DEFAULT);
+		// Parse grid resolution — only width (cols); rows are derived from the data's
+		// aspect ratio server-side so display cells are square.
 		const cols = parseGridParam(url.searchParams.get('cols'), GRID_DEFAULT);
-		const resolution: HeatmapResolutionConfig = { rows, cols };
+		const resolution: HeatmapResolutionConfig = { cols };
 
 		// Parse bin size
 		const binSizeParam = url.searchParams.get('binSize');
@@ -32,7 +32,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			: DEFAULT_BIN_SIZE;
 
 		console.log(
-			`🔥 Heatmaps API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, timeSlice: ${timeSliceParam || 'all'}, grid: ${cols}x${rows}, binSize: ${binSize}`
+			`🔥 Heatmaps API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, timeSlice: ${timeSliceParam || 'all'}, grid width: ${cols} cols, binSize: ${binSize}`
 		);
 
 		if (timeSliceParam) {

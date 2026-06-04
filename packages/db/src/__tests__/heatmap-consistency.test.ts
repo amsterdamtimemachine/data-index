@@ -25,7 +25,7 @@ import { getFeatures } from '../queries/features';
 import { getHeatmap, getHeatmapTimeline } from '../queries/heatmap';
 
 const SLICE = '1900_1950';
-const RES = { rows: 4, cols: 4 }; // coarse: several street base cells fold into one display cell
+const RES = { cols: 4 }; // coarse: several street base cells fold into one display cell
 // Box larger than the data extent — getFeatures clamps it to the full grid.
 const ALL_BOUNDS = { minLon: 4.0, maxLon: 5.5, minLat: 52.0, maxLat: 52.5 };
 

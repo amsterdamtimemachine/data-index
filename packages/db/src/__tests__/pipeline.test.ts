@@ -269,20 +269,20 @@ describe('getHeatmap', () => {
   test('returns single-slice timeline with dimensions', async () => {
     const slices = await computeTimeSlices(50);
     const slice = slices.find(s => s.key === '1900_1950') || slices[0];
-    const r = await getHeatmap(slice.key, { rows: 20, cols: 20 });
+    const r = await getHeatmap(slice.key, { cols: 20 });
     expect(r.timeline[slice.key]).toBeDefined();
     expect(r.dimensions.colsAmount).toBeGreaterThan(0);
     expect(r.dimensions.rowsAmount).toBeGreaterThan(0);
   });
 
   test('throws on unknown time slice', async () => {
-    await expect(getHeatmap('9999_9999', { rows: 10, cols: 10 })).rejects.toThrow();
+    await expect(getHeatmap('9999_9999', { cols: 10 })).rejects.toThrow();
   });
 
   test('grid resolution clamped to data extent', async () => {
     const slices = await computeTimeSlices(50);
     const slice = slices[0];
-    const r = await getHeatmap(slice.key, { rows: 500, cols: 500 });
+    const r = await getHeatmap(slice.key, { cols: 500 });
     expect(r.dimensions.colsAmount).toBeLessThanOrEqual(500);
     expect(r.dimensions.rowsAmount).toBeLessThanOrEqual(500);
   });
@@ -291,13 +291,13 @@ describe('getHeatmap', () => {
 describe('getHeatmapTimeline', () => {
   test('returns all slices', async () => {
     const slices = await computeTimeSlices(50);
-    const r = await getHeatmapTimeline({ rows: 20, cols: 20 });
+    const r = await getHeatmapTimeline({ cols: 20 });
     expect(Object.keys(r.timeline).length).toBe(slices.length);
   });
 
   test('filters by recordType', async () => {
-    const all = await getHeatmapTimeline({ rows: 20, cols: 20 });
-    const personOnly = await getHeatmapTimeline({ rows: 20, cols: 20 }, ['person']);
+    const all = await getHeatmapTimeline({ cols: 20 });
+    const personOnly = await getHeatmapTimeline({ cols: 20 }, ['person']);
     const allCells = Object.values(all.timeline).reduce((s, h) => s + h.indices.length, 0);
     const personCells = Object.values(personOnly.timeline).reduce((s, h) => s + h.indices.length, 0);
     expect(personCells).toBeLessThanOrEqual(allCells);
