@@ -9,8 +9,10 @@
  *  - insertPlaces conflict modes: 'geometry' refreshes geometry but preserves the
  *    adressen-owned preferred_label; 'replace' refreshes label + geometry.
  *
- * Isolated DB lifecycle (its own seed); bun runs test files sequentially with
- * per-file module isolation, and teardownTestDb leaves the shared pool open.
+ * Isolated DB lifecycle (its own seed); bun runs test files sequentially but shares
+ * module singletons process-wide (the pg pool AND the query caches), so teardownTestDb
+ * leaves the pool open and the suite relies on CACHE_TTL_MINUTES=0 to disable caching
+ * (otherwise one file's cached time-slices leak into the next).
  */
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';

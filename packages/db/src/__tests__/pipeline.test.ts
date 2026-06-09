@@ -15,6 +15,7 @@ import { getFeatures } from '../queries/features';
 import { getHeatmap, getHeatmapTimeline } from '../queries/heatmap';
 import { getHistogram } from '../queries/histogram';
 import { getMetadata } from '../queries/metadata';
+import { getGridConfig } from '../queries/grid-config';
 import { computeTimeSlices, computeTimeRange } from '../queries/time-slices';
 
 // Bounds that cover the full Amsterdam area
@@ -79,8 +80,11 @@ describe('Adressen ingestion', () => {
 });
 
 describe('Feature ingestion', () => {
-  test('beeldbank features have record_type = image', async () => {
-    expect(await dbq.featureCountByDatasetAndType('beeldbank', 'image')).toBeGreaterThan(0);
+  test('beeldbank features are all images (record_type = image)', async () => {
+    const images = await dbq.featureCountByDatasetAndType('beeldbank', 'image');
+    expect(images).toBeGreaterThan(0);
+    // every beeldbank feature is an image — invariant that scales with the fixture
+    expect(images).toBe(await dbq.featureCountByDataset('beeldbank'));
   });
 
   test('joods-monument dedups duplicate person rows (6 fixture rows, 5 distinct persons)', async () => {
@@ -98,6 +102,14 @@ describe('Feature ingestion', () => {
 
   test('every feature is linked to at least one place', async () => {
     expect(await dbq.orphanedFeatureCount()).toBe(0);
+  });
+
+  test('beeldbank street fallback links a feature to a street place (line path)', async () => {
+    // A fixture row with an empty address resolves via its street URI, so the seed
+    // exercises LINESTRING ingestion + rasterisation end-to-end (real address-resolved
+    // rows never hit this path).
+    expect(await dbq.streetLinkedFeatureCount()).toBeGreaterThanOrEqual(1);
+    expect(await dbq.maxStreetSpatialFrequency()).toBeGreaterThanOrEqual(2); // ~137m line spans >1 cell
   });
 
   test('features have entity JSONB with correct schema.org type', async () => {
@@ -154,19 +166,20 @@ describe('computeTimeSlices', () => {
 describe('getMetadata', () => {
   test('returns datasets, recordTypes, timeSlices, stats', async () => {
     const meta = await getMetadata();
-    expect(meta.datasets.some(d => d.id === 'joods-monument')).toBe(true);
-    expect(meta.datasets.some(d => d.id === 'beeldbank')).toBe(true);
-    expect(meta.recordTypes).toContain('person');
-    expect(meta.recordTypes).toContain('image');
+    // dataset ids, record types and total all match the seeded data (no hardcoded lists)
+    expect(meta.datasets.map(d => d.id).sort()).toEqual(await dbq.datasetIdList());
+    expect([...meta.recordTypes].map(String).sort()).toEqual(await dbq.recordTypeList());
     expect(meta.timeSlices.length).toBeGreaterThan(0);
-    expect(meta.stats!.totalFeatures).toBeGreaterThan(0);
+    expect(meta.stats!.totalFeatures).toBe(await dbq.featureCount());
   });
 });
 
 describe('getFeatures', () => {
   test('returns features within bounds', async () => {
     const r = await getFeatures({ bounds: BOUNDS, pageSize: 50 });
-    expect(r.total).toBeGreaterThan(0);
+    // BOUNDS cover the whole dataset, so the query must return EVERY feature —
+    // cross-checked against a direct COUNT rather than a hardcoded total.
+    expect(r.total).toBe(await dbq.featureCount());
     expect(r.data.length).toBeGreaterThan(0);
   });
 
@@ -175,13 +188,17 @@ describe('getFeatures', () => {
     for (const f of r.data) {
       expect(f.recordType).toBe('person');
     }
+    // returns ALL and ONLY persons — total equals the direct per-type count
+    expect(r.total).toBe(await dbq.featureCountByRecordType('person'));
   });
 
   test('filters by datasetIds', async () => {
     const r = await getFeatures({ bounds: BOUNDS, datasetIds: ['joods-monument'], pageSize: 50 });
+    const expectedLabel = await dbq.datasetLabel('joods-monument');
     for (const f of r.data) {
-      expect(f.datasetLabel).toBe('Joods Monument');
+      expect(f.datasetLabel).toBe(expectedLabel);
     }
+    expect(r.total).toBe(await dbq.featureCountByDataset('joods-monument'));
   });
 
   test('returns preferredLabel and historicalLabel', async () => {
@@ -193,12 +210,15 @@ describe('getFeatures', () => {
     expect(withHistorical).toBeDefined();
   });
 
-  test('returns datasetLabel and organisationLabel', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, pageSize: 50 });
+  test('returns datasetLabel and organisationLabel matching the source tables', async () => {
+    const r = await getFeatures({ bounds: BOUNDS, datasetIds: ['joods-monument'], pageSize: 50 });
+    const dsLabel = await dbq.datasetLabel('joods-monument');
+    const orgLabel = await dbq.organisationLabelForDataset('joods-monument');
+    expect(r.data.length).toBeGreaterThan(0);
     for (const f of r.data) {
-      expect(f.datasetLabel).toBeDefined();
-      expect(f.organisationLabel).toBeDefined();
-      expect(f.organisationUrl).toBeDefined();
+      expect(f.datasetLabel).toBe(dsLabel); // value cross-check vs datasets table
+      expect(f.organisationLabel).toBe(orgLabel); // vs organisations table
+      expect(f.organisationUrl).toBeTruthy();
     }
   });
 
@@ -270,9 +290,13 @@ describe('getHeatmap', () => {
     const slices = await computeTimeSlices(50);
     const slice = slices.find(s => s.key === '1900_1950') || slices[0];
     const r = await getHeatmap(slice.key, { cols: 20 });
+    const config = await getGridConfig();
     expect(r.timeline[slice.key]).toBeDefined();
-    expect(r.dimensions.colsAmount).toBeGreaterThan(0);
+    // cols clamps to the requested width or the base extent, whichever is smaller;
+    // rows are derived (exact derivation covered in grid-config.test.ts)
+    expect(r.dimensions.colsAmount).toBe(Math.min(20, config.maxCellX + 1));
     expect(r.dimensions.rowsAmount).toBeGreaterThan(0);
+    expect(r.dimensions.rowsAmount).toBeLessThanOrEqual(config.maxCellY + 1);
   });
 
   test('throws on unknown time slice', async () => {
@@ -308,7 +332,8 @@ describe('getHistogram', () => {
   test('returns bins covering the data range', async () => {
     const r = await getHistogram(undefined, undefined, undefined, 50);
     expect(r.bins.length).toBeGreaterThan(0);
-    expect(r.totalFeatures).toBeGreaterThan(0);
+    // every seeded feature is dated, so the histogram total equals the feature count
+    expect(r.totalFeatures).toBe(await dbq.featureCount());
   });
 
   test('feature spanning multiple bins is counted in each (COUNT DISTINCT)', async () => {
@@ -332,9 +357,8 @@ describe('getHistogram', () => {
     expect(r.maxCount).toBe(actualMax);
   });
 
-  test('filter by datasetIds reduces total', async () => {
-    const all = await getHistogram(undefined, undefined, undefined, 50);
+  test('filter by datasetIds matches that dataset feature count', async () => {
     const jmOnly = await getHistogram(undefined, ['joods-monument'], undefined, 50);
-    expect(jmOnly.totalFeatures).toBeLessThanOrEqual(all.totalFeatures);
+    expect(jmOnly.totalFeatures).toBe(await dbq.featureCountByDataset('joods-monument'));
   });
 });

@@ -5,6 +5,11 @@
  *
  * Keeping the SQL out of the test file means the test bodies read like
  * behaviour assertions instead of like database queries.
+ *
+ * These are also the single SOURCE OF TRUTH for expected counts: integration tests
+ * cross-check the query layer (getFeatures / getHistogram / getMetadata) against
+ * these independent direct queries instead of hardcoding magic numbers, so when the
+ * fixtures change (e.g. more beeldbank rows) the expectations follow automatically.
  */
 import { sql } from 'drizzle-orm';
 import type { Entity } from '@atm/shared';
@@ -16,6 +21,24 @@ import type { CountRow } from '../row-types';
 export async function placeCount(): Promise<number> {
   const r = await db.execute<CountRow>(
     sql`SELECT COUNT(*) as count FROM place`
+  );
+  return parseInt(r.rows[0].count);
+}
+
+/** Distinct features resolved onto a street place — beeldbank's street-fallback / line path. */
+export async function streetLinkedFeatureCount(): Promise<number> {
+  const r = await db.execute<CountRow>(sql`
+    SELECT COUNT(DISTINCT fp.feature_id) as count
+    FROM feature_to_place fp JOIN place p ON fp.place_id = p.id
+    WHERE p.type = 'street'
+  `);
+  return parseInt(r.rows[0].count);
+}
+
+/** Max spatial_frequency among street places (a multi-cell LINESTRING spans >1 cell). */
+export async function maxStreetSpatialFrequency(): Promise<number> {
+  const r = await db.execute<CountRow>(
+    sql`SELECT COALESCE(MAX(spatial_frequency), 0) as count FROM place WHERE type = 'street'`
   );
   return parseInt(r.rows[0].count);
 }
@@ -112,6 +135,22 @@ export async function featureCountByDatasetAndType(
   return parseInt(r.rows[0].count);
 }
 
+/** Total features of a record type — ground truth for the getFeatures/heatmap recordType filter. */
+export async function featureCountByRecordType(recordType: string): Promise<number> {
+  const r = await db.execute<CountRow>(
+    sql`SELECT COUNT(*) as count FROM features WHERE record_type = ${recordType}`
+  );
+  return parseInt(r.rows[0].count);
+}
+
+/** Total features in a dataset — ground truth for the datasetIds filter. */
+export async function featureCountByDataset(datasetId: string): Promise<number> {
+  const r = await db.execute<CountRow>(
+    sql`SELECT COUNT(*) as count FROM features WHERE dataset_id = ${datasetId}`
+  );
+  return parseInt(r.rows[0].count);
+}
+
 export async function firstFeatureDateRange(
   datasetId: string
 ): Promise<{ startDate: string; endDate: string }> {
@@ -135,6 +174,35 @@ export async function orphanedFeatureCount(): Promise<number> {
     WHERE NOT EXISTS (SELECT 1 FROM feature_to_place fp WHERE fp.feature_id = f.id)
   `);
   return parseInt(r.rows[0].count);
+}
+
+// ─── datasets / record types (ground truth for metadata + label assertions) ───
+
+export async function recordTypeList(): Promise<string[]> {
+  const r = await db.execute<{ record_type: string }>(
+    sql`SELECT DISTINCT record_type FROM features WHERE record_type IS NOT NULL ORDER BY record_type`
+  );
+  return r.rows.map(x => x.record_type);
+}
+
+export async function datasetIdList(): Promise<string[]> {
+  const r = await db.execute<{ id: string }>(sql`SELECT id FROM datasets ORDER BY id`);
+  return r.rows.map(x => x.id);
+}
+
+export async function datasetLabel(datasetId: string): Promise<string> {
+  const r = await db.execute<{ label: string }>(
+    sql`SELECT label FROM datasets WHERE id = ${datasetId}`
+  );
+  return r.rows[0].label;
+}
+
+export async function organisationLabelForDataset(datasetId: string): Promise<string> {
+  const r = await db.execute<{ label: string }>(sql`
+    SELECT o.label FROM datasets d JOIN organisations o ON d.organisation_id = o.id
+    WHERE d.id = ${datasetId}
+  `);
+  return r.rows[0].label;
 }
 
 // ─── rebuild-index outputs ──────────────────────────────────────────────────

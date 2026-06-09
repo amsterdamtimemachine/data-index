@@ -115,6 +115,23 @@ if unique_matches < 3 and candidate_bb:
     matched_bb.extend(candidate_bb[:take])
 
 bb_out = matched_bb
+
+# Synthetic street-fallback row, kept in sync with the hand-maintained
+# fixtures/seed-streets.ttl (which this script does not generate). Empty address +
+# a street URI → exercises beeldbank's street fallback and the LINESTRING
+# rasterisation path in the integration seed, which real address-resolved rows
+# never reach. seedTestData ingests seed-streets.ttl before beeldbank.
+bb_out.append({
+    'resource': 'https://ams-migrate.memorix.io/resources/records/seed-street-feature-0001',
+    'title': 'Seed Street Image',
+    'thumbnail': 'https://images.memorix.nl/seed-thumb.jpg',
+    'startDate': '1950-01-01',
+    'endDate': '1950-12-31',
+    'textDate': '1950',
+    'address': '',
+    'street': 'https://adamlink.nl/geo/street/seed-straat/1',
+})
+
 print(f"   Final beeldbank rows: {len(bb_out)}, unique images: {len({r['resource'] for r in bb_out})}")
 
 # Step 5: Collect all adresids we need, extract adressen rows

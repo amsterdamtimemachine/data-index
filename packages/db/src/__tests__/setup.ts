@@ -12,12 +12,19 @@ export { db };
 export const FIXTURES = {
   lps: resolve(__dirname, 'fixtures/lps.csv'),
   adressen: resolve(__dirname, 'fixtures/adressen.csv'),
+  streets: resolve(__dirname, 'fixtures/seed-streets.ttl'),
   beeldbank: resolve(__dirname, 'fixtures/beeldbank.csv'),
   jm: resolve(__dirname, 'fixtures/jm.csv'),
 };
 
 export async function setupTestDb() {
   await db.execute(sql`CREATE EXTENSION IF NOT EXISTS postgis`);
+
+  // The test DB persists between runs, and CREATE TABLE IF NOT EXISTS won't apply
+  // schema changes (e.g. a newly added column) to an already-created table. Drop
+  // first so the schema always matches this file — otherwise drift silently breaks
+  // rebuild-index (which is how the missing grid_config.min_x/min_y went unnoticed).
+  await db.execute(sql`DROP TABLE IF EXISTS grid_config, place_cells, feature_tags, feature_to_place, features, place_name, place, relation, tags, datasets, organisations CASCADE`);
 
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS organisations (
@@ -86,6 +93,7 @@ export async function setupTestDb() {
       id TEXT PRIMARY KEY,
       min_cell_x SMALLINT NOT NULL, max_cell_x SMALLINT NOT NULL,
       min_cell_y SMALLINT NOT NULL, max_cell_y SMALLINT NOT NULL,
+      min_x DOUBLE PRECISION NOT NULL, min_y DOUBLE PRECISION NOT NULL,
       min_lon REAL NOT NULL, max_lon REAL NOT NULL,
       min_lat REAL NOT NULL, max_lat REAL NOT NULL,
       max_spatial_frequency INTEGER NOT NULL,
@@ -108,19 +116,26 @@ export async function teardownTestDb() {
 /**
  * Seed via real ingestion scripts on fixture data.
  * After this runs, the DB has:
- *  - 15 places (LPS linked points)
+ *  - 5 address places (LPS linked points) + 1 street place (LINESTRING)
  *  - ~50 historical place names (enriched with street names + dates from adressen)
  *  - 5 person features (Joods Monument, 1900-1945)
- *  - ~9 image features (Beeldbank, various dates)
+ *  - ~10 image features (Beeldbank) — one resolves via the street fallback (empty
+ *    address → street), so the line ingestion + rasterisation path runs end-to-end
+ *    the way production data flows (real address-resolved rows never hit it).
+ *
+ * Streets are ingested before beeldbank: beeldbank's street fallback resolves
+ * against existing `place` rows of type 'street'.
  */
 export async function seedTestData() {
   const { ingest: ingestLps } = await import('../etl/sources/lps');
   const { ingest: ingestAdressen } = await import('../etl/sources/adressen');
+  const { ingest: ingestStreets } = await import('../etl/sources/streets');
   const { ingest: ingestBeeldbank } = await import('../etl/sources/beeldbank');
   const { ingest: ingestJm } = await import('../etl/sources/joods-monument');
 
   await ingestLps(FIXTURES.lps);
   await ingestAdressen(FIXTURES.adressen);
+  await ingestStreets(FIXTURES.streets);
   await ingestBeeldbank(FIXTURES.beeldbank);
   await ingestJm(FIXTURES.jm);
 }

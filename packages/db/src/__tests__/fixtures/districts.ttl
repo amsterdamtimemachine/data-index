@@ -1,0 +1,24 @@
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix hg: <https://erfgoed.amsterdam/hg#> .
+
+# Historical (beginYear 1600) — kept, single POLYGON (WGS84).
+<https://adamlink.nl/geo/district/D1>
+    skos:prefLabel "Poly District" ;
+    geo:hasGeometry _:g1 ;
+    hg:hasEarliestBeginTimeStamp "1600" .
+_:g1 geo:asWKT "POLYGON((4.90 52.37, 4.91 52.37, 4.91 52.38, 4.90 52.38, 4.90 52.37))" .
+
+# Historical (beginYear 1850) — kept, MULTIPOLYGON (two disjoint parts, e.g. an enclave).
+<https://adamlink.nl/geo/district/D2>
+    skos:prefLabel "Multi District" ;
+    geo:hasGeometry _:g2 ;
+    hg:hasEarliestBeginTimeStamp "1850" .
+_:g2 geo:asWKT "MULTIPOLYGON(((4.92 52.37, 4.93 52.37, 4.93 52.38, 4.92 52.38, 4.92 52.37)), ((4.94 52.37, 4.95 52.37, 4.95 52.38, 4.94 52.38, 4.94 52.37)))" .
+
+# Non-historical (CBS current, beginYear 2020) — must be skipped.
+<https://adamlink.nl/geo/district/D3>
+    skos:prefLabel "CBS Current" ;
+    geo:hasGeometry _:g3 ;
+    hg:hasEarliestBeginTimeStamp "2020" .
+_:g3 geo:asWKT "POLYGON((4.96 52.37, 4.97 52.37, 4.97 52.38, 4.96 52.38, 4.96 52.37))" .
