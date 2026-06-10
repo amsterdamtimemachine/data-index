@@ -237,11 +237,6 @@ export async function insertPlaces(
   return inserted;
 }
 
-/** Adamlink address URI for a registry address id. */
-export function adamlinkAddressUri(adresId: string): string {
-  return `https://adamlink.nl/geo/address/${adresId}`;
-}
-
 /**
  * Format a date range for an entity's dateCreated field.
  * Both ends are inclusive: "1948-09-01/1948-09-30" means Sep 1 through Sep 30.

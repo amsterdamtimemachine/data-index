@@ -1,75 +1,77 @@
 /**
- * Enrich place names with labels and accurate dates from Adamlink adressen CSV
+ * Import historical address names from the Adamlink adressen TTL (RDF).
  *
- * Updates the `place_name` table with human-readable names and the actual
- * registry date (which can be more granular than the LPS column dates).
- * Then sets `place.preferred_label` to the most recent named entry per place.
- * Run after LPS ingestion (place_name rows must exist).
+ * Each address observation (one per registry record) carries its label, a date
+ * window (begin/end), a source document, and a `schema:geoContains` link to the LP
+ * point it belongs to. We create one `place_name` row per observation, linked to
+ * the LP `place` via that geoContains link, then set `place.preferred_label` to the
+ * most recent named entry per place.
  *
- * Usage: bun run db:ingest -s adressen -f <path-to-20230920-adressen.csv>
+ * Replaces the older lps.csv-stubs + adressen.csv-enrich two-step: the TTL self-links
+ * observation → LP, so LPS only needs to create the points. Run AFTER lps (the LP
+ * `place` rows must exist for the place_name FK).
+ *
+ * Usage: bun run db:ingest -s adressen -f <path-to-20240311-adressen.ttl>
  */
-import { createReadStream } from 'fs';
-import { parse } from 'csv-parse';
-import { eq, sql } from 'drizzle-orm';
+import { readFileSync } from 'fs';
+import { Parser } from 'n3';
+import { sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { placeName } from '../../schema';
-
-interface RawRow {
-  adresid: string;
-  date: string;
-  source: string;
-  streetname: string;
-  nr: string;
-  addition: string;
-  buildingname: string;
-}
-
-function buildLabel(row: RawRow): string | null {
-  const parts: string[] = [];
-  if (row.streetname) parts.push(row.streetname.trim());
-  if (row.nr) parts.push(row.nr.trim());
-  if (row.addition) parts.push(row.addition.trim());
-  if (parts.length === 0 && row.buildingname) return row.buildingname.trim();
-  return parts.length > 0 ? parts.join(' ') : null;
-}
+import { createNameWriter } from '../helpers';
 
 export async function ingest(filePath: string) {
-  console.log(`Reading ${filePath}...`);
+  console.log(`Parsing ${filePath}...`);
+  const quads = new Parser().parse(readFileSync(filePath, 'utf8'));
 
-  const updates = new Map<string, { name: string; since: string | null; source: string | null }>();
-  const csvParser = createReadStream(filePath).pipe(parse({ columns: true, relax_column_count: true }));
-
-  for await (const row of csvParser as AsyncIterable<RawRow>) {
-    if (!row.adresid) continue;
-    const label = buildLabel(row);
-    if (label) {
-      updates.set(row.adresid, {
-        name: label,
-        since: row.date?.trim() || null,
-        source: row.source?.trim() || null
-      });
-    }
+  // Group triples by subject (each address observation is self-contained — no
+  // blank-node chasing, unlike streets/buurten geometry).
+  const subjects = new Map<string, { predicate: string; object: string }[]>();
+  for (const q of quads) {
+    if (!subjects.has(q.subject.value)) subjects.set(q.subject.value, []);
+    subjects.get(q.subject.value)!.push({ predicate: q.predicate.value, object: q.object.value });
   }
 
-  console.log(`Parsed ${updates.size} unique address entries`);
-  console.log('Updating place names and dates...');
-
-  let updated = 0;
-
-  for (const [adresid, { name, since, source }] of updates) {
-    const uri = `https://adamlink.nl/geo/address/${adresid}`;
-    await db.update(placeName)
-      .set({ name, ...(since && { since }), ...(source && { source }) })
-      .where(eq(placeName.id, uri));
-    updated++;
-    if (updated % 1000 === 0) {
-      process.stdout.write(`\r  ${updated} updated...`);
-    }
+  // Source documents: albr:S1 → "Publieke Werken kaartserie 1943", etc.
+  const sourceLabels = new Map<string, string>();
+  for (const [subj, preds] of subjects) {
+    if (!subj.includes('/geo/source/')) continue;
+    const label = preds.find(p => p.predicate.endsWith('#label'))?.object;
+    if (label) sourceLabels.set(subj, label);
   }
 
-  console.log(`\n${updated} address entries updated`);
+  // Existing LP places (FK guard): skip observations whose LP point wasn't ingested.
+  const places = new Set(
+    (await db.execute<{ id: string }>(sql`SELECT id FROM place WHERE type = 'address'`)).rows.map(r => r.id)
+  );
 
-  // Set place.preferred_label to the most recent named entry per place
+  const names = createNameWriter();
+  let written = 0;
+  let skipped = 0;
+
+  for (const [subj, preds] of subjects) {
+    if (!subj.includes('/geo/address/')) continue;
+
+    const name = preds.find(p => p.predicate.endsWith('#label'))?.object;       // rdfs:label
+    const lpRef = preds.find(p => p.predicate.endsWith('geoContains'))?.object;  // schema:geoContains allp:N
+    if (!name || !lpRef) continue;
+
+    const placeId = `lp-${lpRef.split('/geo/lp/')[1]}`;
+    if (!places.has(placeId)) { skipped++; continue; }
+
+    const since = preds.find(p => p.predicate.endsWith('hasEarliestBeginTimeStamp'))?.object || null;
+    const until = preds.find(p => p.predicate.endsWith('hasLatestEndTimeStamp'))?.object || null;
+    const sourceRef = preds.find(p => p.predicate.endsWith('documentedIn'))?.object;
+    const source = sourceRef ? (sourceLabels.get(sourceRef) ?? sourceRef.split('/geo/source/')[1]) : null;
+
+    names.add({ id: subj, placeId, name, since, until, source });
+    await names.flushIfFull();
+    written++;
+  }
+  await names.flush();
+
+  console.log(`Inserted ${written} place names (${skipped} skipped: LP place not found)`);
+
+  // Set place.preferred_label to the most recent named entry per place.
   console.log('Updating place preferred labels...');
   const result = await db.execute(sql`
     UPDATE place SET preferred_label = sub.name
@@ -81,5 +83,5 @@ export async function ingest(filePath: string) {
     ) sub
     WHERE place.id = sub.place_id
   `);
-  console.log(`Done: ${result.rowCount} place preferred labels updated`);
+  console.log(`Done: ${written} names, ${result.rowCount} preferred labels updated`);
 }
