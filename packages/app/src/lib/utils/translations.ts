@@ -10,6 +10,12 @@ const TRANSLATIONS: Record<string, string> = {
 	person: 'Persoon',
 	text: 'Tekst',
 
+	// Place types
+	address: 'Adres',
+	street: 'Straat',
+	neighbourhood: 'Buurt',
+	district: 'Wijk',
+
 	// Relations
 	isAbout: 'Gaat over',
 	hadLastLivingLocation: 'Laatste woonadres',
@@ -69,6 +75,7 @@ export function rt(dutch: string): string {
 // ============================================================================
 
 export const translateContentType = t;
+export const translatePlaceType = t;
 export const reverseTranslateContentType = rt;
 export const translateRelation = t;
 

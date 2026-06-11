@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import type {
   RecordType,
+  PlaceType,
   FeaturesQuery,
   FeatureResult,
   FeaturesResponse,
@@ -19,6 +20,7 @@ type FeatureRow = {
   id: string;
   url: string | null;
   record_type: RecordType;
+  place_type: PlaceType;
   label: string;
   description: string | null;
   content_url: string | null;
@@ -260,6 +262,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         f.id,
         f.url,
         f.record_type,
+        p.type as place_type,
         f.label,
         f.description,
         f.content_url,
@@ -318,6 +321,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       id,
       url,
       record_type,
+      place_type,
       label,
       description,
       content_url,
@@ -345,6 +349,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     id: row.id,
     url: row.url || undefined,
     recordType: row.record_type,
+    placeType: row.place_type,
     label: row.label,
     description: row.description?.slice(0, 128) || undefined,
     contentUrl: row.content_url || undefined,

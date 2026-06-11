@@ -64,6 +64,7 @@ export interface FeatureResult {
   id: string;
   url?: string;
   recordType: RecordType;
+  placeType?: PlaceType;
   label: string;
   description?: string;
   contentUrl?: string;
