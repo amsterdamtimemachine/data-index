@@ -44,7 +44,7 @@ erDiagram
 
     place {
         text id PK "e.g. lp-1000001"
-        text type  "address | street | neighbourhood"
+        text type  "address | street | neighbourhood | district"
         text preferred_label  "e.g. Prins Hendrikkade 93"
         geometry geometry  "POINT, LINESTRING, or POLYGON"
         integer spatial_frequency  "e.g. 47 # cells spanned"
@@ -136,50 +136,42 @@ erDiagram
 - **place_cells**: Pre-computed spatial grid that powers the heatmap. Each place is mapped to the 100m cells its geometry covers (one cell for a point, many for a street or neighbourhood). Features inherit cell coverage through their place link, cell assignments are stored once per place rather than duplicated per feature.
 - **grid_config**: Single row (`id = 'current'`) of grid metadata written by `rebuild-index`: the RD/28992 grid origin (`min_x`, `min_y`), the base-cell index extent, the WGS84 bounds of the cell grid, and the max spatial/temporal frequencies used to normalise relevance. Read once per heatmap/feature request.
 
-### Adamlink based place naming 
-
-Every `place` has a geometry and a `preferred_label`, and may carry dated historical
-names in `place_name`. How geometry and naming behave over time differs by place type:
-**addresses and streets** have dated names on a single place, while
-**neighbourhoods** have single place per era.
-
-#### Address place
-Address place is represented by single `POINT` geometry. Each address is labelled by multiple dated names based on `addressen.ttl`'s `sem:hasEarliestBeginTimeStamp` and `sem:hasLatestEndTimeStamp` fields. The `preferred_label` derived from the most recent historical name.
-
-### Street place
-Street place is represented by single `LINESTRING` geometry. Each address is labelled by multiple historical names dated by `straten.ttl`'s `sem:hasEarliestBeginTimeStamp ` and `sem:hasEarliestEndTimeStamp` fields. The `preferred_label` is extracted directly from `skos:prefLabel`. 
-
-### Neighbourhood place
-Neighbourhood is represented by single `POLYGON` or `MULTIPOLYGON`. Neighbourhoods are defined
-
-
-
-| Place type | Geometry | Historical names (`place_name`) | `preferred_label` | 
-|---|---|---|---|
-| **address** | single `POINT` | dated name (`since`/`until`) from the adressen registries | the **most recent** dated name |
-| **street** | single `LINESTRING` — Adamlink's dated geometry versions are collapsed to the current/undated one (others discarded) | dated `schema:name` variants from Adamlink, when present | the current `prefLabel` | 
-| **neighbourhood** | `POLYGON` / `MULTIPOLYGON` | none | the district's label | 
-
-`getFeatures` resolves a `historicalLabel` (the name in
-force at the feature's date) by matching `place_name` on `since`/`until` — so address-
-and street-linked features get a historical label, while neighbourhood-linked features
-fall back to `preferredLabel`. A neighbourhood's "period" is implicit in *which* era
-place a feature is linked to, chosen by the dataset contributor at ingest time; nothing
-resolves it automatically by date.
-
 ## Indexing
 
 The data index is restricted to historical features that can be both spatially located (linked to a place with geometry) and temporally located (with a date range). `rebuild-index` precomputes a fixed-resolution spatial grid and a fixed-resolution timeline once after ingestion; the UI then aggregates those base units into coarser display grids and histogram bins on demand.
 
-### Spatial
+### Spatial indexing
 
-Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a geometry (POINT, LINESTRING, or POLYGON) in **RD New (EPSG:28992, metres)**. Query responses reproject to **WGS84 (EPSG:4326)** before sending to the client. `rebuild-index` overlays the city with a regular grid of `CELL_SIZE_METERS`-wide cells (default 100m) whose origin is the south-west corner of the bounding box of all feature-linked `place` geometries, and writes the cells each place covers to `place_cells` — one set of cells per place, not per feature. A point lands in one cell, a line in the cells it crosses, and a polygon is filled (its interior, not just its outline). Features inherit cell coverage through their place link. Heatmap requests join `place_cells` → `feature_to_place` → `features` and count distinct features per cell, instead of scanning every feature row.
+Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a geometry (POINT, LINESTRING, or POLYGON) in **RD New (EPSG:28992, metres)**. Query responses reproject to **WGS84 (EPSG:4326)** before sending to the client. `rebuild-index` overlays the city with a regular grid of `CELL_SIZE_METERS`-wide cells (default 100m) whose origin is the south-west corner of the bounding box of all feature-linked `place` geometries, and writes the cells each of those feature-linked places covers to `place_cells` — one set of cells per place, not per feature. Places with no linked feature are skipped entirely, so ingesting unreferenced geometry (e.g. the present-day districts until a dataset uses them) adds no cells and never enlarges the grid. A point lands in one cell, a line in the cells it crosses, and a polygon is filled (its interior, not just its outline). Features inherit cell coverage through their place link. Heatmap requests join `place_cells` → `feature_to_place` → `features` and count distinct features per cell, instead of scanning every feature row.
 
-The grid lives in RD metres: a cell index is `floor((coord − origin) / CELL_SIZE_METERS)`, so cell `(0,0)` is the 100m square at the origin. `rebuild-index` persists that origin (`min_x`, `min_y`) and the cell extent to the single-row `grid_config` table, together with the **WGS84 bounds of the grid rectangle** — the origin extended by `(maxCell + 1)` cells, reprojected to EPSG:4326. The frontend divides those grid-aligned bounds into display cells, so what it draws tiles the exact grid the counts were computed on rather than the looser data envelope; the reverse lookup (click a cell → list its features) inverts the same bounds, keeping hover counts and feature lists in agreement. (Cells are drawn as axis-aligned WGS84 rectangles, so the ~0.4° RD↔WGS84 rotation is not modelled — a cosmetic skew that grows toward the edges of the extent.)
+The grid lives in RD metres: a cell index is `floor((coord − origin) / CELL_SIZE_METERS)`, so cell `(0,0)` is the 100m square at the origin. `rebuild-index` persists that origin (`min_x`, `min_y`) and the cell extent to the single-row `grid_config` table, together with the **WGS84 bounds of the grid rectangle** — the origin extended by `(maxCell + 1)` cells, reprojected to EPSG:4326. The frontend divides those grid-aligned bounds into display cells, so what it draws tiles the exact grid the counts were computed on rather than the looser data envelope; the reverse lookup (click a cell → list its features) inverts the same bounds, keeping hover counts and feature lists in agreement. (By default cells are drawn as axis-aligned WGS84 rectangles, so the ~0.4° RD↔WGS84 rotation is not modelled — a cosmetic skew that grows toward the edges of the extent; setting `PUBLIC_EXACT_CELLS` reprojects each cell corner through proj4 to remove it.)
 
 Heatmap density is rendered with log-normalised counts (`log(count+1) / log(maxCount+1)`).
 
-### Temporal
+#### Place data naming 
+
+Every `place` has a geometry and a `preferred_label`, and may have dated historical names in `place_name`. How geometry and naming interact with the temporal index depends on geometry type and related data available in Adamlink. At the moment, a feature can link to only a single place. 
+
+##### Address place
+Address place is a single numbered city address such as Prins Henrikkade 15. It is represented by single `POINT` geometry. Each address is labelled by multiple historical names taken from `addressen.ttl`'s `rdfs:label`, each dated by its `sem:hasEarliestBeginTimeStamp` and `sem:hasLatestEndTimeStamp` fields. The `preferred_label` is derived from the most recent historical name.
+
+##### Street place
+Street place is a single street such as Prins Henrikkade. It is represented by single `LINESTRING` geometry. Each street is labelled by multiple historical names taken from the `rdfs:label` nested in `straten.ttl`'s `schema:name`, each dated by its `sem:hasEarliestBeginTimeStamp` and `sem:hasEarliestEndTimeStamp` fields. The `preferred_label` is extracted directly from `skos:prefLabel`. 
+
+##### Neighbourhood place
+Neighbourhood place is a small area of the city, such as Riekerpolder. It is represented by single `POLYGON` or `MULTIPOLYGON` geometry. Unlike addresses and streets it has no dated names; instead each era is its own place (each era redraws the city's division), the *geometry* dated by `buurten.ttl`'s `sem:hasEarliestBeginTimeStamp` and `sem:hasEarliestEndTimeStamp` fields. The `preferred_label` is extracted directly from `skos:prefLabel`.
+
+##### District place
+District place is a larger area that groups several neighbourhoods, such as Volewijck. It is identical to a neighbourhood in every respect (single `POLYGON` or `MULTIPOLYGON`, no dated names, `preferred_label` straight from `skos:prefLabel`) but coarser, and tagged `district`.
+
+Adamlink supplies three neighbourhood systems (1850, 1909, and the present-day CBS buurten) and two district systems (1600 and the present-day CBS wijken). Each system is its own set of places with its own polygons, so unlike a street or address, whose single geometry holds across time a neighbourhood's or district's outline differs from one period to the next.
+
+`buurten.ttl` carries no explicit wijk/buurt field, so the designation is **inferred**: present-day data units by their CBS code (`dc:identifier` `WK…` → district, `BU…` → neighbourhood), and historical units by their begin year (1600 → district, 1850/1909 → neighbourhood). That period-to-granularity mapping follows Adamlink's own [documentation of these systems](https://adamlink.nl/geo/districts) — the pre-1850 wijken, the 1850 and 1909 buurten — rather than any field in the data itself.
+
+#### API effects
+The naming model above determines what the API returns per place type. `getFeatures` resolves a `historicalLabel` — the name a place held at the feature's date — by matching `place_name` on `since`/`until`. Because **addresses and streets have dated names**, their features get a `historicalLabel` that reflects the feature's period; because **neighbourhoods and districts have no dated names**, their features fall back to the place's `preferredLabel`. For a neighbourhood or district, then, period is never resolved by date — it is implicit in *which* era-place the feature was linked to at ingest (chosen by the dataset contributor), and the API only reflects that link.
+
+### Temporal indexing
 
 Each feature has `start_date` and `end_date`, both inclusive at the year level. A feature with `start_date=1900-06-15` and `end_date=1900-08-30` covers exactly the year 1900. Time is divided into base bins of `BASE_BIN_SIZE` years (default 10), each spanning `[bin_start, bin_end)`: start year inclusive, end year exclusive. A feature is assigned to every bin its year range overlaps: a feature spanning 1900–1925 with 10-year bins falls into `[1900,1910)`, `[1910,1920)`, and `[1920,1930)`. Its `temporal_frequency` is the count of those bins (3 here).
 
@@ -199,15 +191,17 @@ Lower scores mean features more unique to the time and place.
 
 ## Data ingestion
 
-### Place data
+### Place data ingestion
 
 The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Adamlink is a Linked Open Data service that connects historical Amsterdam address registries to point geometries, enabling features to be linked to physical locations with historical address names.
 
-Adamlink place data must be ingested before any dataset: run `districts` and `streets` first (from TTL files), then `lps` (a CSV of point geometries) and `adressen` (a TTL of dated address observations). See the [Development](#development) or [Production](#production) sections for the full ingestion order.
+Adamlink place data must be ingested before any dataset. See the [Development](#development) or [Production](#production) sections for the full ingestion order.
 
 Every `place` row is sourced from Adamlink. Features that can't be resolved to an existing Adamlink place are skipped at ingest; no feature row is created and nothing unlinked lands in the database.
 
-If you are deploying this for a different city, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. The `geometry-template.ts` example shows how to match incoming coordinates to existing places; for creating new places, adapt the pattern from `lps.ts`. The core requirement is that each feature links to a `place` row that has a geometry.
+If you are deploying this for **another Dutch city**, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. The `geometry-template.ts` example shows how to match incoming coordinates to existing places; for creating new places, adapt the pattern from `lps.ts`. The core requirement is that each feature links to a `place` row that has a geometry.
+
+For a city **outside the Netherlands** there is one more step: the Dutch national grid (RD / EPSG:28992) is hardcoded across the stack — the `place` geometry column, `insertPlaces`, `rebuild-index`, the grid-config and heatmap queries, and the frontend `proj4` definition — so you must swap that SRID for the target region's metric CRS in each of those spots and re-verify the grid math. RD is only valid over the Netherlands, so this step is unavoidable abroad.
 
 ### Minimum required fields per feature
 
@@ -215,9 +209,7 @@ Each feature needs at minimum:
 - **label**: Display name
 - **record_type**: One of `image`, `text`, `person` (the frontend renders each type differently)
 - **start_date** / **end_date**: Date range for temporal placement on the histogram
-- **place link**: Each feature must be linked to one or more physical locations (e.g. a journal entry mentioning several places links to each). Two methods are supported:
-  - **Adamlink URI**: if your data references Adamlink address or street IDs, the ingestion script resolves them to places via the `place_name` table or `place` table (requires place data to be ingested first)
-  - **WKT geometry point**: if your data only has coordinates, the ingestion script finds the nearest existing place within a configurable distance threshold (e.g. 5 meters)
+- **place link**: Each feature must be linked to one or more physical locations. If your data references Adamlink address or street IDs, the ingestion script resolves them to places via the `place_name` table or `place` table. 
 
 Optional: `description`, `content_url` (media), `entity` (schema.org JSONB), `url` (source link).
 
@@ -251,7 +243,7 @@ Re-running the same file is a no-op.
 
 | Dataset | Description | Access |
 |---------|-------------|--------|
-| [Districts](https://adamlink.nl/geo/districts) | Historical neighbourhood/district polygons (wijken1600, buurten1850, buurten1909) from Adamlink TTL | Public |
+| [Neighbourhoods & districts](https://adamlink.nl/geo/districts) | Neighbourhood (buurt) + district (wijk) polygons from the Adamlink `buurten.ttl` — historical (1600 wijken, 1850/1909 buurten) plus present-day CBS — split onto the `neighbourhood` and `district` place types; ingested by the `neighbourhoods-and-districts` source | Public |
 | [Streets](https://adamlink.nl/data) | Street geometries (LineString) with historical name variants from Adamlink TTL | Public |
 | [LPS](https://adamlink.nl/downloads/20230920-lps.csv.zip) | Linked point set: historical address-to-geometry mappings from 7 Amsterdam registries (1832–1976) | Public |
 | [Adressen](https://adamlink.nl/data) | Dated address observations (label + begin/end date + source document) that link to LPS points via `schema:geoContains` — Adamlink TTL | Public |
@@ -268,8 +260,9 @@ Re-running the same file is a no-op.
 | `GET /api/histogram` | Feature count distribution by time period |
 | `GET /api/features` | Paginated features within geographic bounds |
 | `GET /api/available-tags` | Tags with feature counts |
+| `GET /api/tag-combinations` | Valid next tags for a tag selection — progressive tag filtering (WIP, not yet exposed in the UI) |
 
-Heatmaps, histogram, features, and available-tags accept `recordTypes`, `datasets`, and `placeTypes` (`address` / `street` / `neighbourhood`) query parameters to filter results.
+Heatmaps, histogram, features, and available-tags accept `recordTypes`, `datasets`, and `placeTypes` (`address` / `street` / `neighbourhood` / `district`) query parameters to filter results.
 
 ## Development
 
@@ -291,7 +284,7 @@ bun run docker:db:up
 bun run db:push-schema
 
 # Ingest place data (required before any dataset)
-bun run db:ingest -s districts -f <path-to-adamlinkbuurten.ttl>
+bun run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
 bun run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
 bun run db:ingest -s lps -f <path-to-lps.csv>
 bun run db:ingest -s adressen -f <path-to-adressen.ttl>
@@ -350,7 +343,7 @@ cp .env.example .env.prod
 bun --env-file=.env.prod run db:push-schema
 
 # Ingest place data (same env file)
-bun --env-file=.env.prod run db:ingest -s districts -f <path-to-adamlinkbuurten.ttl>
+bun --env-file=.env.prod run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
 bun --env-file=.env.prod run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
 bun --env-file=.env.prod run db:ingest -s lps -f <path-to-lps.csv>
 bun --env-file=.env.prod run db:ingest -s adressen -f <path-to-adressen.ttl>
@@ -379,7 +372,7 @@ cp .env.example .env.staging
 
 # Push schema + ingest into the staging DB
 bun --env-file=.env.staging run db:push-schema
-bun --env-file=.env.staging run db:ingest -s districts -f <path-to-adamlinkbuurten.ttl>
+bun --env-file=.env.staging run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
 bun --env-file=.env.staging run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
 bun --env-file=.env.staging run db:ingest -s lps -f <path-to-lps.csv>
 # …and the other datasets, same pattern as production…
@@ -419,7 +412,7 @@ docker compose --project-name data-index-prod --env-file .env.prod \
 bun --env-file=.env.prod run db:push-schema
 
 # Ingest place data
-bun --env-file=.env.prod run db:ingest -s districts -f <path-to-adamlinkbuurten.ttl>
+bun --env-file=.env.prod run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
 bun --env-file=.env.prod run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
 bun --env-file=.env.prod run db:ingest -s lps -f <path-to-lps.csv>
 bun --env-file=.env.prod run db:ingest -s adressen -f <path-to-adressen.ttl>
@@ -488,6 +481,7 @@ docker compose --project-name data-index-staging --env-file .env.staging \
 | `APP_PORT` | No | `3000` | App port on host |
 | `PUBLIC_DEFAULT_CELL` | No | - | Default cell to select on load |
 | `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |
+| `PUBLIC_EXACT_CELLS` | No | `false` | Reproject heatmap cells to their exact RD footprint via proj4 (removes the ~0.4° skew); default draws axis-aligned rectangles |
 | `BASE_BIN_SIZE` | No | `10` | Base time bin size (years) |
 | `CELL_SIZE_METERS` | No | `100` | Base spatial cell size (meters) |
 | `GRID_DEFAULT` | No | `75` | Default heatmap grid width (columns); rows are derived from the data's aspect ratio so cells are square |

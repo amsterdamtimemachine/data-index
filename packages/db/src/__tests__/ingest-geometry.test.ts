@@ -2,8 +2,10 @@
  * Ingestion → geometry-type coverage for the line/polygon backbone sources.
  * Proves the TTL parsers + insertPlaces produce places of the right `type` and the
  * right PostGIS geometry type (LINESTRING for streets; POLYGON / MULTIPOLYGON for
- * districts), and that non-historical (CBS) districts are skipped. Uses small TTL
- * fixtures in the Adamlink shape (WGS84 WKT, transformed to RD on insert).
+ * districts), that wijken vs buurten are split onto district vs neighbourhood
+ * (historical by begin year, present-day by CBS code), and that unclassifiable
+ * entries are skipped. Uses small TTL fixtures in the Adamlink shape (WGS84 WKT,
+ * transformed to RD on insert).
  */
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
@@ -28,19 +30,30 @@ describe('line/polygon ingestion produces the right geometry types', () => {
     await teardownTestDb();
   });
 
-  test('districts ingest: historical POLYGON + MULTIPOLYGON kept, CBS skipped', async () => {
+  test('districts ingest: wijken→district, buurten→neighbourhood (historical + CBS), unclassifiable skipped', async () => {
     await cleanTestDb();
-    const { ingest } = await import('../etl/sources/districts');
+    const { ingest } = await import('../etl/sources/neighbourhoods-and-districts');
     await ingest(resolve(__dirname, 'fixtures/districts.ttl'));
 
     const rows = await placeGeoms();
-    expect(rows.length).toBe(2); // D3 (CBS, beginYear 2020) skipped
-    expect(rows.every(r => r.type === 'neighbourhood')).toBe(true);
+    expect(rows.length).toBe(4); // D5 (no CBS code, non-historical begin year) skipped
 
-    const byId = new Map(rows.map(r => [r.id, r.gtype]));
-    expect(byId.get('https://adamlink.nl/geo/district/D1')).toBe('POLYGON');
-    expect(byId.get('https://adamlink.nl/geo/district/D2')).toBe('MULTIPOLYGON');
-    expect([...byId.keys()].some(id => id.endsWith('/D3'))).toBe(false);
+    const D = (n: string) => `https://adamlink.nl/geo/district/${n}`;
+    const type = new Map(rows.map(r => [r.id, r.type]));
+    const gtype = new Map(rows.map(r => [r.id, r.gtype]));
+
+    // Granularity split: wijk → district, buurt → neighbourhood.
+    expect(type.get(D('D1'))).toBe('district');      // historical 1600 wijk
+    expect(type.get(D('D2'))).toBe('neighbourhood'); // historical 1850 buurt
+    expect(type.get(D('D3'))).toBe('district');      // present-day CBS WK…
+    expect(type.get(D('D4'))).toBe('neighbourhood'); // present-day CBS BU…
+
+    // Geometry type preserved through the WGS84→RD transform.
+    expect(gtype.get(D('D1'))).toBe('POLYGON');
+    expect(gtype.get(D('D2'))).toBe('MULTIPOLYGON');
+
+    // Unclassifiable entry dropped.
+    expect([...type.keys()].some(id => id.endsWith('/D5'))).toBe(false);
   });
 
   test('streets ingest: produces a street place with LINESTRING geometry', async () => {

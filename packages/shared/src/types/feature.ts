@@ -41,7 +41,7 @@ export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity;
 /**
  * Query parameters for fetching features
  */
-export type PlaceType = 'address' | 'street' | 'neighbourhood';
+export type PlaceType = 'address' | 'street' | 'neighbourhood' | 'district';
 
 export interface FeaturesQuery {
   bounds: HeatmapCellBounds;

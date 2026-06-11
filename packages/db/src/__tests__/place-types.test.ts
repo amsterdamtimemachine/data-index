@@ -17,8 +17,9 @@ const BOUNDS = { minLon: 4.0, maxLon: 5.5, minLat: 52.0, maxLat: 52.5 };
 const F_ADDR = '33333333-3333-3333-3333-3333333333a1';
 const F_STREET = '33333333-3333-3333-3333-3333333333b2';
 const F_NBHD = '33333333-3333-3333-3333-3333333333c3';
+const F_DISTRICT = '33333333-3333-3333-3333-3333333333d4';
 
-describe('placeTypes filter (address / street / neighbourhood)', () => {
+describe('placeTypes filter (address / street / neighbourhood / district)', () => {
   beforeAll(async () => {
     await setupTestDb();
     await cleanTestDb();
@@ -33,6 +34,7 @@ describe('placeTypes filter (address / street / neighbourhood)', () => {
       ['pt-addr', 'address', 'POINT(120050.5 485050.5)'],
       ['pt-street', 'street', 'LINESTRING(120150.5 485050.5, 120250.5 485050.5)'],
       ['pt-nbhd', 'neighbourhood', 'POLYGON((120350.5 485050.5,120450.5 485050.5,120450.5 485150.5,120350.5 485150.5,120350.5 485050.5))'],
+      ['pt-district', 'district', 'POLYGON((120550.5 485050.5,120650.5 485050.5,120650.5 485150.5,120550.5 485150.5,120550.5 485050.5))'],
     ];
     for (const [id, type, wkt] of places) {
       await db.execute(sql`INSERT INTO place (id, type, geometry) VALUES (${id}, ${type}, ST_GeomFromText(${wkt}, 28992))`);
@@ -43,6 +45,7 @@ describe('placeTypes filter (address / street / neighbourhood)', () => {
       [F_ADDR, 'image', 'addr feat', 'pt-addr'],
       [F_STREET, 'text', 'street feat', 'pt-street'],
       [F_NBHD, 'person', 'nbhd feat', 'pt-nbhd'],
+      [F_DISTRICT, 'image', 'district feat', 'pt-district'],
     ];
     for (const [fid, rt, label, pid] of feats) {
       await db.execute(sql`INSERT INTO features (id, record_type, label, start_date, end_date, dataset_id)
@@ -64,6 +67,14 @@ describe('placeTypes filter (address / street / neighbourhood)', () => {
     expect(r.data.map(f => f.recordType)).toEqual(['text']);
   });
 
+  test('getFeatures honours the district place type (wijk, separate from neighbourhood)', async () => {
+    const r = await getFeatures({ bounds: BOUNDS, placeTypes: ['district'] });
+    expect(r.total).toBe(1);
+    // district and neighbourhood are distinct types — filtering one must not return the other
+    const nbhd = await getFeatures({ bounds: BOUNDS, placeTypes: ['neighbourhood'] });
+    expect(nbhd.total).toBe(1);
+  });
+
   test('getFeatures accepts multiple place types', async () => {
     const r = await getFeatures({ bounds: BOUNDS, placeTypes: ['address', 'neighbourhood'] });
     expect(r.total).toBe(2);
@@ -72,13 +83,13 @@ describe('placeTypes filter (address / street / neighbourhood)', () => {
 
   test('getFeatures without placeTypes returns every type', async () => {
     const r = await getFeatures({ bounds: BOUNDS });
-    expect(r.total).toBe(3);
+    expect(r.total).toBe(4);
   });
 
   test('getHistogram totalFeatures respects placeTypes', async () => {
     expect((await getHistogram(undefined, undefined, ['street'])).totalFeatures).toBe(1);
     expect((await getHistogram(undefined, undefined, ['address', 'neighbourhood'])).totalFeatures).toBe(2);
-    expect((await getHistogram()).totalFeatures).toBe(3);
+    expect((await getHistogram()).totalFeatures).toBe(4);
   });
 
   test('getHeatmapTimeline respects placeTypes', async () => {
