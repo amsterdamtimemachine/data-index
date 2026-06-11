@@ -49,10 +49,6 @@ Runtime: Bun. Infrastructure: Docker Compose. Map tiles: OpenFreeMap.
 ### Data model
 
 ```mermaid
----
-config:
-  layout: elk
----
 erDiagram
     organisations {
         text id PK "e.g. stadsarchief"
