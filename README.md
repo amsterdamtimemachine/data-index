@@ -15,10 +15,16 @@ Rather than curating or contextualising the data, the index presents sources as 
 - [Indexing](#indexing)
   - [Spatial indexing](#spatial-indexing)
   - [Place data naming](#place-data-naming)
+    - [Address place](#address-place)
+    - [Street place](#street-place)
+    - [Neighbourhood place](#neighbourhood-place)
+    - [District place](#district-place)
+    - [Place names at query time](#place-names-at-query-time)
   - [Temporal indexing](#temporal-indexing)
   - [Unique features rank higher](#unique-features-rank-higher)
 - [Data ingestion](#data-ingestion)
   - [Place data ingestion](#place-data-ingestion)
+    - [Place datasets](#place-datasets)
   - [Minimum required fields per feature](#minimum-required-fields-per-feature)
   - [Adding a dataset](#adding-a-dataset)
   - [Re-ingesting and corrections](#re-ingesting-and-corrections)
@@ -30,6 +36,7 @@ Rather than curating or contextualising the data, the index presents sources as 
   - [Testing](#testing)
 - [Production](#production)
   - [First time server setup (external DB)](#first-time-server-setup-external-db)
+    - [Adding staging alongside](#adding-staging-alongside)
   - [First time server setup (self-hosted)](#first-time-server-setup-self-hosted)
   - [CI/CD](#cicd)
   - [Deploying a new image](#deploying-a-new-image)
@@ -191,7 +198,7 @@ Adamlink supplies three neighbourhood systems (1850, 1909, and the present-day C
 
 `buurten.ttl` carries no explicit wijk/buurt field, so the designation is **inferred**: present-day data units by their CBS code (`dc:identifier` `WK…` → district, `BU…` → neighbourhood), and historical units by their begin year (1600 → district, 1850/1909 → neighbourhood). That period-to-granularity mapping follows Adamlink's own [documentation of these systems](https://adamlink.nl/geo/districts) — the pre-1850 wijken, the 1850 and 1909 buurten — rather than any field in the data itself.
 
-#### Labels at query time
+#### Place names at query time
 The naming model above determines what the API returns per place type. `getFeatures` resolves a `historicalLabel` — the name a place held at the feature's date — by matching `place_name` on `since`/`until`. Because **addresses and streets have dated names**, their features get a `historicalLabel` that reflects the feature's period; because **neighbourhoods and districts have no dated names**, their features fall back to the place's `preferredLabel`. For a neighbourhood or district, then, period is never resolved by date — it is implicit in *which* era-place the feature was linked to at ingest (chosen by the dataset contributor), and the API only reflects that link.
 
 ### Temporal indexing
