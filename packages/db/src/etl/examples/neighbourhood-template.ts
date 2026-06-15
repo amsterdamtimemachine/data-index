@@ -3,18 +3,20 @@
  *
  * Use this template when your source records describe a whole neighbourhood or
  * district rather than a point or street — e.g. a statistic or survey for an area.
- * Input is JSON. Each record names the area, its level (wijk/buurt), and a date; the
- * script resolves it to the matching `place` by:
+ * Input is JSON. Each record names the area, its level (wijk/buurt), and a date range;
+ * the script resolves it to the matching `place` by:
  *   - place.type        = district (wijk) | neighbourhood (buurt)   ← from `level`
  *   - preferred_label    matched case-insensitively                 ← from `area`
- *   - the era whose [valid_since, valid_until) window contains the date
+ *   - the era whose [valid_since, valid_until) window OVERLAPS the record's date range
+ *     the most (the same range-overlap test the histogram/heatmap use)
  * Records with no matching place are skipped (same as the point templates).
  *
- * The date is what selects the *system*: historical windows are bounded
- * (1600 wijken [1600,1850), 1850 buurten [1850,1909), 1909 buurten [1909,1921)) and
- * present-day CBS is open-ended. Because each historical era is a single granularity,
- * the date alone usually pins the system; `level` is what disambiguates wijk vs buurt
- * for the present-day CBS layer, where both exist at once.
+ * The date range selects the *system*: historical windows are bounded (1600 wijken
+ * [1600,1850), 1850 buurten [1850,1909), 1909 buurten [1909,1921)) and present-day CBS
+ * is open-ended. Because each historical era is a single granularity, the range usually
+ * pins one system; `level` disambiguates wijk vs buurt for the present-day CBS layer,
+ * where both exist at once. A range straddling a boundary attaches to whichever era it
+ * overlaps most.
  *
  * Neighbourhoods/districts have no `place_name` history, so the only label to match on
  * is `preferred_label` — there is no historical/alternative name for these.
@@ -71,18 +73,27 @@ export async function ingest(filePath: string) {
     relation: { id: RELATION_ID, label: RELATION_LABEL },
   });
 
-  // Resolve (level, area, date) → the place whose era window contains the date.
-  // Cached by the (level|area|date) key since many rows reuse the same area+period.
+  // Resolve (level, area, [start,end]) → the era place whose [valid_since, valid_until)
+  // window OVERLAPS the record's date range the most. The WHERE clause is the same
+  // range-overlap test the rest of the app uses (featureYearOverlap); the ORDER BY then
+  // breaks straddlers toward the era they overlap most (a 1905–1915 buurt feature lands
+  // in the 1909 era, not the 1850 one). A point-in-time record has 0-day overlap but
+  // still resolves to its containing era via the WHERE. Cached by (level|area|start|end).
   const resolvePlaceId = createCachedResolver(async (key) => {
-    const { level, area, date } = JSON.parse(key) as { level: string; area: string; date: string };
+    const { level, area, start, end } = JSON.parse(key) as { level: string; area: string; start: string; end: string };
     const type = level === 'wijk' ? 'district' : 'neighbourhood';
     const result = await db.execute<PlaceIdRow>(sql`
       SELECT id as place_id FROM place
       WHERE type = ${type}
         AND preferred_label ILIKE ${area}
-        AND valid_since <= ${date}::date
-        AND (valid_until IS NULL OR valid_until > ${date}::date)
-      ORDER BY valid_since DESC
+        AND valid_since <= ${end}::date
+        AND (valid_until IS NULL OR valid_until > ${start}::date)
+      ORDER BY GREATEST(
+                 0,
+                 LEAST(${end}::date, COALESCE(valid_until, 'infinity'::date))
+                   - GREATEST(${start}::date, valid_since)
+               ) DESC,
+               valid_since DESC
       LIMIT 1
     `);
     return result.rows[0]?.place_id ?? null;
@@ -98,7 +109,7 @@ export async function ingest(filePath: string) {
     if (!row.area || !row.level || !row.date_start) { skipped++; continue; }
 
     const placeId = await resolvePlaceId(
-      JSON.stringify({ level: row.level, area: row.area, date: row.date_start })
+      JSON.stringify({ level: row.level, area: row.area, start: row.date_start, end: row.date_end || row.date_start })
     );
     if (!placeId) { skipped++; continue; }
 
