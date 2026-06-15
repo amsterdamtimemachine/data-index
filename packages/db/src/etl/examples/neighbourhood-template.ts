@@ -31,6 +31,7 @@ import { readFileSync } from 'fs';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
 import type { PlaceIdRow } from '../../row-types';
+import type { NewFeature } from '../../schema';
 import type { CreativeWorkEntity } from '@atm/shared';
 import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers';
 
@@ -60,9 +61,11 @@ const BATCH_SIZE = 1000;
 interface RawRecord {
   id: string;
   title: string;
+  description?: string;     // optional → features.description (shown on the card)
+  author?: string;          // optional → an example of schema.org entity (JSONB) metadata
   area: string;             // neighbourhood / district name → matched to place.preferred_label
   level: 'wijk' | 'buurt';  // → place.type (district / neighbourhood)
-  date_start: string;       // "YYYY-MM-DD" — selects the era (which buurten/wijken system)
+  date_start: string;       // "YYYY-MM-DD" — with date_end, selects the era by range overlap
   date_end: string;
 }
 
@@ -118,22 +121,33 @@ export async function ingest(filePath: string) {
     const endDate = row.date_end || startDate;
     const dateCreated = formatDateRange(startDate, endDate);
 
+    // `entity` is the schema.org JSONB blob rendered in the feature detail view. Its
+    // shape is the record_type's entity interface — CreativeWorkEntity here (text). Swap
+    // for MediaObjectEntity (adds contentUrl) for images, or PersonEntity (birthDate,
+    // birthPlace, …) for people, and populate whatever fields that type defines.
     const entity: CreativeWorkEntity = {
       type: 'CreativeWork',
       name: row.title || '',
+      ...(row.author && { author: row.author }),
       ...(dateCreated && { dateCreated })
     };
 
-    writer.addFeature({
+    // Typed as NewFeature — the insert shape of the `features` table (schema.ts). Jump
+    // to that type to see every available column (e.g. contentUrl, unused here). The
+    // writer upserts it by id; rebuild-index fills temporal_frequency afterwards.
+    const feature: NewFeature = {
       id: featureId,
       url: row.id,
       recordType: RECORD_TYPE,
       label: row.title || '',
+      description: row.description || null,
       startDate,
       endDate,
       datasetId: DATASET_ID,
       entity
-    });
+    };
+
+    writer.addFeature(feature);
     writer.addLink({ featureId, placeId, relationId: RELATION_ID });
     count++;
 

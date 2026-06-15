@@ -22,6 +22,9 @@ Rather than curating or contextualising the data, the index presents sources as 
     - [Place names at query time](#place-names-at-query-time)
   - [Temporal indexing](#temporal-indexing)
   - [Unique features rank higher](#unique-features-rank-higher)
+- [Dating](#dating)
+  - [Where the dates come from](#where-the-dates-come-from)
+  - [How dates resolve](#how-dates-resolve)
 - [Data ingestion](#data-ingestion)
   - [Place data ingestion](#place-data-ingestion)
     - [Place datasets](#place-datasets)
@@ -220,6 +223,30 @@ relevance_score = spatial_frequency / max_spatial + temporal_frequency / max_tem
 ```
 
 Lower scores mean features more unique to the time and place.
+
+## Dating
+
+The index carries dates on three different things, for three different purposes. Keeping
+them distinct is what lets a 1950 photo of a 17th-century street show the period name on
+a present-day map.
+
+| Dates | Column(s) | What they mean | Used for |
+|---|---|---|---|
+| **Feature** | `features.start_date` / `end_date` | the source item's own date range | all temporal display: histogram, timeline, heatmap slices, `temporal_frequency`, ranking |
+| **Name** | `place_name.since` / `until` | when a historical name was in use (addresses, streets) | the `historicalLabel` shown for a feature |
+| **Place era** | `place.valid_since` / `valid_until` | the period a neighbourhood/district geometry *was* the city's division (null for address/street) | routing an area feature to the right-era polygon at ingest |
+
+### Where the dates come from
+- **Feature dates** — from the source dataset's own fields, at ingest.
+- **Name dates** — from the Adamlink TTLs: `sem:hasEarliestBeginTimeStamp` / `hasLatestEndTimeStamp` on address observations, and the `sem:` fields on a street's `schema:name` variants (see [Place data naming](#place-data-naming)).
+- **Place-era dates** — historical units from `buurten.ttl`'s begin/end years (1600 wijken `[1600,1850)`, 1850 buurten `[1850,1909)`, 1909 buurten `[1909,1921)`); present-day CBS units carry none, so they're assigned an open-ended window back to their predecessor's end (CBS buurten from 1921, CBS wijken from 1850).
+
+### How dates resolve
+- **Overlap on the full range is the default.** A feature belongs to every time bin/slice its `[start, end]` range overlaps — `year(start) < to AND year(end) >= from`. This drives the histogram, timeline, heatmap slices, the `getFeatures` time filter, and `temporal_frequency` (the span); the overall time range is `MIN(start)…MAX(end)`.
+- **Two single-value exceptions:**
+  - `historicalLabel` — the name in force at the feature's **end** date (latest `place_name.since <= end_date`).
+  - neighbourhood/district era-routing — the era whose window **overlaps the feature's range the most**, so a boundary-straddler attaches to the era it spent most of its span in.
+- Intervals are **half-open `[since, until)`** at **year** granularity; `valid_until = null` means open/current.
 
 ## Data ingestion
 
