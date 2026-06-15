@@ -7,9 +7,10 @@
  * the LP `place` via that geoContains link, then set `place.preferred_label` to the
  * most recent named entry per place.
  *
- * Replaces the older lps.csv-stubs + adressen.csv-enrich two-step: the TTL self-links
- * observation → LP, so LPS only needs to create the points. Run AFTER lps (the LP
- * `place` rows must exist for the place_name FK).
+ * Replaces the older two-step where LPS built registry-column name stubs and a
+ * separate adressen file enriched them: the TTL self-links observation → LP, so LPS
+ * only needs to create the points. Run AFTER lps (the LP `place` rows must exist for
+ * the place_name FK).
  *
  * Usage: bun run db:ingest -s adressen -f <path-to-20240311-adressen.ttl>
  */

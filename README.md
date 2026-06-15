@@ -241,7 +241,7 @@ All place geometry comes from these public Adamlink datasets.
 |---------|-------------|--------|
 | [Neighbourhoods & districts](https://adamlink.nl/geo/districts) | Neighbourhood (buurt) + district (wijk) polygons — historical (1600 wijken, 1850/1909 buurten) plus present-day CBS — split onto the `neighbourhood` and `district` place types; ingested by the `neighbourhoods-and-districts` source | TTL |
 | [Streets](https://adamlink.nl/data) | Street geometries (LINESTRING) with historical name variants | TTL |
-| [LPS](https://adamlink.nl/downloads/20230920-lps.csv.zip) | Linked point set: historical address-to-geometry mappings from 7 Amsterdam registries (1832–1976) | CSV |
+| [LPS](https://adamlink.nl/data) | Linked point set: historical address-to-geometry mappings from 7 Amsterdam registries (1832–1976) | TTL |
 | [Adressen](https://adamlink.nl/data) | Dated address observations linking to LPS points via `schema:geoContains` | TTL |
 
 ### Minimum required fields per feature
@@ -313,7 +313,7 @@ bun run db:push-schema
 # Ingest place data (required before any dataset)
 bun run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
 bun run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
-bun run db:ingest -s lps -f <path-to-lps.csv>
+bun run db:ingest -s lps -f <path-to-lps.ttl>
 bun run db:ingest -s adressen -f <path-to-adressen.ttl>
 
 # Ingest datasets (any order)
@@ -372,7 +372,7 @@ bun --env-file=.env.prod run db:push-schema
 # Ingest place data (same env file)
 bun --env-file=.env.prod run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
 bun --env-file=.env.prod run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
-bun --env-file=.env.prod run db:ingest -s lps -f <path-to-lps.csv>
+bun --env-file=.env.prod run db:ingest -s lps -f <path-to-lps.ttl>
 bun --env-file=.env.prod run db:ingest -s adressen -f <path-to-adressen.ttl>
 
 # Ingest feature datasets
@@ -401,7 +401,7 @@ cp .env.example .env.staging
 bun --env-file=.env.staging run db:push-schema
 bun --env-file=.env.staging run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
 bun --env-file=.env.staging run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
-bun --env-file=.env.staging run db:ingest -s lps -f <path-to-lps.csv>
+bun --env-file=.env.staging run db:ingest -s lps -f <path-to-lps.ttl>
 # …and the other datasets, same pattern as production…
 bun --env-file=.env.staging run db:rebuild-index
 
@@ -441,7 +441,7 @@ bun --env-file=.env.prod run db:push-schema
 # Ingest place data
 bun --env-file=.env.prod run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
 bun --env-file=.env.prod run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
-bun --env-file=.env.prod run db:ingest -s lps -f <path-to-lps.csv>
+bun --env-file=.env.prod run db:ingest -s lps -f <path-to-lps.ttl>
 bun --env-file=.env.prod run db:ingest -s adressen -f <path-to-adressen.ttl>
 
 # Ingest feature datasets

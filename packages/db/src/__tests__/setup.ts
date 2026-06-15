@@ -10,7 +10,7 @@ import { db } from '../client';
 export { db };
 
 export const FIXTURES = {
-  lps: resolve(__dirname, 'fixtures/lps.csv'),
+  lps: resolve(__dirname, 'fixtures/lps.ttl'),
   adressen: resolve(__dirname, 'fixtures/adressen.ttl'),
   streets: resolve(__dirname, 'fixtures/seed-streets.ttl'),
   beeldbank: resolve(__dirname, 'fixtures/beeldbank.csv'),
