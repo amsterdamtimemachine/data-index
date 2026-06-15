@@ -78,6 +78,8 @@ erDiagram
         text preferred_label  "e.g. Prins Hendrikkade 93"
         geometry geometry  "POINT, LINESTRING, or POLYGON"
         integer spatial_frequency  "e.g. 47 # cells spanned"
+        date valid_since  "neighbourhood/district era start; null for address/street"
+        date valid_until  "era end; null = open/current"
     }
 
     place_name {
@@ -259,6 +261,7 @@ Optional: `description`, `content_url` (media), `entity` (schema.org JSONB), `ur
 1. Pick a template from `packages/db/src/etl/examples/`: 
    - `adamlink-point-template.ts` for data referencing Adamlink address URIs
    - `geometry-point-template.ts` for data without Adamlink references (matches coordinates to nearest place)
+   - `neighbourhood-template.ts` for area-level data (matches a buurt/wijk by name + date to the right era)
 2. Copy it to `packages/db/src/etl/sources/<your-dataset>.ts`
 3. Update organisation, dataset, relation, and field mappings
 4. Run:

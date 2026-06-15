@@ -172,12 +172,16 @@ export interface PlaceInsert {
   type: string;
   label?: string | null;
   wkt: string;
+  // Era validity — set only for neighbourhood/district (the period this geometry was
+  // the city's division). Left undefined for address/street. Dates as 'YYYY-MM-DD'.
+  validSince?: string | null;
+  validUntil?: string | null;
 }
 
 /**
  * How an existing place row is refreshed when a re-ingest hits its id:
- *  - 'replaceAll'      : type + preferred_label + geometry (sources that own the
- *                        label — streets / neighbourhoods, from their TTL prefLabel).
+ *  - 'replaceAll'      : type + preferred_label + geometry + valid_since/until
+ *                        (streets / neighbourhoods / districts, from their TTL).
  *  - 'replaceGeometry' : type + geometry only, preserving preferred_label
  *                        (LPS — the label is owned by the later adressen enrichment).
  */
@@ -211,6 +215,8 @@ export async function insertPlaces(
       type: r.type,
       preferredLabel: r.label ?? null,
       geometry: geom(r.wkt),
+      validSince: r.validSince ?? null,
+      validUntil: r.validUntil ?? null,
     }));
 
     const query = db.insert(place).values(values);
@@ -229,6 +235,8 @@ export async function insertPlaces(
           type: sql`excluded.type`,
           preferredLabel: sql`excluded.preferred_label`,
           geometry: sql`excluded.geometry`,
+          validSince: sql`excluded.valid_since`,
+          validUntil: sql`excluded.valid_until`,
         },
       });
     }

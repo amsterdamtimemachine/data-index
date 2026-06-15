@@ -10,9 +10,13 @@
  * units, and from the begin year (1600 = wijk, 1850/1909 = buurt) for the historical
  * ones — every subject carries exactly one of the two, so the split is total.
  *
- * Period is NOT stored: a place is just its geometry + label, and which era it belongs
- * to is implicit in which row exists (see the README's place-naming section). Distinct
- * eras have distinct URIs, so they coexist as separate rows without collision.
+ * Each place's era is persisted as valid_since/valid_until. Historical units use their
+ * own TTL begin/end years (1600 wijken [1600,1850), 1850 buurten [1850,1909), 1909
+ * buurten [1909,1921)). Present-day CBS units carry no dates, so each CBS layer is
+ * extended back to where its predecessor ends — CBS buurten from 1921, CBS wijken from
+ * 1850 — with an open end, leaving NO gap: the buurt timeline is contiguous 1850→now and
+ * the wijk timeline 1600→now. Feature ingestion uses these windows to pick the era a
+ * feature's date falls in. Distinct eras have distinct URIs, so they coexist as rows.
  *
  * Usage: bun run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
  */
@@ -22,11 +26,22 @@ import { insertPlaces } from '../helpers';
 
 type DistrictType = 'district' | 'neighbourhood';
 
+// Present-day CBS units carry no dates in the TTL. To leave NO temporal gap, each CBS
+// layer is extended back to where its historical predecessor ends, with an open end:
+//   - CBS buurten from 1921 (right after the 1909 buurten)  → buurt timeline 1850→now
+//   - CBS wijken  from 1850 (right after the 1600 wijken)   → wijk  timeline 1600→now
+// This means a mid-20th-century feature lands in present-day CBS boundaries — pragmatic
+// gap-filling, to revisit with the PM. Adjust these to change the cutoffs.
+const CBS_BUURT_VALID_SINCE = '1921-01-01';
+const CBS_WIJK_VALID_SINCE = '1850-01-01';
+
 interface District {
   uri: string;
   label: string;
   wkt: string;
   type: DistrictType;
+  validSince: string;
+  validUntil: string | null;
 }
 
 /**
@@ -58,6 +73,7 @@ export async function ingest(filePath: string) {
   const hasGeometry = new Map<string, string>();
   const blankToWkt = new Map<string, string>();
   const beginYears = new Map<string, number>();
+  const endYears = new Map<string, number>();
   const cbsCodes = new Map<string, string>();
 
   for (const q of quads) {
@@ -74,6 +90,8 @@ export async function ingest(filePath: string) {
       blankToWkt.set(subj, obj);
     } else if (pred.endsWith('hasEarliestBeginTimeStamp') && isDistrict) {
       beginYears.set(subj, parseInt(obj));
+    } else if (pred.endsWith('hasEarliestEndTimeStamp') && isDistrict) {
+      endYears.set(subj, parseInt(obj));
     } else if (pred.endsWith('identifier') && isDistrict) {
       cbsCodes.set(subj, obj); // CBS code, e.g. "WK036331" / "BU03633100"
     }
@@ -88,13 +106,23 @@ export async function ingest(filePath: string) {
     const label = labels.get(uri);
     if (!wkt || !label) continue;
 
-    const type = classify(cbsCodes.get(uri) ?? null, beginYears.get(uri) ?? null);
+    const cbs = cbsCodes.get(uri) ?? null;
+    const begin = beginYears.get(uri) ?? null;
+    const type = classify(cbs, begin);
     if (!type) {
       skipped++;
       continue;
     }
 
-    districts.push({ uri, label, wkt, type });
+    // Present-day (CBS) → open-ended window from the vintage year; historical units →
+    // their own TTL begin/end (e.g. an 1850 buurt → valid_since 1850, valid_until 1909).
+    const end = endYears.get(uri) ?? null;
+    const validSince = cbs
+      ? (type === 'district' ? CBS_WIJK_VALID_SINCE : CBS_BUURT_VALID_SINCE)
+      : `${begin}-01-01`;
+    const validUntil = cbs ? null : (end ? `${end}-01-01` : null);
+
+    districts.push({ uri, label, wkt, type, validSince, validUntil });
   }
 
   const wijken = districts.filter(d => d.type === 'district').length;
@@ -102,7 +130,7 @@ export async function ingest(filePath: string) {
   console.log(`Resolved ${districts.length} places: ${wijken} districts (wijken), ${buurten} neighbourhoods (buurten)${skipped ? `, ${skipped} skipped` : ''}`);
 
   const inserted = await insertPlaces(
-    districts.map(d => ({ id: d.uri, type: d.type, label: d.label, wkt: d.wkt })),
+    districts.map(d => ({ id: d.uri, type: d.type, label: d.label, wkt: d.wkt, validSince: d.validSince, validUntil: d.validUntil })),
     { sourceSrid: 4326, onConflict: 'replaceAll' }
   );
 

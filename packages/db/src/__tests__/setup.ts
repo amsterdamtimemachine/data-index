@@ -41,7 +41,8 @@ export async function setupTestDb() {
     CREATE TABLE IF NOT EXISTS place (
       id TEXT PRIMARY KEY, type TEXT NOT NULL,
       preferred_label TEXT, geometry geometry(Geometry, 28992),
-      spatial_frequency INTEGER
+      spatial_frequency INTEGER,
+      valid_since DATE, valid_until DATE
     )
   `);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_geometry ON place USING gist(geometry)`);

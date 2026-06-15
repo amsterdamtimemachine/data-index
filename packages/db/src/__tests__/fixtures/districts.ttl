@@ -7,14 +7,16 @@
 <https://adamlink.nl/geo/district/D1>
     skos:prefLabel "Wijk 1" ;
     geo:hasGeometry _:g1 ;
-    hg:hasEarliestBeginTimeStamp "1600" .
+    hg:hasEarliestBeginTimeStamp "1600" ;
+    hg:hasEarliestEndTimeStamp "1850" .
 _:g1 geo:asWKT "POLYGON((4.90 52.37, 4.91 52.37, 4.91 52.38, 4.90 52.38, 4.90 52.37))" .
 
 # Historical buurt (beginYear 1850) → type 'neighbourhood', MULTIPOLYGON (two disjoint parts).
 <https://adamlink.nl/geo/district/D2>
     skos:prefLabel "Buurt A" ;
     geo:hasGeometry _:g2 ;
-    hg:hasEarliestBeginTimeStamp "1850" .
+    hg:hasEarliestBeginTimeStamp "1850" ;
+    hg:hasEarliestEndTimeStamp "1909" .
 _:g2 geo:asWKT "MULTIPOLYGON(((4.92 52.37, 4.93 52.37, 4.93 52.38, 4.92 52.38, 4.92 52.37)), ((4.94 52.37, 4.95 52.37, 4.95 52.38, 4.94 52.38, 4.94 52.37)))" .
 
 # Present-day CBS wijk (dc:identifier WK…, no begin year) → type 'district'.

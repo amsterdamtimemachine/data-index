@@ -37,7 +37,11 @@ export const place = pgTable('place', {
   type: text('type').notNull(),                   // "address" | "street" | "neighbourhood" (buurt) | "district" (wijk)
   preferredLabel: text('preferred_label'),         // preferred display name (most recent place_name entry)
   geometry: geometry('geometry'),                 // POINT, LINESTRING, or POLYGON
-  spatialFrequency: integer('spatial_frequency')  // number of base cells this place's geometry spans
+  spatialFrequency: integer('spatial_frequency'), // number of base cells this place's geometry spans
+  // Era this geometry was the city's division — set ONLY for neighbourhood/district
+  // (null for address/street, whose name dates live on place_name). valid_until null = open/current.
+  validSince: date('valid_since'),
+  validUntil: date('valid_until')
 }, (table) => [
   index('idx_place_geometry').using('gist', table.geometry)
 ]);
