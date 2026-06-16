@@ -226,27 +226,44 @@ Lower scores mean features more unique to the time and place.
 
 ## Dating
 
-The index carries dates on three different things, for three different purposes. Keeping
-them distinct is what lets a 1950 photo of a 17th-century street show the period name on
-a present-day map.
+### Feature dates
+Feature dates (`features.start_date` / `end_date`) are the source feature's own date range, They drive the histogram and the heatmap, `temporal_frequency` and thus the item's ranking.
 
-| Dates | Column(s) | What they mean | Used for |
-|---|---|---|---|
-| **Feature** | `features.start_date` / `end_date` | the source item's own date range | all temporal display: histogram, timeline, heatmap slices, `temporal_frequency`, ranking |
-| **Name** | `place_name.since` / `until` | when a historical name was in use (addresses, streets) | the `historicalLabel` shown for a feature |
-| **Place era** | `place.valid_since` / `valid_until` | the period a neighbourhood/district geometry *was* the city's division (null for address/street) | routing an area feature to the right-era polygon at ingest |
+### Place dates
+(`place.valid_since` / `valid_until`)  mark the period a neighbourhood or district geometry was the city's division. As these are the only ones whose geometry changed over time is documented in Adamlink. Place dates are used to match a neighbourhood/district feature's date range to a relevant periodical geometry during data ingestion.
+ 
+### Place name dates
+Place name dates (`place_name.since` / `until`) represent a historical name of address or street. They supply `historicalLabel` shown on a feature. Adamlink provides historical names only for streets and addresses.
 
 ### Where the dates come from
-- **Feature dates** — from the source dataset's own fields, at ingest.
-- **Name dates** — from the Adamlink TTLs: `sem:hasEarliestBeginTimeStamp` / `hasLatestEndTimeStamp` on address observations, and the `sem:` fields on a street's `schema:name` variants (see [Place data naming](#place-data-naming)).
-- **Place-era dates** — historical units from `buurten.ttl`'s begin/end years (1600 wijken `[1600,1850)`, 1850 buurten `[1850,1909)`, 1909 buurten `[1909,1921)`); present-day CBS units carry none, so they're assigned an open-ended window back to their predecessor's end (CBS buurten from 1921, CBS wijken from 1850).
+**Feature dates** come from the source dataset's own fields, at ingest. **Name dates**
+come from the Adamlink TTLs — `sem:hasEarliestBeginTimeStamp` / `hasLatestEndTimeStamp` on
+address observations, and the `sem:` fields on a street's `schema:name` variants (see
+[Place data naming](#place-data-naming)). 
+
+**Place dates** come from `buurten.ttl`'s begin/end years for historical units (1600 wijken `[1600,1850)`, 1850 buurten
+`[1850,1909)`, 1909 buurten `[1909,1921)`); **present-day CBS units carry no start - end dates, so they're
+assigned an open-ended window back to their predecessor's end: CBS buurten from 1921, CBS
+wijken from 1850.**
 
 ### How dates resolve
-- **Overlap on the full range is the default.** A feature belongs to every time bin/slice its `[start, end]` range overlaps — `year(start) < to AND year(end) >= from`. This drives the histogram, timeline, heatmap slices, the `getFeatures` time filter, and `temporal_frequency` (the span); the overall time range is `MIN(start)…MAX(end)`.
-- **Two single-value exceptions:**
-  - `historicalLabel` — the name in force at the feature's **end** date (latest `place_name.since <= end_date`).
-  - neighbourhood/district era-routing — the era whose window **overlaps the feature's range the most**, so a boundary-straddler attaches to the era it spent most of its span in.
-- Intervals are **half-open `[since, until)`** at **year** granularity; `valid_until = null` means open/current.
+**Overlap on the full range is the default:** a feature belongs to every time bin or slice
+its `[start, end]` range overlaps (`year(start) < to AND year(end) >= from`), which drives
+the histogram, timeline, heatmap slices, the `getFeatures` time filter, and
+`temporal_frequency`.
+
+The full extent of the Data Index timeline is derived from the earliest date any feature starts to the latest date any feature ends.
+
+
+****WIP*****
+Two cases
+instead resolve to a single value: `historicalLabel` takes the name in force at the
+feature's **end** date (the latest `place_name.since <= end_date`), and a
+neighbourhood/district feature is routed to the place whose validity window **overlaps the
+feature's range the most**, so a boundary-straddler attaches to the one it spent most of
+its span in.
+Intervals are half-open `[since, until)` at year granularity, and `valid_until = null`
+means open/current.
 
 ## Data ingestion
 
