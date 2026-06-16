@@ -247,23 +247,15 @@ assigned an open-ended window back to their predecessor's end: CBS buurten from 
 wijken from 1850.**
 
 ### How dates resolve
-**Overlap on the full range is the default:** a feature belongs to every time bin or slice
-its `[start, end]` range overlaps (`year(start) < to AND year(end) >= from`), which drives
-the histogram, timeline, heatmap slices, the `getFeatures` time filter, and
-`temporal_frequency`.
 
-The full extent of the Data Index timeline is derived from the earliest date any feature starts to the latest date any feature ends.
+The full extent of the Data Index timeline is derived from the earliest date any feature starts to the latest date any feature ends. A feature in the Index belongs to every time bin its `[start, end]` time range overlaps.
 
+Two values are instead resolved to a single answer, and each surfaces at a specific spot in the UI:
 
-****WIP*****
-Two cases
-instead resolve to a single value: `historicalLabel` takes the name in force at the
-feature's **end** date (the latest `place_name.since <= end_date`), and a
-neighbourhood/district feature is routed to the place whose validity window **overlaps the
-feature's range the most**, so a boundary-straddler attaches to the one it spent most of
-its span in.
-Intervals are half-open `[since, until)` at year granularity, and `valid_until = null`
-means open/current.
+- **The place name shown on a result is the historical one.** A feature is labelled with the name its location had at the feature's own date, not today's — so a 1700 record of a street reads **Heiligeweg (nu Kalverstraat)**: the period name, with the current name in brackets when the two differ. *(Under the hood: the latest `place_name` whose `since` is ≤ the feature's `end_date`, falling back to the current `preferred_label` for places with no dated names.)*
+- **An area result lands on the boundary of its own time.** A neighbourhood/district feature is attached to the version of that area that existed at its date, so its heatmap footprint — and the division it's grouped under when opened — follow that era's shape rather than today's. A record straddling a boundary year attaches to the era it overlapped most. *(Under the hood: the `place` row whose `[valid_since, valid_until)` window overlaps the feature's range the most.)*
+
+Both name- and era-windows are half-open `[since, until)` at year granularity, where `valid_until = null` means "still current".
 
 ## Data ingestion
 
@@ -381,12 +373,12 @@ bun run db:studio    # http://local.drizzle.studio
 
 ### Testing
 
-Tests run against an isolated Postgres+PostGIS container (port `5434`, tmpfs volume, data wiped on restart). Integration tests exercise the full pipeline end-to-end: LPS + adressen + beeldbank + Joods Monument ingestion on real-data fixtures under `packages/db/src/__tests__/fixtures/`, then the query layer (features, heatmap, timeline, histogram) and `rebuild-index`.
+`bun run test` runs both suites via `turbo run test`: the **db** tests against an isolated Postgres+PostGIS container (port `5434`, ephemeral — wiped on `test:db:down`), and the **app** unit tests (pure heatmap/cell maths, no DB). The db integration tests exercise the pipeline end-to-end — LPS + adressen + streets + beeldbank + Joods Monument ingestion on real-data fixtures under `packages/db/src/__tests__/fixtures/`, then the query layer (features, heatmap, timeline, histogram) and `rebuild-index` — alongside pure-function unit tests for the query helpers.
 
 ```bash
-bun run test:db:up     # start the isolated test DB
-bun run test           # full suite (64 tests: 24 unit + 40 integration)
-bun run test:unit      # unit tests only (no DB needed)
+bun run test:db:up     # start the isolated test DB (required for the db suite)
+bun run test           # both suites via turbo (db + app)
+bun run test:unit      # db pure-function tests only (no DB needed)
 bun run test:db:down   # stop and wipe the test DB
 ```
 

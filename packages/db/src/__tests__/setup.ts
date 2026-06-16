@@ -17,7 +17,35 @@ export const FIXTURES = {
   jm: resolve(__dirname, 'fixtures/jm.csv'),
 };
 
+/**
+ * Safety guard for the destructive helpers below (they DROP/TRUNCATE every table).
+ * Refuses to run unless the *live connection* is the throwaway test database,
+ * checked by the name the server itself reports (`current_database()`) — not env or
+ * config. So a misconfigured DATABASE_URL, a bare `bun test` that fell back to the
+ * dev DB, or a stray Postgres can't trigger a wipe. The test DB is named
+ * distinctively (`dataindex_test`, not a generic `test`) so nothing else matches.
+ */
+const TEST_DB_NAME = 'dataindex_test';
+async function assertTestDb() {
+  const { rows } = await db.execute<{ db: string }>(sql`SELECT current_database() AS db`);
+  if (rows[0]?.db !== TEST_DB_NAME) {
+    throw new Error(
+      `Refusing to run a destructive test operation against database "${rows[0]?.db}" — expected "${TEST_DB_NAME}". ` +
+      `Point DATABASE_URL at the test DB: postgresql://test:test@localhost:5434/${TEST_DB_NAME}`
+    );
+  }
+}
+
 export async function setupTestDb() {
+  await assertTestDb();
+
+  // The postgis Docker image auto-installs postgis_tiger_geocoder, whose `tiger`
+  // schema sits on the search_path and ships a `tiger.place` table. On a fresh DB
+  // (before our public.place exists) an unqualified `DROP TABLE ... place` resolves
+  // to tiger.place and fails ("extension requires it"). We don't use TIGER, so drop
+  // it up front; IF EXISTS makes this a no-op on subsequent runs.
+  await db.execute(sql`DROP EXTENSION IF EXISTS postgis_tiger_geocoder CASCADE`);
+
   await db.execute(sql`CREATE EXTENSION IF NOT EXISTS postgis`);
 
   // The test DB persists between runs, and CREATE TABLE IF NOT EXISTS won't apply
@@ -104,6 +132,7 @@ export async function setupTestDb() {
 }
 
 export async function cleanTestDb() {
+  await assertTestDb();
   await db.execute(sql`TRUNCATE grid_config, place_cells, feature_tags, feature_to_place, features, place_name, place, relation, tags, datasets, organisations CASCADE`);
 }
 
