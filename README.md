@@ -10,7 +10,7 @@ Rather than curating or contextualising the data, the index presents sources as 
 
 ## Table of contents
 
-- [Architecture](#architecture)
+- [Stack](#stack)
   - [Data model](#data-model)
 - [Indexing](#indexing)
   - [Spatial indexing](#spatial-indexing)
@@ -23,8 +23,11 @@ Rather than curating or contextualising the data, the index presents sources as 
   - [Temporal indexing](#temporal-indexing)
   - [Unique features rank higher](#unique-features-rank-higher)
 - [Dating](#dating)
-  - [Where the dates come from](#where-the-dates-come-from)
-  - [How dates resolve](#how-dates-resolve)
+  - [Feature dates](#feature-dates)
+  - [Place dates](#place-dates)
+  - [Place name dates](#place-name-dates)
+  - [Dates sources](#dates-sources)
+  - [Dates resolution](#dates-resolution)
 - [Data ingestion](#data-ingestion)
   - [Place data ingestion](#place-data-ingestion)
     - [Place datasets](#place-datasets)
@@ -45,7 +48,7 @@ Rather than curating or contextualising the data, the index presents sources as 
   - [Deploying a new image](#deploying-a-new-image)
   - [Environment variables](#environment-variables)
 
-## Architecture
+## Stack
 
 ```
 packages/
@@ -230,12 +233,12 @@ Lower scores mean features more unique to the time and place.
 Feature dates (`features.start_date` / `end_date`) are the source feature's own date range, They drive the histogram and the heatmap, `temporal_frequency` and thus the item's ranking.
 
 ### Place dates
-(`place.valid_since` / `valid_until`)  mark the period a neighbourhood or district geometry was the city's division. As these are the only ones whose geometry changed over time is documented in Adamlink. Place dates are used to match a neighbourhood/district feature's date range to a relevant periodical geometry during data ingestion.
+(`place.valid_since` / `valid_until`) mark the period a neighbourhood or district geometry was the city's division. As these are the only ones whose geometry changed over time is documented in Adamlink. Place dates are used to match a neighbourhood/district feature's date range to a relevant periodical geometry during data ingestion.
  
 ### Place name dates
 Place name dates (`place_name.since` / `until`) represent a historical name of address or street. They supply `historicalLabel` shown on a feature. Adamlink provides historical names only for streets and addresses.
 
-### Where the dates come from
+### Dates sources
 **Feature dates** come from the source dataset's own fields, at ingest. **Name dates**
 come from the Adamlink TTLs — `sem:hasEarliestBeginTimeStamp` / `hasLatestEndTimeStamp` on
 address observations, and the `sem:` fields on a street's `schema:name` variants (see
@@ -246,16 +249,15 @@ address observations, and the `sem:` fields on a street's `schema:name` variants
 assigned an open-ended window back to their predecessor's end: CBS buurten from 1921, CBS
 wijken from 1850.**
 
-### How dates resolve
+### Dates resolution
 
-The full extent of the Data Index timeline is derived from the earliest date any feature starts to the latest date any feature ends. A feature in the Index belongs to every time bin its `[start, end]` time range overlaps.
+The full extent of the Data Index timeline is derived from the earliest date any feature starts to the latest date any feature ends. A feature in the Index belongs to every time bin its `[start, end]` time range overlaps. That overlap rule spreads one feature across many bins.
 
-Two values are instead resolved to a single answer, and each surfaces at a specific spot in the UI:
+A street or address feature shows its historical name (from `place_name`) with today's name (from `preferred_label`) in brackets when the two differ — a 1700 record of a street reads **Heiligeweg (nu Kalverstraat)**. A place with no dated name just shows its current `preferred_label`. The historical name is resolved at query time as the **most recent** `place_name` whose `since` is ≤ the feature's `end_date` — the name in force when the feature ends. 
 
-- **The place name shown on a result is the historical one.** A feature is labelled with the name its location had at the feature's own date, not today's — so a 1700 record of a street reads **Heiligeweg (nu Kalverstraat)**: the period name, with the current name in brackets when the two differ. *(Under the hood: the latest `place_name` whose `since` is ≤ the feature's `end_date`, falling back to the current `preferred_label` for places with no dated names.)*
-- **An area result lands on the boundary of its own time.** A neighbourhood/district feature is attached to the version of that area that existed at its date, so its heatmap footprint — and the division it's grouped under when opened — follow that era's shape rather than today's. A record straddling a boundary year attaches to the era it overlapped most. *(Under the hood: the `place` row whose `[valid_since, valid_until)` window overlaps the feature's range the most.)*
+Neighbourhood and district geometry, unlike a street's or address's, changes across history: each era's division is its own `place` row with its own polygon and `[valid_since, valid_until)` window. Which era a feature attaches to is decided **at ingest, not query time** — it's linked to the `place` whose window overlaps the feature's `[start, end]` the most. At query time the heatmap then counts that feature against its historical geometry's footprint, **even though the basemap shows the modern city**.
 
-Both name- and era-windows are half-open `[since, until)` at year granularity, where `valid_until = null` means "still current".
+Both name- and era-windows run from `since` up to but not including `until` (at year granularity), so a boundary year falls in exactly one window; `valid_until = null` means "still current".
 
 ## Data ingestion
 
