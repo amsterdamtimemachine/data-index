@@ -182,8 +182,10 @@
 	function generateHeatmapCells(
 		dims: HeatmapDimensions
 	): FeatureCollection<Polygon, CellProperties> {
-		// Generate geometries on-the-fly using client-side calculation
-		const cellGeometries = generateCellGeometries(dims);
+		// Generate geometries on-the-fly using client-side calculation.
+		// PUBLIC_EXACT_CELLS=true reprojects cells to their true RD footprint (proj4),
+		// removing the ~0.4° rotation skew; default draws axis-aligned lon/lat rects.
+		const cellGeometries = generateCellGeometries(dims, env.PUBLIC_EXACT_CELLS === 'true');
 
 		const features = cellGeometries.map(
 			(cell): Feature<Polygon, CellProperties> => ({

@@ -5,16 +5,40 @@
  *
  * Keeping the SQL out of the test file means the test bodies read like
  * behaviour assertions instead of like database queries.
+ *
+ * These are also the single SOURCE OF TRUTH for expected counts: integration tests
+ * cross-check the query layer (getFeatures / getHistogram / getMetadata) against
+ * these independent direct queries instead of hardcoding magic numbers, so when the
+ * fixtures change (e.g. more beeldbank rows) the expectations follow automatically.
  */
 import { sql } from 'drizzle-orm';
 import type { Entity } from '@atm/shared';
 import { db } from './setup';
+import type { CountRow } from '../row-types';
 
 // ─── place ──────────────────────────────────────────────────────────────────
 
 export async function placeCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(
+  const r = await db.execute<CountRow>(
     sql`SELECT COUNT(*) as count FROM place`
+  );
+  return parseInt(r.rows[0].count);
+}
+
+/** Distinct features resolved onto a street place — beeldbank's street-fallback / line path. */
+export async function streetLinkedFeatureCount(): Promise<number> {
+  const r = await db.execute<CountRow>(sql`
+    SELECT COUNT(DISTINCT fp.feature_id) as count
+    FROM feature_to_place fp JOIN place p ON fp.place_id = p.id
+    WHERE p.type = 'street'
+  `);
+  return parseInt(r.rows[0].count);
+}
+
+/** Max spatial_frequency among street places (a multi-cell LINESTRING spans >1 cell). */
+export async function maxStreetSpatialFrequency(): Promise<number> {
+  const r = await db.execute<CountRow>(
+    sql`SELECT COALESCE(MAX(spatial_frequency), 0) as count FROM place WHERE type = 'street'`
   );
   return parseInt(r.rows[0].count);
 }
@@ -27,66 +51,66 @@ export async function firstPlaceId(): Promise<string> {
 }
 
 export async function placesWithGeometryCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(
+  const r = await db.execute<CountRow>(
     sql`SELECT COUNT(*) as count FROM place WHERE geometry IS NOT NULL`
   );
   return parseInt(r.rows[0].count);
 }
 
-// ─── address ────────────────────────────────────────────────────────────────
+// ─── place_name ─────────────────────────────────────────────────────────────
 
-export async function addressesWithDanglingPlaceIdCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(sql`
-    SELECT COUNT(*) as count FROM address a
-    WHERE NOT EXISTS (SELECT 1 FROM place p WHERE p.id = a.place_id)
+export async function placeNamesWithDanglingPlaceIdCount(): Promise<number> {
+  const r = await db.execute<CountRow>(sql`
+    SELECT COUNT(*) as count FROM place_name pn
+    WHERE NOT EXISTS (SELECT 1 FROM place p WHERE p.id = pn.place_id)
   `);
   return parseInt(r.rows[0].count);
 }
 
-export async function distinctAddressSources(): Promise<string[]> {
+export async function distinctPlaceNameSources(): Promise<string[]> {
   const r = await db.execute<{ source: string }>(
-    sql`SELECT DISTINCT source FROM address WHERE source IS NOT NULL`
+    sql`SELECT DISTINCT source FROM place_name WHERE source IS NOT NULL`
   );
   return r.rows.map(row => row.source);
 }
 
-export async function addressesWithNameCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(
-    sql`SELECT COUNT(*) as count FROM address WHERE name IS NOT NULL`
+export async function placeNamesWithNameCount(): Promise<number> {
+  const r = await db.execute<CountRow>(
+    sql`SELECT COUNT(*) as count FROM place_name WHERE name IS NOT NULL`
   );
   return parseInt(r.rows[0].count);
 }
 
-export async function addressesWithDateCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(
-    sql`SELECT COUNT(*) as count FROM address WHERE date IS NOT NULL`
+export async function placeNamesWithDateCount(): Promise<number> {
+  const r = await db.execute<CountRow>(
+    sql`SELECT COUNT(*) as count FROM place_name WHERE since IS NOT NULL`
   );
   return parseInt(r.rows[0].count);
 }
 
-// ─── place ↔ address consistency ────────────────────────────────────────────
+// ─── place ↔ place_name consistency ─────────────────────────────────────────
 
-export interface PlaceCurrentVsMostRecent {
+export interface PlacePreferredVsMostRecent {
   placeId: string;
-  currentAddress: string;
+  preferredLabel: string;
   mostRecent: string;
 }
 
-export async function placesWithCurrentAddressAndMostRecent(
+export async function placesWithPreferredLabelAndMostRecent(
   limit: number = 5
-): Promise<PlaceCurrentVsMostRecent[]> {
-  const r = await db.execute<{ place_id: string; current_address: string; most_recent: string }>(sql`
-    SELECT p.id as place_id, p.current_address,
-      (SELECT a.name FROM address a
-       WHERE a.place_id = p.id AND a.name IS NOT NULL
-       ORDER BY a.date DESC LIMIT 1) as most_recent
+): Promise<PlacePreferredVsMostRecent[]> {
+  const r = await db.execute<{ place_id: string; preferred_label: string; most_recent: string }>(sql`
+    SELECT p.id as place_id, p.preferred_label,
+      (SELECT pn.name FROM place_name pn
+       WHERE pn.place_id = p.id AND pn.name IS NOT NULL
+       ORDER BY pn.since DESC LIMIT 1) as most_recent
     FROM place p
-    WHERE p.current_address IS NOT NULL
+    WHERE p.preferred_label IS NOT NULL
     LIMIT ${limit}
   `);
   return r.rows.map(row => ({
     placeId: row.place_id,
-    currentAddress: row.current_address,
+    preferredLabel: row.preferred_label,
     mostRecent: row.most_recent,
   }));
 }
@@ -94,7 +118,7 @@ export async function placesWithCurrentAddressAndMostRecent(
 // ─── features ───────────────────────────────────────────────────────────────
 
 export async function featureCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(
+  const r = await db.execute<CountRow>(
     sql`SELECT COUNT(*) as count FROM features`
   );
   return parseInt(r.rows[0].count);
@@ -104,10 +128,26 @@ export async function featureCountByDatasetAndType(
   datasetId: string,
   recordType: string
 ): Promise<number> {
-  const r = await db.execute<{ count: string }>(sql`
+  const r = await db.execute<CountRow>(sql`
     SELECT COUNT(*) as count FROM features
     WHERE dataset_id = ${datasetId} AND record_type = ${recordType}
   `);
+  return parseInt(r.rows[0].count);
+}
+
+/** Total features of a record type — ground truth for the getFeatures/heatmap recordType filter. */
+export async function featureCountByRecordType(recordType: string): Promise<number> {
+  const r = await db.execute<CountRow>(
+    sql`SELECT COUNT(*) as count FROM features WHERE record_type = ${recordType}`
+  );
+  return parseInt(r.rows[0].count);
+}
+
+/** Total features in a dataset — ground truth for the datasetIds filter. */
+export async function featureCountByDataset(datasetId: string): Promise<number> {
+  const r = await db.execute<CountRow>(
+    sql`SELECT COUNT(*) as count FROM features WHERE dataset_id = ${datasetId}`
+  );
   return parseInt(r.rows[0].count);
 }
 
@@ -129,30 +169,69 @@ export async function firstFeatureEntity(datasetId: string): Promise<Entity> {
 }
 
 export async function orphanedFeatureCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(sql`
+  const r = await db.execute<CountRow>(sql`
     SELECT COUNT(*) as count FROM features f
     WHERE NOT EXISTS (SELECT 1 FROM feature_to_place fp WHERE fp.feature_id = f.id)
   `);
   return parseInt(r.rows[0].count);
 }
 
+// ─── datasets / record types (ground truth for metadata + label assertions) ───
+
+export async function recordTypeList(): Promise<string[]> {
+  const r = await db.execute<{ record_type: string }>(
+    sql`SELECT DISTINCT record_type FROM features WHERE record_type IS NOT NULL ORDER BY record_type`
+  );
+  return r.rows.map(x => x.record_type);
+}
+
+export async function datasetIdList(): Promise<string[]> {
+  const r = await db.execute<{ id: string }>(sql`SELECT id FROM datasets ORDER BY id`);
+  return r.rows.map(x => x.id);
+}
+
+export async function datasetLabel(datasetId: string): Promise<string> {
+  const r = await db.execute<{ label: string }>(
+    sql`SELECT label FROM datasets WHERE id = ${datasetId}`
+  );
+  return r.rows[0].label;
+}
+
+export async function organisationLabelForDataset(datasetId: string): Promise<string> {
+  const r = await db.execute<{ label: string }>(sql`
+    SELECT o.label FROM datasets d JOIN organisations o ON d.organisation_id = o.id
+    WHERE d.id = ${datasetId}
+  `);
+  return r.rows[0].label;
+}
+
 // ─── rebuild-index outputs ──────────────────────────────────────────────────
 
-export async function featuresMissingSpatialFrequencyCount(): Promise<number> {
-  const r = await db.execute<{ count: string }>(
-    sql`SELECT COUNT(*) as count FROM features WHERE spatial_frequency IS NULL`
-  );
+export async function featuredPlacesMissingSpatialFrequencyCount(): Promise<number> {
+  const r = await db.execute<CountRow>(sql`
+    SELECT COUNT(*) as count FROM place p
+    WHERE p.spatial_frequency IS NULL
+      AND EXISTS (SELECT 1 FROM feature_to_place fp WHERE fp.place_id = p.id)
+  `);
   return parseInt(r.rows[0].count);
 }
 
-export async function featuresWithMatchingSpatialFrequencyCount(): Promise<number> {
+export async function placesWithMatchingSpatialFrequencyCount(): Promise<number> {
   const r = await db.execute<{ matches: string }>(sql`
-    SELECT COUNT(*) as matches FROM features f
-    WHERE f.spatial_frequency = (
-      SELECT COUNT(*) FROM feature_cells fc WHERE fc.feature_id = f.id
+    SELECT COUNT(*) as matches FROM place p
+    WHERE p.spatial_frequency = (
+      SELECT COUNT(*) FROM place_cells pc WHERE pc.place_id = p.id
     )
+    AND EXISTS (SELECT 1 FROM feature_to_place fp WHERE fp.place_id = p.id)
   `);
   return parseInt(r.rows[0].matches);
+}
+
+export async function featuredPlaceCount(): Promise<number> {
+  const r = await db.execute<CountRow>(sql`
+    SELECT COUNT(DISTINCT fp.place_id) as count FROM feature_to_place fp
+  `);
+  return parseInt(r.rows[0].count);
 }
 
 export async function firstFeatureTemporalFrequency(datasetId: string): Promise<number> {

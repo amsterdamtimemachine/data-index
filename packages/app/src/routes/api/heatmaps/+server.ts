@@ -1,9 +1,10 @@
 // src/routes/api/heatmaps/+server.ts
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RecordType, HeatmapResolutionConfig } from '@atm/shared/types';
+import type { HeatmapResolutionConfig } from '@atm/shared/types';
 import { GRID_DEFAULT, GRID_MIN, GRID_MAX, DEFAULT_BIN_SIZE, BIN_SIZE_MIN, BIN_SIZE_MAX } from '@atm/shared';
 import { getHeatmap, getHeatmapTimeline } from '@atm/db/queries';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes } from '$lib/server/query-params';
 
 function parseGridParam(value: string | null, defaultVal: number): number {
 	if (value === null) return defaultVal;
@@ -14,24 +15,15 @@ function parseGridParam(value: string | null, defaultVal: number): number {
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
-		const recordTypesParam = url.searchParams.get('recordTypes');
 		const timeSliceParam = url.searchParams.get('timeSlice');
+		const recordTypes = parseRecordTypes(url);
+		const datasetIds = parseDatasets(url);
+		const placeTypes = parsePlaceTypes(url);
 
-		// Parse recordTypes
-		const recordTypes: RecordType[] | undefined = recordTypesParam
-			? (recordTypesParam.split(',').map((t) => t.trim()) as RecordType[])
-			: undefined;
-
-		// Parse datasets
-		const datasetsParam = url.searchParams.get('datasets');
-		const datasetIds = datasetsParam
-			? datasetsParam.split(',').map((t) => t.trim())
-			: undefined;
-
-		// Parse grid resolution
-		const rows = parseGridParam(url.searchParams.get('rows'), GRID_DEFAULT);
+		// Parse grid resolution — only width (cols); rows are derived from the data's
+		// aspect ratio server-side so display cells are square.
 		const cols = parseGridParam(url.searchParams.get('cols'), GRID_DEFAULT);
-		const resolution: HeatmapResolutionConfig = { rows, cols };
+		const resolution: HeatmapResolutionConfig = { cols };
 
 		// Parse bin size
 		const binSizeParam = url.searchParams.get('binSize');
@@ -40,22 +32,22 @@ export const GET: RequestHandler = async ({ url }) => {
 			: DEFAULT_BIN_SIZE;
 
 		console.log(
-			`🔥 Heatmaps API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, timeSlice: ${timeSliceParam || 'all'}, grid: ${cols}x${rows}, binSize: ${binSize}`
+			`🔥 Heatmaps API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, timeSlice: ${timeSliceParam || 'all'}, grid width: ${cols} cols, binSize: ${binSize}`
 		);
 
 		if (timeSliceParam) {
-			const heatmapResponse = await getHeatmap(timeSliceParam, resolution, recordTypes, datasetIds, binSize);
+			const heatmapResponse = await getHeatmap(timeSliceParam, resolution, recordTypes, datasetIds, placeTypes, binSize);
 			const cellCount = Object.values(heatmapResponse.timeline)[0]?.indices.length ?? 0;
 			console.log(`✅ Heatmap for ${timeSliceParam}: ${cellCount} cells`);
 
 			return json(heatmapResponse, {
 				headers: {
-					'Cache-Control': 'public, max-age=86400',
+					'Cache-Control': 'no-cache',
 					'Access-Control-Allow-Origin': '*'
 				}
 			});
 		} else {
-			const heatmapResponse = await getHeatmapTimeline(resolution, recordTypes, datasetIds, binSize);
+			const heatmapResponse = await getHeatmapTimeline(resolution, recordTypes, datasetIds, placeTypes, binSize);
 			const timeSliceCount = Object.keys(heatmapResponse.timeline).length;
 			const totalCells = Object.values(heatmapResponse.timeline).reduce(
 				(sum, h) => sum + h.indices.length,
@@ -66,7 +58,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 			return json(heatmapResponse, {
 				headers: {
-					'Cache-Control': 'public, max-age=86400',
+					'Cache-Control': 'no-cache',
 					'Access-Control-Allow-Origin': '*'
 				}
 			});

@@ -1,4 +1,4 @@
-import { pgTable, text, date, smallint, integer, uuid, jsonb, customType, primaryKey, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, date, smallint, integer, uuid, jsonb, real, doublePrecision, customType, primaryKey, index } from 'drizzle-orm/pg-core';
 
 // Custom PostGIS geometry type - stored in RD (Dutch) coordinates
 // Transform to WGS84 (4326) for frontend display
@@ -34,25 +34,31 @@ export const datasets = pgTable('datasets', {
 // ============================================================================
 export const place = pgTable('place', {
   id: text('id').primaryKey(),                    // "lp-1000001"
-  type: text('type').notNull(),                   // "address" | "building" | "street" | "neighbourhood"
-  currentAddress: text('current_address'),        // most recent address name
-  geometry: geometry('geometry')                  // POINT, LINESTRING, or POLYGON
+  type: text('type').notNull(),                   // "address" | "street" | "neighbourhood" (buurt) | "district" (wijk)
+  preferredLabel: text('preferred_label'),         // preferred display name (most recent place_name entry)
+  geometry: geometry('geometry'),                 // POINT, LINESTRING, or POLYGON
+  spatialFrequency: integer('spatial_frequency'), // number of base cells this place's geometry spans
+  // Era this geometry was the city's division — set ONLY for neighbourhood/district
+  // (null for address/street, whose name dates live on place_name). valid_until null = open/current.
+  validSince: date('valid_since'),
+  validUntil: date('valid_until')
 }, (table) => [
   index('idx_place_geometry').using('gist', table.geometry)
 ]);
 
 // ============================================================================
-// ADDRESS - Historical address names linked to places
+// PLACE_NAME - Historical names for places (addresses, streets, buildings)
 // ============================================================================
-export const address = pgTable('address', {
+export const placeName = pgTable('place_name', {
   id: text('id').primaryKey(),                    // adamlink URI "https://adamlink.nl/geo/address/A1"
   placeId: text('place_id').notNull().references(() => place.id),
   name: text('name'),                             // "Prins Hendrikkade 93"
-  date: date('date'),                             // 1943-01-01
+  since: date('since'),                           // name valid from this date
+  until: date('until'),                           // name valid until this date
   source: text('source')                          // "pw-1943"
 }, (table) => [
-  index('idx_address_place').on(table.placeId),
-  index('idx_address_place_date').on(table.placeId, table.date)
+  index('idx_place_name_place').on(table.placeId),
+  index('idx_place_name_place_since').on(table.placeId, table.since)
 ]);
 
 // ============================================================================
@@ -84,7 +90,6 @@ export const features = pgTable('features', {
   startDate: date('start_date'),
   endDate: date('end_date'),
   datasetId: text('dataset_id').references(() => datasets.id),
-  spatialFrequency: integer('spatial_frequency'),
   temporalFrequency: integer('temporal_frequency'),
   entity: jsonb('entity'),
 }, (table) => [
@@ -116,18 +121,44 @@ export const featureTags = pgTable('feature_tags', {
 ]);
 
 // ============================================================================
-// JUNCTION: feature_cells - Grid cells each feature spans (for heatmap)
+// JUNCTION: place_cells - Grid cells each place spans (for heatmap)
 // Pre-computed at 100m resolution for fast aggregation
 // ============================================================================
-export const featureCells = pgTable('feature_cells', {
-  featureId: uuid('feature_id').notNull().references(() => features.id),
+export const placeCells = pgTable('place_cells', {
+  placeId: text('place_id').notNull().references(() => place.id),
   cellX: smallint('cell_x').notNull(),
   cellY: smallint('cell_y').notNull()
 }, (table) => [
-  primaryKey({ columns: [table.featureId, table.cellX, table.cellY] }),
-  index('idx_feature_cells_cell').on(table.cellX, table.cellY),
-  index('idx_feature_cells_feature').on(table.featureId)
+  primaryKey({ columns: [table.placeId, table.cellX, table.cellY] }),
+  index('idx_place_cells_cell').on(table.cellX, table.cellY),
+  index('idx_place_cells_place').on(table.placeId)
 ]);
+
+// ============================================================================
+// GRID_CONFIG - Pre-computed grid metadata from rebuild-index
+// Single row (id = 'current'), upserted each time rebuild-index runs
+// ============================================================================
+export const gridConfig = pgTable('grid_config', {
+  id: text('id').primaryKey(),                    // always 'current'
+  // Base-cell index extent (place_cells are 0-indexed from the RD origin).
+  minCellX: smallint('min_cell_x').notNull(),
+  maxCellX: smallint('max_cell_x').notNull(),
+  minCellY: smallint('min_cell_y').notNull(),
+  maxCellY: smallint('max_cell_y').notNull(),
+  // RD/28992 grid origin in metres — the (min_x, min_y) the cell math floors
+  // against: cell_x = floor((X - min_x) / cellSize).
+  minX: doublePrecision('min_x').notNull(),
+  minY: doublePrecision('min_y').notNull(),
+  // WGS84 bounds of the *cell-grid rectangle* (origin + (maxCell+1) cells), NOT
+  // the data envelope — so the frontend's linear cell interpolation tiles the
+  // exact grid the heatmap counts against.
+  minLon: real('min_lon').notNull(),
+  maxLon: real('max_lon').notNull(),
+  minLat: real('min_lat').notNull(),
+  maxLat: real('max_lat').notNull(),
+  maxSpatialFrequency: integer('max_spatial_frequency').notNull(),
+  maxTemporalFrequency: integer('max_temporal_frequency').notNull(),
+});
 
 // ============================================================================
 // TYPE EXPORTS (Drizzle-inferred types for internal use)
@@ -141,8 +172,8 @@ export type NewDataset = typeof datasets.$inferInsert;
 export type Place = typeof place.$inferSelect;
 export type NewPlace = typeof place.$inferInsert;
 
-export type Address = typeof address.$inferSelect;
-export type NewAddress = typeof address.$inferInsert;
+export type PlaceName = typeof placeName.$inferSelect;
+export type NewPlaceName = typeof placeName.$inferInsert;
 
 export type Relation = typeof relation.$inferSelect;
 export type NewRelation = typeof relation.$inferInsert;
@@ -155,4 +186,4 @@ export type NewFeature = typeof features.$inferInsert;
 
 export type FeatureToPlace = typeof featureToPlace.$inferSelect;
 export type FeatureTag = typeof featureTags.$inferSelect;
-export type FeatureCell = typeof featureCells.$inferSelect;
+export type PlaceCell = typeof placeCells.$inferSelect;

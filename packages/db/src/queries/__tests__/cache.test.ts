@@ -43,9 +43,11 @@ describe('createTTLCache', () => {
     expect(cache.get()).toBe(2);
   });
 
-  test('uses default TTL from env when no arg provided', () => {
+  test('default TTL from env is honoured — CACHE_TTL_MINUTES=0 disables caching', () => {
+    // The test env sets CACHE_TTL_MINUTES=0, so the env-default cache is off:
+    // set() is a no-op and get() always returns null (no cross-test/file pollution).
     const cache = createTTLCache<string>();
     cache.set('test');
-    expect(cache.get()).toBe('test');
+    expect(cache.get()).toBeNull();
   });
 });

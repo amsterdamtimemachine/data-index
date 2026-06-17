@@ -1,24 +1,15 @@
 // src/routes/api/histogram/+server.ts
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RecordType, Histogram } from '@atm/shared/types';
 import { DEFAULT_BIN_SIZE, BIN_SIZE_MIN, BIN_SIZE_MAX } from '@atm/shared';
 import { getHistogram } from '@atm/db/queries';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
-		const recordTypesParam = url.searchParams.get('recordTypes');
-
-		// Parse recordTypes
-		const recordTypes: RecordType[] | undefined = recordTypesParam
-			? (recordTypesParam.split(',').map((t) => t.trim()) as RecordType[])
-			: undefined;
-
-		// Parse datasets
-		const datasetsParam = url.searchParams.get('datasets');
-		const datasetIds = datasetsParam
-			? datasetsParam.split(',').map((t) => t.trim())
-			: undefined;
+		const recordTypes = parseRecordTypes(url);
+		const datasetIds = parseDatasets(url);
+		const placeTypes = parsePlaceTypes(url);
 
 		// Parse bin size
 		const binSizeParam = url.searchParams.get('binSize');
@@ -26,9 +17,9 @@ export const GET: RequestHandler = async ({ url }) => {
 			? Math.min(Math.max(parseInt(binSizeParam, 10) || DEFAULT_BIN_SIZE, BIN_SIZE_MIN), BIN_SIZE_MAX)
 			: DEFAULT_BIN_SIZE;
 
-		console.log(`📊 Histogram API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, binSize: ${binSize}`);
+		console.log(`📊 Histogram API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, binSize: ${binSize}`);
 
-		const histogram = await getHistogram(recordTypes, datasetIds, binSize);
+		const histogram = await getHistogram(recordTypes, datasetIds, placeTypes, binSize);
 
 		console.log(
 			`✅ Histogram: ${histogram.bins.length} bins, ${histogram.totalFeatures} total features`
@@ -36,7 +27,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		return json(histogram, {
 			headers: {
-				'Cache-Control': 'public, max-age=86400',
+				'Cache-Control': 'no-cache',
 				'Access-Control-Allow-Origin': '*'
 			}
 		});

@@ -6,7 +6,8 @@ import type {
 	HeatmapTimeline,
 	HeatmapDimensions,
 	HeatmapResponse,
-	RecordType
+	RecordType,
+	PlaceType
 } from '@atm/shared/types';
 import type { AppError } from '$types/error';
 import { createPageErrorData, createError, createValidationError, createPeriodNotFoundError } from '$utils/error';
@@ -49,6 +50,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	// Parse URL parameters
 	const recordTypesParam = url.searchParams.get('recordTypes');
 	const datasetsParam = url.searchParams.get('datasets');
+	const placeTypesParam = url.searchParams.get('placeTypes');
 	const tagsParam = url.searchParams.get('tags');
 	const tagOperatorParam = url.searchParams.get('tagOperator');
 	const cellParam = url.searchParams.get('cell');
@@ -141,6 +143,20 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		}
 	}
 
+	// Determine place types to use
+	let currentPlaceTypes: PlaceType[] = [];
+	if (metadata?.placeTypes) {
+		if (placeTypesParam) {
+			const requestedPlaceTypes = placeTypesParam.split(',').map(t => t.trim()) as PlaceType[];
+			currentPlaceTypes = requestedPlaceTypes.filter(t => metadata.placeTypes.includes(t));
+			if (currentPlaceTypes.length === 0) {
+				currentPlaceTypes = metadata.placeTypes;
+			}
+		} else {
+			currentPlaceTypes = metadata.placeTypes;
+		}
+	}
+
 	// Parse tags if provided - need to validate combinations, not just existence
 	let currentTags: string[] | undefined;
 
@@ -181,6 +197,9 @@ export const load: PageLoad = async ({ fetch, url }) => {
 			}
 			if (currentDatasets.length > 0) {
 				histogramParams.set('datasets', currentDatasets.join(','));
+			}
+			if (currentPlaceTypes.length > 0) {
+				histogramParams.set('placeTypes', currentPlaceTypes.join(','));
 			}
 			if (histogramParams.toString()) {
 				histogramUrl += '?' + histogramParams.toString();
@@ -239,6 +258,9 @@ export const load: PageLoad = async ({ fetch, url }) => {
 			if (currentDatasets.length > 0) {
 				heatmapParams.set('datasets', currentDatasets.join(','));
 			}
+			if (currentPlaceTypes.length > 0) {
+				heatmapParams.set('placeTypes', currentPlaceTypes.join(','));
+			}
 			if (heatmapParams.toString()) {
 				heatmapUrl += '?' + heatmapParams.toString();
 			}
@@ -290,7 +312,17 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	// Available tags promise
 	const availableTagsPromise = (async () => {
 		try {
-			const tagsUrl = `/api/available-tags${currentRecordTypes.length > 0 ? `?recordTypes=${currentRecordTypes.join(',')}` : ''}`;
+			const tagsParams = new URLSearchParams();
+			if (currentRecordTypes.length > 0) {
+				tagsParams.set('recordTypes', currentRecordTypes.join(','));
+			}
+			if (currentDatasets.length > 0) {
+				tagsParams.set('datasets', currentDatasets.join(','));
+			}
+			if (currentPlaceTypes.length > 0) {
+				tagsParams.set('placeTypes', currentPlaceTypes.join(','));
+			}
+			const tagsUrl = `/api/available-tags${tagsParams.toString() ? '?' + tagsParams.toString() : ''}`;
 			const tagsResponse = await fetch(tagsUrl);
 
 			if (!tagsResponse.ok) {
@@ -431,8 +463,9 @@ export const load: PageLoad = async ({ fetch, url }) => {
 				currentRecordTypes.length > 0 ? currentRecordTypes : metadata.recordTypes;
 
 			// Send all tags to validate in a single API call
+			const placeTypesQuery = currentPlaceTypes.length > 0 ? `&placeTypes=${currentPlaceTypes.join(',')}` : '';
 			const response = await fetch(
-				`/api/tag-combinations?recordTypes=${effectiveRecordTypes.join(',')}&selected=${currentTags.join(',')}&validateAll=true`
+				`/api/tag-combinations?recordTypes=${effectiveRecordTypes.join(',')}&selected=${currentTags.join(',')}${placeTypesQuery}&validateAll=true`
 			);
 
 			if (response.ok) {
@@ -473,6 +506,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		heatmapDimensions,
 		availableTags,
 		currentRecordTypes,
+		currentPlaceTypes,
 		currentDatasets,
 		currentTags,
 		currentTagOperator,

@@ -1,3 +1,4 @@
+import { readdirSync } from 'fs';
 import { program } from 'commander';
 import { rebuildIndex } from './post-process/rebuild-index';
 
@@ -13,7 +14,7 @@ program
       await rebuildIndex();
       process.exit(0);
     } catch (error) {
-      console.error('Failed to rebuild feature_cells:', error);
+      console.error('Failed to rebuild place_cells:', error);
       process.exit(1);
     }
   });
@@ -31,9 +32,22 @@ program
 
       try {
         sourceModule = await import(sourcePath);
-      } catch {
-        console.error(`Unknown source: ${opts.source}`);
-        console.error('Available sources: lps, adressen, beeldbank, joods-monument');
+      } catch (err) {
+        // Two failure modes: the source file doesn't exist (genuinely unknown source),
+        // or it exists but threw while loading (a real error — surface it rather than
+        // mislabel it "Unknown source", which is misleading when the name IS valid).
+        let available: string[] = [];
+        try {
+          available = readdirSync(new URL('./sources/', import.meta.url))
+            .filter(f => f.endsWith('.ts')).map(f => f.replace(/\.ts$/, '')).sort();
+        } catch { /* ignore — fall through to reporting */ }
+        if (available.includes(opts.source)) {
+          console.error(`Source '${opts.source}' exists but failed to load:`);
+          console.error(err);
+        } else {
+          console.error(`Unknown source: ${opts.source}`);
+          console.error(`Available sources: ${available.join(', ') || '(none found)'}`);
+        }
         process.exit(1);
       }
 

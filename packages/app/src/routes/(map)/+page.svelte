@@ -41,6 +41,8 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 	let heatmapTimeline = $derived(data?.heatmapTimeline as HeatmapTimeline | null);
 
 	let currentRecordTypes = $derived(data?.currentRecordTypes || []);
+	let placeTypes = $derived(data?.metadata?.placeTypes || []);
+	let currentPlaceTypes = $derived(data?.currentPlaceTypes || []);
 	let datasetIds = $derived(data?.metadata?.datasets?.map((s: { id: string }) => s.id) || []);
 	let currentDatasets = $derived(data?.currentDatasets || []);
 	let currentTags = $derived(data?.currentTags || []);
@@ -157,6 +159,17 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 		goto(url.pathname + url.search);
 	}
 
+	function handlePlaceTypeChange(selected: string[] | string) {
+		const selectedArray = Array.isArray(selected) ? selected : [selected];
+		const url = new URL(window.location.href);
+		if (selectedArray.length > 0) {
+			url.searchParams.set('placeTypes', selectedArray.join(','));
+		} else {
+			url.searchParams.delete('placeTypes');
+		}
+		goto(url.pathname + url.search);
+	}
+
 	function handleTagsChange(tags: string | string[]) {
 		const tagArray = Array.isArray(tags) ? tags : [tags];
 		const url = new URL(window.location.href);
@@ -258,6 +271,26 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 					</ToggleGroup>
 				</div>
 
+				{#if placeTypes.length > 1}
+				<div class="mb-4">
+					<div class="flex mb-2">
+						<Heading level={3} class="pr-2"> Geometrie </Heading>
+						<Tooltip icon={QuestionMark} text="Filter op basis van het type locatie waarmee de data is verbonden." placement="bottom" />
+					</div>
+					<ToggleGroup
+						items={placeTypes}
+						selectedItems={currentPlaceTypes}
+						onItemSelected={handlePlaceTypeChange}
+						requireOneItemSelected={true}>
+						{#snippet children(item, isSelected, isDisabled)}
+							<Tag variant={isSelected ? 'selected-outline' : 'outline'} disabled={isDisabled} interactive={true}>
+								{item}
+							</Tag>
+						{/snippet}
+					</ToggleGroup>
+				</div>
+				{/if}
+
 				<!-- Topics Section - Use dummy version until tags data is ready -->
 				{#if TAGS_FEATURE_READY}
 					<!-- Real tags implementation - disabled for now -->
@@ -313,6 +346,8 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 		<FiltersStatusPanel
 			selectedRecordTypes={currentRecordTypes}
 			allRecordTypes={recordTypes}
+			selectedPlaceTypes={currentPlaceTypes}
+			allPlaceTypes={placeTypes}
 			selectedDatasets={currentDatasetLabels}
 			allDatasets={datasetLabels}
 			selectedTags={currentTags}
@@ -330,6 +365,7 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 					period={currentPeriod}
 					bounds={selectedCellBounds ?? undefined}
 					recordTypes={currentRecordTypes}
+					placeTypes={currentPlaceTypes}
 					datasets={currentDatasets}
 					tags={currentTags}
 					tagOperator={currentTagOperator as 'AND' | 'OR'}

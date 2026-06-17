@@ -20,9 +20,9 @@
     "db:ingest": "bun run packages/db/src/etl/index.ts ingest",
     "db:rebuild-index": "bun run packages/db/src/etl/index.ts rebuild-index",
     "db:studio": "bunx drizzle-kit studio --config=packages/db/drizzle.config.ts",
-    "test": "cd packages/db && DATABASE_URL=postgresql://test:test@localhost:5434/test CACHE_TTL_MINUTES=0 bun test",
+    "test": "turbo run test",
     "test:unit": "cd packages/db && bun test src/queries/__tests__",
-    "test:integration": "cd packages/db && DATABASE_URL=postgresql://test:test@localhost:5434/test CACHE_TTL_MINUTES=0 bun test src/__tests__",
+    "test:integration": "cd packages/db && DATABASE_URL=postgresql://test:test@localhost:5434/dataindex_test CACHE_TTL_MINUTES=0 bun test src/__tests__",
     "test:db:up": "docker compose -f docker/docker-compose.test.yml up -d && sleep 2",
     "test:db:down": "docker compose -f docker/docker-compose.test.yml down -v",
     "docker:db:up": "docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.self-hosted.yml up -d dataindex-db",
@@ -36,6 +36,6 @@
     "docker:restart:app": "docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.self-hosted.yml restart app"
   },
   "devDependencies": {
-    "turbo": "^2.9.6"
+    "turbo": "^2.9.16"
   }
 }

@@ -18,9 +18,9 @@ import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { organisations, datasets, relation, features, featureToPlace } from '../../schema';
+import type { PlaceIdRow } from '../../row-types';
 import type { CreativeWorkEntity } from '@atm/shared';
-import { formatDateRange } from '../utils';
+import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers';
 
 // ═══════════════════════════════════════════════════════════════
 //  Organisation
@@ -60,30 +60,18 @@ interface RawRow {
   geom_wkt: string;     // e.g. "POINT(4.901959 52.376688)" in WGS84
 }
 
-type PlaceMatch = { place_id: string };
-
 export async function ingest(filePath: string) {
-  await db.insert(organisations)
-    .values({ id: ORG_ID, label: ORG_LABEL, url: ORG_URL })
-    .onConflictDoNothing();
-
-  await db.insert(datasets)
-    .values({ id: DATASET_ID, label: DATASET_LABEL, url: DATASET_URL, organisationId: ORG_ID })
-    .onConflictDoNothing();
-
-  await db.insert(relation)
-    .values({ id: RELATION_ID, label: RELATION_LABEL })
-    .onConflictDoNothing();
+  await upsertSource({
+    organisation: { id: ORG_ID, label: ORG_LABEL, url: ORG_URL },
+    dataset: { id: DATASET_ID, label: DATASET_LABEL, url: DATASET_URL },
+    relation: { id: RELATION_ID, label: RELATION_LABEL },
+  });
 
   console.log(`Match threshold: ${MATCH_THRESHOLD_METERS}m`);
 
-  // Cache: WKT → place ID (many rows often share the same geometry)
-  const placeCache = new Map<string, string | null>();
-
-  async function resolvePlaceId(wkt: string): Promise<string | null> {
-    if (placeCache.has(wkt)) return placeCache.get(wkt)!;
-
-    const result = await db.execute<PlaceMatch>(sql`
+  // Nearest place within threshold (PostGIS), cached by WKT (rows often share one).
+  const resolvePlaceId = createCachedResolver(async (wkt) => {
+    const result = await db.execute<PlaceIdRow>(sql`
       SELECT p.id as place_id
       FROM place p
       WHERE ST_DWithin(
@@ -94,31 +82,16 @@ export async function ingest(filePath: string) {
       ORDER BY p.geometry <-> ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992)
       LIMIT 1
     `);
-
-    const placeId = result.rows[0]?.place_id || null;
-    placeCache.set(wkt, placeId);
-    return placeId;
-  }
+    return result.rows[0]?.place_id ?? null;
+  });
 
   const csvParser = createReadStream(filePath).pipe(
     parse({ columns: true, relax_column_count: true, relax_quotes: true })
   );
 
-  let featureBatch: any[] = [];
-  let linkBatch: { featureId: string; placeId: string; relationId: string }[] = [];
+  const writer = createFeatureWriter(BATCH_SIZE);
   let count = 0;
   let skipped = 0;
-
-  async function flush() {
-    if (featureBatch.length > 0) {
-      await db.insert(features).values(featureBatch).onConflictDoNothing();
-      featureBatch = [];
-    }
-    if (linkBatch.length > 0) {
-      await db.insert(featureToPlace).values(linkBatch).onConflictDoNothing();
-      linkBatch = [];
-    }
-  }
 
   for await (const row of csvParser as AsyncIterable<RawRow>) {
     if (!row.geom_wkt) continue;
@@ -126,7 +99,7 @@ export async function ingest(filePath: string) {
     const placeId = await resolvePlaceId(row.geom_wkt);
     if (!placeId) { skipped++; continue; }
 
-    const featureId = crypto.randomUUID();
+    const featureId = featureUuid(row.url);
     const startDate = row.date_start || null;
     const endDate = row.date_end || null;
     const dateCreated = formatDateRange(startDate, endDate);
@@ -138,7 +111,7 @@ export async function ingest(filePath: string) {
       ...(dateCreated && { dateCreated })
     };
 
-    featureBatch.push({
+    writer.addFeature({
       id: featureId,
       url: row.url,
       recordType: RECORD_TYPE,
@@ -149,16 +122,15 @@ export async function ingest(filePath: string) {
       datasetId: DATASET_ID,
       entity
     });
-
-    linkBatch.push({ featureId, placeId, relationId: RELATION_ID });
+    writer.addLink({ featureId, placeId, relationId: RELATION_ID });
     count++;
 
-    if (featureBatch.length >= BATCH_SIZE) await flush();
+    await writer.flushIfFull();
     if ((count + skipped) % 1000 === 0) {
-      process.stdout.write(`\r  ${count} ingested, ${skipped} skipped, ${placeCache.size} geometries cached`);
+      process.stdout.write(`\r  ${count} ingested, ${skipped} skipped`);
     }
   }
 
-  await flush();
+  await writer.flush();
   console.log(`\nDone: ${count} features, ${skipped} skipped (no place within ${MATCH_THRESHOLD_METERS}m)`);
 }

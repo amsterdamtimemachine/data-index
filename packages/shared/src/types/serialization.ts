@@ -1,5 +1,5 @@
 import { TimeSlice } from "./temporal";
-import { RecordType } from "./feature";
+import { RecordType, PlaceType } from "./feature";
 
 /**
  * Complete visualization metadata from /api/metadata
@@ -11,6 +11,7 @@ export interface VisualizationMetadata {
     end: string;
   };
   recordTypes: RecordType[];
+  placeTypes: PlaceType[];
   datasets: { id: string; label: string }[];
   tags: string[];
   stats?: {

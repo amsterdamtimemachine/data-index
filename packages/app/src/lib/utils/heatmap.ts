@@ -1,4 +1,21 @@
 import type { Heatmap, HeatmapDimensions, HeatmapCellBounds } from '@atm/shared/types';
+import proj4 from 'proj4';
+
+// RD New / Amersfoort (EPSG:28992) → WGS84. Standard 7-parameter Bessel
+// definition; accurate to sub-metre over the Netherlands — far finer than the
+// 100m base cell. Used to draw heatmap cells on their true (rotated) footprint.
+proj4.defs(
+	'EPSG:28992',
+	'+proj=sterea +lat_0=52.15616055555555 +lon_0=5.38763888888889 +k=0.9999079 ' +
+		'+x_0=155000 +y_0=463000 +ellps=bessel ' +
+		'+towgs84=565.417,50.3319,465.552,-0.398957,0.343988,-1.8774,4.0725 +units=m +no_defs'
+);
+
+/** Reproject an RD/28992 point (metres) to WGS84 [lon, lat]. */
+function rdToWgs84(x: number, y: number): [number, number] {
+	const [lon, lat] = proj4('EPSG:28992', 'WGS84', [x, y]);
+	return [lon, lat];
+}
 
 /**
  * Calculate cell bounds for a specific cell
@@ -97,24 +114,65 @@ export interface CellGeometry {
 	coordinates: [number, number][][]; // GeoJSON Polygon coordinates
 }
 
-export function generateCellGeometries(dimensions: HeatmapDimensions): CellGeometry[] {
+export function generateCellGeometries(
+	dimensions: HeatmapDimensions,
+	reproject = false
+): CellGeometry[] {
 	const geometries: CellGeometry[] = [];
+
+	// When the backend ships the RD grid geometry and reprojection is enabled,
+	// precompute a lattice of reprojected corners ((rows+1) × (cols+1)) so adjacent
+	// cells share corners — one proj4 call per lattice point, not four per cell.
+	const useRd =
+		reproject &&
+		dimensions.rdOriginX != null &&
+		dimensions.rdOriginY != null &&
+		dimensions.rdCellWidth != null &&
+		dimensions.rdCellHeight != null;
+
+	let lattice: [number, number][][] | null = null;
+	if (useRd) {
+		const { rdOriginX, rdOriginY, rdCellWidth, rdCellHeight, colsAmount, rowsAmount } =
+			dimensions as Required<HeatmapDimensions>;
+		lattice = [];
+		for (let row = 0; row <= rowsAmount; row++) {
+			const y = rdOriginY + row * rdCellHeight;
+			const line: [number, number][] = [];
+			for (let col = 0; col <= colsAmount; col++) {
+				line.push(rdToWgs84(rdOriginX + col * rdCellWidth, y));
+			}
+			lattice.push(line);
+		}
+	}
 
 	for (let row = 0; row < dimensions.rowsAmount; row++) {
 		for (let col = 0; col < dimensions.colsAmount; col++) {
 			const cellId = getCellIdFromRowCol(row, col);
-			const bounds = calculateCellBounds(row, col, dimensions);
 
-			// GeoJSON Polygon: [lon, lat] format, closed ring (first point === last point)
-			const coordinates: [number, number][][] = [
-				[
-					[bounds.minLon, bounds.minLat],
-					[bounds.maxLon, bounds.minLat],
-					[bounds.maxLon, bounds.maxLat],
-					[bounds.minLon, bounds.maxLat],
-					[bounds.minLon, bounds.minLat]
-				]
-			];
+			// GeoJSON Polygon: [lon, lat], closed ring (first === last), SW→SE→NE→NW→SW.
+			let coordinates: [number, number][][];
+			if (lattice) {
+				coordinates = [
+					[
+						lattice[row][col],
+						lattice[row][col + 1],
+						lattice[row + 1][col + 1],
+						lattice[row + 1][col],
+						lattice[row][col]
+					]
+				];
+			} else {
+				const bounds = calculateCellBounds(row, col, dimensions);
+				coordinates = [
+					[
+						[bounds.minLon, bounds.minLat],
+						[bounds.maxLon, bounds.minLat],
+						[bounds.maxLon, bounds.maxLat],
+						[bounds.minLon, bounds.maxLat],
+						[bounds.minLon, bounds.minLat]
+					]
+				];
+			}
 
 			geometries.push({ cellId, row, col, coordinates });
 		}

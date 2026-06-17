@@ -41,10 +41,13 @@ export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity;
 /**
  * Query parameters for fetching features
  */
+export type PlaceType = 'address' | 'street' | 'neighbourhood' | 'district';
+
 export interface FeaturesQuery {
   bounds: HeatmapCellBounds;
   recordTypes?: RecordType[];
   datasetIds?: string[];
+  placeTypes?: PlaceType[];
   tags?: string[];
   tagOperator?: TagOperator;
   timeSlice?: string;
@@ -61,6 +64,7 @@ export interface FeatureResult {
   id: string;
   url?: string;
   recordType: RecordType;
+  placeType?: PlaceType;
   label: string;
   description?: string;
   contentUrl?: string;
@@ -73,8 +77,8 @@ export interface FeatureResult {
   temporalFrequency: number;
   entity?: Entity;
   relationId?: string;
-  currentAddress?: string;
-  historicalAddress?: string;
+  preferredLabel?: string;
+  historicalLabel?: string;
 }
 
 /**

@@ -1,31 +1,29 @@
 import { sql } from 'drizzle-orm';
-import { createTTLCache } from './cache';
-import type { Heatmap, HeatmapTimeline, HeatmapResponse, HeatmapDimensions, HeatmapResolutionConfig, RecordType } from '@atm/shared';
-import { DEFAULT_BIN_SIZE } from '@atm/shared';
+import type { Heatmap, HeatmapTimeline, HeatmapResponse, HeatmapDimensions, HeatmapResolutionConfig, RecordType, PlaceType } from '@atm/shared';
+import { DEFAULT_BIN_SIZE, CELL_SIZE_METERS } from '@atm/shared';
 import { db } from '../client';
-import { featureCells, features, place } from '../schema';
+import { placeCells, features, featureToPlace, place } from '../schema';
 import { computeTimeSlices } from './time-slices';
+import { getRecordTypes } from './record-types';
+import { getGridConfig } from './grid-config';
+import { featureYearOverlap, slicesCTE } from './time-filter';
+import { andIn } from './filters';
 
 // Query result types
-type CellCount = { cell_x: number; cell_y: number; count: string };
-type CellCountWithTime = { cell_x: number; cell_y: number; time_bin: string; count: string };
-type MaxCell = { max_x: number; max_y: number };
-type BoundsRow = { min_lon: string; max_lon: string; min_lat: string; max_lat: string };
-type RecordTypeRow = { record_type: RecordType };
+type GridCellCount = { grid_col: number; grid_row: number; count: string };
+type GridCellCountWithTime = { grid_col: number; grid_row: number; time_bin: string; count: string };
 
 /**
- * Convert cell (x, y) at base resolution to target grid index
+ * SQL expressions that map a base cell (place_cells) to a display grid cell.
+ * Forward partition: display = floor(cell * gridN / (maxN + 1)), clamped.
+ * getFeatures uses the exact inverse of this partition, so heatmap counts and
+ * the per-cell feature list always agree.
  */
-function cellToGridIndex(
-  cellX: number, cellY: number,
-  maxCellX: number, maxCellY: number,
-  gridCols: number, gridRows: number
-): number {
-  const gridCol = Math.floor((cellX / (maxCellX + 1)) * gridCols);
-  const gridRow = Math.floor((cellY / (maxCellY + 1)) * gridRows);
-  const clampedCol = Math.min(Math.max(gridCol, 0), gridCols - 1);
-  const clampedRow = Math.min(Math.max(gridRow, 0), gridRows - 1);
-  return clampedRow * gridCols + clampedCol;
+function gridColExpr(gridCols: number, maxX: number) {
+  return sql`LEAST(FLOOR(${placeCells.cellX}::numeric * ${gridCols} / ${maxX + 1})::int, ${gridCols - 1})`;
+}
+function gridRowExpr(gridRows: number, maxY: number) {
+  return sql`LEAST(FLOOR(${placeCells.cellY}::numeric * ${gridRows} / ${maxY + 1})::int, ${gridRows - 1})`;
 }
 
 /**
@@ -46,70 +44,53 @@ function buildSparseHeatmap(countsMap: Map<number, number>): Heatmap {
 }
 
 /**
- * Get all available record types from the database
- */
-async function getRecordTypes(): Promise<RecordType[]> {
-  const result = await db.execute<RecordTypeRow>(
-    sql`SELECT DISTINCT ${features.recordType} as record_type FROM ${features} WHERE ${features.recordType} IS NOT NULL`
-  );
-  return result.rows.map(r => r.record_type);
-}
-
-const maxCellBoundsCache = createTTLCache<{ maxX: number; maxY: number }>();
-
-/**
- * Get max cell coordinates for scaling to grid
- */
-async function getMaxCellBounds(): Promise<{ maxX: number; maxY: number }> {
-  const cached = maxCellBoundsCache.get();
-  if (cached) return cached;
-
-  const result = await db.execute<MaxCell>(
-    sql`SELECT MAX(${featureCells.cellX}) as max_x, MAX(${featureCells.cellY}) as max_y FROM ${featureCells}`
-  );
-  const value = { maxX: result.rows[0].max_x, maxY: result.rows[0].max_y };
-  maxCellBoundsCache.set(value);
-  return value;
-}
-
-const geoBoundsCache = createTTLCache<{ minLon: number; maxLon: number; minLat: number; maxLat: number }>();
-
-/**
- * Get geographic bounds from actual data extent (WGS84)
- */
-async function getBoundsFromData(): Promise<{ minLon: number; maxLon: number; minLat: number; maxLat: number }> {
-  const cached = geoBoundsCache.get();
-  if (cached) return cached;
-
-  const result = await db.execute<BoundsRow>(sql`
-    SELECT
-      ST_XMin(ST_Extent(ST_Transform(${place.geometry}, 4326))) as min_lon,
-      ST_XMax(ST_Extent(ST_Transform(${place.geometry}, 4326))) as max_lon,
-      ST_YMin(ST_Extent(ST_Transform(${place.geometry}, 4326))) as min_lat,
-      ST_YMax(ST_Extent(ST_Transform(${place.geometry}, 4326))) as max_lat
-    FROM ${place}
-    WHERE ${place.geometry} IS NOT NULL
-  `);
-  const row = result.rows[0];
-  const value = {
-    minLon: parseFloat(row.min_lon),
-    maxLon: parseFloat(row.max_lon),
-    minLat: parseFloat(row.min_lat),
-    maxLat: parseFloat(row.max_lat)
-  };
-  geoBoundsCache.set(value);
-  return value;
-}
-
-/**
  * Build HeatmapDimensions from grid resolution and geographic bounds
  */
-function buildDimensions(cols: number, rows: number, bounds: { minLon: number; maxLon: number; minLat: number; maxLat: number }): HeatmapDimensions {
+function buildDimensions(
+  cols: number,
+  rows: number,
+  bounds: { minLon: number; maxLon: number; minLat: number; maxLat: number },
+  rd?: { originX: number; originY: number; cellWidth: number; cellHeight: number }
+): HeatmapDimensions {
   return {
     colsAmount: cols,
     rowsAmount: rows,
-    ...bounds
+    ...bounds,
+    ...(rd && {
+      rdOriginX: rd.originX,
+      rdOriginY: rd.originY,
+      rdCellWidth: rd.cellWidth,
+      rdCellHeight: rd.cellHeight
+    })
   };
+}
+
+/**
+ * RD/28992 geometry of the display grid: origin + metres-per-display-cell. Lets
+ * the client reproject cells to their true WGS84 footprint (see HeatmapDimensions).
+ */
+function buildRd(minX: number, minY: number, maxCellX: number, maxCellY: number, gridCols: number, gridRows: number) {
+  return {
+    originX: minX,
+    originY: minY,
+    cellWidth: ((maxCellX + 1) * CELL_SIZE_METERS) / gridCols,
+    cellHeight: ((maxCellY + 1) * CELL_SIZE_METERS) / gridRows
+  };
+}
+
+/**
+ * Derive the display grid from a width (cols) only. Rows follow the data's
+ * aspect ratio — (maxCellY+1)/(maxCellX+1) — so each display cell is square in RD
+ * metres (and, since Web Mercator is conformal, square on screen). Both axes are
+ * capped at the base-cell resolution.
+ */
+function deriveGrid(cols: number, maxCellX: number, maxCellY: number): { gridCols: number; gridRows: number } {
+  const gridCols = Math.min(cols, maxCellX + 1);
+  const gridRows = Math.min(
+    Math.max(1, Math.round((gridCols * (maxCellY + 1)) / (maxCellX + 1))),
+    maxCellY + 1
+  );
+  return { gridCols, gridRows };
 }
 
 /**
@@ -120,9 +101,20 @@ export async function getHeatmap(
   resolution: HeatmapResolutionConfig,
   recordTypes?: RecordType[],
   datasetIds?: string[],
+  placeTypes?: PlaceType[],
   binSizeYears: number = DEFAULT_BIN_SIZE
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
+
+  // No record types means no data — return an empty heatmap rather than emitting
+  // `record_type IN ()`. Matches getHeatmapTimeline / getHistogram / getFeatures.
+  if (types.length === 0) {
+    return {
+      dimensions: buildDimensions(0, 0, { minLon: 0, maxLon: 0, minLat: 0, maxLat: 0 }),
+      timeline: { [timeSliceKey]: buildSparseHeatmap(new Map()) }
+    };
+  }
+
   const timeSlices = await computeTimeSlices(binSizeYears);
   const timeSlice = timeSlices.find(ts => ts.key === timeSliceKey);
 
@@ -130,36 +122,44 @@ export async function getHeatmap(
     throw new Error(`Unknown time slice: ${timeSliceKey}`);
   }
 
-  const [{ maxX, maxY }, bounds] = await Promise.all([
-    getMaxCellBounds(),
-    getBoundsFromData()
-  ]);
+  const config = await getGridConfig();
+  const maxX = config.maxCellX;
+  const maxY = config.maxCellY;
+  const bounds = { minLon: config.minLon, maxLon: config.maxLon, minLat: config.minLat, maxLat: config.maxLat };
 
-  const gridCols = Math.min(resolution.cols, maxX + 1);
-  const gridRows = Math.min(resolution.rows, maxY + 1);
+  const { gridCols, gridRows } = deriveGrid(resolution.cols, maxX, maxY);
 
-  const startDate = timeSlice.timeRange.start;
-  const endDate = timeSlice.timeRange.end;
+  // Half-open, year-based window — identical to getFeatures and getHeatmapTimeline,
+  // so slices don't overlap on boundary years and per-cell counts agree across all three.
+  const startYear = timeSlice.startYear;
+  const endYear = timeSlice.endYear;
 
-  const result = await db.execute<CellCount>(sql`
-    SELECT ${featureCells.cellX} as cell_x, ${featureCells.cellY} as cell_y, COUNT(*) as count
-    FROM ${featureCells}
-    JOIN ${features} ON ${featureCells.featureId} = ${features.id}
+  const result = await db.execute<GridCellCount>(sql`
+    SELECT
+      ${gridColExpr(gridCols, maxX)} as grid_col,
+      ${gridRowExpr(gridRows, maxY)} as grid_row,
+      COUNT(DISTINCT ${features.id}) as count
+    FROM ${placeCells}
+    JOIN ${featureToPlace} ON ${placeCells.placeId} = ${featureToPlace.placeId}
+    JOIN ${features} ON ${featureToPlace.featureId} = ${features.id}
+    JOIN ${place} ON ${placeCells.placeId} = ${place.id}
     WHERE ${features.recordType} IN ${types}
-      ${datasetIds && datasetIds.length > 0 ? sql`AND ${features.datasetId} IN ${datasetIds}` : sql``}
-      AND ${features.startDate} <= ${endDate}
-      AND ${features.endDate} >= ${startDate}
-    GROUP BY ${featureCells.cellX}, ${featureCells.cellY}
+      ${andIn(sql`${features.datasetId}`, datasetIds)}
+      ${andIn(sql`${place.type}`, placeTypes)}
+      AND ${featureYearOverlap(sql`${features.startDate}`, sql`${features.endDate}`, startYear, endYear)}
+    GROUP BY grid_col, grid_row
   `);
 
   const countsMap = new Map<number, number>();
   for (const row of result.rows) {
-    const gridIndex = cellToGridIndex(Number(row.cell_x), Number(row.cell_y), maxX, maxY, gridCols, gridRows);
-    countsMap.set(gridIndex, (countsMap.get(gridIndex) || 0) + parseInt(row.count));
+    const gridIndex = Number(row.grid_row) * gridCols + Number(row.grid_col);
+    countsMap.set(gridIndex, parseInt(row.count));
   }
 
+  const rd = buildRd(config.minX, config.minY, maxX, maxY, gridCols, gridRows);
+
   return {
-    dimensions: buildDimensions(gridCols, gridRows, bounds),
+    dimensions: buildDimensions(gridCols, gridRows, bounds, rd),
     timeline: { [timeSliceKey]: buildSparseHeatmap(countsMap) }
   };
 }
@@ -171,41 +171,45 @@ export async function getHeatmapTimeline(
   resolution: HeatmapResolutionConfig,
   recordTypes?: RecordType[],
   datasetIds?: string[],
+  placeTypes?: PlaceType[],
   binSizeYears: number = DEFAULT_BIN_SIZE
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
   const timeSlices = await computeTimeSlices(binSizeYears);
 
-  const [{ maxX, maxY }, bounds] = await Promise.all([
-    getMaxCellBounds(),
-    getBoundsFromData()
-  ]);
+  if (types.length === 0 || timeSlices.length === 0) {
+    return {
+      dimensions: buildDimensions(0, 0, { minLon: 0, maxLon: 0, minLat: 0, maxLat: 0 }),
+      timeline: {}
+    };
+  }
 
-  const gridCols = Math.min(resolution.cols, maxX + 1);
-  const gridRows = Math.min(resolution.rows, maxY + 1);
+  const config = await getGridConfig();
+  const maxX = config.maxCellX;
+  const maxY = config.maxCellY;
+  const bounds = { minLon: config.minLon, maxLon: config.maxLon, minLat: config.minLat, maxLat: config.maxLat };
+
+  const { gridCols, gridRows } = deriveGrid(resolution.cols, maxX, maxY);
 
   const firstSlice = timeSlices[0];
   const lastSlice = timeSlices[timeSlices.length - 1];
 
-  const result = await db.execute<CellCountWithTime>(sql`
-    WITH slices AS (
-      SELECT gs AS bin_start, gs + ${binSizeYears}::int AS bin_end
-      FROM generate_series(${firstSlice.startYear}::int, ${lastSlice.startYear}::int, ${binSizeYears}::int) AS gs
-    )
+  const result = await db.execute<GridCellCountWithTime>(sql`
+    WITH ${slicesCTE(firstSlice.startYear, lastSlice.startYear, binSizeYears)}
     SELECT
-      ${featureCells.cellX} as cell_x,
-      ${featureCells.cellY} as cell_y,
+      ${gridColExpr(gridCols, maxX)} as grid_col,
+      ${gridRowExpr(gridRows, maxY)} as grid_row,
       s.bin_start as time_bin,
-      COUNT(*) as count
-    FROM ${featureCells}
-    JOIN ${features} ON ${featureCells.featureId} = ${features.id}
-    JOIN slices s ON EXTRACT(YEAR FROM ${features.startDate}) < s.bin_end
-                 AND EXTRACT(YEAR FROM ${features.endDate}) >= s.bin_start
+      COUNT(DISTINCT ${features.id}) as count
+    FROM ${placeCells}
+    JOIN ${featureToPlace} ON ${placeCells.placeId} = ${featureToPlace.placeId}
+    JOIN ${features} ON ${featureToPlace.featureId} = ${features.id}
+    JOIN ${place} ON ${placeCells.placeId} = ${place.id}
+    JOIN slices s ON ${featureYearOverlap(sql`${features.startDate}`, sql`${features.endDate}`, sql`s.bin_start`, sql`s.bin_end`)}
     WHERE ${features.recordType} IN ${types}
-      ${datasetIds && datasetIds.length > 0 ? sql`AND ${features.datasetId} IN ${datasetIds}` : sql``}
-      AND ${features.startDate} IS NOT NULL
-      AND ${features.endDate} IS NOT NULL
-    GROUP BY ${featureCells.cellX}, ${featureCells.cellY}, s.bin_start
+      ${andIn(sql`${features.datasetId}`, datasetIds)}
+      ${andIn(sql`${place.type}`, placeTypes)}
+    GROUP BY grid_col, grid_row, s.bin_start
   `);
 
   const countsBySlice = new Map<number, Map<number, number>>();
@@ -215,8 +219,8 @@ export async function getHeatmapTimeline(
       countsBySlice.set(timeBin, new Map());
     }
     const countsMap = countsBySlice.get(timeBin)!;
-    const gridIndex = cellToGridIndex(Number(row.cell_x), Number(row.cell_y), maxX, maxY, gridCols, gridRows);
-    countsMap.set(gridIndex, (countsMap.get(gridIndex) || 0) + parseInt(row.count));
+    const gridIndex = Number(row.grid_row) * gridCols + Number(row.grid_col);
+    countsMap.set(gridIndex, parseInt(row.count));
   }
 
   const timeline: HeatmapTimeline = {};
@@ -225,8 +229,10 @@ export async function getHeatmapTimeline(
     timeline[timeSlice.key] = buildSparseHeatmap(countsMap);
   }
 
+  const rd = buildRd(config.minX, config.minY, maxX, maxY, gridCols, gridRows);
+
   return {
-    dimensions: buildDimensions(gridCols, gridRows, bounds),
+    dimensions: buildDimensions(gridCols, gridRows, bounds, rd),
     timeline
   };
 }

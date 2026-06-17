@@ -1,12 +1,16 @@
 import { sql } from 'drizzle-orm';
 import type {
   RecordType,
+  PlaceType,
   TagStats,
   AvailableTags,
   TagCombinations,
   TagValidation
 } from '@atm/shared';
 import { db } from '../client';
+import type { CountRow } from '../row-types';
+import { getRecordTypes } from './record-types';
+import { andIn, placeTypeJoin } from './filters';
 import { features, tags, featureTags } from '../schema';
 
 // Query result types (internal)
@@ -20,27 +24,22 @@ type SimpleTagStatsRow = {
   tag_label: string;
   total_features: string;
 };
-type RecordTypeRow = { record_type: RecordType };
-type CountRow = { count: string };
 
 /**
- * Get all available record types from the database
- */
-async function getRecordTypes(): Promise<RecordType[]> {
-  const result = await db.execute<RecordTypeRow>(
-    sql`SELECT DISTINCT ${features.recordType} as record_type FROM ${features} WHERE ${features.recordType} IS NOT NULL`
-  );
-  return result.rows.map(r => r.record_type);
-}
-
-/**
- * Get available tags with feature counts and associated record types
- * Optionally filter by record types
+ * Get available tags with feature counts and associated record types.
+ * Filters share the recordTypes / datasetIds / placeTypes triple used by the
+ * heatmap, histogram and feature list, so the tag list reflects the same filters.
  */
 export async function getAvailableTags(
-  recordTypes?: RecordType[]
+  recordTypes?: RecordType[],
+  datasetIds?: string[],
+  placeTypes?: PlaceType[]
 ): Promise<AvailableTags> {
   const types = recordTypes || await getRecordTypes();
+
+  if (types.length === 0) {
+    return { tags: [], recordTypes: [] };
+  }
 
   // Single query that gets tag stats with record types array
   const result = await db.execute<TagStatsRow>(sql`
@@ -52,7 +51,10 @@ export async function getAvailableTags(
     FROM ${tags}
     JOIN ${featureTags} ON ${tags.id} = ${featureTags.tagId}
     JOIN ${features} ON ${featureTags.featureId} = ${features.id}
+    ${placeTypeJoin(placeTypes, sql`${features.id}`)}
     WHERE ${features.recordType} IN ${types}
+      ${andIn(sql`${features.datasetId}`, datasetIds)}
+      ${andIn(sql`p.type`, placeTypes)}
     GROUP BY ${tags.id}, ${tags.label}
     ORDER BY total_features DESC
   `);
@@ -70,14 +72,20 @@ export async function getAvailableTags(
 }
 
 /**
- * Get available tags that can be combined with already selected tags
- * This finds tags that have features with ALL the selected tags (AND logic)
+ * Get available tags that can be combined with already selected tags.
+ * Finds tags whose features carry ALL the selected tags (AND logic).
  */
 export async function getTagCombinations(
   recordTypes?: RecordType[],
+  datasetIds?: string[],
+  placeTypes?: PlaceType[],
   selectedTags: string[] = []
 ): Promise<TagCombinations> {
   const types = recordTypes || await getRecordTypes();
+
+  if (types.length === 0) {
+    return { availableTags: [], currentSelection: selectedTags, recordTypes: [] };
+  }
 
   if (selectedTags.length === 0) {
     // No selection - return all tags
@@ -88,7 +96,10 @@ export async function getTagCombinations(
       FROM ${tags}
       JOIN ${featureTags} ON ${tags.id} = ${featureTags.tagId}
       JOIN ${features} ON ${featureTags.featureId} = ${features.id}
+      ${placeTypeJoin(placeTypes, sql`${features.id}`)}
       WHERE ${features.recordType} IN ${types}
+        ${andIn(sql`${features.datasetId}`, datasetIds)}
+        ${andIn(sql`p.type`, placeTypes)}
       GROUP BY ${tags.id}, ${tags.label}
       ORDER BY total_features DESC
     `);
@@ -104,15 +115,17 @@ export async function getTagCombinations(
   }
 
   // Find features that have ALL selected tags, then find other tags on those features
-  // Step 1: Get feature IDs that have ALL selected tags
   const result = await db.execute<SimpleTagStatsRow>(sql`
     WITH features_with_all_tags AS (
       SELECT ft.feature_id
       FROM ${featureTags} ft
       JOIN ${features} f ON ft.feature_id = f.id
       JOIN ${tags} t ON ft.tag_id = t.id
+      ${placeTypeJoin(placeTypes, sql`f.id`)}
       WHERE f.record_type IN ${types}
         AND t.label IN ${selectedTags}
+        ${andIn(sql`f.dataset_id`, datasetIds)}
+        ${andIn(sql`p.type`, placeTypes)}
       GROUP BY ft.feature_id
       HAVING COUNT(DISTINCT t.id) = ${selectedTags.length}
     )
@@ -138,11 +151,13 @@ export async function getTagCombinations(
 }
 
 /**
- * Validate that a tag combination has features
- * Returns which tags are valid (have features together) and which are invalid
+ * Validate that a tag combination has features.
+ * Returns which tags are valid (have features together) and which are invalid.
  */
 export async function validateTagCombination(
   recordTypes?: RecordType[],
+  datasetIds?: string[],
+  placeTypes?: PlaceType[],
   selectedTags: string[] = []
 ): Promise<TagValidation> {
   if (selectedTags.length === 0) {
@@ -150,6 +165,11 @@ export async function validateTagCombination(
   }
 
   const types = recordTypes || await getRecordTypes();
+
+  if (types.length === 0) {
+    return { validTags: [], invalidTags: selectedTags };
+  }
+
   const validTags: string[] = [];
   const invalidTags: string[] = [];
 
@@ -167,8 +187,11 @@ export async function validateTagCombination(
         FROM ${featureTags} ft
         JOIN ${features} f ON ft.feature_id = f.id
         JOIN ${tags} t ON ft.tag_id = t.id
+        ${placeTypeJoin(placeTypes, sql`f.id`)}
         WHERE f.record_type IN ${types}
           AND t.label IN ${tagsToCheck}
+          ${andIn(sql`f.dataset_id`, datasetIds)}
+          ${andIn(sql`p.type`, placeTypes)}
         GROUP BY ft.feature_id
         HAVING COUNT(DISTINCT t.id) = ${tagsToCheck.length}
         LIMIT 1

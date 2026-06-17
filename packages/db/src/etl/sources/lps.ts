@@ -1,77 +1,38 @@
 /**
- * Import place data from LPS (Linked Point Set) CSV
+ * Import place data from the LPS (Linked Point Set) TTL.
  *
- * Creates one place per linked point (lp) with geometry, and one address
- * row per historical address ID linking to that place.
+ * Each `allp:` subject is one linked point carrying its geometry directly in
+ * `geo:asWKT` (WGS84, reprojected to RD on insert — no blank nodes). We create one
+ * `place` per LP (id = `lp-<N>`, type = address). Address *names* are not derived
+ * here: the adressen TTL owns them, self-linking each observation to its LP via
+ * `schema:geoContains` (the reverse of the `schema:geoWithin` links carried here,
+ * which we don't use). Run LPS BEFORE adressen.
  *
- * Usage: bun run db:ingest -s lps -f <path-to-20230920-lps.csv>
+ * Usage: bun run db:ingest -s lps -f <path-to-20230920-lps.ttl>
  */
-import { createReadStream } from 'fs';
-import { parse } from 'csv-parse';
-import { sql } from 'drizzle-orm';
-import { db } from '../../client';
-import { address } from '../../schema';
-
-const ADDR_COLS: { col: string; source: string; date: string }[] = [
-  { col: 'pw-1943', source: 'pw-1943', date: '1943-01-01' },
-  { col: 'pw-1909', source: 'pw-1909', date: '1909-01-01' },
-  { col: 'obelt-1920', source: 'obelt-1920', date: '1920-01-01' },
-  { col: 'loman-1976', source: 'loman-1976', date: '1976-01-01' },
-  { col: 'bevolkingsregister-1870', source: 'bevolkingsregister-1870', date: '1870-01-01' },
-  { col: 'wijken-1853', source: 'wijken-1853', date: '1853-01-01' },
-  { col: 'percelen-1832', source: 'percelen-1832', date: '1832-01-01' },
-];
-
-const BATCH_SIZE = 1000;
+import { readFileSync } from 'fs';
+import { Parser } from 'n3';
+import { insertPlaces, type PlaceInsert } from '../helpers';
 
 export async function ingest(filePath: string) {
   console.log(`Parsing ${filePath}...`);
-  const csvParser = createReadStream(filePath).pipe(parse({ columns: true }));
+  const quads = new Parser().parse(readFileSync(filePath, 'utf8'));
 
-  let placeCount = 0;
-  let addressCount = 0;
-  let addressBatch: { id: string; placeId: string; date: string; source: string }[] = [];
-
-  async function flushAddresses() {
-    if (addressBatch.length === 0) return;
-    await db.insert(address).values(addressBatch).onConflictDoNothing();
-    addressBatch = [];
+  // Each LP point carries its geometry directly in geo:asWKT, so a single pass
+  // over the asWKT quads is enough (no subject grouping / blank-node chasing).
+  const placeRows: PlaceInsert[] = [];
+  for (const q of quads) {
+    if (!q.predicate.value.endsWith('asWKT')) continue;
+    const lp = q.subject.value.split('/geo/lp/')[1];
+    if (!lp) continue;
+    placeRows.push({ id: `lp-${lp}`, type: 'address', wkt: q.object.value });
   }
 
-  for await (const row of csvParser) {
-    const lp = row.lp?.trim();
-    const wkt = row.wkt;
-    if (!lp || !wkt) continue;
+  // LPS geometry is WGS84 (EPSG:4326) and is reprojected to RD on insert.
+  // Re-ingest refreshes geometry but preserves preferred_label, which the
+  // adressen enrichment owns.
+  console.log(`Inserting ${placeRows.length} places...`);
+  const placeCount = await insertPlaces(placeRows, { sourceSrid: 4326, onConflict: 'replaceGeometry' });
 
-    const placeId = `lp-${lp}`;
-
-    // Insert place (one per linked point)
-    await db.execute(sql`
-      INSERT INTO place (id, type, geometry)
-      VALUES (${placeId}, 'address', ST_GeomFromText(${wkt}, 28992))
-      ON CONFLICT DO NOTHING
-    `);
-    placeCount++;
-
-    // Collect address rows for each registry column
-    for (const { col, source, date } of ADDR_COLS) {
-      const addrId = row[col]?.trim();
-      if (addrId) {
-        const uri = `https://adamlink.nl/geo/address/${addrId}`;
-        addressBatch.push({ id: uri, placeId, date, source });
-        addressCount++;
-
-        if (addressBatch.length >= BATCH_SIZE) {
-          await flushAddresses();
-        }
-      }
-    }
-
-    if (placeCount % 1000 === 0) {
-      process.stdout.write(`\r  ${placeCount} places, ${addressCount} addresses`);
-    }
-  }
-
-  await flushAddresses();
-  console.log(`\nDone: ${placeCount} places, ${addressCount} addresses`);
+  console.log(`\nDone: ${placeCount} places`);
 }
