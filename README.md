@@ -230,13 +230,13 @@ Lower scores mean features more unique to the time and place.
 ## Dating
 
 ### Feature dates
-Feature dates (`features.start_date` / `end_date`) are the source feature's own date range, They drive the histogram and the heatmap, `temporal_frequency` and thus the item's ranking.
+Feature dates (`features.start_date` / `end_date`) are the source feature's own date range. They drive the histogram and heatmap, `temporal_frequency`, and thus an item's ranking.
 
 ### Place dates
-(`place.valid_since` / `valid_until`) mark the period a neighbourhood or district geometry was the city's division. As these are the only ones whose geometry changed over time is documented in Adamlink. Place dates are used to match a neighbourhood/district feature's date range to a relevant periodical geometry during data ingestion.
+Place dates (`place.valid_since` / `valid_until`) mark the period a neighbourhood or district geometry was the city's division — these are the only place types whose geometry changes over time, as documented in Adamlink. They're used at ingest to match a neighbourhood/district feature's date range to the geometry of the right era.
  
 ### Place name dates
-Place name dates (`place_name.since` / `until`) represent a historical name of address or street. They supply `historicalLabel` shown on a feature. Adamlink provides historical names only for streets and addresses.
+Place name dates (`place_name.since` / `until`) record the period a historical name of an address or street was in use. They supply the `historicalLabel` shown on a feature. Adamlink provides historical names only for streets and addresses.
 
 ### Dates sources
 **Feature dates** come from the source dataset's own fields, at ingest. **Name dates**
