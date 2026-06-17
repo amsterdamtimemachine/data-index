@@ -6,8 +6,8 @@
  * Input is JSON. Each record names the area, its level (wijk/buurt), and a date range;
  * the script resolves it to the matching `place` by:
  *   - place.type        = district (wijk) | neighbourhood (buurt)   ← from `level`
- *   - place.name matched case-insensitively                         ← from `area`
- *   - the geometry whose [since, until) window OVERLAPS the record's date range
+ *   - preferred_label    matched case-insensitively                 ← from `area`
+ *   - the era whose [valid_since, valid_until) window OVERLAPS the record's date range
  *     the most (the same range-overlap test the histogram/heatmap use)
  * Records with no matching place are skipped (same as the point templates).
  *
@@ -18,9 +18,9 @@
  * where both exist at once. A range straddling a boundary attaches to whichever era it
  * overlaps most.
  *
- * Neighbourhoods/districts have no `place_historical_name` history, so the only label to
- * match on is `name` — there is no historical/alternative name for these.
- *
+ * Neighbourhoods/districts have no `place_name` history, so the only label to match on
+ * is `preferred_label` — there is no historical/alternative name for these.
+ * 
  * To use:
  * 1. Copy to packages/db/src/etl/sources/<your-dataset>.ts
  * 2. Fill in the Organisation / Dataset / Feature metadata blocks
@@ -38,16 +38,16 @@ import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRang
 // ═══════════════════════════════════════════════════════════════
 //  Organisation
 // ═══════════════════════════════════════════════════════════════
-const ORG_ID = 'my-org';
-const ORG_LABEL = 'My Organisation';
-const ORG_URL = 'https://org-url.com';
+const ORG_ID = 'amsterdam-museum';
+const ORG_LABEL = 'Amsterdam Museum';
+const ORG_URL = 'https://www.amsterdammuseum.nl/';
 
 // ═══════════════════════════════════════════════════════════════
 //  Dataset
 // ═══════════════════════════════════════════════════════════════
-const DATASET_ID = 'my-dataset';
-const DATASET_LABEL = 'My Dataset';
-const DATASET_URL = 'https://dataset-url.com';
+const DATASET_ID = 'diaries';
+const DATASET_LABEL = 'Diaries';
+const DATASET_URL = '-';
 
 // ═══════════════════════════════════════════════════════════════
 //  Feature metadata
@@ -58,30 +58,48 @@ const RELATION_LABEL = 'Is About';
 
 const BATCH_SIZE = 1000;
 
+
 interface RawRecord {
   id: string;
   title: string;
   description?: string;     // optional → features.description (shown on the card)
   author?: string;          // optional → an example of schema.org entity (JSONB) metadata
-  area: string;             // neighbourhood / district name → matched to place.name
+  area: string;             // neighbourhood / district name → matched to place.preferred_label
   level: 'wijk' | 'buurt';  // → place.type (district / neighbourhood)
   date_start: string;       // "YYYY-MM-DD" — with date_end, selects the era by range overlap
   date_end: string;
 }
 
-//  OriginalRecord interface should match the JSON structure of objects in your dataset
-interface OriginalRecord {}
+type DraftRecord = Omit<RawRecord, 'area' | 'level'> & {
+  area?: string;
+  level?: 'wijk' | 'buurt';
+};
 
-// Use this function to map the objects from your dataset to the desired RawRecord-format 
-function mapToRawRecord(row: OriginalRecord): RawRecord {
-    return {
-    id: '',
-    title: '',
-    area: '',
-    level: 'wijk',
-    date_start: '',
-    date_end: ''
+interface OriginalRecord {
+  identifier: string;
+  "@id": string;
+  headline: string;
+  articleBody: string;
+  url: string;
+  datePublished: string;
+}
+
+async function mapToRawRecords(records: OriginalRecord[]): Promise<RawRecord[]> {
+  const drafts: DraftRecord[] = []
+
+  for (const record of records) {
+      drafts.push({
+      id: record.identifier,
+      title: record.headline,
+      description: record.articleBody,
+      level: 'wijk',
+      date_start: record.datePublished + '-01-01',
+      date_end: record.datePublished + '-01-02'
+    })
   }
+
+  const rawRecords: RawRecord[] = await infer_preferred_places(drafts)
+  return rawRecords
 }
 
 export async function ingest(filePath: string) {
@@ -91,7 +109,8 @@ export async function ingest(filePath: string) {
     relation: { id: RELATION_ID, label: RELATION_LABEL },
   });
 
-  // Resolve (level, area, [start,end]) → the era place whose [since, until)
+
+  // Resolve (level, area, [start,end]) → the era place whose [valid_since, valid_until)
   // window OVERLAPS the record's date range the most. The WHERE clause is the same
   // range-overlap test the rest of the app uses (featureYearOverlap); the ORDER BY then
   // breaks straddlers toward the era they overlap most (a 1905–1915 buurt feature lands
@@ -101,27 +120,26 @@ export async function ingest(filePath: string) {
     const { level, area, start, end } = JSON.parse(key) as { level: string; area: string; start: string; end: string };
     const type = level === 'wijk' ? 'district' : 'neighbourhood';
     const result = await db.execute<PlaceIdRow>(sql`
-      SELECT p.id as place_id
-      FROM place p
-      JOIN place_geometry g ON g.place_id = p.id
-      WHERE p.type = ${type}
-        AND p.name ILIKE ${area}
-        AND g.since <= ${end}::date
-        AND (g.until IS NULL OR g.until > ${start}::date)
+      SELECT id as place_id FROM place
+      WHERE type = ${type}
+        AND preferred_label ILIKE ${area}
+        AND valid_since <= ${end}::date
+        AND (valid_until IS NULL OR valid_until > ${start}::date)
       ORDER BY GREATEST(
                  0,
-                 LEAST(${end}::date, COALESCE(g.until, 'infinity'::date))
-                   - GREATEST(${start}::date, g.since)
+                 LEAST(${end}::date, COALESCE(valid_until, 'infinity'::date))
+                   - GREATEST(${start}::date, valid_since)
                ) DESC,
-               g.since DESC
+               valid_since DESC
       LIMIT 1
     `);
     return result.rows[0]?.place_id ?? null;
   });
 
-  const records = JSON.parse(readFileSync(filePath, 'utf8')) as RawRecord[];
-
+  const originalRecords = JSON.parse(readFileSync(filePath, 'utf8')) as OriginalRecord[];
+  const records = await mapToRawRecords(originalRecords)
   const writer = createFeatureWriter(BATCH_SIZE);
+
   let count = 0;
   let skipped = 0;
 
@@ -133,7 +151,7 @@ export async function ingest(filePath: string) {
     );
     if (!placeId) { skipped++; continue; }
 
-    const featureId = featureUuid(DATASET_ID, row.id);
+    const featureId = featureUuid(row.id);
     const startDate = row.date_start || null;
     const endDate = row.date_end || startDate;
     const dateCreated = formatDateRange(startDate, endDate);
@@ -173,4 +191,50 @@ export async function ingest(filePath: string) {
 
   await writer.flush();
   console.log(`\nDone: ${count} features, ${skipped} skipped (no matching neighbourhood/district)`);
+}
+
+
+async function infer_preferred_places(drafts: DraftRecord[]): Promise<RawRecord[]> {
+    const allPlaces = await db.execute<{ preferred_label: string, type: string }>(sql`
+        SELECT DISTINCT preferred_label, type FROM place WHERE type IN ('district', 'neighbourhood')    
+    `);
+
+    const placeLookup = new Map<string, { label: string; level: 'wijk' | 'buurt' }>(
+        allPlaces.rows.map(row => [
+            row.preferred_label.toLowerCase(),
+            {
+                label: row.preferred_label, // Preserves original DB casing if needed
+                level: row.type === 'district' ? 'wijk' : 'buurt'
+            }
+        ])
+    );
+
+    const placesPattern = new RegExp(`\\b(${allPlaces.rows.map(
+        n => n.preferred_label.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')).join('|')})\\b`, 'gi'
+    );
+
+    const rawRecords: RawRecord[] = []
+    let skipped = 0;
+
+    for (const draft of drafts) {
+        if (!draft.description) { skipped++; continue }
+
+        const matchedPlaces = draft.description.match(placesPattern)
+
+        if (!matchedPlaces || matchedPlaces.length <= 0) { skipped++; continue }
+        
+        const matches = [...new Set(matchedPlaces.map(m => m.toLocaleLowerCase()))]
+        const match = matches[0]
+
+        const placeInfo = placeLookup.get(match);
+        if (!placeInfo) { skipped++; continue; }
+
+        rawRecords.push({
+          ...draft,
+          area: placeInfo.label,
+          level: placeInfo.level
+        } as RawRecord);
+    }
+
+    return rawRecords
 }
