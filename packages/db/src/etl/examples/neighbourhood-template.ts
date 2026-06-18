@@ -69,21 +69,6 @@ interface RawRecord {
   date_end: string;
 }
 
-//  OriginalRecord interface should match the JSON structure of objects in your dataset
-interface OriginalRecord {}
-
-// Use this function to map the objects from your dataset to the desired RawRecord-format 
-function mapToRawRecord(row: OriginalRecord): RawRecord {
-    return {
-    id: '',
-    title: '',
-    area: '',
-    level: 'wijk',
-    date_start: '',
-    date_end: ''
-  }
-}
-
 export async function ingest(filePath: string) {
   await upsertSource({
     organisation: { id: ORG_ID, label: ORG_LABEL, url: ORG_URL },
