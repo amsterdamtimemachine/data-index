@@ -12,14 +12,14 @@ export interface TargetRecord {
     description?: string;     // optional → features.description (shown on the card)
     author?: string;          // optional → an example of schema.org entity (JSONB) metadata
     area: string;             // neighbourhood / district name → matched to place.preferred_label
-    level: 'wijk' | 'buurt';  // → place.type (district / neighbourhood)
+    level: string;  // → place.type (district / neighbourhood)
     date_start: string;       // "YYYY-MM-DD" — with date_end, selects the era by range overlap
     date_end: string;
 }
 
 type DraftRecord = Omit<TargetRecord, 'area' | 'level'> & {
   area?: string;
-  level?: 'wijk' | 'buurt';
+  level?: string;
 };
 
 type InferPlaceArgs = {
@@ -59,23 +59,29 @@ export abstract class Ingestor<SourceRecord> {
     private readonly inferPlaceIdCached = createCachedResolver(async (key: string) => {
         const { level, area, start, end } = JSON.parse(key) as InferPlaceArgs;
 
-        const type = level === 'wijk' ? 'district' : 'neighbourhood';
         const result = await db.execute<PlaceIdRow>(sql`
-            SELECT id as place_id FROM place
-            WHERE type = ${type}
-            AND preferred_label ILIKE ${area}
-            AND valid_since <= ${end}::date
-            AND (valid_until IS NULL OR valid_until > ${start}::date)
+            SELECT id as place_id
+            FROM place
+            WHERE preferred_label ILIKE ${area}
+            AND (
+                (valid_since IS NULL AND valid_until IS NULL)
+                OR (
+                    valid_since <= ${end}::date
+                    AND (valid_until IS NULL OR valid_until > ${start}::date)
+                )
+            )
             ORDER BY GREATEST(
-                    0,
-                    LEAST(${end}::date, COALESCE(valid_until, 'infinity'::date))
+                        0,
+                        LEAST(${end}::date, COALESCE(valid_until, 'infinity'::date))
                         - GREATEST(${start}::date, valid_since)
                     ) DESC,
                     valid_since DESC
             LIMIT 1
         `);
 
-        return result.rows[0]?.place_id ?? null;
+        const r = result.rows[0]?.place_id ?? null;
+
+        return r
     });
 
     private async inferPlaceId(target: TargetRecord) {
@@ -97,15 +103,15 @@ export abstract class Ingestor<SourceRecord> {
 
     private async getPlaceMap() {
         const allPlaces = await db.execute<{ preferred_label: string, type: string }>(sql`
-            SELECT DISTINCT preferred_label, type FROM place WHERE type IN ('district', 'neighbourhood')    
+            SELECT DISTINCT preferred_label, type FROM place WHERE type IN ('district', 'neighbourhood', 'street')    
         `);
 
-        const placeMap = new Map<string, { label: string; level: 'wijk' | 'buurt' }>(
+        const placeMap = new Map<string, { label: string; level: string }>(
             allPlaces.rows.map(row => [
                 row.preferred_label.toLowerCase(),
                 {
                     label: row.preferred_label, // Preserves original DB casing if needed
-                    level: row.type === 'district' ? 'wijk' : 'buurt'
+                    level: row.type
                 }
             ])
         );
@@ -114,16 +120,28 @@ export abstract class Ingestor<SourceRecord> {
     }
 
     protected constructTargetFromDraft(draft: DraftRecord, placesPattern: RegExp, placeMap: Map<string, any>): TargetRecord | undefined {
-        if (!draft.description) { return undefined }
+        if (!draft.description) { 
+            return undefined 
+        }
 
         const matchedPlaces = draft.description.match(placesPattern)
 
-        if (!matchedPlaces || matchedPlaces.length <= 0) { return undefined }
+        if (!matchedPlaces || matchedPlaces.length <= 0) {
+            return undefined 
+        }
 
-        const match = [...new Set(matchedPlaces.map(m => m.toLocaleLowerCase()))][0] // TODO: allow multiple places
+        const matches = [...new Set(
+            matchedPlaces.map(m => m.toLocaleLowerCase())
+            .sort((a, b) => b.length - a.length || a.localeCompare(b)
+        ))]// TODO: allow multiple places
+
+        const match = matches[0]
         const place = placeMap.get(match)
 
-        if (!place) { return undefined }
+        if (!place) { 
+            console.log(match, 'not found in map')
+            return undefined 
+        }
 
         return {
             ...draft,
@@ -148,7 +166,10 @@ export abstract class Ingestor<SourceRecord> {
         for (const draft of drafts) {
             const target = this.constructTargetFromDraft(draft, placesPattern, placeMap)
 
-            if (!target) { skipped++; continue }
+            if (!target) { 
+                skipped++; 
+                continue;
+            }
 
             targets.push(target)
         }
@@ -209,18 +230,22 @@ export abstract class Ingestor<SourceRecord> {
 
         let skipped = 0
         let count = 0
-
+        
         for (const target of targetRecords) {
             const feature: NewFeature | undefined = await this.constructFeature(target)
-            if (!feature) { skipped++; continue; }
+            if (!feature) { 
+                skipped++; continue; 
+            }
 
             const placeId: string | null = await this.inferPlaceId(target)
-            if (!placeId) { skipped++; continue }
+            if (!placeId) { 
+                skipped++; continue 
+            }
 
             writer.addFeature(feature)
             writer.addLink({ featureId: feature.id!, placeId, relationId: this.RELATION_ID })
-
             count++;
+
             await writer.flushIfFull();
         }
 
