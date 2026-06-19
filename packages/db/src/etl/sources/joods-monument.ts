@@ -14,7 +14,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../../client';
 import type { PlaceIdRow } from '../../row-types';
 import type { PersonEntity } from '@atm/shared';
-import { upsertSource, createFeatureWriter, createCachedResolver, featureUuid } from '../helpers';
+import { upsertSource, createFeatureWriter, createCachedResolver, featureUuid } from '../helpers/helpers';
 
 // ═══════════════════════════════════════════════════════════════
 //  Organisation

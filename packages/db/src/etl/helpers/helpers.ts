@@ -9,7 +9,7 @@
  */
 import { sql, inArray } from 'drizzle-orm';
 import { createHash } from 'crypto';
-import { db } from '../client';
+import { db } from '../../client';
 import {
   organisations,
   datasets,
@@ -21,7 +21,7 @@ import {
   placeGeometry,
   type NewFeature,
   type NewPlaceHistoricalName,
-} from '../schema';
+} from '../../schema';
 
 type Link = { featureId: string; placeId: string; relationId: string };
 

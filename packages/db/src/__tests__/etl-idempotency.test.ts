@@ -17,7 +17,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
-import { featureUuid, createFeatureWriter, insertPlaces, upsertSource } from '../etl/helpers';
+import { featureUuid, createFeatureWriter, insertPlaces, upsertSource } from '../etl/helpers/helpers';
 import type { PlaceIdRow } from '../row-types';
 
 async function placeRow(id: string) {

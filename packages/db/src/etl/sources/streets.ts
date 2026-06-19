@@ -13,7 +13,7 @@
  */
 import { readFileSync } from 'fs';
 import { Parser } from 'n3';
-import { insertPlaces, createNameWriter } from '../helpers';
+import { insertPlaces, createNameWriter } from '../helpers/helpers';
 
 const BATCH_SIZE = 100;
 

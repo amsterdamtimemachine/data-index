@@ -18,7 +18,7 @@ import { readFileSync } from 'fs';
 import { Parser } from 'n3';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { createNameWriter } from '../helpers';
+import { createNameWriter } from '../helpers/helpers';
 
 export async function ingest(filePath: string) {
   console.log(`Parsing ${filePath}...`);

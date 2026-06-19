@@ -37,3 +37,4 @@ const ingestor = new Test()
 export async function ingest(filePath:string) {
     await ingestor.ingest(filePath)
 }
+

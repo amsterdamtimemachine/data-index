@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../../client';
 import type { PlaceIdRow } from '../../row-types';
 import type { CreativeWorkEntity } from '@atm/shared';
-import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers';
+import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers/helpers';
 import { NewFeature } from '../../schema';
 
 export interface TargetRecord {
@@ -79,9 +79,7 @@ export abstract class Ingestor<SourceRecord> {
             LIMIT 1
         `);
 
-        const r = result.rows[0]?.place_id ?? null;
-
-        return r
+        return result.rows[0]?.place_id ?? null;
     });
 
     private async inferPlaceId(target: TargetRecord) {
@@ -103,17 +101,19 @@ export abstract class Ingestor<SourceRecord> {
 
     private async getPlaceMap() {
         const allPlaces = await db.execute<{ preferred_label: string, type: string }>(sql`
-            SELECT DISTINCT preferred_label, type FROM place WHERE type IN ('district', 'neighbourhood', 'street')    
+            SELECT DISTINCT preferred_label, type FROM place  
         `);
 
         const placeMap = new Map<string, { label: string; level: string }>(
-            allPlaces.rows.map(row => [
-                row.preferred_label.toLowerCase(),
-                {
-                    label: row.preferred_label, // Preserves original DB casing if needed
-                    level: row.type
-                }
-            ])
+            allPlaces.rows
+                .filter(row => row.preferred_label != null)
+                .map(row => [
+                    row.preferred_label.toLowerCase(),
+                    {
+                        label: row.preferred_label, // Preserves original DB casing if needed
+                        level: row.type
+                    }
+                ])
         );
 
         return placeMap;
@@ -139,7 +139,6 @@ export abstract class Ingestor<SourceRecord> {
         const place = placeMap.get(match)
 
         if (!place) { 
-            console.log(match, 'not found in map')
             return undefined 
         }
 
@@ -153,10 +152,12 @@ export abstract class Ingestor<SourceRecord> {
     protected async infer_preferred_places(drafts: DraftRecord[]): Promise<TargetRecord[]> {
         const placeMap = await this.getPlaceMap()
 
+        const placeNames = Array.from(placeMap.keys())
+            .map(name => name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'))
+            .sort((a, b) => b.length - a.length); // longest first
+
         const placesPattern = new RegExp(
-            `\\b(${Array.from(placeMap.keys())
-                .map(name => name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'))
-                .join('|')})\\b`, 
+            `\\b(${placeNames.join('|')})\\b`,
             'gi'
         );
 
