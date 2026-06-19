@@ -14,7 +14,10 @@ import { db } from '../../client';
 import type { PlaceIdRow } from '../../row-types';
 import type { CreativeWorkEntity } from '@atm/shared';
 import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers/helpers';
+<<<<<<< HEAD
 import { Ingestor, TargetRecord } from './ingestor';
+=======
+>>>>>>> 3ce5987 (setup trie-structure for place-detection)
 
 interface DelpherSourceData {
   id: string;

@@ -96,7 +96,31 @@ export abstract class Ingestor<SourceRecord> {
         })
     }
 
+<<<<<<< HEAD
     protected constructTargetFromDraft(draft: DraftRecord, pi: PlaceIndex): TargetRecord | undefined {
+=======
+    private async getPlaceMap() {
+        const allPlaces = await db.execute<{ preferred_label: string, type: string }>(sql`
+            SELECT DISTINCT preferred_label, type FROM place  
+        `);
+
+        const placeMap = new Map<string, { label: string; level: string }>(
+            allPlaces.rows
+                .filter(row => row.preferred_label != null)
+                .map(row => [
+                    row.preferred_label.toLowerCase(),
+                    {
+                        label: row.preferred_label, // Preserves original DB casing if needed
+                        level: row.type
+                    }
+                ])
+        );
+
+        return placeMap;
+    }
+
+    protected constructTargetFromDraft(draft: DraftRecord, placesPattern: RegExp, placeMap: Map<string, any>): TargetRecord | undefined {
+>>>>>>> 3ce5987 (setup trie-structure for place-detection)
         if (!draft.description) { 
             return undefined 
         }
@@ -115,6 +139,20 @@ export abstract class Ingestor<SourceRecord> {
     }
 
     protected async infer_preferred_places(drafts: DraftRecord[]): Promise<TargetRecord[]> {
+<<<<<<< HEAD
+=======
+        const placeMap = await this.getPlaceMap()
+
+        const placeNames = Array.from(placeMap.keys())
+            .map(name => name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'))
+            .sort((a, b) => b.length - a.length); // longest first
+
+        const placesPattern = new RegExp(
+            `\\b(${placeNames.join('|')})\\b`,
+            'gi'
+        );
+
+>>>>>>> 3ce5987 (setup trie-structure for place-detection)
         const targets: TargetRecord[] = []
         let skipped = 0;
 
