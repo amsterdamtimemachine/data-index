@@ -3,7 +3,7 @@
  *
  * Parses the RDF file containing Amsterdam streets with LineString geometry
  * and historical name variants. Creates one place row per street (current
- * geometry) and place_name entries for dated name variants.
+ * geometry) and place_historical_name entries for dated name variants.
  *
  * Streets without geometry are skipped (693 out of 7,268).
  * For the 34 streets with multiple geometry versions, the current version
@@ -131,7 +131,7 @@ export async function ingest(filePath: string) {
   );
   console.log(`  ${placeCount} street places created`);
 
-  // Insert place_name entries for dated name variants
+  // Insert place_historical_name entries for dated name variants
   let nameCount = 0;
   const names = createNameWriter(BATCH_SIZE);
 
@@ -152,6 +152,6 @@ export async function ingest(filePath: string) {
   }
   await names.flush();
 
-  console.log(`  ${nameCount} place_name entries created`);
+  console.log(`  ${nameCount} place_historical_name entries created`);
   console.log(`\nDone: ${placeCount} streets, ${nameCount} name variants`);
 }

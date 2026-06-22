@@ -52,7 +52,7 @@ export async function setupTestDb() {
   // schema changes (e.g. a newly added column) to an already-created table. Drop
   // first so the schema always matches this file — otherwise drift silently breaks
   // rebuild-index (which is how the missing grid_config.min_x/min_y went unnoticed).
-  await db.execute(sql`DROP TABLE IF EXISTS grid_config, place_cells, feature_tags, feature_to_place, features, place_name, place, relation, tags, datasets, organisations CASCADE`);
+  await db.execute(sql`DROP TABLE IF EXISTS grid_config, place_cells, feature_tags, feature_to_place, features, place_historical_name, place_geometry, place, relation, tags, datasets, organisations CASCADE`);
 
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS organisations (
@@ -68,20 +68,26 @@ export async function setupTestDb() {
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS place (
       id TEXT PRIMARY KEY, type TEXT NOT NULL,
-      preferred_label TEXT, geometry geometry(Geometry, 28992),
-      spatial_frequency INTEGER,
-      valid_since DATE, valid_until DATE
+      display_name TEXT
     )
   `);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_geometry ON place USING gist(geometry)`);
   await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS place_name (
+    CREATE TABLE IF NOT EXISTS place_geometry (
+      place_id TEXT PRIMARY KEY REFERENCES place(id),
+      geometry geometry(Geometry, 28992),
+      spatial_frequency INTEGER,
+      since DATE, until DATE
+    )
+  `);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_geometry_geom ON place_geometry USING gist(geometry)`);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS place_historical_name (
       id TEXT PRIMARY KEY, place_id TEXT NOT NULL REFERENCES place(id),
       name TEXT, since DATE, until DATE, source TEXT
     )
   `);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_name_place ON place_name(place_id)`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_name_place_since ON place_name(place_id, since)`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_historical_name_place ON place_historical_name(place_id)`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_historical_name_place_since ON place_historical_name(place_id, since)`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS relation (id TEXT PRIMARY KEY, label TEXT NOT NULL)`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS tags (id TEXT PRIMARY KEY, label TEXT NOT NULL)`);
   await db.execute(sql`
@@ -133,7 +139,7 @@ export async function setupTestDb() {
 
 export async function cleanTestDb() {
   await assertTestDb();
-  await db.execute(sql`TRUNCATE grid_config, place_cells, feature_tags, feature_to_place, features, place_name, place, relation, tags, datasets, organisations CASCADE`);
+  await db.execute(sql`TRUNCATE grid_config, place_cells, feature_tags, feature_to_place, features, place_historical_name, place_geometry, place, relation, tags, datasets, organisations CASCADE`);
 }
 
 export async function teardownTestDb() {

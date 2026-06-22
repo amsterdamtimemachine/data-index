@@ -67,10 +67,10 @@ describe('Adressen ingestion', () => {
     expect(await dbq.placeNamesWithNameCount()).toBeGreaterThan(0);
   });
 
-  test('place.preferred_label is the most recent dated place name', async () => {
-    const rows = await dbq.placesWithPreferredLabelAndMostRecent(5);
+  test('place.display_name is the most recent dated place name', async () => {
+    const rows = await dbq.placesWithDisplayNameAndMostRecent(5);
     for (const row of rows) {
-      expect(row.preferredLabel).toBe(row.mostRecent);
+      expect(row.displayName).toBe(row.mostRecent);
     }
   });
 
@@ -211,9 +211,9 @@ describe('getFeatures', () => {
     expect(r.total).toBe(await dbq.featureCountByDataset('joods-monument'));
   });
 
-  test('returns preferredLabel and historicalLabel', async () => {
+  test('returns displayName and historicalLabel', async () => {
     const r = await getFeatures({ bounds: BOUNDS, pageSize: 50 });
-    const withLabel = r.data.find(f => f.preferredLabel);
+    const withLabel = r.data.find(f => f.displayName);
     expect(withLabel).toBeDefined();
     // historicalLabel should also be populated for features within the registry date range
     const withHistorical = r.data.find(f => f.historicalLabel);

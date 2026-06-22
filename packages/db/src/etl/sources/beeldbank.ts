@@ -14,7 +14,7 @@ import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { placeName } from '../../schema';
+import { placeHistoricalName } from '../../schema';
 import type { PlaceIdRow } from '../../row-types';
 import type { MediaObjectEntity } from '@atm/shared';
 import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers';
@@ -68,7 +68,7 @@ export async function ingest(filePath: string) {
   // Address and street resolvers keep separate caches; their URI key spaces don't overlap.
   const resolveByAddress = createCachedResolver(async (adamlinkUri) => {
     const result = await db.execute<PlaceIdRow>(
-      sql`SELECT ${placeName.placeId} as place_id FROM ${placeName} WHERE ${placeName.id} = ${adamlinkUri}`
+      sql`SELECT ${placeHistoricalName.placeId} as place_id FROM ${placeHistoricalName} WHERE ${placeHistoricalName.id} = ${adamlinkUri}`
     );
     return result.rows[0]?.place_id ?? null;
   });

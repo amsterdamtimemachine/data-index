@@ -72,14 +72,14 @@ export async function ingest(filePath: string) {
   // Nearest place within threshold (PostGIS), cached by WKT (rows often share one).
   const resolvePlaceId = createCachedResolver(async (wkt) => {
     const result = await db.execute<PlaceIdRow>(sql`
-      SELECT p.id as place_id
-      FROM place p
+      SELECT g.place_id as place_id
+      FROM place_geometry g
       WHERE ST_DWithin(
-        p.geometry,
+        g.geometry,
         ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992),
         ${MATCH_THRESHOLD_METERS}
       )
-      ORDER BY p.geometry <-> ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992)
+      ORDER BY g.geometry <-> ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992)
       LIMIT 1
     `);
     return result.rows[0]?.place_id ?? null;

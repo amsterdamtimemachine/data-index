@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { CELL_SIZE_METERS } from '@atm/shared';
 import { db } from '../../client';
-import { place, features, featureToPlace, placeCells, gridConfig } from '../../schema';
+import { placeGeometry, features, featureToPlace, placeCells, gridConfig } from '../../schema';
 
 type BBoxRow = {
   min_x: number;
@@ -25,12 +25,12 @@ export async function rebuildIndex() {
   // Get bounds from places that have features linked (in RD coordinates)
   const bbox = await db.execute<BBoxRow>(sql`
     SELECT
-      ST_XMin(ST_Extent(p.geometry)) as min_x,
-      ST_YMin(ST_Extent(p.geometry)) as min_y,
-      ST_XMax(ST_Extent(p.geometry)) as max_x,
-      ST_YMax(ST_Extent(p.geometry)) as max_y
-    FROM ${place} p
-    WHERE EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = p.id)
+      ST_XMin(ST_Extent(pg.geometry)) as min_x,
+      ST_YMin(ST_Extent(pg.geometry)) as min_y,
+      ST_XMax(ST_Extent(pg.geometry)) as max_x,
+      ST_YMax(ST_Extent(pg.geometry)) as max_y
+    FROM ${placeGeometry} pg
+    WHERE EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = pg.place_id)
   `);
   const { min_x, min_y, max_x, max_y } = bbox.rows[0];
 
@@ -57,13 +57,13 @@ export async function rebuildIndex() {
   const pointResult = await db.execute(sql`
     INSERT INTO place_cells (place_id, cell_x, cell_y)
     SELECT DISTINCT
-      p.id as place_id,
+      pg.place_id as place_id,
       FLOOR((ST_X((dp).geom) - ${min_x}) / ${CELL_SIZE_METERS})::smallint as cell_x,
       FLOOR((ST_Y((dp).geom) - ${min_y}) / ${CELL_SIZE_METERS})::smallint as cell_y
-    FROM ${place} p
-    CROSS JOIN LATERAL ST_DumpPoints(p.geometry) dp
-    WHERE GeometryType(p.geometry) IN ('POINT', 'MULTIPOINT')
-      AND EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = p.id)
+    FROM ${placeGeometry} pg
+    CROSS JOIN LATERAL ST_DumpPoints(pg.geometry) dp
+    WHERE GeometryType(pg.geometry) IN ('POINT', 'MULTIPOINT')
+      AND EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = pg.place_id)
   `);
 
   // Lines and polygons: rasterise — keep every grid cell whose rectangle intersects
@@ -73,11 +73,11 @@ export async function rebuildIndex() {
   // cell size are cast to float8 so the cell-envelope arithmetic stays floating point.
   const fillResult = await db.execute(sql`
     WITH featured AS (
-      SELECT p.id, p.geometry
-      FROM ${place} p
-      WHERE p.geometry IS NOT NULL
-        AND GeometryType(p.geometry) NOT IN ('POINT', 'MULTIPOINT')
-        AND EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = p.id)
+      SELECT pg.place_id as id, pg.geometry
+      FROM ${placeGeometry} pg
+      WHERE pg.geometry IS NOT NULL
+        AND GeometryType(pg.geometry) NOT IN ('POINT', 'MULTIPOINT')
+        AND EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = pg.place_id)
     )
     INSERT INTO place_cells (place_id, cell_x, cell_y)
     SELECT f.id, gx::smallint, gy::smallint
@@ -105,17 +105,17 @@ export async function rebuildIndex() {
   const rowCount = (pointResult.rowCount ?? 0) + (fillResult.rowCount ?? 0);
   console.log(`✅ Inserted ${rowCount} rows in ${Date.now() - t}ms`);
 
-  // Update spatial frequency on place (number of cells each place spans)
+  // Update spatial frequency on place_geometry (number of cells each geometry spans)
   console.log('Updating spatial frequency...');
   const spatialResult = await db.execute(sql`
-    UPDATE ${place} p
+    UPDATE ${placeGeometry} pg
     SET spatial_frequency = sub.cell_count
     FROM (
       SELECT place_id, COUNT(*) as cell_count
       FROM ${placeCells}
       GROUP BY place_id
     ) sub
-    WHERE p.id = sub.place_id
+    WHERE pg.place_id = sub.place_id
   `);
   console.log(`  ✅ ${spatialResult.rowCount} places updated`);
 
@@ -143,8 +143,8 @@ export async function rebuildIndex() {
     db.execute<PlaceCountRow>(sql`
       SELECT COUNT(*) as total_places,
         COUNT(*) - COUNT(spatial_frequency) as missing_spatial
-      FROM ${place}
-      WHERE EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = ${place}.id)
+      FROM ${placeGeometry} pg
+      WHERE EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = pg.place_id)
     `)
   ]);
   const { total, missing_temporal } = featureCoverage.rows[0];
@@ -200,11 +200,11 @@ export async function rebuildIndex() {
     `),
     db.execute<MaxFreqRow>(sql`
       SELECT
-        COALESCE(MAX(p.spatial_frequency), 1)::text as max_spatial,
+        COALESCE(MAX(pg.spatial_frequency), 1)::text as max_spatial,
         COALESCE(MAX(f.temporal_frequency), 1)::text as max_temporal
       FROM ${features} f
       JOIN ${featureToPlace} fp ON f.id = fp.feature_id
-      JOIN ${place} p ON fp.place_id = p.id
+      JOIN ${placeGeometry} pg ON fp.place_id = pg.place_id
     `)
   ]);
 

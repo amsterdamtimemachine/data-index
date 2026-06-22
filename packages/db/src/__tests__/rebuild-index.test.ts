@@ -29,8 +29,9 @@ describe('rebuild-index line + polygon rasterisation', () => {
     // A 280m square with fractional corners (so the test also exercises float8
     // cell-origin arithmetic, not just integer coords). As the only featured place
     // it anchors min_x/min_y to its own corner → a 3x3 block of 100m cells (0..2).
+    await db.execute(sql`INSERT INTO place (id, type) VALUES (${POLY_ID}, 'neighbourhood')`);
     await db.execute(sql`
-      INSERT INTO place (id, type, geometry) VALUES (${POLY_ID}, 'neighbourhood',
+      INSERT INTO place_geometry (place_id, geometry) VALUES (${POLY_ID},
         ST_GeomFromText('POLYGON((120000.5 485000.5, 120280.5 485000.5, 120280.5 485280.5, 120000.5 485280.5, 120000.5 485000.5))', 28992))
     `);
     await db.execute(sql`
@@ -41,8 +42,9 @@ describe('rebuild-index line + polygon rasterisation', () => {
 
     // A line up-and-right of the polygon (so it doesn't move the min_x/min_y anchor),
     // mid-cell endpoints → it crosses exactly 3 cells in one row: (10,10),(11,10),(12,10).
+    await db.execute(sql`INSERT INTO place (id, type) VALUES (${LINE_ID}, 'street')`);
     await db.execute(sql`
-      INSERT INTO place (id, type, geometry) VALUES (${LINE_ID}, 'street',
+      INSERT INTO place_geometry (place_id, geometry) VALUES (${LINE_ID},
         ST_GeomFromText('LINESTRING(121030.5 486050.5, 121270.5 486050.5)', 28992))
     `);
     await db.execute(sql`
@@ -73,7 +75,7 @@ describe('rebuild-index line + polygon rasterisation', () => {
 
   test('spatial_frequency reflects the filled cell count', async () => {
     const r = await db.execute<{ spatial_frequency: number }>(
-      sql`SELECT spatial_frequency FROM place WHERE id = ${POLY_ID}`
+      sql`SELECT spatial_frequency FROM place_geometry WHERE place_id = ${POLY_ID}`
     );
     expect(r.rows[0].spatial_frequency).toBe(9);
   });

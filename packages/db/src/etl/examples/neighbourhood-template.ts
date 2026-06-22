@@ -6,8 +6,8 @@
  * Input is JSON. Each record names the area, its level (wijk/buurt), and a date range;
  * the script resolves it to the matching `place` by:
  *   - place.type        = district (wijk) | neighbourhood (buurt)   ← from `level`
- *   - preferred_label    matched case-insensitively                 ← from `area`
- *   - the era whose [valid_since, valid_until) window OVERLAPS the record's date range
+ *   - place.display_name matched case-insensitively                 ← from `area`
+ *   - the geometry whose [since, until) window OVERLAPS the record's date range
  *     the most (the same range-overlap test the histogram/heatmap use)
  * Records with no matching place are skipped (same as the point templates).
  *
@@ -18,8 +18,8 @@
  * where both exist at once. A range straddling a boundary attaches to whichever era it
  * overlaps most.
  *
- * Neighbourhoods/districts have no `place_name` history, so the only label to match on
- * is `preferred_label` — there is no historical/alternative name for these.
+ * Neighbourhoods/districts have no `place_historical_name` history, so the only label to
+ * match on is `display_name` — there is no historical/alternative name for these.
  *
  * To use:
  * 1. Copy to packages/db/src/etl/sources/<your-dataset>.ts
@@ -63,7 +63,7 @@ interface RawRecord {
   title: string;
   description?: string;     // optional → features.description (shown on the card)
   author?: string;          // optional → an example of schema.org entity (JSONB) metadata
-  area: string;             // neighbourhood / district name → matched to place.preferred_label
+  area: string;             // neighbourhood / district name → matched to place.display_name
   level: 'wijk' | 'buurt';  // → place.type (district / neighbourhood)
   date_start: string;       // "YYYY-MM-DD" — with date_end, selects the era by range overlap
   date_end: string;
@@ -76,7 +76,7 @@ export async function ingest(filePath: string) {
     relation: { id: RELATION_ID, label: RELATION_LABEL },
   });
 
-  // Resolve (level, area, [start,end]) → the era place whose [valid_since, valid_until)
+  // Resolve (level, area, [start,end]) → the era place whose [since, until)
   // window OVERLAPS the record's date range the most. The WHERE clause is the same
   // range-overlap test the rest of the app uses (featureYearOverlap); the ORDER BY then
   // breaks straddlers toward the era they overlap most (a 1905–1915 buurt feature lands
@@ -86,17 +86,19 @@ export async function ingest(filePath: string) {
     const { level, area, start, end } = JSON.parse(key) as { level: string; area: string; start: string; end: string };
     const type = level === 'wijk' ? 'district' : 'neighbourhood';
     const result = await db.execute<PlaceIdRow>(sql`
-      SELECT id as place_id FROM place
-      WHERE type = ${type}
-        AND preferred_label ILIKE ${area}
-        AND valid_since <= ${end}::date
-        AND (valid_until IS NULL OR valid_until > ${start}::date)
+      SELECT p.id as place_id
+      FROM place p
+      JOIN place_geometry g ON g.place_id = p.id
+      WHERE p.type = ${type}
+        AND p.display_name ILIKE ${area}
+        AND g.since <= ${end}::date
+        AND (g.until IS NULL OR g.until > ${start}::date)
       ORDER BY GREATEST(
                  0,
-                 LEAST(${end}::date, COALESCE(valid_until, 'infinity'::date))
-                   - GREATEST(${start}::date, valid_since)
+                 LEAST(${end}::date, COALESCE(g.until, 'infinity'::date))
+                   - GREATEST(${start}::date, g.since)
                ) DESC,
-               valid_since DESC
+               g.since DESC
       LIMIT 1
     `);
     return result.rows[0]?.place_id ?? null;

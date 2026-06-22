@@ -36,11 +36,11 @@
 		>
 			{feature.label}
 		</Heading>
-		{#if feature.relationId || feature.preferredLabel || feature.historicalLabel}
-			{@const placeName = feature.historicalLabel || feature.preferredLabel}
-			{@const showBoth = feature.historicalLabel && feature.preferredLabel && feature.historicalLabel !== feature.preferredLabel}
+		{#if feature.relationId || feature.displayName || feature.historicalLabel}
+			{@const placeName = feature.historicalLabel || feature.displayName}
+			{@const showBoth = feature.historicalLabel && feature.displayName && feature.historicalLabel !== feature.displayName}
 			<p class="italic text-gray-500 {expanded ? 'px-2 mb-2' : 'mb-1'} text-base">
-				{feature.relationId ? translate(feature.relationId) : ''}{placeName ? ` ${placeName}` : ''}{showBoth ? ` (nu ${feature.preferredLabel})` : ''}
+				{feature.relationId ? translate(feature.relationId) : ''}{placeName ? ` ${placeName}` : ''}{showBoth ? ` (nu ${feature.displayName})` : ''}
 			</p>
 		{/if}
 		<!-- Feature-specific content -->

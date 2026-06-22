@@ -10,7 +10,7 @@
  * units, and from the begin year (1600 = wijk, 1850/1909 = buurt) for the historical
  * ones — every subject carries exactly one of the two, so the split is total.
  *
- * Each place's era is persisted as valid_since/valid_until. Historical units use their
+ * Each place's era is persisted as place_geometry.since/until. Historical units use their
  * own TTL begin/end years (1600 wijken [1600,1850), 1850 buurten [1850,1909), 1909
  * buurten [1909,1921)). Present-day CBS units carry no dates, so each CBS layer is
  * extended back to where its predecessor ends — CBS buurten from 1921, CBS wijken from
@@ -40,8 +40,8 @@ interface District {
   label: string;
   wkt: string;
   type: DistrictType;
-  validSince: string;
-  validUntil: string | null;
+  since: string;
+  until: string | null;
 }
 
 /**
@@ -115,14 +115,14 @@ export async function ingest(filePath: string) {
     }
 
     // Present-day (CBS) → open-ended window from the vintage year; historical units →
-    // their own TTL begin/end (e.g. an 1850 buurt → valid_since 1850, valid_until 1909).
+    // their own TTL begin/end (e.g. an 1850 buurt → since 1850, until 1909).
     const end = endYears.get(uri) ?? null;
-    const validSince = cbs
+    const since = cbs
       ? (type === 'district' ? CBS_WIJK_VALID_SINCE : CBS_BUURT_VALID_SINCE)
       : `${begin}-01-01`;
-    const validUntil = cbs ? null : (end ? `${end}-01-01` : null);
+    const until = cbs ? null : (end ? `${end}-01-01` : null);
 
-    districts.push({ uri, label, wkt, type, validSince, validUntil });
+    districts.push({ uri, label, wkt, type, since, until });
   }
 
   const wijken = districts.filter(d => d.type === 'district').length;
@@ -130,7 +130,7 @@ export async function ingest(filePath: string) {
   console.log(`Resolved ${districts.length} places: ${wijken} districts (wijken), ${buurten} neighbourhoods (buurten)${skipped ? `, ${skipped} skipped` : ''}`);
 
   const inserted = await insertPlaces(
-    districts.map(d => ({ id: d.uri, type: d.type, label: d.label, wkt: d.wkt, validSince: d.validSince, validUntil: d.validUntil })),
+    districts.map(d => ({ id: d.uri, type: d.type, label: d.label, wkt: d.wkt, since: d.since, until: d.until })),
     { sourceSrid: 4326, onConflict: 'replaceAll' }
   );
 

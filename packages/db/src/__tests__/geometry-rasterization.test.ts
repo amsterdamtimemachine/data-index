@@ -24,7 +24,8 @@ async function cellsForGeometry(wkt: string, type = 'neighbourhood'): Promise<Se
   const pid = `geo-${counter}`;
   const fid = `22222222-2222-2222-2222-${String(counter).padStart(12, '0')}`;
   counter++;
-  await db.execute(sql`INSERT INTO place (id, type, geometry) VALUES (${pid}, ${type}, ST_GeomFromText(${wkt}, 28992))`);
+  await db.execute(sql`INSERT INTO place (id, type) VALUES (${pid}, ${type})`);
+  await db.execute(sql`INSERT INTO place_geometry (place_id, geometry) VALUES (${pid}, ST_GeomFromText(${wkt}, 28992))`);
   await db.execute(sql`INSERT INTO features (id, record_type, label, start_date, end_date, dataset_id)
     VALUES (${fid}, 'image', 'g feat', '1950-01-01', '1950-12-31', 'geo-ds')`);
   await db.execute(sql`INSERT INTO feature_to_place (feature_id, place_id, relation_id) VALUES (${fid}, ${pid}, 'isAbout')`);

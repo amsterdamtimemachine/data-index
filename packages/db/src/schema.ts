@@ -30,26 +30,33 @@ export const datasets = pgTable('datasets', {
 });
 
 // ============================================================================
-// PLACE - Physical geographic locations (one per LPS linked point)
+// PLACE - Physical geographic locations (identity); geometry in place_geometry
 // ============================================================================
 export const place = pgTable('place', {
   id: text('id').primaryKey(),                    // "lp-1000001"
   type: text('type').notNull(),                   // "address" | "street" | "neighbourhood" (buurt) | "district" (wijk)
-  preferredLabel: text('preferred_label'),         // preferred display name (most recent place_name entry)
+  displayName: text('display_name')              // name shown for the place; dated past names live in place_historical_name
+});
+
+// ============================================================================
+// PLACE_GEOMETRY - A place's geometry and the period it was valid (1:1 with place)
+// ============================================================================
+export const placeGeometry = pgTable('place_geometry', {
+  placeId: text('place_id').primaryKey().references(() => place.id),
   geometry: geometry('geometry'),                 // POINT, LINESTRING, or POLYGON
-  spatialFrequency: integer('spatial_frequency'), // number of base cells this place's geometry spans
-  // Era this geometry was the city's division — set ONLY for neighbourhood/district
-  // (null for address/street, whose name dates live on place_name). valid_until null = open/current.
-  validSince: date('valid_since'),
-  validUntil: date('valid_until')
+  spatialFrequency: integer('spatial_frequency'), // number of base cells this geometry spans
+  // Period this geometry was the city's division — set ONLY for neighbourhood/district
+  // (null for address/street). until null = open/current.
+  since: date('since'),
+  until: date('until')
 }, (table) => [
-  index('idx_place_geometry').using('gist', table.geometry)
+  index('idx_place_geometry_geom').using('gist', table.geometry)
 ]);
 
 // ============================================================================
-// PLACE_NAME - Historical names for places (addresses, streets, buildings)
+// PLACE_HISTORICAL_NAME - Dated past names for places (addresses, streets)
 // ============================================================================
-export const placeName = pgTable('place_name', {
+export const placeHistoricalName = pgTable('place_historical_name', {
   id: text('id').primaryKey(),                    // adamlink URI "https://adamlink.nl/geo/address/A1"
   placeId: text('place_id').notNull().references(() => place.id),
   name: text('name'),                             // "Prins Hendrikkade 93"
@@ -57,8 +64,8 @@ export const placeName = pgTable('place_name', {
   until: date('until'),                           // name valid until this date
   source: text('source')                          // "pw-1943"
 }, (table) => [
-  index('idx_place_name_place').on(table.placeId),
-  index('idx_place_name_place_since').on(table.placeId, table.since)
+  index('idx_place_historical_name_place').on(table.placeId),
+  index('idx_place_historical_name_place_since').on(table.placeId, table.since)
 ]);
 
 // ============================================================================
@@ -172,8 +179,11 @@ export type NewDataset = typeof datasets.$inferInsert;
 export type Place = typeof place.$inferSelect;
 export type NewPlace = typeof place.$inferInsert;
 
-export type PlaceName = typeof placeName.$inferSelect;
-export type NewPlaceName = typeof placeName.$inferInsert;
+export type PlaceGeometry = typeof placeGeometry.$inferSelect;
+export type NewPlaceGeometry = typeof placeGeometry.$inferInsert;
+
+export type PlaceHistoricalName = typeof placeHistoricalName.$inferSelect;
+export type NewPlaceHistoricalName = typeof placeHistoricalName.$inferInsert;
 
 export type Relation = typeof relation.$inferSelect;
 export type NewRelation = typeof relation.$inferInsert;

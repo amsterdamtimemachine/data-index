@@ -77,7 +77,7 @@ export interface FeatureResult {
   temporalFrequency: number;
   entity?: Entity;
   relationId?: string;
-  preferredLabel?: string;
+  displayName?: string;
   historicalLabel?: string;
 }
 
