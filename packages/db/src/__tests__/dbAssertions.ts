@@ -151,6 +151,13 @@ export async function featureCountByDataset(datasetId: string): Promise<number> 
   return parseInt(r.rows[0].count);
 }
 
+export async function featureUrlsByDataset(datasetId: string): Promise<string[]> {
+  const r = await db.execute<{ url: string }>(
+    sql`SELECT url FROM features WHERE dataset_id = ${datasetId}`
+  );
+  return r.rows.map((row) => row.url);
+}
+
 export async function firstFeatureDateRange(
   datasetId: string
 ): Promise<{ startDate: string; endDate: string }> {

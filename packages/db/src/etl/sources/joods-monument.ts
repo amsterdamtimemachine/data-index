@@ -75,8 +75,8 @@ export async function ingest(filePath: string) {
 
   const writer = createFeatureWriter(BATCH_SIZE);
   // The source lists some people on several rows — identical except for a jittered
-  // `wkt` we don't use (jm links by the adamlink address URI). Dedup by person URL
-  // so we don't emit the same feature id twice (which the upsert would reject).
+  // `wkt` we don't use (jm links by the adamlink address URI). Dedup by person page
+  // id so we don't emit the same feature id twice (which the upsert would reject).
   const committedPersons = new Set<string>();
   const seenLinks = new Set<string>();
   let featureCount = 0;
@@ -93,12 +93,13 @@ export async function ingest(filePath: string) {
       continue;
     }
 
-    const featureId = featureUuid(row.person);
+    const personId = row.person.match(/\/page\/(\d+)/)?.[1] ?? row.person;
+    const featureId = featureUuid(personId);
 
-    if (committedPersons.has(row.person)) {
+    if (committedPersons.has(personId)) {
       duplicates++;
     } else {
-      committedPersons.add(row.person);
+      committedPersons.add(personId);
       const entity: PersonEntity = {
         type: 'Person',
         name: row.name,

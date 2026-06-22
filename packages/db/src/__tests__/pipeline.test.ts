@@ -87,6 +87,16 @@ describe('Feature ingestion', () => {
     expect(images).toBe(await dbq.featureCountByDataset('beeldbank'));
   });
 
+  test('beeldbank feature urls use the id.archief.amsterdam resolver form', async () => {
+    // The source `resource` is an internal memorix URL; ingestion rewrites it to the
+    // canonical resolver link (id.archief.amsterdam/<identifier>). Guard the rewrite.
+    const urls = await dbq.featureUrlsByDataset('beeldbank');
+    expect(urls.length).toBeGreaterThan(0);
+    for (const url of urls) {
+      expect(url).toMatch(/^https:\/\/id\.archief\.amsterdam\/.+/);
+    }
+  });
+
   test('joods-monument dedups duplicate person rows (6 fixture rows, 5 distinct persons)', async () => {
     // The fixture repeats one person on a second row (differing only in wkt, which
     // jm ignores). Without source dedup the seed would error on the upsert; with it
