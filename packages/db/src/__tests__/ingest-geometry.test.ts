@@ -57,10 +57,10 @@ describe('line/polygon ingestion produces the right geometry types', () => {
 
     // Era windows persisted to place_geometry.since/until: historical units from the TTL's
     // begin/end years, present-day CBS open-ended from CBS_VALID_SINCE.
-    const eras = await db.execute<{ id: string; valid_since: string | null; valid_until: string | null }>(
-      sql`SELECT place_id AS id, since::text AS valid_since, until::text AS valid_until FROM place_geometry ORDER BY place_id`
+    const eras = await db.execute<{ id: string; since: string | null; until: string | null }>(
+      sql`SELECT place_id AS id, since::text AS since, until::text AS until FROM place_geometry ORDER BY place_id`
     );
-    const era = new Map(eras.rows.map(r => [r.id, [r.valid_since, r.valid_until]]));
+    const era = new Map(eras.rows.map(r => [r.id, [r.since, r.until]]));
     expect(era.get(D('D1'))).toEqual(['1600-01-01', '1850-01-01']); // historical 1600 wijk
     expect(era.get(D('D2'))).toEqual(['1850-01-01', '1909-01-01']); // historical 1850 buurt
     expect(era.get(D('D3'))).toEqual(['1850-01-01', null]); // CBS wijk — extended back to fill the wijk gap
