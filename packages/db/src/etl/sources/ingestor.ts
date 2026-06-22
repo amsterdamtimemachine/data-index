@@ -5,6 +5,7 @@ import type { PlaceIdRow } from '../../row-types';
 import type { CreativeWorkEntity } from '@atm/shared';
 import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers/helpers';
 import { NewFeature } from '../../schema';
+import { constructTrie, getPlaceMap, match, node } from '../helpers/place-extractor';
 
 export interface TargetRecord {
     id: string;
@@ -99,44 +100,24 @@ export abstract class Ingestor<SourceRecord> {
         })
     }
 
-    private async getPlaceMap() {
-        const allPlaces = await db.execute<{ preferred_label: string, type: string }>(sql`
-            SELECT DISTINCT preferred_label, type FROM place  
-        `);
-
-        const placeMap = new Map<string, { label: string; level: string }>(
-            allPlaces.rows
-                .filter(row => row.preferred_label != null)
-                .map(row => [
-                    row.preferred_label.toLowerCase(),
-                    {
-                        label: row.preferred_label, // Preserves original DB casing if needed
-                        level: row.type
-                    }
-                ])
-        );
-
-        return placeMap;
-    }
-
-    protected constructTargetFromDraft(draft: DraftRecord, placesPattern: RegExp, placeMap: Map<string, any>): TargetRecord | undefined {
+    protected constructTargetFromDraft(draft: DraftRecord, root: node, placeMap: Map<string, any>): TargetRecord | undefined {
         if (!draft.description) { 
             return undefined 
         }
 
-        const matchedPlaces = draft.description.match(placesPattern)
+        const matchedPlaces = match(draft.description, root)
 
         if (!matchedPlaces || matchedPlaces.length <= 0) {
             return undefined 
         }
 
         const matches = [...new Set(
-            matchedPlaces.map(m => m.toLocaleLowerCase())
+            matchedPlaces.map(m => m.value.toLocaleLowerCase())
             .sort((a, b) => b.length - a.length || a.localeCompare(b)
         ))]// TODO: allow multiple places
 
-        const match = matches[0]
-        const place = placeMap.get(match)
+        const m = matches[0]
+        const place = placeMap.get(m)
 
         if (!place) { 
             return undefined 
@@ -144,28 +125,20 @@ export abstract class Ingestor<SourceRecord> {
 
         return {
             ...draft,
-            area: place.label,
-            level: place.level
+            area: m,
+            level: place
         } as TargetRecord
     }
 
     protected async infer_preferred_places(drafts: DraftRecord[]): Promise<TargetRecord[]> {
-        const placeMap = await this.getPlaceMap()
-
-        const placeNames = Array.from(placeMap.keys())
-            .map(name => name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'))
-            .sort((a, b) => b.length - a.length); // longest first
-
-        const placesPattern = new RegExp(
-            `\\b(${placeNames.join('|')})\\b`,
-            'gi'
-        );
-
         const targets: TargetRecord[] = []
         let skipped = 0;
 
+        const placeMap = await getPlaceMap()
+        const root: node = constructTrie(placeMap)
+
         for (const draft of drafts) {
-            const target = this.constructTargetFromDraft(draft, placesPattern, placeMap)
+            const target = this.constructTargetFromDraft(draft, root, placeMap)
 
             if (!target) { 
                 skipped++; 
@@ -231,7 +204,6 @@ export abstract class Ingestor<SourceRecord> {
 
         let skipped = 0
         let count = 0
-        
         for (const target of targetRecords) {
             const feature: NewFeature | undefined = await this.constructFeature(target)
             if (!feature) { 

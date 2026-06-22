@@ -29,7 +29,6 @@ export class Test extends Ingestor<TestSourceData> {
             date_end: source.datePublished + '-01-2'
         }
     }
-
 }
 
 const ingestor = new Test()
@@ -37,4 +36,3 @@ const ingestor = new Test()
 export async function ingest(filePath:string) {
     await ingestor.ingest(filePath)
 }
-
