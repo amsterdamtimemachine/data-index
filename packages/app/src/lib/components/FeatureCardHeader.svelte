@@ -2,7 +2,7 @@
 	import type { FeatureResult } from '@atm/shared/types';
 	import { mergeCss } from '$utils/utils';
 	import { formatTimePeriod } from '$utils/format';
-	import { translateContentType, translatePlaceType } from '$utils/translations';
+	import { translate } from '$utils/translations';
 	import Tag from './Tag.svelte';
 
 	type Props = {
@@ -18,11 +18,11 @@
 	<div class="flex w-full flex-wrap justify-between items-center gap-2">
 		<div class="flex flex-wrap items-center gap-2">
 			<Tag variant="outline" class="flex-shrink-0">
-				{translateContentType(feature.recordType)}
+				{translate(feature.recordType)}
 			</Tag>
 			{#if feature.placeType}
 				<Tag variant="outline" class="flex-shrink-0">
-					{translatePlaceType(feature.placeType)}
+					{translate(feature.placeType)}
 				</Tag>
 			{/if}
 		</div>

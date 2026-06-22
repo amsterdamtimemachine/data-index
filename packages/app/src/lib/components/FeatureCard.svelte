@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { FeatureResult } from '@atm/shared/types';
-	import { t } from '$utils/translations';
+	import { translate } from '$utils/translations';
 	import { featureViewerState } from '$lib/state/featureState.svelte';
 	import FeatureCardHeader from '$components/FeatureCardHeader.svelte';
 	import FeatureCardFooter from '$components/FeatureCardFooter.svelte';
@@ -40,7 +40,7 @@
 			{@const placeName = feature.historicalLabel || feature.preferredLabel}
 			{@const showBoth = feature.historicalLabel && feature.preferredLabel && feature.historicalLabel !== feature.preferredLabel}
 			<p class="italic text-gray-500 {expanded ? 'px-2 mb-2' : 'mb-1'} text-base">
-				{feature.relationId ? t(feature.relationId) : ''}{placeName ? ` ${placeName}` : ''}{showBoth ? ` (nu ${feature.preferredLabel})` : ''}
+				{feature.relationId ? translate(feature.relationId) : ''}{placeName ? ` ${placeName}` : ''}{showBoth ? ` (nu ${feature.preferredLabel})` : ''}
 			</p>
 		{/if}
 		<!-- Feature-specific content -->

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { mergeCss } from '$utils/utils';
-	import { translateContentTypes } from '$utils/translations';
+	import { translateAll } from '$utils/translations';
 	import Tag from './Tag.svelte';
 	import type { RecordType } from '@atm/shared/types';
 
@@ -47,11 +47,11 @@
 	);
 
 	const displayedRecordTypes = $derived(
-		translateContentTypes(hasAllTypes ? allRecordTypes : selectedRecordTypes)
+		translateAll(hasAllTypes ? allRecordTypes : selectedRecordTypes)
 	);
 
 	const displayedPlaceTypes = $derived(
-		hasAllPlaceTypes ? [] : selectedPlaceTypes
+		translateAll(hasAllPlaceTypes ? [] : selectedPlaceTypes)
 	);
 
 	const displayedDatasets = $derived(
