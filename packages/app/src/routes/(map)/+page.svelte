@@ -228,9 +228,11 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 		{/if}
 
 		<NavContainer bind:isExpanded={navExpanded} class="absolute top-0 left-0 z-30">
-			<Nav class="p-3">
-				<NavItem href="/about" label="Over" />
-			</Nav>
+			{#snippet header()}
+				<Nav class="p-3">
+					<NavItem href="/about" label="Over" />
+				</Nav>
+			{/snippet}
 			<div class="p-3">
 					
 				<div class="mb-4">
