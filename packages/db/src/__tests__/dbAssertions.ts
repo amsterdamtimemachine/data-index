@@ -99,18 +99,31 @@ export interface PlaceDisplayNameVsMostRecent {
 export async function placesWithDisplayNameAndMostRecent(
   limit: number = 5
 ): Promise<PlaceDisplayNameVsMostRecent[]> {
+<<<<<<< HEAD
   const r = await db.execute<{ place_id: string; name: string; most_recent: string }>(sql`
     SELECT p.id as place_id, p.name,
+=======
+  const r = await db.execute<{ place_id: string; display_name: string; most_recent: string }>(sql`
+    SELECT p.id as place_id, p.display_name,
+>>>>>>> 4bfc998 (move place geometry to its own 'place_geometry' table, rename preferred_label to display_name, rename place_name table to place_historical_name)
       (SELECT pn.name FROM place_historical_name pn
        WHERE pn.place_id = p.id AND pn.name IS NOT NULL
        ORDER BY pn.since DESC LIMIT 1) as most_recent
     FROM place p
+<<<<<<< HEAD
     WHERE p.name IS NOT NULL
+=======
+    WHERE p.display_name IS NOT NULL
+>>>>>>> 4bfc998 (move place geometry to its own 'place_geometry' table, rename preferred_label to display_name, rename place_name table to place_historical_name)
     LIMIT ${limit}
   `);
   return r.rows.map(row => ({
     placeId: row.place_id,
+<<<<<<< HEAD
     displayName: row.name,
+=======
+    displayName: row.display_name,
+>>>>>>> 4bfc998 (move place geometry to its own 'place_geometry' table, rename preferred_label to display_name, rename place_name table to place_historical_name)
     mostRecent: row.most_recent,
   }));
 }
