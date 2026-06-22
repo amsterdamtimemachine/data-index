@@ -2,8 +2,10 @@
  * Import Beeldbank (Amsterdam Stadsarchief image archive) features
  *
  * Streams a CSV where each row is one (image x place-link). Same `resource`
- * can appear on multiple rows for different linked places. Dedups features
- * by `resource`. Links to place using a cascade: address first, then street.
+ * can appear on multiple rows for different linked places. Dedups features by
+ * the archive object identifier (last path segment of `resource`); the stored
+ * feature URL is the canonical resolver link built from that identifier.
+ * Links to place using a cascade: address first, then street.
  * Features that resolve neither are dropped.
  *
  * Usage: bun run db:ingest -s beeldbank -f <path-to-beeldbank.csv>
@@ -30,6 +32,7 @@ const ORG_URL = 'https://archief.amsterdam';
 const DATASET_ID = 'beeldbank';
 const DATASET_LABEL = 'Beeldbank';
 const DATASET_URL = 'https://archief.amsterdam/beeldbank';
+const RESOLVER_BASE = 'https://id.archief.amsterdam';
 
 // ═══════════════════════════════════════════════════════════════
 //  Feature metadata
@@ -90,7 +93,7 @@ export async function ingest(filePath: string) {
 
   const writer = createFeatureWriter(BATCH_SIZE);
 
-  function buildFeatureData(row: RawRow) {
+  function buildFeatureData(row: RawRow, identifier: string) {
     const name = row.title?.trim() || '';
     const contentUrl = row.thumbnail?.trim() || '';
     const startDate = row.startDate?.trim() || null;
@@ -105,7 +108,7 @@ export async function ingest(filePath: string) {
     };
 
     return {
-      url: row.resource.trim(),
+      url: `${RESOLVER_BASE}/${identifier}`,
       recordType: RECORD_TYPE,
       label: name,
       contentUrl,
@@ -120,8 +123,10 @@ export async function ingest(filePath: string) {
     .pipe(parse({ columns: true, relax_column_count: true, bom: true }));
 
   for await (const row of csvParser as AsyncIterable<RawRow>) {
-    const sourceUrl = row.resource?.trim();
-    if (!sourceUrl) continue;
+    const resource = row.resource?.trim();
+    if (!resource) continue;
+    const identifier = resource.split('/').pop() ?? '';
+    if (!identifier) continue;
 
     const adamlinkUri = row.address?.trim();
     let placeId: string | null = null;
@@ -130,27 +135,27 @@ export async function ingest(filePath: string) {
       if (!placeId) skippedLinks++;
     }
 
-    let featureId = committedFeatures.get(sourceUrl);
+    let featureId = committedFeatures.get(identifier);
 
     if (!featureId) {
-      if (!pendingFeatures.has(sourceUrl)) {
-        pendingFeatures.set(sourceUrl, buildFeatureData(row));
+      if (!pendingFeatures.has(identifier)) {
+        pendingFeatures.set(identifier, buildFeatureData(row, identifier));
       }
 
       // Remember street URIs for the fallback pass
       const streetUri = row.street?.trim();
       if (streetUri) {
-        if (!pendingStreetUris.has(sourceUrl)) pendingStreetUris.set(sourceUrl, new Set());
-        pendingStreetUris.get(sourceUrl)!.add(streetUri);
+        if (!pendingStreetUris.has(identifier)) pendingStreetUris.set(identifier, new Set());
+        pendingStreetUris.get(identifier)!.add(streetUri);
       }
 
       if (!placeId) continue;
 
-      featureId = featureUuid(sourceUrl);
-      writer.addFeature({ id: featureId, ...pendingFeatures.get(sourceUrl)! });
-      committedFeatures.set(sourceUrl, featureId);
-      pendingFeatures.delete(sourceUrl);
-      pendingStreetUris.delete(sourceUrl);
+      featureId = featureUuid(identifier);
+      writer.addFeature({ id: featureId, ...pendingFeatures.get(identifier)! });
+      committedFeatures.set(identifier, featureId);
+      pendingFeatures.delete(identifier);
+      pendingStreetUris.delete(identifier);
       featureCount++;
     }
 
@@ -177,8 +182,8 @@ export async function ingest(filePath: string) {
   console.log(`\n\nStreet fallback: ${pendingFeatures.size} resources to try...`);
   let streetResolved = 0;
 
-  for (const [sourceUrl, featureData] of pendingFeatures) {
-    const streetUris = pendingStreetUris.get(sourceUrl);
+  for (const [identifier, featureData] of pendingFeatures) {
+    const streetUris = pendingStreetUris.get(identifier);
     if (!streetUris) continue;
 
     let resolvedPlaceId: string | null = null;
@@ -188,7 +193,7 @@ export async function ingest(filePath: string) {
     }
 
     if (resolvedPlaceId) {
-      const featureId = featureUuid(sourceUrl);
+      const featureId = featureUuid(identifier);
       writer.addFeature({ id: featureId, ...featureData });
       writer.addLink({ featureId, placeId: resolvedPlaceId, relationId: RELATION_ID });
       featureCount++;

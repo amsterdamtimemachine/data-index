@@ -101,7 +101,7 @@ export async function ingest(filePath: string) {
   let skipped = 0;
 
   for await (const row of csvParser as AsyncIterable<RawRow>) {
-    if (!row.geom_wkt || !row.url) continue;
+    if (!row.geom_wkt || !row.url || !row.id) continue;
 
     const placeId = await resolvePlaceId(row.geom_wkt);
     if (!placeId) {
@@ -119,7 +119,7 @@ export async function ingest(filePath: string) {
       ...(dateCreated && { dateCreated })
     };
 
-    const featureId = featureUuid(row.url);
+    const featureId = featureUuid(row.id);
 
     writer.addFeature({
       id: featureId,

@@ -267,7 +267,7 @@ The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Ada
 
 Adamlink place data must be ingested before any dataset. See the [Development](#development) or [Production](#production) sections for the full ingestion order.
 
-Every `place` row is sourced from Adamlink. Features that can't be resolved to an existing Adamlink place are skipped at ingest; no feature row is created and nothing unlinked lands in the database.
+Every `place` row is sourced from Adamlink. A feature is skipped at ingest if it can't be resolved to an existing place, or if it lacks the stable source identifier its `id` is derived from — no feature row is created and nothing unlinked lands in the database.
 
 If you are deploying this for **another Dutch city**, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. The `geometry-point-template.ts` example shows how to match incoming coordinates to existing places; for creating new places, adapt the pattern from `lps.ts`. The core requirement is that each feature links to a `place` row that has a geometry.
 
