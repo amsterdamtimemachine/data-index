@@ -13,7 +13,7 @@
 	let { level, depth, id, style, class: className, children }: Props = $props();
 	
 	// Use depth from svelte-markdown if available, otherwise fallback to level prop
-	const headingLevel = depth ?? level ?? 1;
+	const headingLevel = $derived(depth ?? level ?? 1);
 
 	const levelStyles = {
 		1: 'text-2xl font-bold mb-4',

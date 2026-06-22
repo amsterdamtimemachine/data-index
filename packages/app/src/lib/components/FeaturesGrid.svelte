@@ -13,7 +13,7 @@
 	let { features, columns, layoutMemory }: Props = $props();
 
 	// Use programmatic responsive columns if no explicit columns prop provided
-	const useResponsiveColumns = columns === undefined;
+	const useResponsiveColumns = $derived(columns === undefined);
 
 	let masonryContainer = $state<HTMLElement>();
 	let masonry: MasonryMemoizedInstance | null = null;

@@ -20,7 +20,7 @@
 	const orderedClasses = 'list-decimal list-inside pl-4';
 	const unorderedClasses = 'list-disc list-inside pl-4';
 	
-	const listClasses = ordered ? orderedClasses : unorderedClasses;
+	const listClasses = $derived(ordered ? orderedClasses : unorderedClasses);
 </script>
 
 {#if ordered}
