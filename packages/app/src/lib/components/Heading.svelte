@@ -3,7 +3,7 @@
 
 	interface Props {
 		level?: 1 | 2 | 3 | 4 | 5 | 6;
-		depth?: 1 | 2 | 3 | 4 | 5 | 6; // For svelte-markdown compatibility
+		depth?: 1 | 2 | 3 | 4 | 5 | 6;
 		id?: string;
 		style?: string;
 		class?: string;
@@ -11,8 +11,7 @@
 	}
 
 	let { level, depth, id, style, class: className, children }: Props = $props();
-	
-	// Use depth from svelte-markdown if available, otherwise fallback to level prop
+
 	const headingLevel = $derived(depth ?? level ?? 1);
 
 	const levelStyles = {

@@ -2,13 +2,16 @@
 import adapter from "svelte-adapter-bun";
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { preprocessMeltUI, sequence } from '@melt-ui/pp';
+import { mdsvex } from 'mdsvex';
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
+	extensions: ['.svelte', '.svx'],
 	preprocess: sequence([
 		vitePreprocess({
 			script: true // Make sure this is enabled for TypeScript
 		}),
+		mdsvex({ extensions: ['.svx'] }),
 		preprocessMeltUI()
 	]),
 

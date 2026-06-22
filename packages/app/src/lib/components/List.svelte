@@ -3,8 +3,8 @@
 	import type { Snippet } from 'svelte';
 
 	interface Props {
-		ordered?: boolean; // For svelte-markdown compatibility
-		start?: number; // For svelte-markdown compatibility (ol start attribute)
+		ordered?: boolean;
+		start?: number; // ol start attribute
 		class?: string;
 		children?: Snippet;
 	}

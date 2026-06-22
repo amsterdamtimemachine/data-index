@@ -13,7 +13,7 @@
 
 	interface Props {
 		href: string;
-		title?: string; // For svelte-markdown compatibility
+		title?: string;
 		target?: string;
 		rel?: string;
 		class?: string;
