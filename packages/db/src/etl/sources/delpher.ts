@@ -2,7 +2,7 @@
  * Import Delpher newspaper articles
  *
  * Parses CSV of newspaper articles with geometry points.
- * Matches geometry to existing places via nearest-neighbor spatial lookup.
+ * Matches each point to the nearest address place via spatial lookup.
  * Unmatched features (no place within threshold) are skipped.
  *
  * Usage: bun run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
@@ -75,16 +75,20 @@ export async function ingest(filePath: string) {
   console.log(`Streaming ${filePath}...`);
   console.log(`Match threshold: ${MATCH_THRESHOLD_METERS}m`);
 
-  // Nearest place within threshold, cached by WKT (many articles share a point).
+  // Nearest address within threshold, cached by WKT (many articles share a point).
+  // Restricted to address places: the 5m threshold is for point-to-point matching;
+  // without the type filter a point inside a buurt/wijk polygon matches at distance 0.
   const resolvePlaceId = createCachedResolver(async (wkt) => {
     const result = await db.execute<PlaceIdRow>(sql`
       SELECT g.place_id as place_id
       FROM place_geometry g
-      WHERE ST_DWithin(
-        g.geometry,
-        ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992),
-        ${MATCH_THRESHOLD_METERS}
-      )
+      JOIN place p ON p.id = g.place_id
+      WHERE p.type = 'address'
+        AND ST_DWithin(
+          g.geometry,
+          ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992),
+          ${MATCH_THRESHOLD_METERS}
+        )
       ORDER BY g.geometry <-> ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992)
       LIMIT 1
     `);
