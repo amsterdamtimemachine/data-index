@@ -172,7 +172,7 @@ erDiagram
 
 - **organisations**: Institutions that provide datasets
 - **datasets**: Data collections from organisations
-- **place**: Physical location identity (id, type, display name)
+- **place**: Physical location identity (id, type, name)
 - **place_geometry**: A place's geometry (RD / EPSG:28992) and the period it was valid (1:1 with place)
 - **place_historical_name**: Dated past names linked to places (addresses, streets), used to show what a location was called at a given time
 - **tags**: Thematic categories (e.g. Nature, Transport, Living) assigned to features. Work in progress, generated via AI classification across datasets
