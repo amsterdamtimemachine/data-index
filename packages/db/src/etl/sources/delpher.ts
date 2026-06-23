@@ -2,7 +2,7 @@
  * Import Delpher newspaper articles
  *
  * Parses CSV of newspaper articles with geometry points.
- * Matches geometry to existing places via nearest-neighbor spatial lookup.
+ * Matches each point to the nearest address place via spatial lookup.
  * Unmatched features (no place within threshold) are skipped.
  *
  * Usage: bun run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
@@ -75,17 +75,21 @@ export async function ingest(filePath: string) {
   console.log(`Streaming ${filePath}...`);
   console.log(`Match threshold: ${MATCH_THRESHOLD_METERS}m`);
 
-  // Nearest place within threshold, cached by WKT (many articles share a point).
+  // Nearest address within threshold, cached by WKT (many articles share a point).
+  // Restricted to address places: the 5m threshold is for point-to-point matching;
+  // without the type filter a point inside a buurt/wijk polygon matches at distance 0.
   const resolvePlaceId = createCachedResolver(async (wkt) => {
     const result = await db.execute<PlaceIdRow>(sql`
-      SELECT p.id as place_id
-      FROM place p
-      WHERE ST_DWithin(
-        p.geometry,
-        ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992),
-        ${MATCH_THRESHOLD_METERS}
-      )
-      ORDER BY p.geometry <-> ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992)
+      SELECT g.place_id as place_id
+      FROM place_geometry g
+      JOIN place p ON p.id = g.place_id
+      WHERE p.type = 'address'
+        AND ST_DWithin(
+          g.geometry,
+          ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992),
+          ${MATCH_THRESHOLD_METERS}
+        )
+      ORDER BY g.geometry <-> ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992)
       LIMIT 1
     `);
     return result.rows[0]?.place_id ?? null;
@@ -99,9 +103,15 @@ export async function ingest(filePath: string) {
   let featureCount = 0;
   let linkCount = 0;
   let skipped = 0;
+  let missingFields = 0;
+  let total = 0;
 
   for await (const row of csvParser as AsyncIterable<RawRow>) {
-    if (!row.geom_wkt || !row.url) continue;
+    total++;
+    if (!row.geom_wkt || !row.url || !row.id) {
+      missingFields++;
+      continue;
+    }
 
     const placeId = await resolvePlaceId(row.geom_wkt);
     if (!placeId) {
@@ -119,7 +129,7 @@ export async function ingest(filePath: string) {
       ...(dateCreated && { dateCreated })
     };
 
-    const featureId = featureUuid(row.url);
+    const featureId = featureUuid(DATASET_ID, row.id);
 
     writer.addFeature({
       id: featureId,
@@ -139,12 +149,16 @@ export async function ingest(filePath: string) {
 
     await writer.flushIfFull();
 
-    if ((featureCount + skipped) % 1000 === 0) {
-      process.stdout.write(`\r  ${featureCount} ingested, ${skipped} skipped`);
+    if (total % 1000 === 0) {
+      process.stdout.write(`\r  ${total} rows, ${featureCount} ingested, ${skipped + missingFields} skipped`);
     }
   }
 
   await writer.flush();
 
-  console.log(`\nDone: ${featureCount} features, ${linkCount} links, ${skipped} skipped (no place within ${MATCH_THRESHOLD_METERS}m)`);
+  console.log(
+    `\nDone: ${featureCount} features, ${linkCount} links, ` +
+    `${skipped} skipped (no place within ${MATCH_THRESHOLD_METERS}m), ` +
+    `${missingFields} skipped (missing fields), ${total} rows read`
+  );
 }

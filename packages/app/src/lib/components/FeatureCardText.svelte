@@ -8,8 +8,8 @@
 
 	const maxLength = 200;
 	let showFullText = $state(false);
-	const truncatedText = text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
-	const needsTruncation = text.length > maxLength;
+	const truncatedText = $derived(text.length > maxLength ? text.slice(0, maxLength) + '...' : text);
+	const needsTruncation = $derived(text.length > maxLength);
 </script>
 
 {#if expanded}

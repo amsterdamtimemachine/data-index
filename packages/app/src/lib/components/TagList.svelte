@@ -11,9 +11,9 @@
 
 	let { tags, class: className, maxVisible = 2, expanded = false }: Props = $props();
 
-	const visibleTags = expanded ? tags : tags.slice(0, maxVisible);
-	const hiddenCount = tags.length - maxVisible;
-	const showOverflow = !expanded && hiddenCount > 0;
+	const visibleTags = $derived(expanded ? tags : tags.slice(0, maxVisible));
+	const hiddenCount = $derived(tags.length - maxVisible);
+	const showOverflow = $derived(!expanded && hiddenCount > 0);
 </script>
 
 {#if tags && tags.length > 0}

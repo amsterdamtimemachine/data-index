@@ -81,14 +81,18 @@ erDiagram
     place {
         text id PK "e.g. lp-1000001"
         text type  "address | street | neighbourhood | district"
-        text preferred_label  "e.g. Prins Hendrikkade 93"
-        geometry geometry  "POINT, LINESTRING, or POLYGON"
-        integer spatial_frequency  "e.g. 47 # cells spanned"
-        date valid_since  "neighbourhood/district era start; null for address/street"
-        date valid_until  "era end; null = open/current"
+        text name  "e.g. Prins Hendrikkade 93"
     }
 
-    place_name {
+    place_geometry {
+        text place_id PK "e.g. lp-1000001"
+        geometry geometry  "POINT, LINESTRING, or POLYGON"
+        integer spatial_frequency  "e.g. 47 # cells spanned"
+        date since  "neighbourhood/district era start; null for address/street"
+        date until  "era end; null = open/current"
+    }
+
+    place_historical_name {
         text id PK "e.g. https://adamlink.nl/geo/address/A1"
         text place_id FK "e.g. lp-1000001"
         text name  "e.g. Prins Hendrikkade 93"
@@ -156,7 +160,8 @@ erDiagram
 
     organisations||--o{datasets:"has datasets"
     datasets||--o{features:"has"
-    place||--o{place_name:"has historical names"
+    place||--||place_geometry:"has geometry"
+    place||--o{place_historical_name:"has historical names"
     place||--o{place_cells:"spans cells"
     features||--o{feature_to_place:"located at"
     place||--o{feature_to_place:"links"
@@ -167,8 +172,9 @@ erDiagram
 
 - **organisations**: Institutions that provide datasets
 - **datasets**: Data collections from organisations
-- **place**: Physical locations stored in RD coordinates (EPSG:28992)
-- **place_name**: Historical names linked to places (addresses, streets), used to show what a location was called at a given time
+- **place**: Physical location identity (id, type, name)
+- **place_geometry**: A place's geometry (RD / EPSG:28992) and the period it was valid (1:1 with place)
+- **place_historical_name**: Dated past names linked to places (addresses, streets), used to show what a location was called at a given time
 - **tags**: Thematic categories (e.g. Nature, Transport, Living) assigned to features. Work in progress, generated via AI classification across datasets
 - **features**: Images, texts, persons, or other content items linked to places and displayed in the UI
 - **place_cells**: Pre-computed spatial grid that powers the heatmap. Each place is mapped to the 100m cells its geometry covers (one cell for a point, many for a street or neighbourhood). Features inherit cell coverage through their place link, cell assignments are stored once per place rather than duplicated per feature.
@@ -188,26 +194,26 @@ Heatmap density is rendered with log-normalised counts (`log(count+1) / log(maxC
 
 ### Place data naming 
 
-Every `place` has a geometry and a `preferred_label`, and may have dated historical names in `place_name`. How geometry and naming interact with the temporal index depends on geometry type and related data available in Adamlink. At the moment, a feature can link to only a single place. 
+Every `place` has a geometry and a `name`, and may have dated historical names in `place_historical_name`. How geometry and naming interact with the temporal index depends on geometry type and related data available in Adamlink. At the moment, a feature can link to only a single place. 
 
 #### Address place
-Address place is a single numbered city address such as Prins Henrikkade 15. It is represented by single `POINT` geometry. Each address is labelled by multiple historical names taken from `addressen.ttl`'s `rdfs:label`, each dated by its `sem:hasEarliestBeginTimeStamp` and `sem:hasLatestEndTimeStamp` fields. The `preferred_label` is derived from the most recent historical name. In the heatmap its point occupies a single grid cell.
+Address place is a single numbered city address such as Prins Henrikkade 15. It is represented by single `POINT` geometry. Each address is labelled by multiple historical names taken from `addressen.ttl`'s `rdfs:label`, each dated by its `sem:hasEarliestBeginTimeStamp` and `sem:hasLatestEndTimeStamp` fields. The `name` is derived from the most recent historical name. In the heatmap its point occupies a single grid cell.
 
 #### Street place
-Street place is a single street such as Prins Henrikkade. It is represented by single `LINESTRING` geometry. Each street is labelled by multiple historical names taken from the `rdfs:label` nested in `straten.ttl`'s `schema:name`, each dated by its `sem:hasEarliestBeginTimeStamp` and `sem:hasEarliestEndTimeStamp` fields. The `preferred_label` is extracted directly from `skos:prefLabel`. In the heatmap its line is rasterised to every cell it crosses. 
+Street place is a single street such as Prins Henrikkade. It is represented by single `LINESTRING` geometry. Each street is labelled by multiple historical names taken from the `rdfs:label` nested in `straten.ttl`'s `schema:name`, each dated by its `sem:hasEarliestBeginTimeStamp` and `sem:hasEarliestEndTimeStamp` fields. The `name` is extracted directly from `skos:prefLabel`. In the heatmap its line is rasterised to every cell it crosses. 
 
 #### Neighbourhood place
-Neighbourhood place is a small area of the city, such as Riekerpolder. It is represented by single `POLYGON` or `MULTIPOLYGON` geometry. Unlike addresses and streets it has no dated names; instead each era is its own place (each era redraws the city's division), the *geometry* dated by `buurten.ttl`'s `sem:hasEarliestBeginTimeStamp` and `sem:hasEarliestEndTimeStamp` fields. The `preferred_label` is extracted directly from `skos:prefLabel`. In the heatmap its polygon is rasterised, every cell its interior covers is filled.
+Neighbourhood place is a small area of the city, such as Riekerpolder. It is represented by single `POLYGON` or `MULTIPOLYGON` geometry. Unlike addresses and streets it has no dated names; instead each era is its own place (each era redraws the city's division), the *geometry* dated by `buurten.ttl`'s `sem:hasEarliestBeginTimeStamp` and `sem:hasEarliestEndTimeStamp` fields. The `name` is extracted directly from `skos:prefLabel`. In the heatmap its polygon is rasterised, every cell its interior covers is filled.
 
 #### District place
-District place is a larger area that groups several neighbourhoods, such as Volewijck. It is identical to a neighbourhood in every respect (single `POLYGON` or `MULTIPOLYGON`, no dated names, `preferred_label` straight from `skos:prefLabel`) but coarser, and tagged `district`. It rasterises like a neighbourhood, but its larger area fills more cells — so district-linked features carry a higher `spatial_frequency` and rank as less spatially specific.
+District place is a larger area that groups several neighbourhoods, such as Volewijck. It is identical to a neighbourhood in every respect (single `POLYGON` or `MULTIPOLYGON`, no dated names, `name` straight from `skos:prefLabel`) but coarser, and tagged `district`. It rasterises like a neighbourhood, but its larger area fills more cells — so district-linked features carry a higher `spatial_frequency` and rank as less spatially specific.
 
 Adamlink supplies three neighbourhood systems (1850, 1909, and the present-day CBS buurten) and two district systems (1600 and the present-day CBS wijken). Each system is its own set of places with its own polygons, so unlike a street or address, whose single geometry holds across time a neighbourhood's or district's outline differs from one period to the next.
 
 `buurten.ttl` carries no explicit wijk/buurt field, so the designation is **inferred**: present-day data units by their CBS code (`dc:identifier` `WK…` → district, `BU…` → neighbourhood), and historical units by their begin year (1600 → district, 1850/1909 → neighbourhood). That period-to-granularity mapping follows Adamlink's own [documentation of these systems](https://adamlink.nl/geo/districts) — the pre-1850 wijken, the 1850 and 1909 buurten — rather than any field in the data itself.
 
 #### Place names at query time
-The naming model above determines what the API returns per place type. `getFeatures` resolves a `historicalLabel` — the name a place held at the feature's date — by matching `place_name` on `since`/`until`. Because **addresses and streets have dated names**, their features get a `historicalLabel` that reflects the feature's period; because **neighbourhoods and districts have no dated names**, their features fall back to the place's `preferredLabel`. For a neighbourhood or district, then, period is never resolved by date — it is implicit in *which* era-place the feature was linked to at ingest (chosen by the dataset contributor), and the API only reflects that link.
+The naming model above determines what the API returns per place type. `getFeatures` resolves a `historicalLabel` — the name a place held at the feature's date — by matching `place_historical_name` on `since`/`until`. Because **addresses and streets have dated names**, their features get a `historicalLabel` that reflects the feature's period; because **neighbourhoods and districts have no dated names**, their features fall back to the place's `displayName`. For a neighbourhood or district, then, period is never resolved by date — it is implicit in *which* era-place the feature was linked to at ingest (chosen by the dataset contributor), and the API only reflects that link.
 
 ### Temporal indexing
 
@@ -233,10 +239,10 @@ Lower scores mean features more unique to the time and place.
 Feature dates (`features.start_date` / `end_date`) are the source feature's own date range. They drive the histogram and heatmap, `temporal_frequency`, and thus an item's ranking.
 
 ### Place dates
-Place dates (`place.valid_since` / `valid_until`) mark the period a neighbourhood or district geometry was the city's division — these are the only place types whose geometry changes over time, as documented in Adamlink. They're used at ingest to match a neighbourhood/district feature's date range to the geometry of the right era.
+Place dates (`place_geometry.since` / `until`) mark the period a neighbourhood or district geometry was the city's division — these are the only place types whose geometry changes over time, as documented in Adamlink. They're used at ingest to match a neighbourhood/district feature's date range to the geometry of the right era.
  
 ### Place name dates
-Place name dates (`place_name.since` / `until`) record the period a historical name of an address or street was in use. They supply the `historicalLabel` shown on a feature. Adamlink provides historical names only for streets and addresses.
+Name dates (`place_historical_name.since` / `until`) record the period a historical name of an address or street was in use. They supply the `historicalLabel` shown on a feature. Adamlink provides historical names only for streets and addresses.
 
 ### Dates sources
 **Feature dates** come from the source dataset's own fields, at ingest. **Name dates**
@@ -253,11 +259,11 @@ wijken from 1850.**
 
 The full extent of the Data Index timeline is derived from the earliest date any feature starts to the latest date any feature ends. A feature in the Index belongs to every time bin its `[start, end]` time range overlaps. That overlap rule spreads one feature across many bins.
 
-A street or address feature shows its historical name (from `place_name`) with today's name (from `preferred_label`) in brackets when the two differ — a 1700 record of a street reads **Heiligeweg (nu Kalverstraat)**. A place with no dated name just shows its current `preferred_label`. The historical name is resolved at query time as the **most recent** `place_name` whose `since` is ≤ the feature's `end_date` — the name in force when the feature ends. 
+A street or address feature shows its historical name (from `place_historical_name`) with today's name (from `name`) in brackets when the two differ — a 1700 record of a street reads **Heiligeweg (nu Kalverstraat)**. A place with no dated name just shows its current `name`. The historical name is resolved at query time as the **most recent** `place_historical_name` whose `since` is ≤ the feature's `end_date` — the name in force when the feature ends. 
 
-Neighbourhood and district geometry, unlike a street's or address's, changes across history: each era's division is its own `place` row with its own polygon and `[valid_since, valid_until)` window. Which era a feature attaches to is decided **at ingest, not query time** — it's linked to the `place` whose window overlaps the feature's `[start, end]` the most. At query time the heatmap then counts that feature against its historical geometry's footprint, **even though the basemap shows the modern city**.
+Neighbourhood and district geometry, unlike a street's or address's, changes across history: each era's division is its own `place` row with its own `place_geometry` (polygon + `[since, until)` window). Which era a feature attaches to is decided **at ingest, not query time** — it's linked to the `place` whose window overlaps the feature's `[start, end]` the most. At query time the heatmap then counts that feature against its historical geometry's footprint, **even though the basemap shows the modern city**.
 
-Both name- and era-windows run from `since` up to but not including `until` (at year granularity), so a boundary year falls in exactly one window; `valid_until = null` means "still current".
+Both name- and geometry-windows run from `since` up to but not including `until` (at year granularity), so a boundary year falls in exactly one window; `until = null` means "still current".
 
 ## Data ingestion
 
@@ -267,7 +273,7 @@ The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Ada
 
 Adamlink place data must be ingested before any dataset. See the [Development](#development) or [Production](#production) sections for the full ingestion order.
 
-Every `place` row is sourced from Adamlink. Features that can't be resolved to an existing Adamlink place are skipped at ingest; no feature row is created and nothing unlinked lands in the database.
+Every `place` row is sourced from Adamlink. A feature is skipped at ingest if it can't be resolved to an existing place, or if it lacks the stable source identifier its `id` is derived from — no feature row is created and nothing unlinked lands in the database.
 
 If you are deploying this for **another Dutch city**, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. The `geometry-point-template.ts` example shows how to match incoming coordinates to existing places; for creating new places, adapt the pattern from `lps.ts`. The core requirement is that each feature links to a `place` row that has a geometry.
 
@@ -290,7 +296,7 @@ Each feature needs at minimum:
 - **label**: Display name
 - **record_type**: One of `image`, `text`, `person` (the frontend renders each type differently)
 - **start_date** / **end_date**: Date range for temporal placement on the histogram
-- **place link**: Each feature must be linked to one or more physical locations. If your data references Adamlink address or street IDs, the ingestion script resolves them to places via the `place_name` table or `place` table. 
+- **place link**: Each feature must be linked to one or more physical locations. If your data references Adamlink address or street IDs, the ingestion script resolves them to places via the `place_historical_name` table or `place` table. 
 
 Optional: `description`, `content_url` (media), `entity` (schema.org JSONB), `url` (source link).
 
@@ -315,7 +321,7 @@ bun run db:rebuild-index
 
 Ingestion is idempotent and source-driven: corrections are made in the **source file** and re-ingested, not by editing the database directly (a raw DB edit is overwritten the next time that source runs). Re-running an unchanged file is a no-op, a source that lists the same item twice dedups it by its natural key, and after any correction you run `bun run db:rebuild-index` to refresh the spatial grid and frequency counts.
 
-**Fixing a feature.** A feature's id is derived from its source URL (`featureUuid`), so editing a field in the source and re-ingesting that source upserts the existing row in place — `label`, `description`, `content_url`, dates, `entity`, and record type are all refreshed. A corrected place link is reconciled too: the feature's old `feature_to_place` rows are cleared and the new link replaces them rather than accumulating a second. Keep the source URL stable — it is the key, so changing it creates a new feature and orphans the old one. Removing a feature is *not* automatic: a row dropped from the source file stays in the DB until you delete it by hand.
+**Fixing a feature.** A feature's id is a deterministic UUID derived from its dataset id plus the source's stable identifier (`featureUuid(datasetId, key)`); the dataset prefix keeps identical keys in different datasets from colliding. Editing a field in the source and re-ingesting that source upserts the existing row in place — `label`, `description`, `content_url`, dates, `entity`, and record type are all refreshed. A corrected place link is reconciled too: the feature's old `feature_to_place` rows are cleared and the new link replaces them rather than accumulating a second. Keep the source identifier stable — it is the key, so changing it creates a new feature and orphans the old one. Removing a feature is *not* automatic: a row dropped from the source file stays in the DB until you delete it by hand.
 
 **Fixing a place.** Re-ingest the relevant place source (`lps`, `streets`, `neighbourhoods-and-districts`, or `adressen`). Place rows refresh under one of two conflict modes — streets, neighbourhoods, and districts overwrite everything including their label from the source (`replaceAll`), while addresses refresh only their geometry and keep the label the `adressen` step owns (`replaceGeometry`). So you re-ingest `lps` to correct an address's point without losing its name, and `adressen` to correct the name.
 

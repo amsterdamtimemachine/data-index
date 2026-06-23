@@ -5,7 +5,7 @@
 	import { goto } from '$app/navigation';
 	import { createStateController } from '$state/StateController.svelte';
 	import { createPageErrorData } from '$utils/error';
-	import { translateContentTypes, reverseTranslateContentTypes } from '$utils/translations';
+	import { translateAll, reverseTranslateAll } from '$utils/translations';
 	import { loadingState } from '$lib/state/loadingState.svelte';
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
 	import Heading from '$components/Heading.svelte';
@@ -53,8 +53,12 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 	let histogram = $derived(data?.histogram as Histogram | null);
 
 	// Translated content types for UI display
-	let translatedRecordTypes = $derived(recordTypes ? translateContentTypes(recordTypes) : []);
-	let translatedCurrentRecordTypes = $derived(currentRecordTypes ? translateContentTypes(currentRecordTypes) : []);
+	let translatedRecordTypes = $derived(recordTypes ? translateAll(recordTypes) : []);
+	let translatedCurrentRecordTypes = $derived(currentRecordTypes ? translateAll(currentRecordTypes) : []);
+
+	// Translated place types for UI display (selection + URL stay on raw enum values)
+	let translatedPlaceTypes = $derived(placeTypes ? translateAll(placeTypes) : []);
+	let translatedCurrentPlaceTypes = $derived(currentPlaceTypes ? translateAll(currentPlaceTypes) : []);
 
 	// Source labels from metadata (used as toggle display + reverse lookup)
 	let datasetLookup = $derived(new Map(data?.metadata?.datasets?.map((s: { id: string; label: string }) => [s.id, s.label]) || []));
@@ -132,7 +136,7 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 	function handleRecordTypeChange(recordTypes: string[] | string) {
 		// Translate Dutch labels back to English for API/URL  
 		const dutchArray = Array.isArray(recordTypes) ? recordTypes : [recordTypes];
-		const englishArray = reverseTranslateContentTypes(dutchArray);
+		const englishArray = reverseTranslateAll(dutchArray);
 		
 		const url = new URL(window.location.href);
 		if (englishArray.length > 0) {
@@ -160,7 +164,9 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 	}
 
 	function handlePlaceTypeChange(selected: string[] | string) {
-		const selectedArray = Array.isArray(selected) ? selected : [selected];
+		// Translate Dutch labels back to the raw place-type enum for the URL param
+		const dutchArray = Array.isArray(selected) ? selected : [selected];
+		const selectedArray = reverseTranslateAll(dutchArray);
 		const url = new URL(window.location.href);
 		if (selectedArray.length > 0) {
 			url.searchParams.set('placeTypes', selectedArray.join(','));
@@ -228,9 +234,11 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 		{/if}
 
 		<NavContainer bind:isExpanded={navExpanded} class="absolute top-0 left-0 z-30">
-			<Nav class="p-3">
-				<NavItem href="/about" label="Over" />
-			</Nav>
+			{#snippet header()}
+				<Nav class="p-3">
+					<NavItem href="/about" label="Over" />
+				</Nav>
+			{/snippet}
 			<div class="p-3">
 					
 				<div class="mb-4">
@@ -278,8 +286,8 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 						<Tooltip icon={QuestionMark} text="Filter op basis van het type locatie waarmee de data is verbonden." placement="bottom" />
 					</div>
 					<ToggleGroup
-						items={placeTypes}
-						selectedItems={currentPlaceTypes}
+						items={translatedPlaceTypes}
+						selectedItems={translatedCurrentPlaceTypes}
 						onItemSelected={handlePlaceTypeChange}
 						requireOneItemSelected={true}>
 						{#snippet children(item, isSelected, isDisabled)}

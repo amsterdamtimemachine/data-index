@@ -2,7 +2,7 @@
  * Import Joods Monument (Jewish Monument) person data
  *
  * Parses CSV of Holocaust victims with last known addresses. Resolves adamlink
- * URIs → place IDs via the place_name table (populated by LPS). Rows whose
+ * URIs → place IDs via the place_historical_name table (populated by LPS). Rows whose
  * adamlink URI isn't in LPS are skipped — no feature is created. All features
  * get a fixed date range of 1900–1945.
  *
@@ -66,7 +66,7 @@ export async function ingest(filePath: string) {
 
   const resolvePlaceId = createCachedResolver(async (adamlinkUri) => {
     const result = await db.execute<PlaceIdRow>(
-      sql`SELECT place_id FROM place_name WHERE id = ${adamlinkUri}`
+      sql`SELECT place_id FROM place_historical_name WHERE id = ${adamlinkUri}`
     );
     return result.rows[0]?.place_id ?? null;
   });
@@ -75,17 +75,31 @@ export async function ingest(filePath: string) {
 
   const writer = createFeatureWriter(BATCH_SIZE);
   // The source lists some people on several rows — identical except for a jittered
-  // `wkt` we don't use (jm links by the adamlink address URI). Dedup by person URL
-  // so we don't emit the same feature id twice (which the upsert would reject).
+  // `wkt` we don't use (jm links by the adamlink address URI). Dedup by person page
+  // id so we don't emit the same feature id twice (which the upsert would reject).
   const committedPersons = new Set<string>();
   const seenLinks = new Set<string>();
   let featureCount = 0;
   let linkCount = 0;
   let skipped = 0;
   let duplicates = 0;
+  let missingFields = 0;
+  let total = 0;
 
   for await (const row of csvParser as AsyncIterable<RawRow>) {
-    if (!row.person || !row.address) continue;
+    total++;
+    if (!row.person || !row.address) {
+      missingFields++;
+      continue;
+    }
+
+    // Stable id = the numeric page id from the person URL (the slug after it is mutable).
+    // No id → skip, so the feature id never falls back to the volatile full URL.
+    const personId = row.person.match(/\/page\/(\d+)/)?.[1];
+    if (!personId) {
+      skipped++;
+      continue;
+    }
 
     const placeId = await resolvePlaceId(row.address);
     if (!placeId) {
@@ -93,12 +107,12 @@ export async function ingest(filePath: string) {
       continue;
     }
 
-    const featureId = featureUuid(row.person);
+    const featureId = featureUuid(DATASET_ID, personId);
 
-    if (committedPersons.has(row.person)) {
+    if (committedPersons.has(personId)) {
       duplicates++;
     } else {
-      committedPersons.add(row.person);
+      committedPersons.add(personId);
       const entity: PersonEntity = {
         type: 'Person',
         name: row.name,
@@ -129,12 +143,16 @@ export async function ingest(filePath: string) {
 
     await writer.flushIfFull();
 
-    if ((featureCount + duplicates + skipped) % 1000 === 0) {
-      process.stdout.write(`\r  ${featureCount} persons, ${duplicates} duplicates, ${skipped} skipped`);
+    if (total % 1000 === 0) {
+      process.stdout.write(`\r  ${total} rows, ${featureCount} persons, ${duplicates} duplicates, ${skipped + missingFields} skipped`);
     }
   }
 
   await writer.flush();
 
-  console.log(`\nDone: ${featureCount} features, ${linkCount} links, ${duplicates} duplicate rows skipped, ${skipped} skipped (no matching place)`);
+  console.log(
+    `\nDone: ${featureCount} features, ${linkCount} links, ` +
+    `${duplicates} duplicate rows skipped, ${missingFields} skipped (missing fields), ` +
+    `${skipped} skipped (no page id or no matching place), ${total} rows read`
+  );
 }

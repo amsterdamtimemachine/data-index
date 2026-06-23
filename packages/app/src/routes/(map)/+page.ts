@@ -13,7 +13,7 @@ import type { AppError } from '$types/error';
 import { createPageErrorData, createError, createValidationError, createPeriodNotFoundError } from '$utils/error';
 import { validateCellId } from '$utils/utils';
 import { getCellBoundsFromCellId } from '$utils/heatmap';
-import { translateContentType, translateContentTypes } from '$utils/translations';
+import { translateAll } from '$utils/translations';
 import { loadingState } from '$lib/state/loadingState.svelte';
 
 // Helper functions for period validation
@@ -105,7 +105,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 							'warning',
 							'Invalid Content Type Removed',
 							`"${invalidType}" is not a valid content type and was removed from your selection.`,
-							{ invalidType, availableTypes: translateContentTypes(metadata.recordTypes) }
+							{ invalidType, availableTypes: translateAll(metadata.recordTypes) }
 						)
 					);
 				}
@@ -116,7 +116,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 					createValidationError(
 						'recordTypes',
 						recordTypesParam,
-						`No valid content types found. Defaulting to all content types: ${translateContentTypes(metadata.recordTypes).join(', ')}`
+						`No valid content types found. Defaulting to all content types: ${translateAll(metadata.recordTypes).join(', ')}`
 					)
 				);
 				// Default to all record types for better UX

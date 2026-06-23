@@ -2,12 +2,12 @@
  * Regression: re-ingesting a source must be idempotent (a "fix the file and
  * re-run" workflow), not duplicate rows.
  *
- *  - features carry a deterministic id (featureUuid(url)), so a re-ingest upserts
+ *  - features carry a deterministic id (featureUuid(datasetId, key)), so a re-ingest upserts
  *    the existing row instead of inserting a copy with a fresh random id.
  *  - a corrected place assignment replaces the feature's old link rather than
  *    accumulating a second one (link reconciliation).
  *  - insertPlaces conflict modes: 'geometry' refreshes geometry but preserves the
- *    adressen-owned preferred_label; 'replace' refreshes label + geometry.
+ *    adressen-owned name; 'replace' refreshes label + geometry.
  *
  * Isolated DB lifecycle (its own seed); bun runs test files sequentially but shares
  * module singletons process-wide (the pg pool AND the query caches), so teardownTestDb
@@ -22,7 +22,8 @@ import type { PlaceIdRow } from '../row-types';
 
 async function placeRow(id: string) {
   const r = await db.execute<{ label: string | null; x: number }>(
-    sql`SELECT preferred_label as label, ST_X(geometry) as x FROM place WHERE id = ${id}`
+    sql`SELECT p.name as label, ST_X(g.geometry) as x
+        FROM place p JOIN place_geometry g ON g.place_id = p.id WHERE p.id = ${id}`
   );
   return r.rows[0];
 }
@@ -55,15 +56,19 @@ describe('ETL idempotency', () => {
     await teardownTestDb();
   });
 
-  test('featureUuid is deterministic, url-specific, and a valid v5 UUID', () => {
-    expect(featureUuid('https://x/1')).toBe(featureUuid('https://x/1'));
-    expect(featureUuid('https://x/1')).not.toBe(featureUuid('https://x/2'));
-    expect(featureUuid('https://x/1')).toMatch(
+  test('featureUuid is deterministic, key-specific, and a valid v5 UUID', () => {
+    expect(featureUuid('ds', '1')).toBe(featureUuid('ds', '1'));
+    expect(featureUuid('ds', '1')).not.toBe(featureUuid('ds', '2'));
+    expect(featureUuid('ds', '1')).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     );
   });
 
-  test("insertPlaces 'geometry' updates geometry but preserves preferred_label", async () => {
+  test('featureUuid namespaces by dataset — same key in different datasets does not collide', () => {
+    expect(featureUuid('delpher', '32235')).not.toBe(featureUuid('joods-monument', '32235'));
+  });
+
+  test("insertPlaces 'geometry' updates geometry but preserves name", async () => {
     const id = 'idem-geo';
     await insertPlaces([{ id, type: 'address', label: 'Original Label', wkt: 'POINT(100000 480000)' }],
       { sourceSrid: 28992, onConflict: 'replaceAll' });
@@ -95,7 +100,7 @@ describe('ETL idempotency', () => {
     ], { sourceSrid: 28992, onConflict: 'replaceAll' });
 
     const url = 'https://example.org/feature/1';
-    const id = featureUuid(url);
+    const id = featureUuid('idem-ds', url);
 
     // Run 1: feature v1 linked to A.
     const w1 = createFeatureWriter();

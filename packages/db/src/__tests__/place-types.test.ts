@@ -37,7 +37,8 @@ describe('placeTypes filter (address / street / neighbourhood / district)', () =
       ['pt-district', 'district', 'POLYGON((120550.5 485050.5,120650.5 485050.5,120650.5 485150.5,120550.5 485150.5,120550.5 485050.5))'],
     ];
     for (const [id, type, wkt] of places) {
-      await db.execute(sql`INSERT INTO place (id, type, geometry) VALUES (${id}, ${type}, ST_GeomFromText(${wkt}, 28992))`);
+      await db.execute(sql`INSERT INTO place (id, type) VALUES (${id}, ${type})`);
+      await db.execute(sql`INSERT INTO place_geometry (place_id, geometry) VALUES (${id}, ST_GeomFromText(${wkt}, 28992))`);
     }
 
     // One feature per place, distinct record types so we can tell them apart.

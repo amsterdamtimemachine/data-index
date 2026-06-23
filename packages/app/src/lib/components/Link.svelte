@@ -13,7 +13,7 @@
 
 	interface Props {
 		href: string;
-		title?: string; // For svelte-markdown compatibility
+		title?: string;
 		target?: string;
 		rel?: string;
 		class?: string;
@@ -37,16 +37,16 @@
 		children
 	}: Props = $props();
 
-	const iconProps: PhosphorIconProps = {
+	const iconProps: PhosphorIconProps = $derived({
 		size,
 		weight,
 		color,
 		mirrored: false
-	};
+	});
 
 	const baseClasses =
 		'inline-flex items-center font-sans text-black hover:text-atm-gold-dark underline';
-	const gapClass = Icon && children ? 'gap-1' : '';
+	const gapClass = $derived(Icon && children ? 'gap-1' : '');
 </script>
 
 <a {href} {title} {target} {rel} class={mergeCss(`${baseClasses} ${gapClass}`, className)}>

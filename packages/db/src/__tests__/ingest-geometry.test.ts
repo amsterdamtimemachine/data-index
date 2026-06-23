@@ -16,7 +16,7 @@ type PlaceGeomRow = { id: string; type: string; gtype: string };
 
 async function placeGeoms(): Promise<PlaceGeomRow[]> {
   const r = await db.execute<PlaceGeomRow>(
-    sql`SELECT id, type, GeometryType(geometry) as gtype FROM place ORDER BY id`
+    sql`SELECT p.id, p.type, GeometryType(g.geometry) as gtype FROM place p JOIN place_geometry g ON g.place_id = p.id ORDER BY p.id`
   );
   return r.rows;
 }
@@ -55,12 +55,12 @@ describe('line/polygon ingestion produces the right geometry types', () => {
     // Unclassifiable entry dropped.
     expect([...type.keys()].some(id => id.endsWith('/D5'))).toBe(false);
 
-    // Era windows persisted to valid_since/valid_until: historical units from the TTL's
+    // Era windows persisted to place_geometry.since/until: historical units from the TTL's
     // begin/end years, present-day CBS open-ended from CBS_VALID_SINCE.
-    const eras = await db.execute<{ id: string; valid_since: string | null; valid_until: string | null }>(
-      sql`SELECT id, valid_since::text AS valid_since, valid_until::text AS valid_until FROM place ORDER BY id`
+    const eras = await db.execute<{ id: string; since: string | null; until: string | null }>(
+      sql`SELECT place_id AS id, since::text AS since, until::text AS until FROM place_geometry ORDER BY place_id`
     );
-    const era = new Map(eras.rows.map(r => [r.id, [r.valid_since, r.valid_until]]));
+    const era = new Map(eras.rows.map(r => [r.id, [r.since, r.until]]));
     expect(era.get(D('D1'))).toEqual(['1600-01-01', '1850-01-01']); // historical 1600 wijk
     expect(era.get(D('D2'))).toEqual(['1850-01-01', '1909-01-01']); // historical 1850 buurt
     expect(era.get(D('D3'))).toEqual(['1850-01-01', null]); // CBS wijk — extended back to fill the wijk gap

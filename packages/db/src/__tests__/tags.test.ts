@@ -36,10 +36,16 @@ describe('tag queries', () => {
     });
 
     await db.execute(sql`
-      INSERT INTO place (id, type, geometry) VALUES
-        ('tp-addr',  'address',       ST_SetSRID(ST_MakePoint(120000.5, 485000.5), 28992)),
-        ('tp-street','street',        ST_GeomFromText('LINESTRING(120100.5 485000.5, 120200.5 485000.5)', 28992)),
-        ('tp-nbhd',  'neighbourhood', ST_GeomFromText('POLYGON((120300.5 485000.5,120400.5 485000.5,120400.5 485100.5,120300.5 485100.5,120300.5 485000.5))', 28992))
+      INSERT INTO place (id, type) VALUES
+        ('tp-addr',  'address'),
+        ('tp-street','street'),
+        ('tp-nbhd',  'neighbourhood')
+    `);
+    await db.execute(sql`
+      INSERT INTO place_geometry (place_id, geometry) VALUES
+        ('tp-addr',  ST_SetSRID(ST_MakePoint(120000.5, 485000.5), 28992)),
+        ('tp-street',ST_GeomFromText('LINESTRING(120100.5 485000.5, 120200.5 485000.5)', 28992)),
+        ('tp-nbhd',  ST_GeomFromText('POLYGON((120300.5 485000.5,120400.5 485000.5,120400.5 485100.5,120300.5 485100.5,120300.5 485000.5))', 28992))
     `);
     await db.execute(sql`
       INSERT INTO features (id, record_type, label, start_date, end_date, dataset_id) VALUES

@@ -3,14 +3,14 @@
  *
  * Each address observation (one per registry record) carries its label, a date
  * window (begin/end), a source document, and a `schema:geoContains` link to the LP
- * point it belongs to. We create one `place_name` row per observation, linked to
- * the LP `place` via that geoContains link, then set `place.preferred_label` to the
- * most recent named entry per place.
+ * point it belongs to. We create one `place_historical_name` row per observation,
+ * linked to the LP `place` via that geoContains link, then set `place.name`
+ * to the most recent named entry per place.
  *
  * Replaces the older two-step where LPS built registry-column name stubs and a
  * separate adressen file enriched them: the TTL self-links observation → LP, so LPS
  * only needs to create the points. Run AFTER lps (the LP `place` rows must exist for
- * the place_name FK).
+ * the place_historical_name FK).
  *
  * Usage: bun run db:ingest -s adressen -f <path-to-20240311-adressen.ttl>
  */
@@ -72,17 +72,17 @@ export async function ingest(filePath: string) {
 
   console.log(`Inserted ${written} place names (${skipped} skipped: LP place not found)`);
 
-  // Set place.preferred_label to the most recent named entry per place.
-  console.log('Updating place preferred labels...');
+  // Set place.name to the most recent named entry per place.
+  console.log('Updating place names...');
   const result = await db.execute(sql`
-    UPDATE place SET preferred_label = sub.name
+    UPDATE place SET name = sub.name
     FROM (
       SELECT DISTINCT ON (place_id) place_id, name
-      FROM place_name
+      FROM place_historical_name
       WHERE name IS NOT NULL
       ORDER BY place_id, since DESC
     ) sub
     WHERE place.id = sub.place_id
   `);
-  console.log(`Done: ${written} names, ${result.rowCount} preferred labels updated`);
+  console.log(`Done: ${written} names, ${result.rowCount} place names updated`);
 }

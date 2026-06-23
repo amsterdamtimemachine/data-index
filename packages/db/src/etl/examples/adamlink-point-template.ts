@@ -3,7 +3,7 @@
  *
  * Use this template when your source data links to places via Adamlink URIs
  * (e.g. https://adamlink.nl/geo/address/A12345). The script resolves each URI
- * to a place ID via the place_name table. Requires LPS + adressen data to be
+ * to a place ID via the place_historical_name table. Requires LPS + adressen data to be
  * ingested first.
  *
  * To use:
@@ -17,7 +17,7 @@ import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { placeName } from '../../schema';
+import { placeHistoricalName } from '../../schema';
 import type { PlaceIdRow } from '../../row-types';
 import type { MediaObjectEntity } from '@atm/shared';
 import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers';
@@ -61,10 +61,10 @@ export async function ingest(filePath: string) {
     relation: { id: RELATION_ID, label: RELATION_LABEL },
   });
 
-  // Resolve an Adamlink URI to a place id via place_name (cached per run).
+  // Resolve an Adamlink URI to a place id via place_historical_name (cached per run).
   const resolvePlaceId = createCachedResolver(async (adamlinkUri) => {
     const result = await db.execute<PlaceIdRow>(
-      sql`SELECT ${placeName.placeId} as place_id FROM ${placeName} WHERE ${placeName.id} = ${adamlinkUri}`
+      sql`SELECT ${placeHistoricalName.placeId} as place_id FROM ${placeHistoricalName} WHERE ${placeHistoricalName.id} = ${adamlinkUri}`
     );
     return result.rows[0]?.place_id ?? null;
   });
@@ -79,7 +79,7 @@ export async function ingest(filePath: string) {
     const placeId = await resolvePlaceId(row.adamlink_uri);
     if (!placeId) { skipped++; continue; }
 
-    const featureId = featureUuid(row.id);
+    const featureId = featureUuid(DATASET_ID, row.id);
     const startDate = row.date_start || null;
     const endDate = row.date_end || null;
     const dateCreated = formatDateRange(startDate, endDate);

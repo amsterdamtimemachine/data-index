@@ -33,8 +33,8 @@ describe('grid_config + display-grid derivation', () => {
       dataset: { id: 'gc-ds', label: 'GC DS' },
       relation: { id: 'isAbout', label: 'Is About' },
     });
-    await db.execute(sql`INSERT INTO place (id, type, geometry) VALUES ('gc-sw', 'address', ST_SetSRID(ST_MakePoint(${ORIGIN_X}, ${ORIGIN_Y}), 28992))`);
-    await db.execute(sql`INSERT INTO place (id, type, geometry) VALUES ('gc-ne', 'address', ST_SetSRID(ST_MakePoint(${NE_X}, ${NE_Y}), 28992))`);
+    await db.execute(sql`INSERT INTO place (id, type) VALUES ('gc-sw', 'address'), ('gc-ne', 'address')`);
+    await db.execute(sql`INSERT INTO place_geometry (place_id, geometry) VALUES ('gc-sw', ST_SetSRID(ST_MakePoint(${ORIGIN_X}, ${ORIGIN_Y}), 28992)), ('gc-ne', ST_SetSRID(ST_MakePoint(${NE_X}, ${NE_Y}), 28992))`);
     const links: [string, string][] = [[F1, 'gc-sw'], [F2, 'gc-ne']];
     for (const [fid, pid] of links) {
       await db.execute(sql`INSERT INTO features (id, record_type, label, start_date, end_date, dataset_id)
@@ -69,7 +69,7 @@ describe('grid_config + display-grid derivation', () => {
     const cfg = await getGridConfig();
     const env = await db.execute<{ minlon: number; maxlon: number; minlat: number; maxlat: number }>(sql`
       SELECT ST_XMin(e) AS minlon, ST_XMax(e) AS maxlon, ST_YMin(e) AS minlat, ST_YMax(e) AS maxlat
-      FROM (SELECT ST_Extent(ST_Transform(geometry, 4326)) AS e FROM place) s
+      FROM (SELECT ST_Extent(ST_Transform(geometry, 4326)) AS e FROM place_geometry) s
     `);
     const d = env.rows[0];
     // Grid = data bbox rounded UP to whole cells, so its WGS84 bbox contains the

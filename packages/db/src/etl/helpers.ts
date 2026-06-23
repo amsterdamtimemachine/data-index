@@ -3,7 +3,7 @@
  *
  * Every source script repeated the same handful of patterns: upserting its
  * organisation/dataset/relation, batching feature + link inserts, caching
- * place-id lookups, batching place_name inserts, and inserting place rows with a
+ * place-id lookups, batching place_historical_name inserts, and inserting place rows with a
  * geometry transform. These are factored out here so the source files only
  * contain what is genuinely source-specific (parsing + how a row maps to a place).
  */
@@ -16,10 +16,11 @@ import {
   relation,
   features,
   featureToPlace,
-  placeName,
+  placeHistoricalName,
   place,
+  placeGeometry,
   type NewFeature,
-  type NewPlaceName,
+  type NewPlaceHistoricalName,
 } from '../schema';
 
 type Link = { featureId: string; placeId: string; relationId: string };
@@ -39,12 +40,12 @@ function uuidv5(name: string, namespace: string): string {
 }
 
 /**
- * Deterministic feature UUID derived from the source URL (the feature's stable
- * natural key). Same URL always yields the same id, so re-ingesting a file
- * upserts the existing rows instead of creating duplicates with fresh random ids.
+ * Deterministic feature UUID from a dataset id + the source's stable natural key.
+ * The dataset id namespaces the key, so identical keys in different datasets
+ * (e.g. a bare integer) don't collide.
  */
-export function featureUuid(url: string): string {
-  return uuidv5(url, FEATURE_ID_NAMESPACE);
+export function featureUuid(datasetId: string, key: string): string {
+  return uuidv5(`${datasetId}:${key}`, FEATURE_ID_NAMESPACE);
 }
 
 /**
@@ -150,18 +151,18 @@ export function createCachedResolver(
   };
 }
 
-/** Batched writer for place_name rows. */
+/** Batched writer for place_historical_name rows. */
 export function createNameWriter(batchSize = 1000) {
-  let batch: NewPlaceName[] = [];
+  let batch: NewPlaceHistoricalName[] = [];
 
   async function flush(): Promise<void> {
     if (batch.length === 0) return;
-    await db.insert(placeName).values(batch).onConflictDoNothing();
+    await db.insert(placeHistoricalName).values(batch).onConflictDoNothing();
     batch = [];
   }
 
   return {
-    add(name: NewPlaceName): void { batch.push(name); },
+    add(name: NewPlaceHistoricalName): void { batch.push(name); },
     async flushIfFull(): Promise<void> { if (batch.length >= batchSize) await flush(); },
     flush,
   };
@@ -172,23 +173,24 @@ export interface PlaceInsert {
   type: string;
   label?: string | null;
   wkt: string;
-  // Era validity — set only for neighbourhood/district (the period this geometry was
-  // the city's division). Left undefined for address/street. Dates as 'YYYY-MM-DD'.
-  validSince?: string | null;
-  validUntil?: string | null;
+  // Period this geometry was the city's division — set only for neighbourhood/district.
+  // Left undefined for address/street. Dates as 'YYYY-MM-DD'.
+  since?: string | null;
+  until?: string | null;
 }
 
 /**
- * How an existing place row is refreshed when a re-ingest hits its id:
- *  - 'replaceAll'      : type + preferred_label + geometry + valid_since/until
+ * How an existing place is refreshed when a re-ingest hits its id:
+ *  - 'replaceAll'      : place type + name, and geometry + since/until
  *                        (streets / neighbourhoods / districts, from their TTL).
- *  - 'replaceGeometry' : type + geometry only, preserving preferred_label
- *                        (LPS — the label is owned by the later adressen enrichment).
+ *  - 'replaceGeometry' : place type + geometry only, preserving name and
+ *                        since/until (LPS — the label is owned by adressen enrichment).
  */
 export type PlaceConflict = 'replaceAll' | 'replaceGeometry';
 
 /**
- * Batch-insert place rows with a geometry transform to RD (28992).
+ * Batch-insert places + their geometry with a transform to RD (28992). Writes the
+ * identity row to `place` and the geometry row to `place_geometry`.
  *
  * `sourceSrid` is the SRID of the incoming WKT: 28992 is inserted as-is, anything
  * else (e.g. 4326) is wrapped in ST_Transform. `onConflict` selects which columns
@@ -210,36 +212,48 @@ export async function insertPlaces(
   let inserted = 0;
   for (let i = 0; i < rows.length; i += batchSize) {
     const chunk = rows.slice(i, i + batchSize);
-    const values = chunk.map(r => ({
-      id: r.id,
-      type: r.type,
-      preferredLabel: r.label ?? null,
-      geometry: geom(r.wkt),
-      validSince: r.validSince ?? null,
-      validUntil: r.validUntil ?? null,
-    }));
 
-    const query = db.insert(place).values(values);
+    // 1. Identity row in `place`.
+    const placeQuery = db.insert(place).values(
+      chunk.map(r => ({ id: r.id, type: r.type, name: r.label ?? null }))
+    );
     if (opts.onConflict === 'replaceGeometry') {
-      await query.onConflictDoUpdate({
+      await placeQuery.onConflictDoUpdate({
         target: place.id,
-        set: {
-          type: sql`excluded.type`,
-          geometry: sql`excluded.geometry`,
-        },
+        set: { type: sql`excluded.type` }, // preserve name
       });
     } else {
-      await query.onConflictDoUpdate({
+      await placeQuery.onConflictDoUpdate({
         target: place.id,
+        set: { type: sql`excluded.type`, name: sql`excluded.name` },
+      });
+    }
+
+    // 2. Geometry row in `place_geometry` (1:1 with place).
+    const geomQuery = db.insert(placeGeometry).values(
+      chunk.map(r => ({
+        placeId: r.id,
+        geometry: geom(r.wkt),
+        since: r.since ?? null,
+        until: r.until ?? null,
+      }))
+    );
+    if (opts.onConflict === 'replaceGeometry') {
+      await geomQuery.onConflictDoUpdate({
+        target: placeGeometry.placeId,
+        set: { geometry: sql`excluded.geometry` }, // preserve since/until
+      });
+    } else {
+      await geomQuery.onConflictDoUpdate({
+        target: placeGeometry.placeId,
         set: {
-          type: sql`excluded.type`,
-          preferredLabel: sql`excluded.preferred_label`,
           geometry: sql`excluded.geometry`,
-          validSince: sql`excluded.valid_since`,
-          validUntil: sql`excluded.valid_until`,
+          since: sql`excluded.since`,
+          until: sql`excluded.until`,
         },
       });
     }
+
     inserted += chunk.length;
   }
   return inserted;

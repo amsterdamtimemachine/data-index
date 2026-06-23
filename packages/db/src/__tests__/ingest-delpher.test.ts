@@ -14,9 +14,10 @@ describe('delpher ingestion (nearest-place match + period parse)', () => {
     await setupTestDb();
     await cleanTestDb();
     // One place exactly under the first article's point; nothing near the second.
+    await db.execute(sql`INSERT INTO place (id, type) VALUES ('delpher-place', 'address')`);
     await db.execute(sql`
-      INSERT INTO place (id, type, geometry)
-      VALUES ('delpher-place', 'address', ST_Transform(ST_GeomFromText('POINT(4.9 52.37)', 4326), 28992))
+      INSERT INTO place_geometry (place_id, geometry)
+      VALUES ('delpher-place', ST_Transform(ST_GeomFromText('POINT(4.9 52.37)', 4326), 28992))
     `);
     const { ingest } = await import('../etl/sources/delpher');
     await ingest(resolve(__dirname, 'fixtures/delpher.csv'));

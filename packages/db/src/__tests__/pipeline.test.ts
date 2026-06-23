@@ -67,10 +67,10 @@ describe('Adressen ingestion', () => {
     expect(await dbq.placeNamesWithNameCount()).toBeGreaterThan(0);
   });
 
-  test('place.preferred_label is the most recent dated place name', async () => {
-    const rows = await dbq.placesWithPreferredLabelAndMostRecent(5);
+  test('place.name is the most recent dated place name', async () => {
+    const rows = await dbq.placesWithDisplayNameAndMostRecent(5);
     for (const row of rows) {
-      expect(row.preferredLabel).toBe(row.mostRecent);
+      expect(row.displayName).toBe(row.mostRecent);
     }
   });
 
@@ -85,6 +85,16 @@ describe('Feature ingestion', () => {
     expect(images).toBeGreaterThan(0);
     // every beeldbank feature is an image — invariant that scales with the fixture
     expect(images).toBe(await dbq.featureCountByDataset('beeldbank'));
+  });
+
+  test('beeldbank feature urls use the id.archief.amsterdam resolver form', async () => {
+    // The source `resource` is an internal memorix URL; ingestion rewrites it to the
+    // canonical resolver link (id.archief.amsterdam/<identifier>). Guard the rewrite.
+    const urls = await dbq.featureUrlsByDataset('beeldbank');
+    expect(urls.length).toBeGreaterThan(0);
+    for (const url of urls) {
+      expect(url).toMatch(/^https:\/\/id\.archief\.amsterdam\/.+/);
+    }
   });
 
   test('joods-monument dedups duplicate person rows (6 fixture rows, 5 distinct persons)', async () => {
@@ -201,9 +211,9 @@ describe('getFeatures', () => {
     expect(r.total).toBe(await dbq.featureCountByDataset('joods-monument'));
   });
 
-  test('returns preferredLabel and historicalLabel', async () => {
+  test('returns displayName and historicalLabel', async () => {
     const r = await getFeatures({ bounds: BOUNDS, pageSize: 50 });
-    const withLabel = r.data.find(f => f.preferredLabel);
+    const withLabel = r.data.find(f => f.displayName);
     expect(withLabel).toBeDefined();
     // historicalLabel should also be populated for features within the registry date range
     const withHistorical = r.data.find(f => f.historicalLabel);

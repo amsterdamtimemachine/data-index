@@ -30,16 +30,16 @@
 		meltAction
 	}: Props = $props();
 
-	const iconProps: PhosphorIconProps = {
+	const iconProps: PhosphorIconProps = $derived({
 		size,
 		weight,
 		color,
 		mirrored: false
-	};
+	});
 
 	const baseClasses =
 		'h-[32px] w-[32px] flex justify-center items-center bg-atm-sand-darkish rounded border border-atm-gold border-[1px] hover:bg-atm-sand-dark disabled:opacity-50 disabled:cursor-not-allowed text-sm';
-	const paddingClasses = Icon ? 'p-1' : 'px-3 py-2';
+	const paddingClasses = $derived(Icon ? 'p-1' : 'px-3 py-2');
 </script>
 
 {#if meltAction}

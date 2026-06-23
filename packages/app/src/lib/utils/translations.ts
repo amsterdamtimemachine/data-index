@@ -1,5 +1,3 @@
-import type { RecordType } from '@atm/shared/types';
-
 // Single translation map: all UI strings in one place
 const TRANSLATIONS: Record<string, string> = {
 	// Placeholders
@@ -59,38 +57,31 @@ const REVERSE: Record<string, string> = Object.fromEntries(
 /**
  * Translate a key to Dutch. Returns the key itself if no translation exists.
  */
-export function t(key: string): string {
+export function translate(key: string): string {
 	return TRANSLATIONS[key] || key;
 }
 
 /**
  * Reverse translate a Dutch string back to its English key.
  */
-export function rt(dutch: string): string {
+export function reverseTranslate(dutch: string): string {
 	return REVERSE[dutch] || dutch;
 }
 
-// ============================================================================
-// Convenience wrappers (for backward compatibility + array operations)
-// ============================================================================
-
-export const translateContentType = t;
-export const translatePlaceType = t;
-export const reverseTranslateContentType = rt;
-export const translateRelation = t;
-
-export function translateContentTypes(types: string[]): string[] {
-	return types.map(t);
+/** Translate an array of keys to Dutch. */
+export function translateAll(keys: string[]): string[] {
+	return keys.map(translate);
 }
 
-export function reverseTranslateContentTypes(types: string[]): string[] {
-	return types.map(rt);
+/** Reverse translate an array of Dutch strings back to their English keys. */
+export function reverseTranslateAll(dutch: string[]): string[] {
+	return dutch.map(reverseTranslate);
 }
 
-export function translateErrorTitle(title: string): string {
-	return t(title);
-}
-
+/**
+ * Translate an error message by substring replacement (not a key lookup), so
+ * dynamic messages with interpolated values still get their known phrases translated.
+ */
 export function translateErrorMessage(message: string): string {
 	let translated = message;
 	// Apply translations for error message patterns

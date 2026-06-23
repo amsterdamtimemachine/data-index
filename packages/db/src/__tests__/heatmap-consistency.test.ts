@@ -68,10 +68,16 @@ describe('heatmap ↔ features cell-count consistency', () => {
 
     // A street spanning ~6 base cells (500m line) + two point addresses elsewhere.
     await db.execute(sql`
-      INSERT INTO place (id, type, geometry) VALUES
-        ('street-1', 'street',  ST_GeomFromText('LINESTRING(121000 486000, 121500 486000)', 28992)),
-        ('addr-1',   'address', ST_GeomFromText('POINT(122000 486500)', 28992)),
-        ('addr-2',   'address', ST_GeomFromText('POINT(121200 485800)', 28992))
+      INSERT INTO place (id, type) VALUES
+        ('street-1', 'street'),
+        ('addr-1',   'address'),
+        ('addr-2',   'address')
+    `);
+    await db.execute(sql`
+      INSERT INTO place_geometry (place_id, geometry) VALUES
+        ('street-1', ST_GeomFromText('LINESTRING(121000 486000, 121500 486000)', 28992)),
+        ('addr-1',   ST_GeomFromText('POINT(122000 486500)', 28992)),
+        ('addr-2',   ST_GeomFromText('POINT(121200 485800)', 28992))
     `);
 
     // 3 features on the street, 1 on each address — all dated within slice 1900_1950.
@@ -103,7 +109,7 @@ describe('heatmap ↔ features cell-count consistency', () => {
 
   test('street place spans multiple base cells (so the double-count path is exercised)', async () => {
     const r = await db.execute<{ spatial_frequency: number }>(
-      sql`SELECT spatial_frequency FROM place WHERE id = 'street-1'`
+      sql`SELECT spatial_frequency FROM place_geometry WHERE place_id = 'street-1'`
     );
     expect(r.rows[0].spatial_frequency).toBeGreaterThan(1);
   });

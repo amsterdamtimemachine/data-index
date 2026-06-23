@@ -12,7 +12,7 @@ import { getRecordTypes } from './record-types';
 import { getGridConfig } from './grid-config';
 import { featureYearOverlap } from './time-filter';
 import { db } from '../client';
-import { featureToPlace, place, placeCells } from '../schema';
+import { featureToPlace, place, placeGeometry, placeCells } from '../schema';
 import type { CountRow } from '../row-types';
 
 // Query result types
@@ -34,7 +34,7 @@ type FeatureRow = {
   relevance_score: number | null;
   entity: Entity | null;
   relation_id: string | null;
-  preferred_label: string | null;
+  name: string | null;
   historical_label: string | null;
   tags: string[] | null;
 };
@@ -268,17 +268,17 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         f.content_url,
         f.start_date,
         f.end_date,
-        p.spatial_frequency,
+        pg.spatial_frequency,
         f.temporal_frequency,
-        (COALESCE(p.spatial_frequency::float, 0) / ${maxSpatial}
+        (COALESCE(pg.spatial_frequency::float, 0) / ${maxSpatial}
          + COALESCE(f.temporal_frequency::float, 0) / ${maxTemporal}) as relevance_score,
         d.label as dataset_label,
         o.label as organisation_label,
         o.url as organisation_url,
         f.entity,
         fp.relation_id,
-        p.preferred_label,
-        (SELECT a.name FROM place_name a
+        p.name,
+        (SELECT a.name FROM place_historical_name a
          WHERE a.place_id = fp.place_id
            AND a.since <= f.end_date
          ORDER BY a.since DESC LIMIT 1) as historical_label
@@ -286,6 +286,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       JOIN ${featureToPlace} fp ON pc.place_id = fp.place_id
       JOIN features f ON fp.feature_id = f.id
       JOIN ${place} p ON pc.place_id = p.id
+      JOIN ${placeGeometry} pg ON pc.place_id = pg.place_id
       LEFT JOIN datasets d ON f.dataset_id = d.id
       LEFT JOIN organisations o ON d.organisation_id = o.id
       WHERE ${cellCondition}
@@ -335,7 +336,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       organisation_url,
       entity,
       relation_id,
-      preferred_label,
+      name,
       historical_label,
       tags
     FROM ranked
@@ -365,7 +366,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     temporalFrequency: row.temporal_frequency || 1,
     entity: row.entity || undefined,
     relationId: row.relation_id || undefined,
-    preferredLabel: row.preferred_label || undefined,
+    displayName: row.name || undefined,
     historicalLabel: row.historical_label || undefined
   }));
 
