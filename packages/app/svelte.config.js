@@ -3,6 +3,10 @@ import adapter from "svelte-adapter-bun";
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { preprocessMeltUI, sequence } from '@melt-ui/pp';
 import { mdsvex } from 'mdsvex';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const root = dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -11,7 +15,7 @@ const config = {
 		vitePreprocess({
 			script: true // Make sure this is enabled for TypeScript
 		}),
-		mdsvex({ extensions: ['.svx'] }),
+		mdsvex({ extensions: ['.svx'], layout: join(root, 'src/routes/about/Layout.svelte') }),
 		preprocessMeltUI()
 	]),
 

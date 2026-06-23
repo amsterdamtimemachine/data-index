@@ -13,9 +13,7 @@
 		</Nav>
 	</div>
 	<div class="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-		<div class="prose prose-slate max-w-none prose-a:text-atm-gold-dark">
-			<Content />
-		</div>
+		<Content />
 		<LogoGrid class="mt-8" />
 	</div>
 </div>
