@@ -81,7 +81,7 @@ erDiagram
     place {
         text id PK "e.g. lp-1000001"
         text type  "address | street | neighbourhood | district"
-        text display_name  "e.g. Prins Hendrikkade 93"
+        text name  "e.g. Prins Hendrikkade 93"
     }
 
     place_geometry {
@@ -194,19 +194,19 @@ Heatmap density is rendered with log-normalised counts (`log(count+1) / log(maxC
 
 ### Place data naming 
 
-Every `place` has a geometry and a `display_name`, and may have dated historical names in `place_historical_name`. How geometry and naming interact with the temporal index depends on geometry type and related data available in Adamlink. At the moment, a feature can link to only a single place. 
+Every `place` has a geometry and a `name`, and may have dated historical names in `place_historical_name`. How geometry and naming interact with the temporal index depends on geometry type and related data available in Adamlink. At the moment, a feature can link to only a single place. 
 
 #### Address place
-Address place is a single numbered city address such as Prins Henrikkade 15. It is represented by single `POINT` geometry. Each address is labelled by multiple historical names taken from `addressen.ttl`'s `rdfs:label`, each dated by its `sem:hasEarliestBeginTimeStamp` and `sem:hasLatestEndTimeStamp` fields. The `display_name` is derived from the most recent historical name. In the heatmap its point occupies a single grid cell.
+Address place is a single numbered city address such as Prins Henrikkade 15. It is represented by single `POINT` geometry. Each address is labelled by multiple historical names taken from `addressen.ttl`'s `rdfs:label`, each dated by its `sem:hasEarliestBeginTimeStamp` and `sem:hasLatestEndTimeStamp` fields. The `name` is derived from the most recent historical name. In the heatmap its point occupies a single grid cell.
 
 #### Street place
-Street place is a single street such as Prins Henrikkade. It is represented by single `LINESTRING` geometry. Each street is labelled by multiple historical names taken from the `rdfs:label` nested in `straten.ttl`'s `schema:name`, each dated by its `sem:hasEarliestBeginTimeStamp` and `sem:hasEarliestEndTimeStamp` fields. The `display_name` is extracted directly from `skos:prefLabel`. In the heatmap its line is rasterised to every cell it crosses. 
+Street place is a single street such as Prins Henrikkade. It is represented by single `LINESTRING` geometry. Each street is labelled by multiple historical names taken from the `rdfs:label` nested in `straten.ttl`'s `schema:name`, each dated by its `sem:hasEarliestBeginTimeStamp` and `sem:hasEarliestEndTimeStamp` fields. The `name` is extracted directly from `skos:prefLabel`. In the heatmap its line is rasterised to every cell it crosses. 
 
 #### Neighbourhood place
-Neighbourhood place is a small area of the city, such as Riekerpolder. It is represented by single `POLYGON` or `MULTIPOLYGON` geometry. Unlike addresses and streets it has no dated names; instead each era is its own place (each era redraws the city's division), the *geometry* dated by `buurten.ttl`'s `sem:hasEarliestBeginTimeStamp` and `sem:hasEarliestEndTimeStamp` fields. The `display_name` is extracted directly from `skos:prefLabel`. In the heatmap its polygon is rasterised, every cell its interior covers is filled.
+Neighbourhood place is a small area of the city, such as Riekerpolder. It is represented by single `POLYGON` or `MULTIPOLYGON` geometry. Unlike addresses and streets it has no dated names; instead each era is its own place (each era redraws the city's division), the *geometry* dated by `buurten.ttl`'s `sem:hasEarliestBeginTimeStamp` and `sem:hasEarliestEndTimeStamp` fields. The `name` is extracted directly from `skos:prefLabel`. In the heatmap its polygon is rasterised, every cell its interior covers is filled.
 
 #### District place
-District place is a larger area that groups several neighbourhoods, such as Volewijck. It is identical to a neighbourhood in every respect (single `POLYGON` or `MULTIPOLYGON`, no dated names, `display_name` straight from `skos:prefLabel`) but coarser, and tagged `district`. It rasterises like a neighbourhood, but its larger area fills more cells — so district-linked features carry a higher `spatial_frequency` and rank as less spatially specific.
+District place is a larger area that groups several neighbourhoods, such as Volewijck. It is identical to a neighbourhood in every respect (single `POLYGON` or `MULTIPOLYGON`, no dated names, `name` straight from `skos:prefLabel`) but coarser, and tagged `district`. It rasterises like a neighbourhood, but its larger area fills more cells — so district-linked features carry a higher `spatial_frequency` and rank as less spatially specific.
 
 Adamlink supplies three neighbourhood systems (1850, 1909, and the present-day CBS buurten) and two district systems (1600 and the present-day CBS wijken). Each system is its own set of places with its own polygons, so unlike a street or address, whose single geometry holds across time a neighbourhood's or district's outline differs from one period to the next.
 
@@ -259,7 +259,7 @@ wijken from 1850.**
 
 The full extent of the Data Index timeline is derived from the earliest date any feature starts to the latest date any feature ends. A feature in the Index belongs to every time bin its `[start, end]` time range overlaps. That overlap rule spreads one feature across many bins.
 
-A street or address feature shows its historical name (from `place_historical_name`) with today's name (from `display_name`) in brackets when the two differ — a 1700 record of a street reads **Heiligeweg (nu Kalverstraat)**. A place with no dated name just shows its current `display_name`. The historical name is resolved at query time as the **most recent** `place_historical_name` whose `since` is ≤ the feature's `end_date` — the name in force when the feature ends. 
+A street or address feature shows its historical name (from `place_historical_name`) with today's name (from `name`) in brackets when the two differ — a 1700 record of a street reads **Heiligeweg (nu Kalverstraat)**. A place with no dated name just shows its current `name`. The historical name is resolved at query time as the **most recent** `place_historical_name` whose `since` is ≤ the feature's `end_date` — the name in force when the feature ends. 
 
 Neighbourhood and district geometry, unlike a street's or address's, changes across history: each era's division is its own `place` row with its own `place_geometry` (polygon + `[since, until)` window). Which era a feature attaches to is decided **at ingest, not query time** — it's linked to the `place` whose window overlaps the feature's `[start, end]` the most. At query time the heatmap then counts that feature against its historical geometry's footprint, **even though the basemap shows the modern city**.
 

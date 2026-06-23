@@ -1,7 +1,7 @@
 # Test fixture: a real subset of 20240311-adressen.ttl (Adamlink address observations).
 #
 # Each aladr: subject is one dated address observation that self-links to its LP
-# point via schema:geoContains; the adressen ingestion turns each into a place_name
+# point via schema:geoContains; the adressen ingestion turns each into a place_historical_name
 # row (id = the aladr URI, place_id = lp-<geoContains>, source = the albr label).
 #
 # Coverage: one block per registry id referenced by the lps.ttl fixture, plus the

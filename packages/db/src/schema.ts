@@ -35,7 +35,7 @@ export const datasets = pgTable('datasets', {
 export const place = pgTable('place', {
   id: text('id').primaryKey(),                    // "lp-1000001"
   type: text('type').notNull(),                   // "address" | "street" | "neighbourhood" (buurt) | "district" (wijk)
-  displayName: text('display_name')              // name shown for the place; dated past names live in place_historical_name
+  name: text('name')                             // name shown for the place; dated past names live in place_historical_name
 });
 
 // ============================================================================

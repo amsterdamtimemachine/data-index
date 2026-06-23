@@ -67,7 +67,7 @@ describe('Adressen ingestion', () => {
     expect(await dbq.placeNamesWithNameCount()).toBeGreaterThan(0);
   });
 
-  test('place.display_name is the most recent dated place name', async () => {
+  test('place.name is the most recent dated place name', async () => {
     const rows = await dbq.placesWithDisplayNameAndMostRecent(5);
     for (const row of rows) {
       expect(row.displayName).toBe(row.mostRecent);

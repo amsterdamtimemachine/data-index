@@ -4,7 +4,7 @@
  * Each address observation (one per registry record) carries its label, a date
  * window (begin/end), a source document, and a `schema:geoContains` link to the LP
  * point it belongs to. We create one `place_historical_name` row per observation,
- * linked to the LP `place` via that geoContains link, then set `place.display_name`
+ * linked to the LP `place` via that geoContains link, then set `place.name`
  * to the most recent named entry per place.
  *
  * Replaces the older two-step where LPS built registry-column name stubs and a
@@ -72,10 +72,10 @@ export async function ingest(filePath: string) {
 
   console.log(`Inserted ${written} place names (${skipped} skipped: LP place not found)`);
 
-  // Set place.display_name to the most recent named entry per place.
+  // Set place.name to the most recent named entry per place.
   console.log('Updating place display names...');
   const result = await db.execute(sql`
-    UPDATE place SET display_name = sub.name
+    UPDATE place SET name = sub.name
     FROM (
       SELECT DISTINCT ON (place_id) place_id, name
       FROM place_historical_name

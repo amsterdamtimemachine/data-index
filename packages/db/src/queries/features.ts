@@ -34,7 +34,7 @@ type FeatureRow = {
   relevance_score: number | null;
   entity: Entity | null;
   relation_id: string | null;
-  display_name: string | null;
+  name: string | null;
   historical_label: string | null;
   tags: string[] | null;
 };
@@ -277,7 +277,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         o.url as organisation_url,
         f.entity,
         fp.relation_id,
-        p.display_name,
+        p.name,
         (SELECT a.name FROM place_historical_name a
          WHERE a.place_id = fp.place_id
            AND a.since <= f.end_date
@@ -336,7 +336,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       organisation_url,
       entity,
       relation_id,
-      display_name,
+      name,
       historical_label,
       tags
     FROM ranked
@@ -366,7 +366,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     temporalFrequency: row.temporal_frequency || 1,
     entity: row.entity || undefined,
     relationId: row.relation_id || undefined,
-    displayName: row.display_name || undefined,
+    displayName: row.name || undefined,
     historicalLabel: row.historical_label || undefined
   }));
 

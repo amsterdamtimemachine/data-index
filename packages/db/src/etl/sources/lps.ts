@@ -29,7 +29,7 @@ export async function ingest(filePath: string) {
   }
 
   // LPS geometry is WGS84 (EPSG:4326) and is reprojected to RD on insert.
-  // Re-ingest refreshes geometry but preserves display_name, which the
+  // Re-ingest refreshes geometry but preserves name, which the
   // adressen enrichment owns.
   console.log(`Inserting ${placeRows.length} places...`);
   const placeCount = await insertPlaces(placeRows, { sourceSrid: 4326, onConflict: 'replaceGeometry' });

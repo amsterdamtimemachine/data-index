@@ -7,7 +7,7 @@
  *  - a corrected place assignment replaces the feature's old link rather than
  *    accumulating a second one (link reconciliation).
  *  - insertPlaces conflict modes: 'geometry' refreshes geometry but preserves the
- *    adressen-owned display_name; 'replace' refreshes label + geometry.
+ *    adressen-owned name; 'replace' refreshes label + geometry.
  *
  * Isolated DB lifecycle (its own seed); bun runs test files sequentially but shares
  * module singletons process-wide (the pg pool AND the query caches), so teardownTestDb
@@ -22,7 +22,7 @@ import type { PlaceIdRow } from '../row-types';
 
 async function placeRow(id: string) {
   const r = await db.execute<{ label: string | null; x: number }>(
-    sql`SELECT p.display_name as label, ST_X(g.geometry) as x
+    sql`SELECT p.name as label, ST_X(g.geometry) as x
         FROM place p JOIN place_geometry g ON g.place_id = p.id WHERE p.id = ${id}`
   );
   return r.rows[0];
@@ -64,7 +64,7 @@ describe('ETL idempotency', () => {
     );
   });
 
-  test("insertPlaces 'geometry' updates geometry but preserves display_name", async () => {
+  test("insertPlaces 'geometry' updates geometry but preserves name", async () => {
     const id = 'idem-geo';
     await insertPlaces([{ id, type: 'address', label: 'Original Label', wkt: 'POINT(100000 480000)' }],
       { sourceSrid: 28992, onConflict: 'replaceAll' });

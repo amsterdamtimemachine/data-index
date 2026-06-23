@@ -181,9 +181,9 @@ export interface PlaceInsert {
 
 /**
  * How an existing place is refreshed when a re-ingest hits its id:
- *  - 'replaceAll'      : place type + display_name, and geometry + since/until
+ *  - 'replaceAll'      : place type + name, and geometry + since/until
  *                        (streets / neighbourhoods / districts, from their TTL).
- *  - 'replaceGeometry' : place type + geometry only, preserving display_name and
+ *  - 'replaceGeometry' : place type + geometry only, preserving name and
  *                        since/until (LPS — the label is owned by adressen enrichment).
  */
 export type PlaceConflict = 'replaceAll' | 'replaceGeometry';
@@ -215,17 +215,17 @@ export async function insertPlaces(
 
     // 1. Identity row in `place`.
     const placeQuery = db.insert(place).values(
-      chunk.map(r => ({ id: r.id, type: r.type, displayName: r.label ?? null }))
+      chunk.map(r => ({ id: r.id, type: r.type, name: r.label ?? null }))
     );
     if (opts.onConflict === 'replaceGeometry') {
       await placeQuery.onConflictDoUpdate({
         target: place.id,
-        set: { type: sql`excluded.type` }, // preserve display_name
+        set: { type: sql`excluded.type` }, // preserve name
       });
     } else {
       await placeQuery.onConflictDoUpdate({
         target: place.id,
-        set: { type: sql`excluded.type`, displayName: sql`excluded.display_name` },
+        set: { type: sql`excluded.type`, name: sql`excluded.name` },
       });
     }
 

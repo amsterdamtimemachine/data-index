@@ -6,7 +6,7 @@
  * Input is JSON. Each record names the area, its level (wijk/buurt), and a date range;
  * the script resolves it to the matching `place` by:
  *   - place.type        = district (wijk) | neighbourhood (buurt)   ← from `level`
- *   - place.display_name matched case-insensitively                 ← from `area`
+ *   - place.name matched case-insensitively                         ← from `area`
  *   - the geometry whose [since, until) window OVERLAPS the record's date range
  *     the most (the same range-overlap test the histogram/heatmap use)
  * Records with no matching place are skipped (same as the point templates).
@@ -19,7 +19,7 @@
  * overlaps most.
  *
  * Neighbourhoods/districts have no `place_historical_name` history, so the only label to
- * match on is `display_name` — there is no historical/alternative name for these.
+ * match on is `name` — there is no historical/alternative name for these.
  *
  * To use:
  * 1. Copy to packages/db/src/etl/sources/<your-dataset>.ts
@@ -63,7 +63,7 @@ interface RawRecord {
   title: string;
   description?: string;     // optional → features.description (shown on the card)
   author?: string;          // optional → an example of schema.org entity (JSONB) metadata
-  area: string;             // neighbourhood / district name → matched to place.display_name
+  area: string;             // neighbourhood / district name → matched to place.name
   level: 'wijk' | 'buurt';  // → place.type (district / neighbourhood)
   date_start: string;       // "YYYY-MM-DD" — with date_end, selects the era by range overlap
   date_end: string;
@@ -90,7 +90,7 @@ export async function ingest(filePath: string) {
       FROM place p
       JOIN place_geometry g ON g.place_id = p.id
       WHERE p.type = ${type}
-        AND p.display_name ILIKE ${area}
+        AND p.name ILIKE ${area}
         AND g.since <= ${end}::date
         AND (g.until IS NULL OR g.until > ${start}::date)
       ORDER BY GREATEST(

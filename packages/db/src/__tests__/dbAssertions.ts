@@ -99,18 +99,18 @@ export interface PlaceDisplayNameVsMostRecent {
 export async function placesWithDisplayNameAndMostRecent(
   limit: number = 5
 ): Promise<PlaceDisplayNameVsMostRecent[]> {
-  const r = await db.execute<{ place_id: string; display_name: string; most_recent: string }>(sql`
-    SELECT p.id as place_id, p.display_name,
+  const r = await db.execute<{ place_id: string; name: string; most_recent: string }>(sql`
+    SELECT p.id as place_id, p.name,
       (SELECT pn.name FROM place_historical_name pn
        WHERE pn.place_id = p.id AND pn.name IS NOT NULL
        ORDER BY pn.since DESC LIMIT 1) as most_recent
     FROM place p
-    WHERE p.display_name IS NOT NULL
+    WHERE p.name IS NOT NULL
     LIMIT ${limit}
   `);
   return r.rows.map(row => ({
     placeId: row.place_id,
-    displayName: row.display_name,
+    displayName: row.name,
     mostRecent: row.most_recent,
   }));
 }
