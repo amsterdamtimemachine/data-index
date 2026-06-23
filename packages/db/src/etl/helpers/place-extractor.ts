@@ -10,15 +10,28 @@ export interface node {
 }
 
 export async function getPlaceMap() {
-    const allPlaces = await db.execute<{ preferred_label: string, type: string }>(sql`
-        SELECT DISTINCT preferred_label, type FROM place  
+    const allPlaces = await db.execute<{ id: string, name: string, type: string }>(sql`
+        SELECT p.id AS place_id,
+            p.preferred_label AS name,
+            p.type AS type
+        FROM place p
+        WHERE p.preferred_label IS NOT NULL
+
+        UNION
+
+        SELECT pn.place_id AS place_id,
+            pn.name AS name,
+            p.type AS type
+        FROM place_name pn
+        JOIN place p ON p.id = pn.place_id
+        WHERE pn.name IS NOT NULL;
     `);
 
     const placeMap = new Map<string, string>(
         allPlaces.rows
-            .filter(row => row.preferred_label != null)
+            .filter(row => row.name != null)
             .map(row => [
-                row.preferred_label.toLowerCase(),
+                row.name.toLowerCase(),
                 row.type
             ])
     );
@@ -73,7 +86,8 @@ export function match(text: string, root: node): node[] {
 
             current = current.children.get(word)!
 
-            if (current.isTerminal) {
+            if (current.isTerminal && 
+                (j + 1 <= words.length && !current.children.has(words[j + 1]))) {
                 matches.push(current)
             }
         }
