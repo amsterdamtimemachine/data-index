@@ -8,10 +8,14 @@
  *    accumulating a second one (link reconciliation).
  *  - insertPlaces conflict modes: 'geometry' refreshes geometry but preserves the
 <<<<<<< HEAD
+<<<<<<< HEAD
  *    adressen-owned name; 'replace' refreshes label + geometry.
 =======
  *    adressen-owned display_name; 'replace' refreshes label + geometry.
 >>>>>>> 4bfc998 (move place geometry to its own 'place_geometry' table, rename preferred_label to display_name, rename place_name table to place_historical_name)
+=======
+ *    adressen-owned name; 'replace' refreshes label + geometry.
+>>>>>>> 587fe7d (rename display_name in the db to 'name')
  *
  * Isolated DB lifecycle (its own seed); bun runs test files sequentially but shares
  * module singletons process-wide (the pg pool AND the query caches), so teardownTestDb
@@ -27,10 +31,14 @@ import type { PlaceIdRow } from '../row-types';
 async function placeRow(id: string) {
   const r = await db.execute<{ label: string | null; x: number }>(
 <<<<<<< HEAD
+<<<<<<< HEAD
     sql`SELECT p.name as label, ST_X(g.geometry) as x
 =======
     sql`SELECT p.display_name as label, ST_X(g.geometry) as x
 >>>>>>> 4bfc998 (move place geometry to its own 'place_geometry' table, rename preferred_label to display_name, rename place_name table to place_historical_name)
+=======
+    sql`SELECT p.name as label, ST_X(g.geometry) as x
+>>>>>>> 587fe7d (rename display_name in the db to 'name')
         FROM place p JOIN place_geometry g ON g.place_id = p.id WHERE p.id = ${id}`
   );
   return r.rows[0];
@@ -73,6 +81,7 @@ describe('ETL idempotency', () => {
   });
 
 <<<<<<< HEAD
+<<<<<<< HEAD
   test('featureUuid namespaces by dataset — same key in different datasets does not collide', () => {
     expect(featureUuid('delpher', '32235')).not.toBe(featureUuid('joods-monument', '32235'));
   });
@@ -81,6 +90,9 @@ describe('ETL idempotency', () => {
 =======
   test("insertPlaces 'geometry' updates geometry but preserves display_name", async () => {
 >>>>>>> 4bfc998 (move place geometry to its own 'place_geometry' table, rename preferred_label to display_name, rename place_name table to place_historical_name)
+=======
+  test("insertPlaces 'geometry' updates geometry but preserves name", async () => {
+>>>>>>> 587fe7d (rename display_name in the db to 'name')
     const id = 'idem-geo';
     await insertPlaces([{ id, type: 'address', label: 'Original Label', wkt: 'POINT(100000 480000)' }],
       { sourceSrid: 28992, onConflict: 'replaceAll' });

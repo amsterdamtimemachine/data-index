@@ -82,10 +82,14 @@ erDiagram
         text id PK "e.g. lp-1000001"
         text type  "address | street | neighbourhood | district"
 <<<<<<< HEAD
+<<<<<<< HEAD
         text name  "e.g. Prins Hendrikkade 93"
 =======
         text display_name  "e.g. Prins Hendrikkade 93"
 >>>>>>> 4bfc998 (move place geometry to its own 'place_geometry' table, rename preferred_label to display_name, rename place_name table to place_historical_name)
+=======
+        text name  "e.g. Prins Hendrikkade 93"
+>>>>>>> 587fe7d (rename display_name in the db to 'name')
     }
 
     place_geometry {
