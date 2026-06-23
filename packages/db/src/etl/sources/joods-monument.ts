@@ -83,9 +83,23 @@ export async function ingest(filePath: string) {
   let linkCount = 0;
   let skipped = 0;
   let duplicates = 0;
+  let missingFields = 0;
+  let total = 0;
 
   for await (const row of csvParser as AsyncIterable<RawRow>) {
-    if (!row.person || !row.address) continue;
+    total++;
+    if (!row.person || !row.address) {
+      missingFields++;
+      continue;
+    }
+
+    // Stable id = the numeric page id from the person URL (the slug after it is mutable).
+    // No id → skip, so the feature id never falls back to the volatile full URL.
+    const personId = row.person.match(/\/page\/(\d+)/)?.[1];
+    if (!personId) {
+      skipped++;
+      continue;
+    }
 
     const placeId = await resolvePlaceId(row.address);
     if (!placeId) {
@@ -93,7 +107,6 @@ export async function ingest(filePath: string) {
       continue;
     }
 
-    const personId = row.person.match(/\/page\/(\d+)/)?.[1] ?? row.person;
     const featureId = featureUuid(personId);
 
     if (committedPersons.has(personId)) {
@@ -130,12 +143,16 @@ export async function ingest(filePath: string) {
 
     await writer.flushIfFull();
 
-    if ((featureCount + duplicates + skipped) % 1000 === 0) {
-      process.stdout.write(`\r  ${featureCount} persons, ${duplicates} duplicates, ${skipped} skipped`);
+    if (total % 1000 === 0) {
+      process.stdout.write(`\r  ${total} rows, ${featureCount} persons, ${duplicates} duplicates, ${skipped + missingFields} skipped`);
     }
   }
 
   await writer.flush();
 
-  console.log(`\nDone: ${featureCount} features, ${linkCount} links, ${duplicates} duplicate rows skipped, ${skipped} skipped (no matching place)`);
+  console.log(
+    `\nDone: ${featureCount} features, ${linkCount} links, ` +
+    `${duplicates} duplicate rows skipped, ${missingFields} skipped (missing fields), ` +
+    `${skipped} skipped (no page id or no matching place), ${total} rows read`
+  );
 }

@@ -103,9 +103,15 @@ export async function ingest(filePath: string) {
   let featureCount = 0;
   let linkCount = 0;
   let skipped = 0;
+  let missingFields = 0;
+  let total = 0;
 
   for await (const row of csvParser as AsyncIterable<RawRow>) {
-    if (!row.geom_wkt || !row.url || !row.id) continue;
+    total++;
+    if (!row.geom_wkt || !row.url || !row.id) {
+      missingFields++;
+      continue;
+    }
 
     const placeId = await resolvePlaceId(row.geom_wkt);
     if (!placeId) {
@@ -143,12 +149,16 @@ export async function ingest(filePath: string) {
 
     await writer.flushIfFull();
 
-    if ((featureCount + skipped) % 1000 === 0) {
-      process.stdout.write(`\r  ${featureCount} ingested, ${skipped} skipped`);
+    if (total % 1000 === 0) {
+      process.stdout.write(`\r  ${total} rows, ${featureCount} ingested, ${skipped + missingFields} skipped`);
     }
   }
 
   await writer.flush();
 
-  console.log(`\nDone: ${featureCount} features, ${linkCount} links, ${skipped} skipped (no place within ${MATCH_THRESHOLD_METERS}m)`);
+  console.log(
+    `\nDone: ${featureCount} features, ${linkCount} links, ` +
+    `${skipped} skipped (no place within ${MATCH_THRESHOLD_METERS}m), ` +
+    `${missingFields} skipped (missing fields), ${total} rows read`
+  );
 }

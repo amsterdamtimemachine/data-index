@@ -89,6 +89,7 @@ export async function ingest(filePath: string) {
   let skippedLinks = 0;
   let streetLinkCount = 0;
   let droppedResources = 0;
+  let missingId = 0;
   let rowCount = 0;
 
   const writer = createFeatureWriter(BATCH_SIZE);
@@ -123,10 +124,11 @@ export async function ingest(filePath: string) {
     .pipe(parse({ columns: true, relax_column_count: true, bom: true }));
 
   for await (const row of csvParser as AsyncIterable<RawRow>) {
+    rowCount++;
     const resource = row.resource?.trim();
-    if (!resource) continue;
+    if (!resource) { missingId++; continue; }
     const identifier = resource.split('/').pop() ?? '';
-    if (!identifier) continue;
+    if (!identifier) { missingId++; continue; }
 
     const adamlinkUri = row.address?.trim();
     let placeId: string | null = null;
@@ -170,7 +172,6 @@ export async function ingest(filePath: string) {
 
     await writer.flushIfFull();
 
-    rowCount++;
     if (rowCount % 10000 === 0) {
       process.stdout.write(`\r  ${rowCount} rows, ${featureCount} features, ${linkCount} address links, ${pendingFeatures.size} pending`);
     }
@@ -212,5 +213,9 @@ export async function ingest(filePath: string) {
 
   droppedResources = pendingFeatures.size - streetResolved;
 
-  console.log(`\n\nDone: ${featureCount} features (${linkCount} address links, ${streetLinkCount} street links), ${skippedLinks} skipped, ${droppedResources} dropped (no link)`);
+  console.log(
+    `\n\nDone: ${featureCount} features (${linkCount} address links, ${streetLinkCount} street links), ` +
+    `${droppedResources} dropped (no link), ${missingId} skipped (no id), ` +
+    `${skippedLinks} address links unresolved, ${rowCount} rows read`
+  );
 }
