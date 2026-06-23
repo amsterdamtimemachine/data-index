@@ -73,7 +73,7 @@ export async function ingest(filePath: string) {
   console.log(`Inserted ${written} place names (${skipped} skipped: LP place not found)`);
 
   // Set place.name to the most recent named entry per place.
-  console.log('Updating place display names...');
+  console.log('Updating place names...');
   const result = await db.execute(sql`
     UPDATE place SET name = sub.name
     FROM (
@@ -84,5 +84,5 @@ export async function ingest(filePath: string) {
     ) sub
     WHERE place.id = sub.place_id
   `);
-  console.log(`Done: ${written} names, ${result.rowCount} preferred labels updated`);
+  console.log(`Done: ${written} names, ${result.rowCount} place names updated`);
 }

@@ -107,7 +107,7 @@ export async function ingest(filePath: string) {
       continue;
     }
 
-    const featureId = featureUuid(personId);
+    const featureId = featureUuid(DATASET_ID, personId);
 
     if (committedPersons.has(personId)) {
       duplicates++;

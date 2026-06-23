@@ -2,7 +2,7 @@
  * Regression: re-ingesting a source must be idempotent (a "fix the file and
  * re-run" workflow), not duplicate rows.
  *
- *  - features carry a deterministic id (featureUuid(url)), so a re-ingest upserts
+ *  - features carry a deterministic id (featureUuid(datasetId, key)), so a re-ingest upserts
  *    the existing row instead of inserting a copy with a fresh random id.
  *  - a corrected place assignment replaces the feature's old link rather than
  *    accumulating a second one (link reconciliation).
@@ -56,12 +56,16 @@ describe('ETL idempotency', () => {
     await teardownTestDb();
   });
 
-  test('featureUuid is deterministic, url-specific, and a valid v5 UUID', () => {
-    expect(featureUuid('https://x/1')).toBe(featureUuid('https://x/1'));
-    expect(featureUuid('https://x/1')).not.toBe(featureUuid('https://x/2'));
-    expect(featureUuid('https://x/1')).toMatch(
+  test('featureUuid is deterministic, key-specific, and a valid v5 UUID', () => {
+    expect(featureUuid('ds', '1')).toBe(featureUuid('ds', '1'));
+    expect(featureUuid('ds', '1')).not.toBe(featureUuid('ds', '2'));
+    expect(featureUuid('ds', '1')).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     );
+  });
+
+  test('featureUuid namespaces by dataset — same key in different datasets does not collide', () => {
+    expect(featureUuid('delpher', '32235')).not.toBe(featureUuid('joods-monument', '32235'));
   });
 
   test("insertPlaces 'geometry' updates geometry but preserves name", async () => {
@@ -96,7 +100,7 @@ describe('ETL idempotency', () => {
     ], { sourceSrid: 28992, onConflict: 'replaceAll' });
 
     const url = 'https://example.org/feature/1';
-    const id = featureUuid(url);
+    const id = featureUuid('idem-ds', url);
 
     // Run 1: feature v1 linked to A.
     const w1 = createFeatureWriter();

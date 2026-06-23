@@ -99,7 +99,7 @@ export async function ingest(filePath: string) {
     const placeId = await resolvePlaceId(row.geom_wkt);
     if (!placeId) { skipped++; continue; }
 
-    const featureId = featureUuid(row.url);
+    const featureId = featureUuid(DATASET_ID, row.url);
     const startDate = row.date_start || null;
     const endDate = row.date_end || null;
     const dateCreated = formatDateRange(startDate, endDate);

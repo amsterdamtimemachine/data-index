@@ -118,7 +118,7 @@ export async function ingest(filePath: string) {
     );
     if (!placeId) { skipped++; continue; }
 
-    const featureId = featureUuid(row.id);
+    const featureId = featureUuid(DATASET_ID, row.id);
     const startDate = row.date_start || null;
     const endDate = row.date_end || startDate;
     const dateCreated = formatDateRange(startDate, endDate);

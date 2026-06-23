@@ -129,7 +129,7 @@ export async function ingest(filePath: string) {
       ...(dateCreated && { dateCreated })
     };
 
-    const featureId = featureUuid(row.id);
+    const featureId = featureUuid(DATASET_ID, row.id);
 
     writer.addFeature({
       id: featureId,

@@ -153,7 +153,7 @@ export async function ingest(filePath: string) {
 
       if (!placeId) continue;
 
-      featureId = featureUuid(identifier);
+      featureId = featureUuid(DATASET_ID, identifier);
       writer.addFeature({ id: featureId, ...pendingFeatures.get(identifier)! });
       committedFeatures.set(identifier, featureId);
       pendingFeatures.delete(identifier);
@@ -194,7 +194,7 @@ export async function ingest(filePath: string) {
     }
 
     if (resolvedPlaceId) {
-      const featureId = featureUuid(identifier);
+      const featureId = featureUuid(DATASET_ID, identifier);
       writer.addFeature({ id: featureId, ...featureData });
       writer.addLink({ featureId, placeId: resolvedPlaceId, relationId: RELATION_ID });
       featureCount++;

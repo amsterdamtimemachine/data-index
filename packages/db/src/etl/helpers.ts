@@ -40,12 +40,12 @@ function uuidv5(name: string, namespace: string): string {
 }
 
 /**
- * Deterministic feature UUID derived from the source URL (the feature's stable
- * natural key). Same URL always yields the same id, so re-ingesting a file
- * upserts the existing rows instead of creating duplicates with fresh random ids.
+ * Deterministic feature UUID from a dataset id + the source's stable natural key.
+ * The dataset id namespaces the key, so identical keys in different datasets
+ * (e.g. a bare integer) don't collide.
  */
-export function featureUuid(url: string): string {
-  return uuidv5(url, FEATURE_ID_NAMESPACE);
+export function featureUuid(datasetId: string, key: string): string {
+  return uuidv5(`${datasetId}:${key}`, FEATURE_ID_NAMESPACE);
 }
 
 /**
