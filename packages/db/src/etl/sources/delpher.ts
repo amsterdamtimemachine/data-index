@@ -15,9 +15,13 @@ import type { PlaceIdRow } from '../../row-types';
 import type { CreativeWorkEntity } from '@atm/shared';
 import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers/helpers';
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { Ingestor, TargetRecord } from './ingestor';
 =======
 >>>>>>> 3ce5987 (setup trie-structure for place-detection)
+=======
+import { Ingestor, TargetRecord } from './ingestor';
+>>>>>>> 043e737 (add ingestor-factory)
 
 interface DelpherSourceData {
   id: string;
@@ -58,7 +62,11 @@ export class Delpher extends Ingestor<DelpherSourceData> {
     const { startDate, endDate } = this.parsePeriod(source.period);
     
     return {
+<<<<<<< HEAD
       id: featureUuid(source.url),
+=======
+      id: '1',//featureUuid(source.url),
+>>>>>>> 043e737 (add ingestor-factory)
       url: source.url,
       contentUrl: source.url,
       title: source.title || '',

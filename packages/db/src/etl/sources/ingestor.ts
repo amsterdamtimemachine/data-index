@@ -97,6 +97,7 @@ export abstract class Ingestor<SourceRecord> {
     }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     protected constructTargetFromDraft(draft: DraftRecord, pi: PlaceIndex): TargetRecord | undefined {
 =======
     private async getPlaceMap() {
@@ -121,6 +122,9 @@ export abstract class Ingestor<SourceRecord> {
 
     protected constructTargetFromDraft(draft: DraftRecord, placesPattern: RegExp, placeMap: Map<string, any>): TargetRecord | undefined {
 >>>>>>> 3ce5987 (setup trie-structure for place-detection)
+=======
+    protected constructTargetFromDraft(draft: DraftRecord, pi: PlaceIndex): TargetRecord | undefined {
+>>>>>>> 043e737 (add ingestor-factory)
         if (!draft.description) { 
             return undefined 
         }
