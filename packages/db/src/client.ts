@@ -12,7 +12,12 @@ const config: PoolConfig = process.env.DATABASE_URL
       database: process.env.DB_NAME,
     };
 
-const pool = new Pool(config);
+const pool = new Pool({
+  ...config,
+  connectionTimeoutMillis: parseInt(process.env.DB_CONNECT_TIMEOUT_MS ?? '5000'),
+  statement_timeout: parseInt(process.env.DB_STATEMENT_TIMEOUT_MS ?? '30000'),
+  idleTimeoutMillis: 30000,
+});
 
 /**
  * Drizzle client.
