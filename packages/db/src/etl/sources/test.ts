@@ -25,8 +25,8 @@ export class Test extends Ingestor<TestSourceData> {
             id: source["@id"],
             title: source.headline,
             description: source.articleBody,
-            date_start: source.datePublished + '-01-01',
-            date_end: source.datePublished + '-01-2'
+            dateStart: source.datePublished + '-01-01',
+            dateEnd: source.datePublished + '-01-2'
         }
     }
 }

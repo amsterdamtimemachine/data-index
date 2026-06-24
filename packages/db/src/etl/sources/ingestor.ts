@@ -5,20 +5,24 @@ import type { PlaceIdRow } from '../../row-types';
 import type { CreativeWorkEntity } from '@atm/shared';
 import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers/helpers';
 import { NewFeature } from '../../schema';
-import { constructTrie, getPlaceMap, match, node } from '../helpers/place-extractor';
+import { constructTrie, getPlaceMap, match, node, PlaceIndex } from '../helpers/place-extractor';
+import { extname } from 'path';
+import { parse } from 'csv-parse/sync';
 
 export interface TargetRecord {
     id: string;
+    url?: string;
+    contentUrl?: string;    
     title: string;
     description?: string;     // optional → features.description (shown on the card)
     author?: string;          // optional → an example of schema.org entity (JSONB) metadata
     area: string;             // neighbourhood / district name → matched to place.preferred_label
     level: string;  // → place.type (district / neighbourhood)
-    date_start: string;       // "YYYY-MM-DD" — with date_end, selects the era by range overlap
-    date_end: string;
+    dateStart: string | null;       // "YYYY-MM-DD" — with date_end, selects the era by range overlap
+    dateEnd: string | null;
 }
 
-type DraftRecord = Omit<TargetRecord, 'area' | 'level'> & {
+export type DraftRecord = Omit<TargetRecord, 'area' | 'level'> & {
   area?: string;
   level?: string;
 };
@@ -34,23 +38,15 @@ export abstract class Ingestor<SourceRecord> {
     protected target: TargetRecord | undefined;
     protected BATCH_SIZE = 1000;
 
-    // ═══════════════════════════════════════════════════════════════
-    //  Organisation
-    // ═══════════════════════════════════════════════════════════════
     protected abstract ORG_ID: string; // Example: 'my-org';
     protected abstract ORG_LABEL: string; // Example: 'My Organisation';
     protected abstract ORG_URL: string; // Example: 'https://org-url.com';
 
-    // ═══════════════════════════════════════════════════════════════
-    //  Dataset
-    // ═══════════════════════════════════════════════════════════════
+
     protected abstract DATASET_ID: string; // Example: 'my-dataset';
     protected abstract DATASET_LABEL: string; // Example: 'My Dataset';
     protected abstract DATASET_URL: string; // Example: 'https://dataset-url.com';
 
-    // ═══════════════════════════════════════════════════════════════
-    //  Feature metadata
-    // ═══════════════════════════════════════════════════════════════
     protected abstract RECORD_TYPE: string; // Possible values: 'image' | 'text' | 'person'
     protected abstract RELATION_ID: string; // Example: 'isAbout';
     protected abstract RELATION_LABEL: string; // Example: 'Is About';
@@ -84,7 +80,7 @@ export abstract class Ingestor<SourceRecord> {
     });
 
     private async inferPlaceId(target: TargetRecord) {
-        const { level, area, date_start, date_end } = target;
+        const { level, area, dateStart: date_start, dateEnd: date_end } = target;
         const start = date_start;
         const end = date_end || date_start;
 
@@ -100,24 +96,12 @@ export abstract class Ingestor<SourceRecord> {
         })
     }
 
-    protected constructTargetFromDraft(draft: DraftRecord, root: node, placeMap: Map<string, any>): TargetRecord | undefined {
+    protected constructTargetFromDraft(draft: DraftRecord, pi: PlaceIndex): TargetRecord | undefined {
         if (!draft.description) { 
             return undefined 
         }
 
-        const matchedPlaces = match(draft.description, root)
-
-        if (!matchedPlaces || matchedPlaces.length <= 0) {
-            return undefined 
-        }
-
-        const matches = [...new Set(
-            matchedPlaces.map(m => m.value.toLocaleLowerCase())
-            .sort((a, b) => b.length - a.length || a.localeCompare(b)
-        ))]// TODO: allow multiple places
-
-        const m = matches[0]
-        const place = placeMap.get(m)
+        const place = pi.extract(draft.description)
 
         if (!place) { 
             return undefined 
@@ -125,8 +109,8 @@ export abstract class Ingestor<SourceRecord> {
 
         return {
             ...draft,
-            area: m,
-            level: place
+            area: place.area,
+            level: place.level
         } as TargetRecord
     }
 
@@ -134,11 +118,10 @@ export abstract class Ingestor<SourceRecord> {
         const targets: TargetRecord[] = []
         let skipped = 0;
 
-        const placeMap = await getPlaceMap()
-        const root: node = constructTrie(placeMap)
+        const pi = await PlaceIndex.create()
 
         for (const draft of drafts) {
-            const target = this.constructTargetFromDraft(draft, root, placeMap)
+            const target = this.constructTargetFromDraft(draft, pi)
 
             if (!target) { 
                 skipped++; 
@@ -166,11 +149,11 @@ export abstract class Ingestor<SourceRecord> {
     }
 
     protected async constructFeature(target: TargetRecord): Promise<NewFeature | undefined> {
-        if (!target.area || !target.level || !target.date_start) { return undefined }
+        if (!target.area || !target.level) { return undefined }
 
         const featureId = featureUuid(target.id)
-        const startDate = target.date_start || null
-        const endDate = target.date_end || startDate
+        const startDate = target.dateStart || null
+        const endDate = target.dateEnd || startDate
         const dateCreated = formatDateRange(startDate, endDate)
 
         // TODO: we could more abstractly create this entity
@@ -183,7 +166,8 @@ export abstract class Ingestor<SourceRecord> {
         
         return {
             id: featureId,
-            url: target.id,
+            url: target.url,
+            contentUrl: target.url,
             recordType: this.RECORD_TYPE,
             label: target.title || '',
             description: target.description || null,
@@ -194,10 +178,24 @@ export abstract class Ingestor<SourceRecord> {
         } as NewFeature
     }
 
+    protected readFileAsSourceRecord(filePath: string): SourceRecord[] {
+        const extension = extname(filePath);
+        const content = readFileSync(filePath, 'utf8');
+
+        switch (extension) {
+            case '.json':
+                return JSON.parse(content) as SourceRecord[]
+            case '.csv':
+                return parse(content, { columns: true, skip_empty_lines: true }) as SourceRecord[];
+            default:
+                return []
+        }
+    }
+
     public async ingest(filePath: string) {
         await this.upsertDatasource();
 
-        const sourceRecords = JSON.parse(readFileSync(filePath, 'utf-8')) as SourceRecord[]
+        const sourceRecords = this.readFileAsSourceRecord(filePath)
         const targetRecords = await this.mapToTargetRecords(sourceRecords)
 
         const writer = createFeatureWriter(this.BATCH_SIZE)

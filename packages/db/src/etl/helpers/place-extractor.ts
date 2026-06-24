@@ -1,6 +1,7 @@
 import { is, sql } from 'drizzle-orm';
 import { db } from '../../client';
 import { writeFileSync } from "fs";
+import { DraftRecord } from '../sources/ingestor';
 
 export interface node {
     value: string
@@ -9,7 +10,7 @@ export interface node {
     type?: string
 }
 
-export async function getPlaceMap() {
+async function getPlaceMap() {
     const allPlaces = await db.execute<{ id: string, name: string, type: string }>(sql`
         SELECT p.id AS place_id,
             p.preferred_label AS name,
@@ -39,7 +40,7 @@ export async function getPlaceMap() {
     return placeMap;
 }
 
-export function constructTrie(map: Map<string, string>): node {
+function constructTrie(map: Map<string, string>): node {
     const root: node = { value: '', children: new Map(), isTerminal: false};
 
     for (const place of map) {
@@ -72,7 +73,7 @@ function isChild(word: string, node: node) {
     return node.children.has(word)
 }
 
-export function match(text: string, root: node): node[] {
+function match(text: string, root: node): node[] {
     const matches: node[] = []
     const words = text.toLowerCase().split(' ');
 
@@ -94,4 +95,29 @@ export function match(text: string, root: node): node[] {
     }
 
     return matches.sort((a, b) => b.value.length - a.value.length)
+}
+
+export class PlaceIndex {
+    private constructor(
+        private readonly placeMap: Map<string, string>,
+        private readonly root: node
+    ) {}
+
+    static async create(): Promise<PlaceIndex> {
+        const placeMap = await getPlaceMap();
+        const root = constructTrie(placeMap);
+
+        return new PlaceIndex(placeMap, root)
+    }
+
+    extract(text: string): { area: string; level: string } | undefined {
+        const matches = match(text, this.root)
+
+        if (!matches || matches.length <= 0) { return undefined }
+
+        return { 
+            area: matches[0].value, 
+            level: this.placeMap.get(matches[0].value)!
+        }
+    }
 }

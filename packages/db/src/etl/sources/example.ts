@@ -1,29 +1,28 @@
-import { Ingestor, TargetRecord } from "./ingestor";
-
-interface TestSourceData {
-    identifier: string;
-    "@id": string;
-    headline: string;
-    articleBody: string;
-    url: string;
-    datePublished: string;
 }
 
-export class Example extends Ingestor<TestSourceData> {
-    protected ORG_ID: string;
-    protected ORG_LABEL: string;
-    protected ORG_URL: string;
+export class Delpher extends Ingestor<DelpherSourceData> {
+  // ═══════════════════════════════════════════════════════════════
+  //  Organisation
+  // ═══════════════════════════════════════════════════════════════
+  protected ORG_ID = 'kb';
+  protected ORG_LABEL = 'Koninklijke Bibliotheek';
+  protected ORG_URL = 'https://www.kb.nl';
 
-    protected DATASET_ID: string;
-    protected DATASET_LABEL: string;
-    protected DATASET_URL: string;
+  // ═══════════════════════════════════════════════════════════════
+  //  Dataset
+  // ═══════════════════════════════════════════════════════════════
+  protected DATASET_ID = 'delpher';
+  protected DATASET_LABEL = 'Delpher Kranten';
+  protected DATASET_URL = 'https://www.delpher.nl';
 
-    protected RECORD_TYPE: string;
-    protected RELATION_ID: string;
-    protected RELATION_LABEL: string;
-
-    protected transform(source: TestSourceData): Omit<TargetRecord, "area" | "level"> & { area?: string; level?: string; } {
-
-    }
-
+  // ═══════════════════════════════════════════════════════════════
+  //  Feature metadata
+  // ═══════════════════════════════════════════════════════════════
+  protected RECORD_TYPE = 'text';
+  protected RELATION_ID = 'isAbout';
+  protected RELATION_LABEL = 'Is About';
+  protected transform(source: DelpherSourceData): Omit<TargetRecord, 'area' | 'level'> & { area?: string; level?: string; } {
+    throw new Error('Method not implemented.');
+  }
+  
 }
