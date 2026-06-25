@@ -14,7 +14,7 @@ import { db } from '../../client';
 import type { PlaceIdRow } from '../../row-types';
 import type { CreativeWorkEntity } from '@atm/shared';
 import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers/helpers';
-import { Ingestor, TargetRecord } from './ingestor';
+import { Ingestor } from './ingestor';
 
 interface DelpherSourceData {
   id: string;
