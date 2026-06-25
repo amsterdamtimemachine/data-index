@@ -1,7 +1,7 @@
 import { is, sql } from 'drizzle-orm';
 import { db } from '../../client';
 import { writeFileSync } from "fs";
-import { DraftRecord } from '../sources/ingestor';
+import { Draft, DraftRecord } from '../sources/ingestor';
 import { NewFeature } from '../../schema';
 import { createCachedResolver } from './helpers';
 import { PlaceIdRow } from '../../row-types';
@@ -163,7 +163,7 @@ const inferPlaceIdCached = createCachedResolver(async (key: string) => {
     return result.rows[0]?.place_id ?? null;
 });
 
-export async function inferPlaceId(target: NewFeature, place: { area: string; level: string }) {
+export async function inferPlaceId(target: Draft<NewFeature>, place: { area: string; level: string }) {
     const { startDate: date_start, endDate: date_end } = target;
     const start = date_start;
     const end = date_end || date_start;

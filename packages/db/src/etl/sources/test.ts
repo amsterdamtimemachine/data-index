@@ -1,5 +1,7 @@
+import { EntityBase } from "@atm/shared";
 import { NewFeature } from "../../schema";
-import { Ingestor, TargetRecord } from "./ingestor";
+import { Ingestor } from "./ingestor";
+import { recordType} from '../helpers/entity-factory';
 
 interface TestSourceData {
     identifier: string;
@@ -17,7 +19,7 @@ export class Test extends Ingestor<TestSourceData> {
     protected DATASET_ID: string = 'set';
     protected DATASET_LABEL: string = 'Set';
     protected DATASET_URL: string = 'set.test.com';
-    protected RECORD_TYPE: string = 'text';
+    protected RECORD_TYPE: recordType = recordType.IMAGE;
     protected RELATION_ID: string = 'isAbout';
     protected RELATION_LABEL: string = 'Is About';
 
@@ -31,6 +33,10 @@ export class Test extends Ingestor<TestSourceData> {
             url: source.url,
             contentUrl: source.url,
         }
+    }
+
+    protected createEntity(source: TestSourceData): EntityBase {
+        
     }
 }
 
