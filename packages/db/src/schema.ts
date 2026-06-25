@@ -88,15 +88,15 @@ export const tags = pgTable('tags', {
 // FEATURES - Main content items (images, text, video, audio, persons)
 // ============================================================================
 export const features = pgTable('features', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  url: text('url'),
+  id: uuid('id').primaryKey(),
+  url: text('url').notNull(),
   recordType: text('record_type').notNull(),
   label: text('label').notNull(),
   description: text('description'),
   contentUrl: text('content_url'),
-  startDate: date('start_date'),
-  endDate: date('end_date'),
-  datasetId: text('dataset_id').references(() => datasets.id),
+  startDate: date('start_date').notNull(),
+  endDate: date('end_date').notNull(),
+  datasetId: text('dataset_id').notNull().references(() => datasets.id),
   temporalFrequency: integer('temporal_frequency'),
   entity: jsonb('entity'),
 }, (table) => [
