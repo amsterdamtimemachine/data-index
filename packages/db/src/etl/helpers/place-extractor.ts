@@ -2,6 +2,17 @@ import { is, sql } from 'drizzle-orm';
 import { db } from '../../client';
 import { writeFileSync } from "fs";
 import { DraftRecord } from '../sources/ingestor';
+import { NewFeature } from '../../schema';
+import { createCachedResolver } from './helpers';
+import { PlaceIdRow } from '../../row-types';
+
+
+type InferPlaceArgs = {
+    level: string;
+    area: string;
+    start: string;
+    end: string;
+};
 
 export interface node {
     value: string
@@ -120,4 +131,46 @@ export class PlaceIndex {
             level: this.placeMap.get(matches[0].value)!
         }
     }
+}
+
+
+// ------------------------------------------------------------------------------------------------------
+// INFERENCE OF PLACE 
+// ------------------------------------------------------------------------------------------------------
+const inferPlaceIdCached = createCachedResolver(async (key: string) => {
+    const { level, area, start, end } = JSON.parse(key) as InferPlaceArgs;
+
+    const result = await db.execute<PlaceIdRow>(sql`
+        SELECT id as place_id
+        FROM place
+        WHERE preferred_label ILIKE ${area}
+        AND (
+            (valid_since IS NULL AND valid_until IS NULL)
+            OR (
+                valid_since <= ${end}::date
+                AND (valid_until IS NULL OR valid_until > ${start}::date)
+            )
+        )
+        ORDER BY GREATEST(
+                    0,
+                    LEAST(${end}::date, COALESCE(valid_until, 'infinity'::date))
+                    - GREATEST(${start}::date, valid_since)
+                ) DESC,
+                valid_since DESC
+        LIMIT 1
+    `);
+
+    return result.rows[0]?.place_id ?? null;
+});
+
+export async function inferPlaceId(target: NewFeature, place: { area: string; level: string }) {
+    const { startDate: date_start, endDate: date_end } = target;
+    const start = date_start;
+    const end = date_end || date_start;
+    const level = place.level
+    const area = place.area
+
+    const key = JSON.stringify({ level, area, start, end });
+
+    return inferPlaceIdCached(key);
 }

@@ -1,3 +1,4 @@
+import { NewFeature } from "../../schema";
 import { Ingestor, TargetRecord } from "./ingestor";
 
 interface TestSourceData {
@@ -20,13 +21,15 @@ export class Test extends Ingestor<TestSourceData> {
     protected RELATION_ID: string = 'isAbout';
     protected RELATION_LABEL: string = 'Is About';
 
-    protected transform(source: TestSourceData): Omit<TargetRecord, "level" | "area"> & { area?: string; level?: "wijk" | "buurt"; } {
+    protected transform(source: TestSourceData): Omit<NewFeature, "recordType"> {
         return {
-            id: source["@id"],
-            title: source.headline,
+            id: source['@id'],
+            label: source.headline,
             description: source.articleBody,
-            dateStart: source.datePublished + '-01-01',
-            dateEnd: source.datePublished + '-01-2'
+            startDate: source.datePublished + '-01-01',
+            endDate: source.datePublished + '-01-01',
+            url: source.url,
+            contentUrl: source.url,
         }
     }
 }
