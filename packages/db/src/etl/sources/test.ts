@@ -1,6 +1,5 @@
-import { EntityBase } from "@atm/shared";
 import { NewFeature } from "../../schema";
-import { Ingestor } from "./ingestor";
+import { Draft, Ingestor } from "./ingestor";
 import { recordType} from '../helpers/entity-factory';
 
 interface TestSourceData {
@@ -23,7 +22,7 @@ export class Test extends Ingestor<TestSourceData> {
     protected RELATION_ID: string = 'isAbout';
     protected RELATION_LABEL: string = 'Is About';
 
-    protected transform(source: TestSourceData): Omit<NewFeature, "recordType"> {
+    protected transform(source: TestSourceData): Draft<NewFeature> {
         return {
             id: source['@id'],
             label: source.headline,
@@ -33,10 +32,6 @@ export class Test extends Ingestor<TestSourceData> {
             url: source.url,
             contentUrl: source.url,
         }
-    }
-
-    protected createEntity(source: TestSourceData): EntityBase {
-        
     }
 }
 

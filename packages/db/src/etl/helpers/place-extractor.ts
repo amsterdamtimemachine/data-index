@@ -1,10 +1,9 @@
-import { is, sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { writeFileSync } from "fs";
-import { Draft, DraftRecord } from '../sources/ingestor';
+import { Draft } from '../sources/ingestor';
 import { NewFeature } from '../../schema';
 import { createCachedResolver } from './helpers';
 import { PlaceIdRow } from '../../row-types';
+import { sql } from 'drizzle-orm/sql';
 
 
 type InferPlaceArgs = {
@@ -15,7 +14,7 @@ type InferPlaceArgs = {
 };
 
 export interface node {
-    value: string
+    value?: string
     children: Map<string, node>
     isTerminal: boolean
     type?: string
@@ -24,17 +23,17 @@ export interface node {
 async function getPlaceMap() {
     const allPlaces = await db.execute<{ id: string, name: string, type: string }>(sql`
         SELECT p.id AS place_id,
-            p.preferred_label AS name,
+            p.name AS name,
             p.type AS type
         FROM place p
-        WHERE p.preferred_label IS NOT NULL
+        WHERE p.name IS NOT NULL
 
         UNION
 
         SELECT pn.place_id AS place_id,
             pn.name AS name,
             p.type AS type
-        FROM place_name pn
+        FROM place_historical_name pn
         JOIN place p ON p.id = pn.place_id
         WHERE pn.name IS NOT NULL;
     `);
@@ -62,7 +61,6 @@ function constructTrie(map: Map<string, string>): node {
         for (const word of words) {
             if (!current.children.has(word)) {
                 const child: node = {
-                    value: word,
                     children: new Map(),
                     isTerminal: false,
                 }
@@ -73,6 +71,7 @@ function constructTrie(map: Map<string, string>): node {
             current = current.children.get(word)!
         }
 
+        current.value = place[0]
         current.isTerminal = true
         current.type = place[1]
     }
@@ -95,17 +94,15 @@ function match(text: string, root: node): node[] {
             const word = words[j]
 
             if (!isChild(word, current)) { break }
-
             current = current.children.get(word)!
 
-            if (current.isTerminal && 
-                (j + 1 <= words.length && !current.children.has(words[j + 1]))) {
+            if (current.isTerminal && (j + 1 >= words.length || !current.children.has(words[j + 1]))) {
                 matches.push(current)
             }
         }
     }
 
-    return matches.sort((a, b) => b.value.length - a.value.length)
+    return matches.sort((a, b) => b.value!.length - a.value!.length)
 }
 
 export class PlaceIndex {
@@ -124,7 +121,7 @@ export class PlaceIndex {
     extract(text: string): { area: string; level: string } | undefined {
         const matches = match(text, this.root)
 
-        if (!matches || matches.length <= 0) { return undefined }
+        if (matches.length <= 0 || !matches[0].value ) { return undefined }
 
         return { 
             area: matches[0].value, 
@@ -163,7 +160,7 @@ const inferPlaceIdCached = createCachedResolver(async (key: string) => {
     return result.rows[0]?.place_id ?? null;
 });
 
-export async function inferPlaceId(target: Draft<NewFeature>, place: { area: string; level: string }) {
+export async function inferPlaceId(target: Draft, place: { area: string; level: string }) {
     const { startDate: date_start, endDate: date_end } = target;
     const start = date_start;
     const end = date_end || date_start;

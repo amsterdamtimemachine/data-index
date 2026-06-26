@@ -1,16 +1,15 @@
 import { readFileSync } from 'fs';
-import { upsertSource, createFeatureWriter, , featureUuid } from '../helpers/helpers';
-import { NewFeature, Place } from '../../schema';
+import { upsertSource, createFeatureWriter, featureUuid } from '../helpers/helpers';
+import { NewFeature } from '../../schema';
 import { inferPlaceId, PlaceIndex } from '../helpers/place-extractor';
 import { extname } from 'path';
 import { parse } from 'csv-parse/sync';
 import { createEntityFactory, EntityFactory, recordType} from '../helpers/entity-factory';
 import { EntityBase } from '@atm/shared';
 
-export type Draft<NewFeature> = Omit<NewFeature, 'recordType'>;
+export type Draft = Omit<NewFeature, 'recordType'>;
 
 export abstract class Ingestor<SourceRecord> {
-    protected target: NewFeature | undefined;
     protected BATCH_SIZE = 1000;
 
     protected abstract ORG_ID: string; // Example: 'my-org';
@@ -26,7 +25,7 @@ export abstract class Ingestor<SourceRecord> {
     protected abstract RELATION_ID: string; // Example: 'isAbout';
     protected abstract RELATION_LABEL: string; // Example: 'Is About';
 
-    protected abstract transform(source: SourceRecord): Draft<NewFeature>;
+    protected abstract transform(source: SourceRecord): Draft;
 
     protected pi: PlaceIndex | undefined;
     protected ef: EntityFactory<EntityBase> | undefined;
@@ -40,30 +39,40 @@ export abstract class Ingestor<SourceRecord> {
         })
     }
 
-    protected extractPlace(feature: Draft<NewFeature>) {
+    protected async extractPlace(feature: Draft) {
         if (!feature.description) { 
             return undefined 
         }
 
         const place = this.pi!.extract(feature.description)
 
-        if (!place) { return null }
+        if (!place) { return undefined }
 
         return await inferPlaceId(feature, place)
     }
 
-    protected sourceToFeature(source: SourceRecord) {
-        const draft: Draft<NewFeature> = this.transform(source)
-        const entity: EntityBase = this.ef!.create(draft, new Map<string, any>(Object.entries(source as object)))
-
-        return await this.constructFeature(draft, entity) as NewFeature
-    }
-
-    protected writeFeature(feature: NewFeature, placeId: string) {
+    protected async writeFeature(feature: NewFeature, placeId: string) {
         this.writer.addFeature(feature)
         this.writer.addLink({ featureId: feature.id!, placeId, relationId: this.RELATION_ID })
 
         await this.writer.flushIfFull();
+    }
+
+    protected constructFeature(feature: Draft, entity: EntityBase): NewFeature {
+        return {
+            ...feature,
+            id: featureUuid(this.DATASET_ID, feature.id),
+            datasetId: this.DATASET_ID,
+            recordType: this.RECORD_TYPE,
+            entity: entity
+        } as NewFeature
+    }
+
+    protected async sourceToFeature(source: SourceRecord) {
+        const draft: Draft = this.transform(source)
+        const entity: EntityBase = this.ef!.create(draft, new Map<string, any>(Object.entries(source as object)))
+
+        return await this.constructFeature(draft, entity) as NewFeature
     }
 
     protected async ingestSourceRecords(sources: SourceRecord[]): Promise<NewFeature[]> {
@@ -72,12 +81,12 @@ export abstract class Ingestor<SourceRecord> {
         let skipped = 0
 
         for (const source of sources) {
-            const feature: NewFeature = this.sourceToFeature(source)
-            const placeId = this.extractPlace(feature)
+            const feature: NewFeature = await this.sourceToFeature(source)
+            const placeId = await this.extractPlace(feature)
             
             if (!placeId) { skipped++; continue; }
 
-            this.writeFeature(feature, placeId)
+            await this.writeFeature(feature, placeId)
 
             newFeatures.push(feature)
         }
@@ -88,15 +97,6 @@ export abstract class Ingestor<SourceRecord> {
         return newFeatures
     }
 
-    protected async constructFeature(feature: Draft<NewFeature>, entity: EntityBase): Promise<NewFeature> {
-        return {
-            ...feature,
-            id: featureUuid(this.DATASET_ID, feature.id),
-            datasetId: this.DATASET_ID,
-            recordType: this.RECORD_TYPE,
-            entity: entity
-        } as NewFeature
-    }
 
     protected readFileAsSourceRecords(filePath: string): SourceRecord[] {
         const extension = extname(filePath);
