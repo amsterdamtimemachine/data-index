@@ -1,6 +1,5 @@
 import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity } from "@atm/shared";
 import { formatDateRange } from "./helpers";
-import { NewFeature } from "../../schema";
 import { Draft } from "../sources/ingestor";
 
 export enum recordType {
@@ -10,11 +9,11 @@ export enum recordType {
 }
 
 export abstract class EntityFactory<T extends EntityBase> {
-    abstract create(feature: Draft<NewFeature>, data: Map<string, any>): T
+    abstract create(feature: Draft, data: Map<string, any>): T
 }
 
 export class PersonEntityFactory extends EntityFactory<PersonEntity> {
-    create(feature: Draft<NewFeature>, data: Map<string, any>): PersonEntity {
+    create(feature: Draft, data: Map<string, any>): PersonEntity {
       return {
         type: 'Person',
         name: feature.label,
@@ -27,7 +26,7 @@ export class PersonEntityFactory extends EntityFactory<PersonEntity> {
 }
 
 export class CreativeWorkEntityFactory extends EntityFactory<CreativeWorkEntity> {
-    create(feature: Draft<NewFeature>, data: Map<string, any>): CreativeWorkEntity {
+    create(feature: Draft, data: Map<string, any>): CreativeWorkEntity {
         const dateCreated = formatDateRange(feature.startDate, feature.endDate);
 
         return {
@@ -40,7 +39,7 @@ export class CreativeWorkEntityFactory extends EntityFactory<CreativeWorkEntity>
 }
 
 export class MediaObjectEntityFactory extends EntityFactory<MediaObjectEntity> {
-    create(feature: Draft<NewFeature>, data: Map<string, any>): MediaObjectEntity {
+    create(feature: Draft, data: Map<string, any>): MediaObjectEntity {
         const dateCreatedFormatted = formatDateRange(feature.startDate, feature.endDate);
 
         return {

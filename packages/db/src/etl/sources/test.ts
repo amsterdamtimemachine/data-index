@@ -14,9 +14,11 @@ export class Test extends Ingestor<TestSourceData> {
     protected ORG_ID: string = 'test';
     protected ORG_LABEL: string = 'Test';
     protected ORG_URL: string = 'test.com';
+
     protected DATASET_ID: string = 'set';
     protected DATASET_LABEL: string = 'Set';
     protected DATASET_URL: string = 'set.test.com';
+    //
     protected RECORD_TYPE: recordType = recordType.IMAGE;
     protected RELATION_ID: string = 'isAbout';
     protected RELATION_LABEL: string = 'Is About';
@@ -24,11 +26,12 @@ export class Test extends Ingestor<TestSourceData> {
     protected transform(source: TestSourceData): Draft {
         return {
             id: source['@id'],
+            url: source['@id'],
             label: source.headline,
             description: source.articleBody,
             startDate: source.datePublished + '-01-01',
             endDate: source.datePublished + '-01-01',
-            url: source['@id']
+            location: source.articleBody
         }
     }
 }

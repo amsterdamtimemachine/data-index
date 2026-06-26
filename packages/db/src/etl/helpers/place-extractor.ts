@@ -118,14 +118,18 @@ export class PlaceIndex {
         return new PlaceIndex(placeMap, root)
     }
 
-    extract(text: string): { area: string; level: string } | undefined {
-        const matches = match(text, this.root)
+    async extract(draft: Draft) {
+        if (draft.inferLocationFromText) {
+            const matches = match(draft.inferLocationFromText, this.root)
 
-        if (matches.length <= 0 || !matches[0].value ) { return undefined }
-
-        return { 
-            area: matches[0].value, 
-            level: this.placeMap.get(matches[0].value)!
+            if (matches.length <= 0 || !matches[0].value ) { return undefined }
+            
+            return await inferPlaceId(draft, { 
+                area: matches[0].value, 
+                level: this.placeMap.get(matches[0].value)!
+            })
+        } else if (draft.wkt) {
+            inferPlaceIdByWKTCached(draft.wkt)
         }
     }
 }
@@ -134,7 +138,8 @@ export class PlaceIndex {
 // ------------------------------------------------------------------------------------------------------
 // INFERENCE OF PLACE 
 // ------------------------------------------------------------------------------------------------------
-const inferPlaceIdCached = createCachedResolver(async (key: string) => {
+
+const inferPlaceIdByNameCached = createCachedResolver(async (key: string): Promise<string | undefined> => {
     const { level, area, start, end } = JSON.parse(key) as InferPlaceArgs;
     const result = await db.execute<PlaceIdRow>(sql`
         SELECT p.id AS place_id
@@ -157,10 +162,26 @@ const inferPlaceIdCached = createCachedResolver(async (key: string) => {
         LIMIT 1
     `);
 
-    return result.rows[0]?.place_id ?? null;
+    return result.rows[0]?.place_id ?? undefined;
 });
 
-export async function inferPlaceId(target: Draft, place: { area: string; level: string }) {
+// TODO: could make {5} in query dynamicall
+const inferPlaceIdByWKTCached = createCachedResolver(async (wkt) => {
+    const result = await db.execute<PlaceIdRow>(sql`
+      SELECT p.id as place_id
+      FROM place p
+      WHERE ST_DWithin(
+        p.geometry,
+        ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992),
+        5 
+      )
+      ORDER BY p.geometry <-> ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992)
+      LIMIT 1
+    `);
+    return result.rows[0]?.place_id ?? null;
+  });
+
+export async function inferPlaceId(target: Draft, place: { area: string; level: string }): Promise<string | undefined> {
     const { startDate: date_start, endDate: date_end } = target;
     const start = date_start;
     const end = date_end || date_start;
@@ -169,5 +190,5 @@ export async function inferPlaceId(target: Draft, place: { area: string; level: 
 
     const key = JSON.stringify({ level, area, start, end });
 
-    return inferPlaceIdCached(key);
+    return inferPlaceIdByNameCached(key);
 }

@@ -139,12 +139,11 @@ export function createFeatureWriter(batchSize = 1000) {
  * same key (address URI, street URI, geometry WKT), so this avoids repeat queries.
  */
 export function createCachedResolver(
-  lookup: (key: string) => Promise<string | null>
-): (key: string) => Promise<string | null> {
-  const cache = new Map<string, string | null>();
-  return async (key: string): Promise<string | null> => {
-    const cached = cache.get(key);
-    if (cached !== undefined) return cached;
+  lookup: (key: string) => Promise<string | undefined>
+): (key: string) => Promise<string | undefined> {
+  const cache = new Map<string, string | undefined>();
+  return async (key: string): Promise<string | undefined> => {
+    if (cache.has(key)) return cache.get(key);
     const result = await lookup(key);
     cache.set(key, result);
     return result;

@@ -7,7 +7,9 @@ import { parse } from 'csv-parse/sync';
 import { createEntityFactory, EntityFactory, recordType} from '../helpers/entity-factory';
 import { EntityBase } from '@atm/shared';
 
-export type Draft = Omit<NewFeature, 'recordType' | 'datasetId'>;
+type DraftWithText = { inferLocationFromText: string; wkt?: never }
+type DraftWithWkt = { wkt: string; inferLocationFromText?: never }
+export type Draft = Omit<NewFeature, 'recordType' | 'datasetId'> & (DraftWithText | DraftWithWkt)
 
 export abstract class Ingestor<SourceRecord> {
     protected BATCH_SIZE = 1000;
@@ -25,7 +27,7 @@ export abstract class Ingestor<SourceRecord> {
     protected abstract RELATION_ID: string; // Example: 'isAbout';
     protected abstract RELATION_LABEL: string; // Example: 'Is About';
 
-    protected abstract transform(source: SourceRecord): Draft;
+    protected abstract transform(source: SourceRecord): Draft | undefined;
 
     protected pi: PlaceIndex | undefined;
     protected ef: EntityFactory<EntityBase> | undefined;
@@ -39,16 +41,12 @@ export abstract class Ingestor<SourceRecord> {
         })
     }
 
-    protected async extractPlace(feature: Draft) {
-        if (!feature.description) { 
-            return undefined 
-        }
-
-        const place = this.pi!.extract(feature.description)
+    protected async extractPlace(draft: Draft) {
+        const place = this.pi!.extract(draft)
 
         if (!place) { return undefined }
 
-        return await inferPlaceId(feature, place)
+        return await inferPlaceId(draft, place)
     }
 
     protected async writeFeature(feature: NewFeature, placeId: string) {
@@ -69,38 +67,41 @@ export abstract class Ingestor<SourceRecord> {
     }
 
     protected validate(feature: NewFeature) {
-        
+        // TODO: validate feature to have all required properties
     }
 
-    protected async sourceToFeature(source: SourceRecord) {
-        const draft: Draft = this.transform(source)
+    protected async sourceToFeature(source: SourceRecord): Promise<[NewFeature | undefined, string | undefined]> {
+        const draft: Draft | undefined = this.transform(source)
+
+        if (!draft) { return [undefined, undefined] }
+
+        const placeId = await this.extractPlace(draft)
         const entity: EntityBase = this.ef!.create(draft, new Map<string, any>(Object.entries(source as object)))
+        const feature = this.constructFeature(draft, entity) as NewFeature
 
-        return await this.constructFeature(draft, entity) as NewFeature
+        return [feature, placeId]
     }
 
-    protected async ingestSourceRecords(sources: SourceRecord[]): Promise<NewFeature[]> {
-        const newFeatures:  NewFeature[] = []
+    protected async ingestSourceRecords(sources: SourceRecord[]) {
+        const uuids = []
 
         let skipped = 0
+        let duplicates = 0
 
         for (const source of sources) {
-            const feature: NewFeature = await this.sourceToFeature(source)
-            const placeId = await this.extractPlace(feature)
+            const [feature, placeId] =  await this.sourceToFeature(source)
             
-            if (!placeId) { skipped++; continue; }
+            if (!placeId || !feature) { skipped++; continue; }
+            if (feature.id in uuids) { duplicates++; skipped++; continue; }
 
             await this.writeFeature(feature, placeId)
 
-            newFeatures.push(feature)
+            uuids.push(feature.id)
         }
 
         await this.writer.flush()
-        console.log(`\nDone: ${newFeatures.length} features, ${skipped} skipped (no matching neighbourhood/district)`);
-
-        return newFeatures
+        console.log(`\nDone: ${uuids.length} features, ${duplicates} duplicates found, ${skipped} skipped (no matching neighbourhood/district)`);
     }
-
 
     protected readFileAsSourceRecords(filePath: string): SourceRecord[] {
         const extension = extname(filePath);
