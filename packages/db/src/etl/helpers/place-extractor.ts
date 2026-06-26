@@ -136,24 +136,24 @@ export class PlaceIndex {
 // ------------------------------------------------------------------------------------------------------
 const inferPlaceIdCached = createCachedResolver(async (key: string) => {
     const { level, area, start, end } = JSON.parse(key) as InferPlaceArgs;
-
     const result = await db.execute<PlaceIdRow>(sql`
-        SELECT id as place_id
-        FROM place
-        WHERE preferred_label ILIKE ${area}
+        SELECT p.id AS place_id
+        FROM place p
+        JOIN place_geometry pg ON pg.place_id = p.id
+        WHERE p.name ILIKE ${area}
         AND (
-            (valid_since IS NULL AND valid_until IS NULL)
+            (pg.since IS NULL AND pg.until IS NULL)
             OR (
-                valid_since <= ${end}::date
-                AND (valid_until IS NULL OR valid_until > ${start}::date)
+                pg.since <= ${end}::date
+                AND (pg.until IS NULL OR pg.until > ${start}::date)
             )
         )
         ORDER BY GREATEST(
                     0,
-                    LEAST(${end}::date, COALESCE(valid_until, 'infinity'::date))
-                    - GREATEST(${start}::date, valid_since)
+                    LEAST(${end}::date, COALESCE(pg.until, 'infinity'::date))
+                    - GREATEST(${start}::date, pg.since)
                 ) DESC,
-                valid_since DESC
+                pg.since DESC
         LIMIT 1
     `);
 

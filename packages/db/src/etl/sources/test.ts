@@ -7,7 +7,6 @@ interface TestSourceData {
     "@id": string;
     headline: string;
     articleBody: string;
-    url: string;
     datePublished: string;
 }
 
@@ -22,15 +21,14 @@ export class Test extends Ingestor<TestSourceData> {
     protected RELATION_ID: string = 'isAbout';
     protected RELATION_LABEL: string = 'Is About';
 
-    protected transform(source: TestSourceData): Draft<NewFeature> {
+    protected transform(source: TestSourceData): Draft {
         return {
             id: source['@id'],
             label: source.headline,
             description: source.articleBody,
             startDate: source.datePublished + '-01-01',
             endDate: source.datePublished + '-01-01',
-            url: source.url,
-            contentUrl: source.url,
+            url: source['@id']
         }
     }
 }

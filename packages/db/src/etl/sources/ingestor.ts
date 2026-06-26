@@ -7,7 +7,7 @@ import { parse } from 'csv-parse/sync';
 import { createEntityFactory, EntityFactory, recordType} from '../helpers/entity-factory';
 import { EntityBase } from '@atm/shared';
 
-export type Draft = Omit<NewFeature, 'recordType'>;
+export type Draft = Omit<NewFeature, 'recordType' | 'datasetId'>;
 
 export abstract class Ingestor<SourceRecord> {
     protected BATCH_SIZE = 1000;
@@ -66,6 +66,10 @@ export abstract class Ingestor<SourceRecord> {
             recordType: this.RECORD_TYPE,
             entity: entity
         } as NewFeature
+    }
+
+    protected validate(feature: NewFeature) {
+        
     }
 
     protected async sourceToFeature(source: SourceRecord) {
