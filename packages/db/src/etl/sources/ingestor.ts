@@ -42,11 +42,7 @@ export abstract class Ingestor<SourceRecord> {
     }
 
     protected async extractPlace(draft: Draft) {
-        const place = this.pi!.extract(draft)
-
-        if (!place) { return undefined }
-
-        return await inferPlaceId(draft, place)
+        return this.pi!.extract(draft)
     }
 
     protected async writeFeature(feature: NewFeature, placeId: string) {

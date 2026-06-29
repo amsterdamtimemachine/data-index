@@ -21,7 +21,7 @@ interface DelpherSourceData {
   tags: string;
 }
 
-export class Delpher extends Ingestor<DelpherSourceData> {
+export class DelpherIngestor extends Ingestor<DelpherSourceData> {
   protected ORG_ID = 'kb';
   protected ORG_LABEL = 'Koninklijke Bibliotheek';
   protected ORG_URL = 'https://www.kb.nl';

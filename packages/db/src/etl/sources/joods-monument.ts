@@ -37,8 +37,9 @@ export class JoodsMonumentIngestor extends Ingestor<JoodsMonumentData> {
     const id = this.extractId(source.person)
 
     if (!id) { return undefined }
+    
     return {
-      id: '',
+      id: id,
       label: source.name,
       url: source.person,
       startDate: this.START_DATE,

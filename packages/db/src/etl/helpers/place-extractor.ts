@@ -4,6 +4,7 @@ import { NewFeature } from '../../schema';
 import { createCachedResolver } from './helpers';
 import { PlaceIdRow } from '../../row-types';
 import { sql } from 'drizzle-orm/sql';
+import { inferByName, inferByWKT } from './place-inference';
 
 
 type InferPlaceArgs = {
@@ -129,7 +130,7 @@ export class PlaceIndex {
                 level: this.placeMap.get(matches[0].value)!
             })
         } else if (draft.wkt) {
-            inferPlaceIdByWKTCached(draft.wkt)
+            inferByWKT(draft.wkt)
         }
     }
 }
@@ -139,47 +140,7 @@ export class PlaceIndex {
 // INFERENCE OF PLACE 
 // ------------------------------------------------------------------------------------------------------
 
-const inferPlaceIdByNameCached = createCachedResolver(async (key: string): Promise<string | undefined> => {
-    const { level, area, start, end } = JSON.parse(key) as InferPlaceArgs;
-    const result = await db.execute<PlaceIdRow>(sql`
-        SELECT p.id AS place_id
-        FROM place p
-        JOIN place_geometry pg ON pg.place_id = p.id
-        WHERE p.name ILIKE ${area}
-        AND (
-            (pg.since IS NULL AND pg.until IS NULL)
-            OR (
-                pg.since <= ${end}::date
-                AND (pg.until IS NULL OR pg.until > ${start}::date)
-            )
-        )
-        ORDER BY GREATEST(
-                    0,
-                    LEAST(${end}::date, COALESCE(pg.until, 'infinity'::date))
-                    - GREATEST(${start}::date, pg.since)
-                ) DESC,
-                pg.since DESC
-        LIMIT 1
-    `);
 
-    return result.rows[0]?.place_id ?? undefined;
-});
-
-// TODO: could make {5} in query dynamicall
-const inferPlaceIdByWKTCached = createCachedResolver(async (wkt) => {
-    const result = await db.execute<PlaceIdRow>(sql`
-      SELECT p.id as place_id
-      FROM place p
-      WHERE ST_DWithin(
-        p.geometry,
-        ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992),
-        5 
-      )
-      ORDER BY p.geometry <-> ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992)
-      LIMIT 1
-    `);
-    return result.rows[0]?.place_id ?? null;
-  });
 
 export async function inferPlaceId(target: Draft, place: { area: string; level: string }): Promise<string | undefined> {
     const { startDate: date_start, endDate: date_end } = target;
@@ -190,5 +151,5 @@ export async function inferPlaceId(target: Draft, place: { area: string; level: 
 
     const key = JSON.stringify({ level, area, start, end });
 
-    return inferPlaceIdByNameCached(key);
+    return inferByName(key);
 }

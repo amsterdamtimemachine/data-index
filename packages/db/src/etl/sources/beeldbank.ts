@@ -1,3 +1,47 @@
+
+
+interface BeeldbankData {
+  resource: string;
+  title: string;
+  thumbnail: string;
+  creationDateItem: string;
+  startDate: string;
+  endDate: string;
+  textDate: string;
+  pand: string;
+  address: string;
+  street: string;
+}
+
+export class BeeldbankIngestor extends Ingestor<BeeldbankData> {
+  protected ORG_ID: string = 'stadsarchief';
+  protected ORG_LABEL: string = 'Amsterdam Stadsarchief';
+  protected ORG_URL: string = 'https://archief.amsterdam';
+
+  protected DATASET_ID: string = 'beeldbank';
+  protected DATASET_LABEL: string = 'Beeldbank';
+  protected DATASET_URL: string = 'https://archief.amsterdam/beeldbank';
+
+  protected RECORD_TYPE: recordType = recordType.IMAGE;
+  protected RELATION_ID: string = 'isAbout';
+  protected RELATION_LABEL: string = 'is about';
+
+  protected transform(source: BeeldbankData): Draft | undefined {
+    const id = source.resource.split('/').pop() 
+
+    return {
+      id: id || '',
+      label: source.title.trim() || '',
+      url: source.resource,
+      contentUrl: source.thumbnail.trim() || '',
+      startDate: source.startDate.trim(),
+      endDate: source.endDate.trim() || source.startDate.trim(),
+      inferLocationFromText: source.street
+    }
+  }
+}
+
+
 /**
  * Import Beeldbank (Amsterdam Stadsarchief image archive) features
  *
@@ -18,6 +62,8 @@ import { placeHistoricalName } from '../../schema';
 import type { PlaceIdRow } from '../../row-types';
 import type { MediaObjectEntity } from '@atm/shared';
 import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers/helpers';
+import { Draft, Ingestor } from './ingestor';
+import { recordType } from '../helpers/entity-factory';
 
 // ═══════════════════════════════════════════════════════════════
 //  Organisation
