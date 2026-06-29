@@ -35,7 +35,9 @@ export const datasets = pgTable('datasets', {
 export const place = pgTable('place', {
   id: text('id').primaryKey(),                    // "lp-1000001"
   type: text('type').notNull(),                   // "address" | "street" | "neighbourhood" (buurt) | "district" (wijk)
-  name: text('name')                             // name shown for the place; dated past names live in place_historical_name
+  name: text('name'),                            // name shown for the place; dated past names live in place_historical_name
+  source: text('source'),                        // "adamlink-lps" | "adamlink-straten" | "adamlink-buurten" | "cbs" | "nwb" | "bag"
+  url: text('url')                               // canonical record at the source (adamlink.nl / bag.basisregistraties.overheid.nl / …)
 });
 
 // ============================================================================
