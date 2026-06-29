@@ -69,4 +69,24 @@ program
     }
   });
 
+program
+  .command('fetch')
+  .description('Fetch reference place data from PDOK into a ground-truth file')
+  .requiredOption('-s, --source <name>', 'Fetcher name')
+  .requiredOption('-o, --out <path>', 'Output file path')
+  .action(async (opts) => {
+    try {
+      const mod = await import(`./fetchers/${opts.source}.ts`);
+      if (!mod.run) {
+        console.error(`Fetcher ${opts.source} does not export a run function`);
+        process.exit(1);
+      }
+      await mod.run(opts.out);
+      process.exit(0);
+    } catch (error) {
+      console.error('Fetch failed:', error);
+      process.exit(1);
+    }
+  });
+
 program.parse();
