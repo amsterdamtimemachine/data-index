@@ -71,7 +71,7 @@ export abstract class PdokFetcher<P = GeoJsonProperties> {
   protected abstract keep(props: P): boolean;
   protected abstract toPlace(feature: Feature<Geometry, P>, layer: string): PlaceRecord;
 
-  private async *page(service: string, layer: string, filter: string): AsyncGenerator<Feature<Geometry, P>> {
+  protected async *page(service: string, layer: string, filter: string): AsyncGenerator<Feature<Geometry, P>> {
     for (let start = 0; ; start += PAGE) {
       const url = `${service}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layer}`
         + `&outputFormat=application/json&srsName=EPSG:28992&count=${PAGE}&startIndex=${start}`
@@ -82,16 +82,24 @@ export abstract class PdokFetcher<P = GeoJsonProperties> {
     }
   }
 
+  // One place per kept feature. Override to aggregate (e.g. NWB merges a street's
+  // many segments into a single place).
+  protected async *places(g: Gemeente): AsyncGenerator<PlaceRecord> {
+    for (const layer of this.layers) {
+      for await (const feature of this.page(this.service(g), layer, this.gemeenteFilter(g))) {
+        if (!this.keep(feature.properties)) continue;
+        yield this.toPlace(feature, layer);
+      }
+    }
+  }
+
   async run(outPath: string) {
     const writer = this.ndjson ? ndjsonWriter(outPath) : geojsonWriter(outPath);
     let written = 0;
     for (const g of this.gemeenten()) {
-      for (const layer of this.layers) {
-        for await (const feature of this.page(this.service(g), layer, this.gemeenteFilter(g))) {
-          if (!this.keep(feature.properties)) continue;
-          writer.write(toFeature(this.toPlace(feature, layer)));
-          written++;
-        }
+      for await (const place of this.places(g)) {
+        writer.write(toFeature(place));
+        written++;
       }
     }
     await writer.close();
