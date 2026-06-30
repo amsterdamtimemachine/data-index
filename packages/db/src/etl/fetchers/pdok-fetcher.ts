@@ -1,7 +1,7 @@
 import { writeFileSync, createWriteStream } from 'fs';
 import type { Feature, FeatureCollection, Geometry, GeoJsonProperties } from 'geojson';
 import type { PlaceType } from '@atm/shared';
-import { MUNICIPALITIES } from './config';
+import { MUNICIPALITIES, type Gemeente } from './config';
 
 export interface PlaceRecord {
   id: string;
@@ -61,18 +61,19 @@ const toFeature = (p: PlaceRecord): OutFeature => ({
 });
 
 export abstract class PdokFetcher<P = GeoJsonProperties> {
-  protected abstract service: string;
   protected abstract source: string;
   protected abstract layers: string[];
   protected ndjson = false;
 
-  protected abstract gemeenteFilter(code: string): string;
+  protected gemeenten(): readonly Gemeente[] { return MUNICIPALITIES; }
+  protected abstract service(g: Gemeente): string;
+  protected abstract gemeenteFilter(g: Gemeente): string;
   protected abstract keep(props: P): boolean;
   protected abstract toPlace(feature: Feature<Geometry, P>, layer: string): PlaceRecord;
 
-  private async *page(layer: string, filter: string): AsyncGenerator<Feature<Geometry, P>> {
+  private async *page(service: string, layer: string, filter: string): AsyncGenerator<Feature<Geometry, P>> {
     for (let start = 0; ; start += PAGE) {
-      const url = `${this.service}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layer}`
+      const url = `${service}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layer}`
         + `&outputFormat=application/json&srsName=EPSG:28992&count=${PAGE}&startIndex=${start}`
         + `&filter=${encodeURIComponent(filter)}`;
       const features = (await getJson<FeatureCollection<Geometry, P>>(url)).features ?? [];
@@ -84,9 +85,9 @@ export abstract class PdokFetcher<P = GeoJsonProperties> {
   async run(outPath: string) {
     const writer = this.ndjson ? ndjsonWriter(outPath) : geojsonWriter(outPath);
     let written = 0;
-    for (const layer of this.layers) {
-      for (const { code } of MUNICIPALITIES) {
-        for await (const feature of this.page(layer, this.gemeenteFilter(code))) {
+    for (const g of this.gemeenten()) {
+      for (const layer of this.layers) {
+        for await (const feature of this.page(this.service(g), layer, this.gemeenteFilter(g))) {
           if (!this.keep(feature.properties)) continue;
           writer.write(toFeature(this.toPlace(feature, layer)));
           written++;

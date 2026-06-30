@@ -1,3 +1,9 @@
+export interface Gemeente {
+  name: string;
+  code: string;
+  year?: string;
+}
+
 export const MUNICIPALITIES = [
   { name: 'Amsterdam', code: 'GM0363' },
   { name: 'Zaanstad', code: 'GM0479' },

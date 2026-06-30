@@ -173,6 +173,8 @@ export interface PlaceInsert {
   type: string;
   label?: string | null;
   wkt: string;
+  source?: string | null;
+  url?: string | null;
   // Period this geometry was the city's division — set only for neighbourhood/district.
   // Left undefined for address/street. Dates as 'YYYY-MM-DD'.
   since?: string | null;
@@ -215,17 +217,17 @@ export async function insertPlaces(
 
     // 1. Identity row in `place`.
     const placeQuery = db.insert(place).values(
-      chunk.map(r => ({ id: r.id, type: r.type, name: r.label ?? null }))
+      chunk.map(r => ({ id: r.id, type: r.type, name: r.label ?? null, source: r.source ?? null, url: r.url ?? null }))
     );
     if (opts.onConflict === 'replaceGeometry') {
       await placeQuery.onConflictDoUpdate({
         target: place.id,
-        set: { type: sql`excluded.type` }, // preserve name
+        set: { type: sql`excluded.type` }, // preserve name, source, url
       });
     } else {
       await placeQuery.onConflictDoUpdate({
         target: place.id,
-        set: { type: sql`excluded.type`, name: sql`excluded.name` },
+        set: { type: sql`excluded.type`, name: sql`excluded.name`, source: sql`excluded.source`, url: sql`excluded.url` },
       });
     }
 
