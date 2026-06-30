@@ -74,6 +74,7 @@ program
   .description('Fetch reference place data from PDOK into a ground-truth file')
   .requiredOption('-s, --source <name>', 'Fetcher name')
   .requiredOption('-o, --out <path>', 'Output file path')
+  .option('-x, --exclude-adamlink <path>', 'Adamlink straten TTL; streets it already covers (by owl:sameAs bagOrl) are skipped')
   .action(async (opts) => {
     try {
       const mod = await import(`./fetchers/${opts.source}.ts`);
@@ -81,7 +82,7 @@ program
         console.error(`Fetcher ${opts.source} does not export a run function`);
         process.exit(1);
       }
-      await mod.run(opts.out);
+      await mod.run(opts.out, { excludeAdamlink: opts.excludeAdamlink });
       process.exit(0);
     } catch (error) {
       console.error('Fetch failed:', error);
