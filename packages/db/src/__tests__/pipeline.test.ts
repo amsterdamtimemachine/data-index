@@ -45,8 +45,8 @@ describe('LPS ingestion', () => {
     expect(await dbq.placeCount()).toBeGreaterThanOrEqual(5);
   });
 
-  test('places have lp- prefixed IDs', async () => {
-    expect(await dbq.firstPlaceId()).toMatch(/^lp-\d+$/);
+  test('places have Adamlink LP URI IDs', async () => {
+    expect(await dbq.firstPlaceId()).toMatch(/\/geo\/lp\/\d+$/);
   });
 
   test('places have RD geometry populated', async () => {

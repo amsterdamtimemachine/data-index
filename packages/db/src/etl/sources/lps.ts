@@ -3,7 +3,7 @@
  *
  * Each `allp:` subject is one linked point carrying its geometry directly in
  * `geo:asWKT` (WGS84, reprojected to RD on insert — no blank nodes). We create one
- * `place` per LP (id = `lp-<N>`, type = address). Address *names* are not derived
+ * `place` per LP (id = the Adamlink LP URI, type = address). Address *names* are not derived
  * here: the adressen TTL owns them, self-linking each observation to its LP via
  * `schema:geoContains` (the reverse of the `schema:geoWithin` links carried here,
  * which we don't use). Run LPS BEFORE adressen.
@@ -25,7 +25,7 @@ export async function ingest(filePath: string) {
     if (!q.predicate.value.endsWith('asWKT')) continue;
     const lp = q.subject.value.split('/geo/lp/')[1];
     if (!lp) continue;
-    placeRows.push({ id: `lp-${lp}`, type: 'address', wkt: q.object.value });
+    placeRows.push({ id: q.subject.value, type: 'address', source: 'adamlink', url: q.subject.value, wkt: q.object.value });
   }
 
   // LPS geometry is WGS84 (EPSG:4326) and is reprojected to RD on insert.

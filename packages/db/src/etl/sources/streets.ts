@@ -126,7 +126,7 @@ export async function ingest(filePath: string) {
 
   // Insert place rows (geometry transformed from WGS84 to RD)
   const placeCount = await insertPlaces(
-    streets.map(s => ({ id: s.uri, type: 'street', label: s.prefLabel, wkt: s.wkt })),
+    streets.map(s => ({ id: s.uri, type: 'street', label: s.prefLabel, source: 'adamlink', url: s.uri, wkt: s.wkt })),
     { sourceSrid: 4326, onConflict: 'replaceAll' }
   );
   console.log(`  ${placeCount} street places created`);

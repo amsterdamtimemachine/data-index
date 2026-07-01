@@ -71,12 +71,16 @@ export abstract class PdokFetcher<P = GeoJsonProperties> {
   protected abstract keep(props: P): boolean;
   protected abstract toPlace(feature: Feature<Geometry, P>, layer: string): PlaceRecord;
 
+  protected async fetchFeatures(service: string, layer: string, params: string): Promise<Feature<Geometry, P>[]> {
+    const url = `${service}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layer}`
+      + `&outputFormat=application/json&srsName=EPSG:28992&${params}`;
+    return (await getJson<FeatureCollection<Geometry, P>>(url)).features ?? [];
+  }
+
   protected async *page(service: string, layer: string, filter: string): AsyncGenerator<Feature<Geometry, P>> {
     for (let start = 0; ; start += PAGE) {
-      const url = `${service}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layer}`
-        + `&outputFormat=application/json&srsName=EPSG:28992&count=${PAGE}&startIndex=${start}`
-        + `&filter=${encodeURIComponent(filter)}`;
-      const features = (await getJson<FeatureCollection<Geometry, P>>(url)).features ?? [];
+      const features = await this.fetchFeatures(service, layer,
+        `count=${PAGE}&startIndex=${start}&filter=${encodeURIComponent(filter)}`);
       yield* features;
       if (features.length < PAGE) break;
     }

@@ -33,10 +33,10 @@ export const datasets = pgTable('datasets', {
 // PLACE - Physical geographic locations (identity); geometry in place_geometry
 // ============================================================================
 export const place = pgTable('place', {
-  id: text('id').primaryKey(),                    // "lp-1000001"
+  id: text('id').primaryKey(),                    // Adamlink URI ("https://adamlink.nl/geo/{street,district,lp}/…") or PDOK "{cbs,nwb,bag}-<code>"
   type: text('type').notNull(),                   // "address" | "street" | "neighbourhood" (buurt) | "district" (wijk)
   name: text('name'),                            // name shown for the place; dated past names live in place_historical_name
-  source: text('source'),                        // "adamlink-lps" | "adamlink-straten" | "adamlink-buurten" | "cbs" | "nwb" | "bag"
+  source: text('source'),                        // "adamlink" | "cbs" | "nwb" | "bag"
   url: text('url')                               // canonical record at the source (adamlink.nl / bag.basisregistraties.overheid.nl / …)
 });
 
