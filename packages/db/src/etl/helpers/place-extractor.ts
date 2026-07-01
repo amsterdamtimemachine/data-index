@@ -1,6 +1,7 @@
 import { db } from '../../client';
 import { sql } from 'drizzle-orm/sql';
 import { inferByName, inferByWKT, inferByAdamURI } from './place-inference';
+import { Draft } from '../sources/ingestor';
 
 export enum PlaceExtractionMethod {
     TEXT,
@@ -12,6 +13,8 @@ export type ExtractionArgs<SourceRecord> = {
   method: PlaceExtractionMethod;
   column: Extract<keyof SourceRecord, string>; 
 }[];
+
+export type DateRange = { start: string; end: string };
 
 type InferPlaceArgs = {
     level: string;
@@ -137,7 +140,8 @@ export class PlaceIndex<SourceRecord extends Record<string, any>> {
         this.root = constructTrie(this.placeMap);
     }
 
-    async extractFromText(source: SourceRecord, text: string) {
+    async extractFromText(
+        text: string, dateRange: DateRange) {
         const matches = match(text, this.root!)
 
         if (matches.length <= 0 || !matches[0].value ) { return undefined }
@@ -145,19 +149,19 @@ export class PlaceIndex<SourceRecord extends Record<string, any>> {
         return await inferByName(JSON.stringify({
             level: matches[0].type,
             area: matches[0].value,
-            start: source.startDate,
-            end: source.endDate ? source.endDate : source.startDate,
+            start: dateRange.start,
+            end: dateRange.end,
         } as InferPlaceArgs))
     }
 
-    async extract(source: SourceRecord) {
+    async extract(source: SourceRecord, dateRange: DateRange) {
         for (const method of this.methods) {
             const value = source[method.column];
             let result: string | undefined = undefined
 
             switch (method.method) {
                 case PlaceExtractionMethod.TEXT:
-                    result = await this.extractFromText(source, value)
+                    result = await this.extractFromText(value, dateRange)
                     break
                 case PlaceExtractionMethod.WKT:
                     result = await inferByWKT(value)
@@ -166,7 +170,7 @@ export class PlaceIndex<SourceRecord extends Record<string, any>> {
                     result = await inferByAdamURI(value)
                     break
                 default:
-                    result = await this.extractFromText(source, value)
+                    result = await this.extractFromText(value, dateRange)
                     break
             }
 

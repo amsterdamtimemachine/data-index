@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { upsertSource, createFeatureWriter, featureUuid } from '../helpers/helpers';
 import { NewFeature } from '../../schema';
-import { PlaceIndex, PlaceExtractionMethod, ExtractionArgs } from '../helpers/place-extractor';
+import { PlaceIndex, PlaceExtractionMethod, ExtractionArgs, DateRange } from '../helpers/place-extractor';
 import { extname } from 'path';
 import { parse } from 'csv-parse/sync';
 import { createEntityFactory, EntityFactory, recordType} from '../helpers/entity-factory';
@@ -41,8 +41,9 @@ export abstract class Ingestor<SourceRecord extends Record<string, any>> {
         })
     }
 
-    protected async extractPlace(source: SourceRecord) {
-        return this.pi!.extract(source)
+    protected async extractPlace(source: SourceRecord, draft: Draft) {
+        const dateRange = { start: draft.startDate, end: draft.endDate } as DateRange
+        return this.pi!.extract(source, dateRange)
     }
 
     protected async writeFeature(feature: NewFeature, placeId: string) {
@@ -71,7 +72,7 @@ export abstract class Ingestor<SourceRecord extends Record<string, any>> {
 
         if (!draft) { return [undefined, undefined] }
 
-        const placeId = await this.extractPlace(source)
+        const placeId = await this.extractPlace(source, draft)
         const entity: EntityBase = this.ef!.create(draft, new Map<string, any>(Object.entries(source as object)))
         const feature = this.constructFeature(draft, entity) as NewFeature
 
