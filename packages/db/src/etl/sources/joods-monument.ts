@@ -1,4 +1,5 @@
 import { recordType } from "../helpers/entity-factory";
+import { ExtractionArgs, PlaceExtractionMethod } from "../helpers/place-extractor";
 import { Draft, Ingestor } from "./ingestor";
 
 interface JoodsMonumentData {
@@ -29,6 +30,10 @@ export class JoodsMonumentIngestor extends Ingestor<JoodsMonumentData> {
   private START_DATE = '1900-01-01';
   private END_DATE = '1945-12-31';
 
+  protected PLACE_EXTRACTION_METHODS: ExtractionArgs<JoodsMonumentData> = [
+    { method: PlaceExtractionMethod.URI, column: 'address'}
+  ];
+
   private extractId(url: string) {
     return url.match(/\/page\/(\d+)/)?.[1];
   }
@@ -44,7 +49,6 @@ export class JoodsMonumentIngestor extends Ingestor<JoodsMonumentData> {
       url: source.person,
       startDate: this.START_DATE,
       endDate: this.END_DATE,
-      inferLocationFromText: source.addressName,
     }
   }
 }

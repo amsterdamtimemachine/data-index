@@ -3,7 +3,7 @@ import { recordType} from '../helpers/entity-factory';
 import { ExtractionArgs, PlaceExtractionMethod } from "../helpers/place-extractor";
 
 
-interface TestSourceData {
+export interface TestSourceData {
     identifier: string;
     "@id": string;
     headline: string;
