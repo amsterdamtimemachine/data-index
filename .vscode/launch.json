@@ -9,8 +9,8 @@
       "cwd": "${workspaceFolder}",
       "args": [
         "ingest",
-        "-s", "test",
-        "-f", "/Users/stijn-h/Projects/atm/data/amsterdammuseum_uva_blogs.json"
+        "-s", "joods-monument",
+        "-f", "/Users/stijn-h/Projects/atm/data/joodsmonument.csv"
       ],
       "stopOnEntry": true
     }

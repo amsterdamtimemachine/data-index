@@ -10,6 +10,7 @@
 import { Draft, Ingestor } from './ingestor';
 import { recordType } from '../helpers/entity-factory';
 import { NewFeature } from '../../schema';
+import { ExtractionArgs, PlaceExtractionMethod } from '../helpers/place-extractor';
 
 interface DelpherSourceData {
   id: string;
@@ -35,6 +36,10 @@ export class DelpherIngestor extends Ingestor<DelpherSourceData> {
   protected RELATION_ID = 'isAbout';
   protected RELATION_LABEL = 'Is About';
 
+  protected PLACE_EXTRACTION_METHODS: ExtractionArgs<DelpherSourceData> = [
+    { method: PlaceExtractionMethod.WKT, column: 'geom_wkt' }
+  ];
+
   private parsePeriod(period: string): { startDate: string | null; endDate: string | null } {
     // Format: [start,end) — inclusive start, exclusive end
     const match = period.match(/[\[(\s]*(\d{4}-\d{2}-\d{2})\s*,\s*(\d{4}-\d{2}-\d{2})\s*[)\]]/);
@@ -50,7 +55,7 @@ export class DelpherIngestor extends Ingestor<DelpherSourceData> {
     return text ? text.slice(0, 128) : '';
   }
 
-  // @override from ingestor.ts, 'cause we can truncate the description
+  // @override from ingestor.ts, 'cause we have to truncate the description
   // at the last step
   protected async writeFeature(feature: NewFeature, placeId: string): Promise<void> {
     feature.description = this.truncate(feature.description!)
@@ -75,4 +80,10 @@ export class DelpherIngestor extends Ingestor<DelpherSourceData> {
       wkt: source.geom_wkt
     } as Draft
   }
+}
+
+const ingestor = new DelpherIngestor()
+
+export async function ingest(filePath:string) {
+    await ingestor.ingest(filePath)
 }
