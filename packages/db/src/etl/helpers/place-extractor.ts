@@ -1,11 +1,17 @@
 import { db } from '../../client';
-import { Draft } from '../sources/ingestor';
-import { NewFeature } from '../../schema';
-import { createCachedResolver } from './helpers';
-import { PlaceIdRow } from '../../row-types';
 import { sql } from 'drizzle-orm/sql';
-import { inferByName, inferByWKT } from './place-inference';
+import { inferByName, inferByWKT, inferByAdamURI } from './place-inference';
 
+export enum PlaceExtractionMethod {
+    TEXT,
+    WKT,
+    URI
+}
+
+export type ExtractionArgs<SourceRecord> = {
+  method: PlaceExtractionMethod;
+  column: Extract<keyof SourceRecord, string>; 
+}[];
 
 type InferPlaceArgs = {
     level: string;
@@ -106,50 +112,67 @@ function match(text: string, root: node): node[] {
     return matches.sort((a, b) => b.value!.length - a.value!.length)
 }
 
-export class PlaceIndex {
+export class PlaceIndex<SourceRecord extends Record<string, any>> {
     private constructor(
-        private readonly placeMap: Map<string, string>,
-        private readonly root: node
+        private readonly methods: ExtractionArgs<SourceRecord>,
+        private placeMap?: Map<string, string>,
+        private root?: node
     ) {}
 
-    static async create(): Promise<PlaceIndex> {
-        const placeMap = await getPlaceMap();
-        const root = constructTrie(placeMap);
+    static async create<SourceRecord extends Record<string, any>>
+        (methods: ExtractionArgs<SourceRecord>): Promise<PlaceIndex<SourceRecord>> {
+        const index = new PlaceIndex(methods);
 
-        return new PlaceIndex(placeMap, root)
+        if (methods.some((m) => m.method === PlaceExtractionMethod.TEXT)) {
+            await index.initTextIndex();
+        }
+        
+        return index;
     }
 
-    async extract(draft: Draft) {
-        if (draft.inferLocationFromText) {
-            const matches = match(draft.inferLocationFromText, this.root)
+    private async initTextIndex(): Promise<void> {
+        if (this.root) return; 
 
-            if (matches.length <= 0 || !matches[0].value ) { return undefined }
-            
-            return await inferPlaceId(draft, { 
-                area: matches[0].value, 
-                level: this.placeMap.get(matches[0].value)!
-            })
-        } else if (draft.wkt) {
-            inferByWKT(draft.wkt)
+        this.placeMap = await getPlaceMap();
+        this.root = constructTrie(this.placeMap);
+    }
+
+    async extractFromText(source: SourceRecord, text: string) {
+        const matches = match(text, this.root!)
+
+        if (matches.length <= 0 || !matches[0].value ) { return undefined }
+
+        return await inferByName(JSON.stringify({
+            level: matches[0].type,
+            area: matches[0].value,
+            start: source.startDate,
+            end: source.endDate ? source.endDate : source.startDate,
+        } as InferPlaceArgs))
+    }
+
+    async extract(source: SourceRecord) {
+        for (const method of this.methods) {
+            const value = source[method.column];
+            let result: string | undefined = undefined
+
+            switch (method.method) {
+                case PlaceExtractionMethod.TEXT:
+                    result = await this.extractFromText(source, value)
+                    break
+                case PlaceExtractionMethod.WKT:
+                    result = await inferByWKT(value)
+                    break
+                case PlaceExtractionMethod.URI:
+                    result = await inferByAdamURI(value)
+                    break
+                default:
+                    result = await this.extractFromText(source, value)
+                    break
+            }
+
+            if (result) {
+                return result
+            }
         }
     }
-}
-
-
-// ------------------------------------------------------------------------------------------------------
-// INFERENCE OF PLACE 
-// ------------------------------------------------------------------------------------------------------
-
-
-
-export async function inferPlaceId(target: Draft, place: { area: string; level: string }): Promise<string | undefined> {
-    const { startDate: date_start, endDate: date_end } = target;
-    const start = date_start;
-    const end = date_end || date_start;
-    const level = place.level
-    const area = place.area
-
-    const key = JSON.stringify({ level, area, start, end });
-
-    return inferByName(key);
 }

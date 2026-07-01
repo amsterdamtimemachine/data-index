@@ -13,7 +13,7 @@ async function fetch<T = string | null>(
 }
 
 export const inferByName = createCachedResolver(async (key: string): Promise<string | undefined> => {
-    const { level, area, start, end } = JSON.parse(key) as InferPlaceArgs;
+    const { level, area, start, end } = JSON.parse(key);
     
     return fetch(sql`
         SELECT p.id AS place_id
@@ -52,18 +52,23 @@ export const inferByWKT = createCachedResolver(async (wkt) => {
     `);
 });
 
-export const resolveByAddress = createCachedResolver(async (adamlinkUri) => {
+export const inferByAdamURI = createCachedResolver(async (adamlinkUri) => {
     return fetch(sql`
-        SELECT ${placeHistoricalName.placeId} as place_id 
-        FROM ${placeHistoricalName} 
-        WHERE ${placeHistoricalName.id} = ${adamlinkUri}
-    `);
-});
+        SELECT p.id AS place_id,
+            p.name AS name,
+            p.type AS type
+        FROM place p
+        WHERE p.name IS NOT NULL AND
+            p.id = ${adamlinkUri}
 
-export const resolveByStreet = createCachedResolver(async (streetUri) => {
-    return fetch(sql`
-        SELECT id as place_id 
-        FROM place 
-        WHERE id = ${streetUri} AND type = 'street'
+        UNION
+
+        SELECT pn.place_id AS place_id,
+            pn.name AS name,
+            p.type AS type
+        FROM place_historical_name pn
+        JOIN place p ON p.id = pn.place_id
+        WHERE pn.name IS NOT NULL AND
+            p.id = ${adamlinkUri}
     `);
 });

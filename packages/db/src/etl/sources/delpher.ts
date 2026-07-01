@@ -9,6 +9,7 @@
  */
 import { Draft, Ingestor } from './ingestor';
 import { recordType } from '../helpers/entity-factory';
+import { NewFeature } from '../../schema';
 
 interface DelpherSourceData {
   id: string;
@@ -44,6 +45,21 @@ export class DelpherIngestor extends Ingestor<DelpherSourceData> {
     
     return { startDate: match[1], endDate: match[2]};
   }  
+
+  private truncate(text: string): string {
+    return text ? text.slice(0, 128) : '';
+  }
+
+  // @override from ingestor.ts, 'cause we can truncate the description
+  // at the last step
+  protected async writeFeature(feature: NewFeature, placeId: string): Promise<void> {
+    feature.description = this.truncate(feature.description!)
+    
+    this.writer.addFeature(feature)
+    this.writer.addLink({ featureId: feature.id, placeId, relationId: this.RELATION_ID })
+
+    await this.writer.flushIfFull();
+  }
   
   protected transform(source: DelpherSourceData): Draft {
     const dates = this.parsePeriod(source.period)

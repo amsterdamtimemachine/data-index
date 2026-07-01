@@ -1,17 +1,15 @@
 import { readFileSync } from 'fs';
 import { upsertSource, createFeatureWriter, featureUuid } from '../helpers/helpers';
 import { NewFeature } from '../../schema';
-import { inferPlaceId, PlaceIndex } from '../helpers/place-extractor';
+import { PlaceIndex, PlaceExtractionMethod, ExtractionArgs } from '../helpers/place-extractor';
 import { extname } from 'path';
 import { parse } from 'csv-parse/sync';
 import { createEntityFactory, EntityFactory, recordType} from '../helpers/entity-factory';
 import { EntityBase } from '@atm/shared';
 
-type DraftWithText = { inferLocationFromText: string; wkt?: never }
-type DraftWithWkt = { wkt: string; inferLocationFromText?: never }
-export type Draft = Omit<NewFeature, 'recordType' | 'datasetId'> & (DraftWithText | DraftWithWkt)
+export type Draft = Omit<NewFeature, 'recordType' | 'datasetId'>
 
-export abstract class Ingestor<SourceRecord> {
+export abstract class Ingestor<SourceRecord extends Record<string, any>> {
     protected BATCH_SIZE = 1000;
 
     protected abstract ORG_ID: string; // Example: 'my-org';
@@ -27,9 +25,11 @@ export abstract class Ingestor<SourceRecord> {
     protected abstract RELATION_ID: string; // Example: 'isAbout';
     protected abstract RELATION_LABEL: string; // Example: 'Is About';
 
+    protected abstract PLACE_EXTRACTION_METHODS: ExtractionArgs<SourceRecord>;
+
     protected abstract transform(source: SourceRecord): Draft | undefined;
 
-    protected pi: PlaceIndex | undefined;
+    protected pi: PlaceIndex<SourceRecord> | undefined;
     protected ef: EntityFactory<EntityBase> | undefined;
     protected writer: any; // TODO: could do some better type-checking here. 
 
@@ -41,13 +41,13 @@ export abstract class Ingestor<SourceRecord> {
         })
     }
 
-    protected async extractPlace(draft: Draft) {
-        return this.pi!.extract(draft)
+    protected async extractPlace(source: SourceRecord) {
+        return this.pi!.extract(source)
     }
 
     protected async writeFeature(feature: NewFeature, placeId: string) {
         this.writer.addFeature(feature)
-        this.writer.addLink({ featureId: feature.id!, placeId, relationId: this.RELATION_ID })
+        this.writer.addLink({ featureId: feature.id, placeId, relationId: this.RELATION_ID })
 
         await this.writer.flushIfFull();
     }
@@ -71,7 +71,7 @@ export abstract class Ingestor<SourceRecord> {
 
         if (!draft) { return [undefined, undefined] }
 
-        const placeId = await this.extractPlace(draft)
+        const placeId = await this.extractPlace(source)
         const entity: EntityBase = this.ef!.create(draft, new Map<string, any>(Object.entries(source as object)))
         const feature = this.constructFeature(draft, entity) as NewFeature
 
@@ -116,7 +116,7 @@ export abstract class Ingestor<SourceRecord> {
     public async ingest(filePath: string) {
         await this.upsertDatasource();
 
-        this.pi = await PlaceIndex.create()
+        this.pi = await PlaceIndex.create(this.PLACE_EXTRACTION_METHODS)
         this.ef = createEntityFactory(this.RECORD_TYPE)
         this.writer = createFeatureWriter(this.BATCH_SIZE)
 

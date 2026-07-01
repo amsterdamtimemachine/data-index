@@ -1,6 +1,7 @@
-import { NewFeature } from "../../schema";
 import { Draft, Ingestor } from "./ingestor";
 import { recordType} from '../helpers/entity-factory';
+import { ExtractionArgs, PlaceExtractionMethod } from "../helpers/place-extractor";
+
 
 interface TestSourceData {
     identifier: string;
@@ -18,10 +19,14 @@ export class Test extends Ingestor<TestSourceData> {
     protected DATASET_ID: string = 'set';
     protected DATASET_LABEL: string = 'Set';
     protected DATASET_URL: string = 'set.test.com';
-    //
+    
     protected RECORD_TYPE: recordType = recordType.IMAGE;
     protected RELATION_ID: string = 'isAbout';
     protected RELATION_LABEL: string = 'Is About';
+
+    protected PLACE_EXTRACTION_METHODS: ExtractionArgs<TestSourceData> = [
+        { method: PlaceExtractionMethod.TEXT, column: 'articleBody' }
+    ];
 
     protected transform(source: TestSourceData): Draft {
         return {
@@ -31,7 +36,6 @@ export class Test extends Ingestor<TestSourceData> {
             description: source.articleBody,
             startDate: source.datePublished + '-01-01',
             endDate: source.datePublished + '-01-01',
-            location: source.articleBody
         }
     }
 }
