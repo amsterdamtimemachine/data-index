@@ -1,6 +1,6 @@
 import type { Feature, Geometry } from 'geojson';
-import { PdokFetcher, type PlaceRecord } from './pdok-fetcher';
-import { type Gemeente } from './config';
+import { PdokFetcher, type PlaceDraft } from './pdok-fetcher';
+import { AMSTERDAM, WEESP, type Gemeente } from './config';
 
 type BagProps = {
   identificatie: string;
@@ -28,10 +28,13 @@ function addressLabel(p: BagProps): string {
 // they coexist with the historical Adamlink LPs (different ids, no dedup). The
 // identificatie is 16 digits, first 4 = gemeente code.
 export class BagAddressesFetcher extends PdokFetcher<BagProps> {
-  protected source = 'bag';
+  protected source = 'bag' as const;
   protected layers = ['bag:verblijfsobject'];
   protected ndjson = true;
 
+  // Task scope: Amsterdam (current addresses) + Weesp (identificatie 0457*, still
+  // present post-annexation; not in Adamlink). Peripheral parked — add them here to re-expand.
+  protected gemeenten() { return [AMSTERDAM, WEESP]; }
   protected service() { return SERVICE; }
   protected gemeenteFilter(g: Gemeente) { return wrap(likeIdent(g.code.slice(2))); }
   protected keep(props: BagProps) { return !!props.identificatie && !!props.openbare_ruimte; }
@@ -39,7 +42,7 @@ export class BagAddressesFetcher extends PdokFetcher<BagProps> {
   // PDOK's BAG WFS caps startIndex paging, so a large municipality (Amsterdam ~470k)
   // is fetched by keyset pagination: sort by identificatie and page with
   // identificatie > last-seen instead of a growing offset.
-  protected async *places(g: Gemeente): AsyncGenerator<PlaceRecord> {
+  protected async *places(g: Gemeente): AsyncGenerator<PlaceDraft> {
     const code = g.code.slice(2);
     const layer = this.layers[0];
     let cursor: string | null = null;
@@ -56,13 +59,12 @@ export class BagAddressesFetcher extends PdokFetcher<BagProps> {
     }
   }
 
-  protected toPlace(feature: Feature<Geometry, BagProps>): PlaceRecord {
+  protected toPlace(feature: Feature<Geometry, BagProps>): PlaceDraft {
     const p = feature.properties;
     return {
       id: `bag-${p.identificatie}`,
       type: 'address',
       name: addressLabel(p),
-      source: 'bag',
       url: p.rdf_seealso ?? null,
       geometry: feature.geometry,
     };

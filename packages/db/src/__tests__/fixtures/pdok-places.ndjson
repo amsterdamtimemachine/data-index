@@ -1,0 +1,2 @@
+{"type":"Feature","geometry":{"type":"Point","coordinates":[121050,487050]},"properties":{"id":"bag-0363010000099998","type":"address","name":"Teststraat 1","source":"bag","url":"http://bag.basisregistraties.overheid.nl/bag/id/verblijfsobject/0363010000099998"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[121060,487060]},"properties":{"id":"bag-0457010000099997","type":"address","name":"Weesperstraat 2","source":"bag","url":"http://bag.basisregistraties.overheid.nl/bag/id/verblijfsobject/0457010000099997"}}

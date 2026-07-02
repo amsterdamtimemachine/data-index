@@ -1,8 +1,9 @@
 /**
  * Delpher ingestion (previously untested): unlike the Adamlink-URI sources, Delpher
- * matches each article's POINT to the *nearest existing place* within a threshold
- * (ST_DWithin 5m) and parses a PostgreSQL date range into start/end. Fixture has one
- * point on top of a seeded place (matched) and one far away (skipped).
+ * matches each article's POINT to the *nearest existing Adamlink place* (source='adamlink')
+ * within a threshold (ST_DWithin 5m) and parses a PostgreSQL date range into start/end —
+ * it targets the historical LP layer, not current BAG points. Fixture has one point on
+ * top of a seeded place (matched) and one far away (skipped).
  */
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
@@ -14,7 +15,7 @@ describe('delpher ingestion (nearest-place match + period parse)', () => {
     await setupTestDb();
     await cleanTestDb();
     // One place exactly under the first article's point; nothing near the second.
-    await db.execute(sql`INSERT INTO place (id, type) VALUES ('delpher-place', 'address')`);
+    await db.execute(sql`INSERT INTO place (id, type, source) VALUES ('delpher-place', 'address', 'adamlink')`);
     await db.execute(sql`
       INSERT INTO place_geometry (place_id, geometry)
       VALUES ('delpher-place', ST_Transform(ST_GeomFromText('POINT(4.9 52.37)', 4326), 28992))

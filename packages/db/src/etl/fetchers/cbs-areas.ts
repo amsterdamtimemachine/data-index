@@ -1,6 +1,6 @@
 import type { Feature, Geometry } from 'geojson';
-import { PdokFetcher, type PlaceRecord, fesEq } from './pdok-fetcher';
-import { MUNICIPALITIES, type Gemeente } from './config';
+import { PdokFetcher, type PlaceDraft, fesEq } from './pdok-fetcher';
+import { WEESP, type Gemeente } from './config';
 
 type CbsProps = {
   gemeentecode: string;
@@ -11,15 +11,15 @@ type CbsProps = {
   wijknaam?: string;
 };
 
-// Amsterdam (GM0363) areas come from Adamlink. Weesp was annexed by Amsterdam in
-// 2022, so its standalone areas live in the last vintage that still has GM0457.
+// Task scope: Weesp only — its areas aren't in Adamlink (Amsterdam's are). Weesp was
+// annexed by Amsterdam in 2022, so its standalone areas live in the last vintage that
+// still has GM0457. Peripheral parked: add the peripheral municipalities @ '2023' to expand.
 const AREA_GEMEENTEN: Gemeente[] = [
-  ...MUNICIPALITIES.filter(m => m.code !== 'GM0363').map(m => ({ name: m.name, code: m.code, year: '2023' })),
-  { name: 'Weesp', code: 'GM0457', year: '2022' },
+  { ...WEESP, year: '2022' },
 ];
 
 export class CbsAreasFetcher extends PdokFetcher<CbsProps> {
-  protected source = 'cbs';
+  protected source = 'cbs' as const;
   protected layers = ['wijkenbuurten:buurten', 'wijkenbuurten:wijken'];
 
   protected gemeenten() { return AREA_GEMEENTEN; }
@@ -27,7 +27,7 @@ export class CbsAreasFetcher extends PdokFetcher<CbsProps> {
   protected gemeenteFilter(g: Gemeente) { return fesEq('gemeentecode', g.code); }
   protected keep(props: CbsProps) { return String(props.water).toUpperCase() !== 'JA'; }
 
-  protected toPlace(feature: Feature<Geometry, CbsProps>, layer: string): PlaceRecord {
+  protected toPlace(feature: Feature<Geometry, CbsProps>, layer: string): PlaceDraft {
     const p = feature.properties;
     const isBuurt = layer.endsWith('buurten');
     const code = (isBuurt ? p.buurtcode : p.wijkcode)!;
@@ -35,7 +35,6 @@ export class CbsAreasFetcher extends PdokFetcher<CbsProps> {
       id: `cbs-${code}`,
       type: isBuurt ? 'neighbourhood' : 'district',
       name: (isBuurt ? p.buurtnaam : p.wijknaam)!,
-      source: 'cbs',
       url: null,
       geometry: feature.geometry,
     };

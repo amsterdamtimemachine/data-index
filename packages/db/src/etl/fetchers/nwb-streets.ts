@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import type { Feature, Geometry, Position } from 'geojson';
-import { PdokFetcher, type PlaceRecord, fesEq } from './pdok-fetcher';
-import { type Gemeente } from './config';
+import { PdokFetcher, type PlaceDraft, fesEq } from './pdok-fetcher';
+import { AMSTERDAM, type Gemeente } from './config';
 
 type NwbProps = {
   sttNaam?: string;
@@ -43,7 +43,7 @@ function adamlinkBagOrls(ttlPath: string): Set<string> {
 }
 
 export class NwbStreetsFetcher extends PdokFetcher<NwbProps> {
-  protected source = 'nwb';
+  protected source = 'nwb' as const;
   protected layers = ['nwbwegen:wegvakken'];
   private readonly exclude: Set<string>;
   private dupBagOrl = 0;
@@ -56,6 +56,9 @@ export class NwbStreetsFetcher extends PdokFetcher<NwbProps> {
     this.exclude = dedupTtl ? adamlinkBagOrls(dedupTtl) : new Set();
   }
 
+  // Task scope: Amsterdam only (gmeId 363, incl. annexed Weesp) — gap-fill against
+  // Adamlink. Peripheral municipalities parked — add them here to re-expand.
+  protected gemeenten() { return [AMSTERDAM]; }
   protected service() { return SERVICE; }
   protected gemeenteFilter(g: Gemeente) { return fesEq('gmeId', String(parseInt(g.code.slice(2), 10))); }
   protected keep(props: NwbProps) {
@@ -65,7 +68,7 @@ export class NwbStreetsFetcher extends PdokFetcher<NwbProps> {
   // NWB returns one feature per road segment; a street is many segments sharing a
   // bagOrl (BAG openbareruimte). Merge them into one MultiLineString per street,
   // preferring carriageway geometry and falling back to footpath for pedestrian-only ways.
-  protected async *places(g: Gemeente): AsyncGenerator<PlaceRecord> {
+  protected async *places(g: Gemeente): AsyncGenerator<PlaceDraft> {
     const groups = new Map<string, { props: NwbProps; street: Position[][]; foot: Position[][] }>();
     for await (const seg of this.page(this.service(), this.layers[0], this.gemeenteFilter(g))) {
       if (!this.keep(seg.properties)) continue;
@@ -92,14 +95,13 @@ export class NwbStreetsFetcher extends PdokFetcher<NwbProps> {
     }
   }
 
-  protected toPlace(feature: Feature<Geometry, NwbProps>): PlaceRecord {
+  protected toPlace(feature: Feature<Geometry, NwbProps>): PlaceDraft {
     const p = feature.properties;
     const bagOrl = p.bagOrl?.trim() || null;
     return {
       id: bagOrl ? `nwb-${bagOrl}` : `nwb-${p.gmeId}-${slug(p.sttNaam!)}`,
       type: 'street',
       name: p.sttNaam!,
-      source: 'nwb',
       url: bagOrl ? `https://bagviewer.kadaster.nl/lvbag/bag-viewer/#?searchQuery=${bagOrl}` : null,
       geometry: feature.geometry,
     };

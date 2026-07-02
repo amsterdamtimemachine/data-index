@@ -11,16 +11,15 @@
  */
 import { readFileSync } from 'fs';
 import type { Feature, FeatureCollection, Geometry, Position } from 'geojson';
+import type { PlaceType, PlaceSource } from '@atm/shared';
 import { insertPlaces, type PlaceInsert } from '../helpers';
 
 interface PdokProps {
   id: string;
-  type: string;
+  type: PlaceType;
   name: string;
-  source: string;
+  source: PlaceSource;
   url: string | null;
-  since?: string | null;
-  until?: string | null;
 }
 
 type PdokFeature = Feature<Geometry, PdokProps>;
@@ -59,8 +58,6 @@ export async function ingest(filePath: string) {
     wkt: toWkt(f.geometry),
     source: f.properties.source,
     url: f.properties.url,
-    since: f.properties.since ?? null,
-    until: f.properties.until ?? null,
   }));
 
   const byType = rows.reduce<Record<string, number>>((acc, r) => {

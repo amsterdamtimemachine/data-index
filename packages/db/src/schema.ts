@@ -1,4 +1,5 @@
 import { pgTable, text, date, smallint, integer, uuid, jsonb, real, doublePrecision, customType, primaryKey, index } from 'drizzle-orm/pg-core';
+import type { PlaceSource } from '@atm/shared';
 
 // Custom PostGIS geometry type - stored in RD (Dutch) coordinates
 // Transform to WGS84 (4326) for frontend display
@@ -36,7 +37,7 @@ export const place = pgTable('place', {
   id: text('id').primaryKey(),                    // Adamlink URI ("https://adamlink.nl/geo/{street,district,lp}/…") or PDOK "{cbs,nwb,bag}-<code>"
   type: text('type').notNull(),                   // "address" | "street" | "neighbourhood" (buurt) | "district" (wijk)
   name: text('name'),                            // name shown for the place; dated past names live in place_historical_name
-  source: text('source'),                        // "adamlink" | "cbs" | "nwb" | "bag"
+  source: text('source').$type<PlaceSource>(),   // "adamlink" | "cbs" | "nwb" | "bag"
   url: text('url')                               // canonical record at the source (adamlink.nl / bag.basisregistraties.overheid.nl / …)
 });
 

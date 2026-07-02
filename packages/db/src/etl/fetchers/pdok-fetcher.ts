@@ -1,18 +1,19 @@
 import { writeFileSync, createWriteStream } from 'fs';
 import type { Feature, FeatureCollection, Geometry, GeoJsonProperties } from 'geojson';
-import type { PlaceType } from '@atm/shared';
-import { MUNICIPALITIES, type Gemeente } from './config';
+import type { PlaceType, PlaceSource } from '@atm/shared';
+import { type Gemeente } from './config';
 
-export interface PlaceRecord {
+interface PlaceRecord {
   id: string;
   type: PlaceType;
   name: string;
-  source: string;
+  source: PlaceSource;
   url: string | null;
   geometry: Geometry;
 }
 
-type OutProps = { id: string; type: PlaceType; name: string; source: string; url: string | null };
+export type PlaceDraft = Omit<PlaceRecord, 'source'>;
+type OutProps = Omit<PlaceRecord, 'geometry'>;
 type OutFeature = Feature<Geometry, OutProps>;
 
 const PAGE = 1000;
@@ -20,9 +21,6 @@ const FES = 'http://www.opengis.net/fes/2.0';
 
 export const fesEq = (field: string, value: string) =>
   `<fes:Filter xmlns:fes="${FES}"><fes:PropertyIsEqualTo><fes:ValueReference>${field}</fes:ValueReference><fes:Literal>${value}</fes:Literal></fes:PropertyIsEqualTo></fes:Filter>`;
-
-export const fesLike = (field: string, value: string) =>
-  `<fes:Filter xmlns:fes="${FES}"><fes:PropertyIsLike wildCard="*" singleChar="?" escapeChar="\\"><fes:ValueReference>${field}</fes:ValueReference><fes:Literal>${value}</fes:Literal></fes:PropertyIsLike></fes:Filter>`;
 
 async function getJson<T>(url: string, retries = 2): Promise<T> {
   for (let attempt = 0; ; attempt++) {
@@ -61,15 +59,15 @@ const toFeature = (p: PlaceRecord): OutFeature => ({
 });
 
 export abstract class PdokFetcher<P = GeoJsonProperties> {
-  protected abstract source: string;
+  protected abstract source: PlaceSource;
   protected abstract layers: string[];
   protected ndjson = false;
 
-  protected gemeenten(): readonly Gemeente[] { return MUNICIPALITIES; }
+  protected abstract gemeenten(): readonly Gemeente[];
   protected abstract service(g: Gemeente): string;
   protected abstract gemeenteFilter(g: Gemeente): string;
   protected abstract keep(props: P): boolean;
-  protected abstract toPlace(feature: Feature<Geometry, P>, layer: string): PlaceRecord;
+  protected abstract toPlace(feature: Feature<Geometry, P>, layer: string): PlaceDraft;
 
   protected async fetchFeatures(service: string, layer: string, params: string): Promise<Feature<Geometry, P>[]> {
     const url = `${service}?service=WFS&version=2.0.0&request=GetFeature&typeName=${layer}`
@@ -88,7 +86,7 @@ export abstract class PdokFetcher<P = GeoJsonProperties> {
 
   // One place per kept feature. Override to aggregate (e.g. NWB merges a street's
   // many segments into a single place).
-  protected async *places(g: Gemeente): AsyncGenerator<PlaceRecord> {
+  protected async *places(g: Gemeente): AsyncGenerator<PlaceDraft> {
     for (const layer of this.layers) {
       for await (const feature of this.page(this.service(g), layer, this.gemeenteFilter(g))) {
         if (!this.keep(feature.properties)) continue;
@@ -101,8 +99,8 @@ export abstract class PdokFetcher<P = GeoJsonProperties> {
     const writer = this.ndjson ? ndjsonWriter(outPath) : geojsonWriter(outPath);
     let written = 0;
     for (const g of this.gemeenten()) {
-      for await (const place of this.places(g)) {
-        writer.write(toFeature(place));
+      for await (const draft of this.places(g)) {
+        writer.write(toFeature({ ...draft, source: this.source }));
         written++;
       }
     }

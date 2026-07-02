@@ -76,14 +76,16 @@ export async function ingest(filePath: string) {
   console.log(`Match threshold: ${MATCH_THRESHOLD_METERS}m`);
 
   // Nearest address within threshold, cached by WKT (many articles share a point).
-  // Restricted to address places: the 5m threshold is for point-to-point matching;
-  // without the type filter a point inside a buurt/wijk polygon matches at distance 0.
+  // Restricted to Adamlink LP addresses (source='adamlink'): delpher is a historical
+  // dataset (~1900-1950), so it snaps to the historical address layer, not current BAG
+  // points. The type filter also keeps a point inside a buurt/wijk polygon from matching at 0.
   const resolvePlaceId = createCachedResolver(async (wkt) => {
     const result = await db.execute<PlaceIdRow>(sql`
       SELECT g.place_id as place_id
       FROM place_geometry g
       JOIN place p ON p.id = g.place_id
       WHERE p.type = 'address'
+        AND p.source = 'adamlink'
         AND ST_DWithin(
           g.geometry,
           ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992),

@@ -43,6 +43,9 @@ export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity;
  */
 export type PlaceType = 'address' | 'street' | 'neighbourhood' | 'district';
 
+/** Where a place came from — Adamlink (historical) or a PDOK base registry. */
+export type PlaceSource = 'adamlink' | 'cbs' | 'nwb' | 'bag';
+
 export interface FeaturesQuery {
   bounds: HeatmapCellBounds;
   recordTypes?: RecordType[];
@@ -79,6 +82,8 @@ export interface FeatureResult {
   relationId?: string;
   displayName?: string;
   historicalLabel?: string;
+  placeSource?: PlaceSource;
+  placeUrl?: string;
 }
 
 /**

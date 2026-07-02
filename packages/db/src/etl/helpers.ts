@@ -9,6 +9,7 @@
  */
 import { sql, inArray } from 'drizzle-orm';
 import { createHash } from 'crypto';
+import type { PlaceSource } from '@atm/shared';
 import { db } from '../client';
 import {
   organisations,
@@ -173,7 +174,7 @@ export interface PlaceInsert {
   type: string;
   label?: string | null;
   wkt: string;
-  source?: string | null;
+  source?: PlaceSource | null;
   url?: string | null;
   // Period this geometry was the city's division — set only for neighbourhood/district.
   // Left undefined for address/street. Dates as 'YYYY-MM-DD'.

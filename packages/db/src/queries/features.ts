@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import type {
   RecordType,
   PlaceType,
+  PlaceSource,
   FeaturesQuery,
   FeatureResult,
   FeaturesResponse,
@@ -36,6 +37,8 @@ type FeatureRow = {
   relation_id: string | null;
   name: string | null;
   historical_label: string | null;
+  place_source: PlaceSource | null;
+  place_url: string | null;
   tags: string[] | null;
 };
 
@@ -278,6 +281,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         f.entity,
         fp.relation_id,
         p.name,
+        p.source as place_source,
+        p.url as place_url,
         (SELECT a.name FROM place_historical_name a
          WHERE a.place_id = fp.place_id
            AND a.since <= f.end_date
@@ -338,6 +343,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       relation_id,
       name,
       historical_label,
+      place_source,
+      place_url,
       tags
     FROM ranked
     ORDER BY type_rank, record_type, id
@@ -367,6 +374,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     entity: row.entity || undefined,
     relationId: row.relation_id || undefined,
     displayName: row.name || undefined,
+    placeSource: row.place_source || undefined,
+    placeUrl: row.place_url || undefined,
     historicalLabel: row.historical_label || undefined
   }));
 
