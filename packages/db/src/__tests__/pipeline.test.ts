@@ -11,6 +11,7 @@ import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { setupTestDb, cleanTestDb, seedTestData, teardownTestDb } from './setup';
 import * as dbq from './dbAssertions';
 
+import { PLACE_PROVIDERS } from '@atm/shared';
 import { getFeatures } from '../queries/features';
 import { getHeatmap, getHeatmapTimeline } from '../queries/heatmap';
 import { getHistogram } from '../queries/histogram';
@@ -218,6 +219,17 @@ describe('getFeatures', () => {
     // historicalLabel should also be populated for features within the registry date range
     const withHistorical = r.data.find(f => f.historicalLabel);
     expect(withHistorical).toBeDefined();
+  });
+
+  test('resolves the place provider from place.source via the organisations join', async () => {
+    // Seeded places are all Adamlink LPs, so every feature carries the Adamlink provider.
+    const r = await getFeatures({ bounds: BOUNDS, pageSize: 50 });
+    const withProvider = r.data.find(f => f.placeProviderLabel);
+    expect(withProvider).toBeDefined();
+    expect(withProvider!.placeSource).toBe('adamlink');
+    expect(withProvider!.placeProviderLabel).toBe(PLACE_PROVIDERS.adamlink.label); // from organisations, seeded from PLACE_PROVIDERS
+    expect(withProvider!.placeProviderUrl).toBe(PLACE_PROVIDERS.adamlink.url);
+    expect(withProvider!.placeUrl).toBeTruthy(); // per-record link, distinct from the provider homepage
   });
 
   test('returns datasetLabel and organisationLabel matching the source tables', async () => {

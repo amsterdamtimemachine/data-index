@@ -27,6 +27,8 @@ const TRANSLATIONS: Record<string, string> = {
 	// UI labels
 	filters: 'Filters',
 	dataset: 'Dataset',
+	dataProvider: 'Databron',
+	placeDataProvider: 'Locatiebron',
 	contentType: 'Inhoudstype',
 	topics: 'Onderwerpen',
 	source: 'Bron',

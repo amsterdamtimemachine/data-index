@@ -83,7 +83,7 @@ erDiagram
         text id PK "e.g. https://adamlink.nl/geo/lp/1000001"
         text type  "address | street | neighbourhood | district"
         text name  "e.g. Prins Hendrikkade 93"
-        text source  "adamlink | cbs | nwb | bag"
+        text source FK "provider org: adamlink | cbs | nwb | bag"
         text url  "link to the origin record"
     }
 
@@ -162,6 +162,7 @@ erDiagram
     }
 
     organisations||--o{datasets:"has datasets"
+    organisations||--o{place:"provides geometry"
     datasets||--o{features:"has"
     place||--||place_geometry:"has geometry"
     place||--o{place_historical_name:"has historical names"
@@ -173,9 +174,9 @@ erDiagram
     tags||--o{feature_tags:"links"
 ```
 
-- **organisations**: Institutions that provide datasets
+- **organisations**: Institutions that provide datasets, or place geometry (referenced by `place.source`)
 - **datasets**: Data collections from organisations
-- **place**: Physical location identity (id, type, name)
+- **place**: Physical location identity (id, type, name); `source` is the provider organisation
 - **place_geometry**: A place's geometry (RD / EPSG:28992) and the period it was valid (1:1 with place)
 - **place_historical_name**: Dated past names linked to places (addresses, streets), used to show what a location was called at a given time
 - **tags**: Thematic categories (e.g. Nature, Transport, Living) assigned to features. Work in progress, generated via AI classification across datasets

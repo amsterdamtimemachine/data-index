@@ -30,6 +30,7 @@ type FeatureRow = {
   spatial_frequency: number | null;
   temporal_frequency: number | null;
   dataset_label: string | null;
+  dataset_url: string | null;
   organisation_label: string | null;
   organisation_url: string | null;
   relevance_score: number | null;
@@ -39,6 +40,8 @@ type FeatureRow = {
   historical_label: string | null;
   place_source: PlaceSource | null;
   place_url: string | null;
+  place_provider_label: string | null;
+  place_provider_url: string | null;
   tags: string[] | null;
 };
 
@@ -276,6 +279,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         (COALESCE(pg.spatial_frequency::float, 0) / ${maxSpatial}
          + COALESCE(f.temporal_frequency::float, 0) / ${maxTemporal}) as relevance_score,
         d.label as dataset_label,
+        d.url as dataset_url,
         o.label as organisation_label,
         o.url as organisation_url,
         f.entity,
@@ -283,6 +287,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         p.name,
         p.source as place_source,
         p.url as place_url,
+        po.label as place_provider_label,
+        po.url as place_provider_url,
         (SELECT a.name FROM place_historical_name a
          WHERE a.place_id = fp.place_id
            AND a.since <= f.end_date
@@ -294,6 +300,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       JOIN ${placeGeometry} pg ON pc.place_id = pg.place_id
       LEFT JOIN datasets d ON f.dataset_id = d.id
       LEFT JOIN organisations o ON d.organisation_id = o.id
+      LEFT JOIN organisations po ON p.source = po.id
       WHERE ${cellCondition}
         AND ${typeCondition}
         AND ${datasetCondition}
@@ -337,6 +344,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       temporal_frequency,
       relevance_score,
       dataset_label,
+      dataset_url,
       organisation_label,
       organisation_url,
       entity,
@@ -345,6 +353,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       historical_label,
       place_source,
       place_url,
+      place_provider_label,
+      place_provider_url,
       tags
     FROM ranked
     ORDER BY type_rank, record_type, id
@@ -367,6 +377,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     ] as [number, number],
     tags: row.tags || [],
     datasetLabel: row.dataset_label || undefined,
+    datasetUrl: row.dataset_url || undefined,
     organisationLabel: row.organisation_label || undefined,
     organisationUrl: row.organisation_url || undefined,
     spatialFrequency: row.spatial_frequency || 1,
@@ -376,6 +387,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     displayName: row.name || undefined,
     placeSource: row.place_source || undefined,
     placeUrl: row.place_url || undefined,
+    placeProviderLabel: row.place_provider_label || undefined,
+    placeProviderUrl: row.place_provider_url || undefined,
     historicalLabel: row.historical_label || undefined
   }));
 

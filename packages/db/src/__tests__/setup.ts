@@ -68,7 +68,7 @@ export async function setupTestDb() {
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS place (
       id TEXT PRIMARY KEY, type TEXT NOT NULL,
-      name TEXT, source TEXT, url TEXT
+      name TEXT, source TEXT REFERENCES organisations(id), url TEXT
     )
   `);
   await db.execute(sql`

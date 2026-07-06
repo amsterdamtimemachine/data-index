@@ -10,7 +10,8 @@ const geometry = customType<{ data: string; driverData: string }>({
 });
 
 // ============================================================================
-// ORGANISATIONS - Institutions that provide datasets
+// ORGANISATIONS - Institutions that provide datasets (via datasets.organisation_id)
+// or place geometry (via place.source: Adamlink, CBS, NWB/Rijkswaterstaat, BAG/Kadaster)
 // ============================================================================
 export const organisations = pgTable('organisations', {
   id: text('id').primaryKey(),
@@ -37,7 +38,7 @@ export const place = pgTable('place', {
   id: text('id').primaryKey(),                    // Adamlink URI ("https://adamlink.nl/geo/{street,district,lp}/…") or PDOK "{cbs,nwb,bag}-<code>"
   type: text('type').notNull(),                   // "address" | "street" | "neighbourhood" (buurt) | "district" (wijk)
   name: text('name'),                            // name shown for the place; dated past names live in place_historical_name
-  source: text('source').$type<PlaceSource>(),   // "adamlink" | "cbs" | "nwb" | "bag"
+  source: text('source').$type<PlaceSource>().references(() => organisations.id), // provider org, seeded from PLACE_PROVIDERS
   url: text('url')                               // canonical record at the source (adamlink.nl / bag.basisregistraties.overheid.nl / …)
 });
 

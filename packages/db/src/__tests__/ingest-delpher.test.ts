@@ -15,6 +15,8 @@ describe('delpher ingestion (nearest-place match + period parse)', () => {
     await setupTestDb();
     await cleanTestDb();
     // One place exactly under the first article's point; nothing near the second.
+    // place.source FKs to organisations, so seed the Adamlink provider first.
+    await db.execute(sql`INSERT INTO organisations (id, label) VALUES ('adamlink', 'Adamlink')`);
     await db.execute(sql`INSERT INTO place (id, type, source) VALUES ('delpher-place', 'address', 'adamlink')`);
     await db.execute(sql`
       INSERT INTO place_geometry (place_id, geometry)

@@ -9,7 +9,7 @@
  */
 import { sql, inArray } from 'drizzle-orm';
 import { createHash } from 'crypto';
-import type { PlaceSource } from '@atm/shared';
+import { PLACE_PROVIDERS, type PlaceSource } from '@atm/shared';
 import { db } from '../client';
 import {
   organisations,
@@ -65,6 +65,17 @@ export async function upsertSource(opts: {
   if (opts.relation) {
     await db.insert(relation).values(opts.relation).onConflictDoNothing();
   }
+}
+
+/**
+ * Seed the place-provider organisations (Adamlink/CBS/NWB/BAG) that `place.source`
+ * references. Idempotent; called by insertPlaces so every place has its provider row
+ * before the foreign key is checked. The rows are a materialised copy of PLACE_PROVIDERS.
+ */
+async function upsertProviders(): Promise<void> {
+  await db.insert(organisations)
+    .values(Object.entries(PLACE_PROVIDERS).map(([id, { label, url }]) => ({ id, label, url })))
+    .onConflictDoNothing();
 }
 
 /**
@@ -204,6 +215,7 @@ export async function insertPlaces(
   opts: { sourceSrid: number; onConflict: PlaceConflict; batchSize?: number }
 ): Promise<number> {
   const batchSize = opts.batchSize ?? 500;
+  await upsertProviders(); // place.source FKs to these org rows
 
   // Geometry is PostGIS, so the column value is a sql ST_* expression; the rest
   // of the insert goes through Drizzle's builder. RD (28992) is stored as-is;
