@@ -38,7 +38,7 @@ function toWkt(g: Geometry): string {
   }
 }
 
-function readFeatures(raw: string): PdokFeature[] {
+export function readFeatures(raw: string): PdokFeature[] {
   try {
     const doc = JSON.parse(raw) as FeatureCollection<Geometry, PdokProps> | PdokFeature;
     return doc.type === 'FeatureCollection' ? doc.features : [doc];
@@ -47,18 +47,22 @@ function readFeatures(raw: string): PdokFeature[] {
   }
 }
 
+// A fetched feature's normalised properties → a place row. Shared with the nwb-streets
+// ingest, which filters the features first and then maps the survivors.
+export const pdokRow = (f: PdokFeature): PlaceInsert => ({
+  id: f.properties.id,
+  type: f.properties.type,
+  label: f.properties.name,
+  wkt: toWkt(f.geometry),
+  source: f.properties.source,
+  url: f.properties.url,
+});
+
 export async function ingest(filePath: string) {
   console.log(`Reading ${filePath}...`);
   const features = readFeatures(readFileSync(filePath, 'utf8'));
 
-  const rows: PlaceInsert[] = features.map(f => ({
-    id: f.properties.id,
-    type: f.properties.type,
-    label: f.properties.name,
-    wkt: toWkt(f.geometry),
-    source: f.properties.source,
-    url: f.properties.url,
-  }));
+  const rows: PlaceInsert[] = features.map(pdokRow);
 
   const byType = rows.reduce<Record<string, number>>((acc, r) => {
     acc[r.type] = (acc[r.type] ?? 0) + 1;

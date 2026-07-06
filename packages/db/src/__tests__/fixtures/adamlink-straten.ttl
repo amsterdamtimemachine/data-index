@@ -1,0 +1,9 @@
+# Test fixture: minimal Adamlink straten with one owl:sameAs → BAG openbare-ruimte link.
+# The nwb-streets ingest extracts the 16-digit id (0363300000000001) as a bagOrl the
+# NWB gap-fill must skip. Only the id inside /openbare-ruimte/<id> matters here.
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+<https://adamlink.nl/geo/street/covered-street/1>
+    skos:prefLabel "Covered Street" ;
+    owl:sameAs <https://bag.basisregistraties.overheid.nl/bag/id/openbare-ruimte/0363300000000001> .

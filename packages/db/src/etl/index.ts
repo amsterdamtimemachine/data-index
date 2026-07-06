@@ -24,6 +24,7 @@ program
   .description('Ingest data from a source')
   .requiredOption('-s, --source <name>', 'Source name to ingest')
   .requiredOption('-f, --file <path>', 'Input file path')
+  .option('-x, --adamlink-streets <path>', 'Adamlink straten TTL (required by the nwb-streets source, to dedup against)')
   .action(async (opts) => {
     try {
       // Dynamically import the source module
@@ -59,7 +60,7 @@ program
       console.log(`Ingesting from source: ${opts.source}`);
       console.log(`File: ${opts.file}\n`);
 
-      await sourceModule.ingest(opts.file);
+      await sourceModule.ingest(opts.file, { adamlinkStreets: opts.adamlinkStreets });
 
       console.log('\nRun `bun run db:rebuild-index` to rebuild the spatial grid index and compute temporal and spatial frequencies.');
       process.exit(0);
@@ -74,7 +75,6 @@ program
   .description('Fetch reference place data from PDOK into a ground-truth file')
   .requiredOption('-s, --source <name>', 'Fetcher name')
   .requiredOption('-o, --out <path>', 'Output file path')
-  .option('-x, --exclude-adamlink <path>', 'Adamlink straten TTL; streets it already covers (by owl:sameAs bagOrl) are skipped')
   .action(async (opts) => {
     try {
       const mod = await import(`./fetchers/${opts.source}.ts`);
@@ -82,7 +82,7 @@ program
         console.error(`Fetcher ${opts.source} does not export a run function`);
         process.exit(1);
       }
-      await mod.run(opts.out, { excludeAdamlink: opts.excludeAdamlink });
+      await mod.run(opts.out);
       process.exit(0);
     } catch (error) {
       console.error('Fetch failed:', error);

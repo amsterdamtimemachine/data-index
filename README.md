@@ -280,7 +280,7 @@ Ingestion reads files from a local data directory; how you obtain each differs b
 
   ```bash
   bun run db:fetch -s cbs-areas     -o <data-dir>/cbs-areas.geojson
-  bun run db:fetch -s nwb-streets   -o <data-dir>/nwb-streets.geojson -x <data-dir>/adamlinkstraten.ttl
+  bun run db:fetch -s nwb-streets   -o <data-dir>/nwb-streets.geojson
   bun run db:fetch -s bag-addresses -o <data-dir>/bag-addresses.ndjson
   ```
 
@@ -314,10 +314,10 @@ Adamlink (download the TTLs, see [Getting the data](#getting-the-data)):
 | [LPS](https://adamlink.nl/data) | Linked point set: historical address-to-geometry mappings from 7 Amsterdam registries (1832–1976) | TTL |
 | [Adressen](https://adamlink.nl/data) | Dated address observations linking to LPS points via `schema:geoContains` | TTL |
 
-Three PDOK base registries fill the gaps, fetched with `db:fetch` and ingested via the `pdok-places` source (scope Amsterdam + Weesp — see [Getting the data](#getting-the-data)):
+Three PDOK base registries fill the gaps, fetched with `db:fetch` (scope Amsterdam + Weesp — see [Getting the data](#getting-the-data)). CBS and BAG ingest via the generic `pdok-places` source; NWB has its own `nwb-streets` source that dedups against Adamlink at ingest.
 
 - **[CBS WijkenBuurten](https://service.pdok.nl/cbs/wijkenbuurten/2022/wfs/v1_0)** (`source` = `cbs`, GeoJSON) — Weesp's neighbourhoods (buurten) and districts (wijken), annexed by Amsterdam in 2022 and absent from Adamlink.
-- **[NWB Wegen](https://service.pdok.nl/rws/nwbwegen/wfs/v1_0)** (`source` = `nwb`, GeoJSON) — Amsterdam streets missing from Adamlink, deduped against Adamlink's `owl:sameAs` BAG ids.
+- **[NWB Wegen](https://service.pdok.nl/rws/nwbwegen/wfs/v1_0)** (`source` = `nwb`, GeoJSON) — the fetcher pulls *all* Amsterdam streets (incl. annexed Weesp); the `nwb-streets` ingest then keeps only those Adamlink is missing, deduped against Adamlink's `owl:sameAs` BAG openbare-ruimte ids (`-x <adamlinkstraten.ttl>`, required).
 - **[BAG](https://service.pdok.nl/lv/bag/wfs/v2_0)** (`source` = `bag`, NDJSON) — current addresses; Adamlink's address history stops at 1943.
 
 ### Minimum required fields per feature
@@ -395,7 +395,7 @@ bun run db:ingest -s adressen -f <path-to-adressen.ttl>
 
 # PDOK gap-fills (Amsterdam + Weesp; fetch them first, see Getting the data)
 bun run db:ingest -s pdok-places -f <data-dir>/cbs-areas.geojson
-bun run db:ingest -s pdok-places -f <data-dir>/nwb-streets.geojson
+bun run db:ingest -s nwb-streets -f <data-dir>/nwb-streets.geojson -x <data-dir>/adamlinkstraten.ttl
 bun run db:ingest -s pdok-places -f <data-dir>/bag-addresses.ndjson
 
 # Ingest datasets (any order)
@@ -459,7 +459,7 @@ bun --env-file=.env.prod run db:ingest -s adressen -f <path-to-adressen.ttl>
 
 # PDOK gap-fills (Amsterdam + Weesp; fetch them first, see Getting the data)
 bun --env-file=.env.prod run db:ingest -s pdok-places -f <data-dir>/cbs-areas.geojson
-bun --env-file=.env.prod run db:ingest -s pdok-places -f <data-dir>/nwb-streets.geojson
+bun --env-file=.env.prod run db:ingest -s nwb-streets -f <data-dir>/nwb-streets.geojson -x <data-dir>/adamlinkstraten.ttl
 bun --env-file=.env.prod run db:ingest -s pdok-places -f <data-dir>/bag-addresses.ndjson
 
 # Ingest feature datasets
@@ -533,7 +533,7 @@ bun --env-file=.env.prod run db:ingest -s adressen -f <path-to-adressen.ttl>
 
 # PDOK gap-fills (Amsterdam + Weesp; fetch them first, see Getting the data)
 bun --env-file=.env.prod run db:ingest -s pdok-places -f <data-dir>/cbs-areas.geojson
-bun --env-file=.env.prod run db:ingest -s pdok-places -f <data-dir>/nwb-streets.geojson
+bun --env-file=.env.prod run db:ingest -s nwb-streets -f <data-dir>/nwb-streets.geojson -x <data-dir>/adamlinkstraten.ttl
 bun --env-file=.env.prod run db:ingest -s pdok-places -f <data-dir>/bag-addresses.ndjson
 
 # Ingest feature datasets

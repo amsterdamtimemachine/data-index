@@ -24,9 +24,9 @@ function addressLabel(p: BagProps): string {
   return `${p.openbare_ruimte} ${p.huisnummer ?? ''}${suffix}`.trim();
 }
 
-// Current addresses (BAG verblijfsobject), all 10 municipalities incl. Amsterdam —
-// they coexist with the historical Adamlink LPs (different ids, no dedup). The
-// identificatie is 16 digits, first 4 = gemeente code.
+// Current addresses (BAG verblijfsobject) for Amsterdam + Weesp — they coexist with
+// the historical Adamlink LPs (different ids, no dedup). The identificatie is 16
+// digits, first 4 = gemeente code.
 export class BagAddressesFetcher extends PdokFetcher<BagProps> {
   protected source = 'bag' as const;
   protected layers = ['bag:verblijfsobject'];
