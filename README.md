@@ -29,6 +29,7 @@ Rather than curating or contextualising the data, the index presents sources as 
   - [Dates sources](#dates-sources)
   - [Dates resolution](#dates-resolution)
 - [Data ingestion](#data-ingestion)
+  - [Getting the data](#getting-the-data)
   - [Place data ingestion](#place-data-ingestion)
     - [Place datasets](#place-datasets)
   - [Minimum required fields per feature](#minimum-required-fields-per-feature)
@@ -79,13 +80,15 @@ erDiagram
     }
 
     place {
-        text id PK "e.g. lp-1000001"
+        text id PK "e.g. https://adamlink.nl/geo/lp/1000001"
         text type  "address | street | neighbourhood | district"
         text name  "e.g. Prins Hendrikkade 93"
+        text source  "adamlink | cbs | nwb | bag"
+        text url  "link to the origin record"
     }
 
     place_geometry {
-        text place_id PK "e.g. lp-1000001"
+        text place_id PK "e.g. https://adamlink.nl/geo/lp/1000001"
         geometry geometry  "POINT, LINESTRING, or POLYGON"
         integer spatial_frequency  "e.g. 47 # cells spanned"
         date since  "neighbourhood/district era start; null for address/street"
@@ -94,7 +97,7 @@ erDiagram
 
     place_historical_name {
         text id PK "e.g. https://adamlink.nl/geo/address/A1"
-        text place_id FK "e.g. lp-1000001"
+        text place_id FK "e.g. https://adamlink.nl/geo/lp/1000001"
         text name  "e.g. Prins Hendrikkade 93"
         date since  "e.g. 1943-01-01"
         date until  "e.g. 1976-01-01"
@@ -267,13 +270,31 @@ Both name- and geometry-windows run from `since` up to but not including `until`
 
 ## Data ingestion
 
+### Getting the data
+
+Ingestion reads files from a local data directory; how you obtain each differs by source:
+
+- **Adamlink place data** — download the TTLs from [adamlink.nl/data](https://adamlink.nl/data): the neighbourhoods & districts, streets, LPS, and adressen files. Static, versioned downloads.
+- **PDOK base registries (CBS / NWB / BAG)** — not downloaded by hand. `db:fetch` queries the [PDOK](https://www.pdok.nl) WFS and writes a ground-truth file:
+
+  ```bash
+  bun run db:fetch -s cbs-areas     -o <data-dir>/cbs-areas.geojson
+  bun run db:fetch -s nwb-streets   -o <data-dir>/nwb-streets.geojson -x <data-dir>/adamlinkstraten.ttl
+  bun run db:fetch -s bag-addresses -o <data-dir>/bag-addresses.ndjson
+  ```
+
+  Splitting fetch from ingest keeps ingestion offline and reproducible and pins each PDOK snapshot as an inspectable file; re-run a fetch to refresh it.
+- **Feature datasets (Beeldbank, Joods Monument, Delpher)** — currently private derivatives of mostly-public source collections, so they are not publicly distributable.
+
+All files land in the data directory; the ingestion steps below read them.
+
 ### Place data ingestion
 
 The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Adamlink is a Linked Open Data service that connects historical Amsterdam address registries to point geometries, enabling features to be linked to physical locations with historical address names.
 
 Adamlink place data must be ingested before any dataset. See the [Development](#development) or [Production](#production) sections for the full ingestion order.
 
-Every `place` row is sourced from Adamlink. A feature is skipped at ingest if it can't be resolved to an existing place, or if it lacks the stable source identifier its `id` is derived from — no feature row is created and nothing unlinked lands in the database.
+Adamlink is the backbone, but it doesn't cover everything — its addresses stop at 1943, it doesn't include the recently-annexed municipality of Weesp, and it misses some Amsterdam streets. Three national base registries fill those gaps (see [Place datasets](#place-datasets)), and every `place` row records its `source` (`adamlink` / `cbs` / `nwb` / `bag`) and a `url` to the origin record. A feature is skipped at ingest if it can't be resolved to an existing place, or if it lacks the stable source identifier its `id` is derived from — no feature row is created and nothing unlinked lands in the database.
 
 If you are deploying this for **another Dutch city**, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. The `geometry-point-template.ts` example shows how to match incoming coordinates to existing places; for creating new places, adapt the pattern from `lps.ts`. The core requirement is that each feature links to a `place` row that has a geometry.
 
@@ -281,7 +302,9 @@ For a city **outside the Netherlands** there is one more step: the Dutch nationa
 
 #### Place datasets
 
-All place geometry comes from these public Adamlink datasets.
+Place data comes from two kinds of source, distinguished by the `source` column. **Adamlink** is the backbone — historical geometry and address history. Three **PDOK base registries** fill what Adamlink lacks, for Amsterdam and the annexed municipality of Weesp.
+
+Adamlink (download the TTLs, see [Getting the data](#getting-the-data)):
 
 | Dataset | Description | Format |
 |---------|-------------|--------|
@@ -289,6 +312,12 @@ All place geometry comes from these public Adamlink datasets.
 | [Streets](https://adamlink.nl/data) | Street geometries (LINESTRING) with historical name variants | TTL |
 | [LPS](https://adamlink.nl/data) | Linked point set: historical address-to-geometry mappings from 7 Amsterdam registries (1832–1976) | TTL |
 | [Adressen](https://adamlink.nl/data) | Dated address observations linking to LPS points via `schema:geoContains` | TTL |
+
+Three PDOK base registries fill the gaps, fetched with `db:fetch` and ingested via the `pdok-places` source (scope Amsterdam + Weesp — see [Getting the data](#getting-the-data)):
+
+- **[CBS WijkenBuurten](https://service.pdok.nl/cbs/wijkenbuurten/2022/wfs/v1_0)** (`source` = `cbs`, GeoJSON) — Weesp's neighbourhoods (buurten) and districts (wijken), annexed by Amsterdam in 2022 and absent from Adamlink.
+- **[NWB Wegen](https://service.pdok.nl/rws/nwbwegen/wfs/v1_0)** (`source` = `nwb`, GeoJSON) — Amsterdam streets missing from Adamlink, deduped against Adamlink's `owl:sameAs` BAG ids.
+- **[BAG](https://service.pdok.nl/lv/bag/wfs/v2_0)** (`source` = `bag`, NDJSON) — current addresses; Adamlink's address history stops at 1943.
 
 ### Minimum required fields per feature
 
@@ -363,6 +392,11 @@ bun run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
 bun run db:ingest -s lps -f <path-to-lps.ttl>
 bun run db:ingest -s adressen -f <path-to-adressen.ttl>
 
+# PDOK gap-fills (Amsterdam + Weesp; fetch them first, see Getting the data)
+bun run db:ingest -s pdok-places -f <data-dir>/cbs-areas.geojson
+bun run db:ingest -s pdok-places -f <data-dir>/nwb-streets.geojson
+bun run db:ingest -s pdok-places -f <data-dir>/bag-addresses.ndjson
+
 # Ingest datasets (any order)
 bun run db:ingest -s <dataset-name> -f <path-to-file>
 
@@ -421,6 +455,11 @@ bun --env-file=.env.prod run db:ingest -s neighbourhoods-and-districts -f <path-
 bun --env-file=.env.prod run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
 bun --env-file=.env.prod run db:ingest -s lps -f <path-to-lps.ttl>
 bun --env-file=.env.prod run db:ingest -s adressen -f <path-to-adressen.ttl>
+
+# PDOK gap-fills (Amsterdam + Weesp; fetch them first, see Getting the data)
+bun --env-file=.env.prod run db:ingest -s pdok-places -f <data-dir>/cbs-areas.geojson
+bun --env-file=.env.prod run db:ingest -s pdok-places -f <data-dir>/nwb-streets.geojson
+bun --env-file=.env.prod run db:ingest -s pdok-places -f <data-dir>/bag-addresses.ndjson
 
 # Ingest feature datasets
 bun --env-file=.env.prod run db:ingest -s beeldbank -f <path-to-beeldbank.csv>
@@ -490,6 +529,11 @@ bun --env-file=.env.prod run db:ingest -s neighbourhoods-and-districts -f <path-
 bun --env-file=.env.prod run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
 bun --env-file=.env.prod run db:ingest -s lps -f <path-to-lps.ttl>
 bun --env-file=.env.prod run db:ingest -s adressen -f <path-to-adressen.ttl>
+
+# PDOK gap-fills (Amsterdam + Weesp; fetch them first, see Getting the data)
+bun --env-file=.env.prod run db:ingest -s pdok-places -f <data-dir>/cbs-areas.geojson
+bun --env-file=.env.prod run db:ingest -s pdok-places -f <data-dir>/nwb-streets.geojson
+bun --env-file=.env.prod run db:ingest -s pdok-places -f <data-dir>/bag-addresses.ndjson
 
 # Ingest feature datasets
 bun --env-file=.env.prod run db:ingest -s beeldbank -f <path-to-beeldbank.csv>
