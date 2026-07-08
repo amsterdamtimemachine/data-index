@@ -76,6 +76,8 @@ export async function setupTestDb() {
       place_id TEXT PRIMARY KEY REFERENCES place(id),
       geometry geometry(Geometry, 28992),
       spatial_frequency INTEGER,
+      source TEXT REFERENCES organisations(id),
+      url TEXT,
       since DATE, until DATE
     )
   `);

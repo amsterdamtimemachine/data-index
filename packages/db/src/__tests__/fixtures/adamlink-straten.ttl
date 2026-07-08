@@ -1,9 +1,23 @@
-# Test fixture: minimal Adamlink straten with one owl:sameAs → BAG openbare-ruimte link.
-# The nwb-streets ingest extracts the 16-digit id (0363300000000001) as a bagOrl the
-# NWB gap-fill must skip. Only the id inside /openbare-ruimte/<id> matters here.
+# Test fixture: Adamlink straten covering the two cases nwb-streets cares about.
+#  - covered-street/1: HAS geometry + a bagOrl → NWB should skip it (Adamlink draws it).
+#  - backfill-street/2: NO geometry but a bagOrl + a dated name → NWB should backfill the
+#    line under this Adamlink URI and carry the dated name through.
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix schema: <https://schema.org/> .
+@prefix sem: <http://semanticweb.cs.vu.nl/2009/11/sem/> .
+@prefix hg: <http://rdf.histograph.io/> .
 
 <https://adamlink.nl/geo/street/covered-street/1>
+    a hg:Street ;
     skos:prefLabel "Covered Street" ;
+    geo:hasGeometry [ geo:asWKT "LINESTRING(4.89 52.37,4.90 52.37)" ] ;
     owl:sameAs <https://bag.basisregistraties.overheid.nl/bag/id/openbare-ruimte/0363300000000001> .
+
+<https://adamlink.nl/geo/street/backfill-street/2>
+    a hg:Street ;
+    skos:prefLabel "Backfill Street" ;
+    schema:name [ rdfs:label "Oude Naam" ; sem:hasEarliestBeginTimeStamp "1900" ] ;
+    owl:sameAs <https://bag.basisregistraties.overheid.nl/bag/id/openbare-ruimte/0363300000000002> .

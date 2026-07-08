@@ -49,6 +49,10 @@ export const placeGeometry = pgTable('place_geometry', {
   placeId: text('place_id').primaryKey().references(() => place.id),
   geometry: geometry('geometry'),                 // POINT, LINESTRING, or POLYGON
   spatialFrequency: integer('spatial_frequency'), // number of base cells this geometry spans
+  // Geometry provenance, set ONLY when it differs from the place's own (place.source/url) —
+  // e.g. NWB backfilling an Adamlink street that has no line. null = same provider as the place.
+  source: text('source').$type<PlaceSource>().references(() => organisations.id),
+  url: text('url'),                               // link to the geometry's source record
   // Period this geometry was the city's division — set ONLY for neighbourhood/district
   // (null for address/street). until null = open/current.
   since: date('since'),

@@ -91,6 +91,8 @@ erDiagram
         text place_id PK "e.g. https://adamlink.nl/geo/lp/1000001"
         geometry geometry  "POINT, LINESTRING, or POLYGON"
         integer spatial_frequency  "e.g. 47 # cells spanned"
+        text source  "geometry provider when it differs from place.source (e.g. nwb); null = same"
+        text url  "link to the geometry's source record; null = same as place.url"
         date since  "neighbourhood/district era start; null for address/street"
         date until  "era end; null = open/current"
     }

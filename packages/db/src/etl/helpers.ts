@@ -187,6 +187,10 @@ export interface PlaceInsert {
   wkt: string;
   source?: PlaceSource | null;
   url?: string | null;
+  // Geometry provenance, set only when the line comes from a different provider than the
+  // place itself (e.g. an Adamlink street backfilled from NWB). Left undefined otherwise.
+  geometrySource?: PlaceSource | null;
+  geometryUrl?: string | null;
   // Period this geometry was the city's division — set only for neighbourhood/district.
   // Left undefined for address/street. Dates as 'YYYY-MM-DD'.
   since?: string | null;
@@ -249,6 +253,8 @@ export async function insertPlaces(
       chunk.map(r => ({
         placeId: r.id,
         geometry: geom(r.wkt),
+        source: r.geometrySource ?? null,
+        url: r.geometryUrl ?? null,
         since: r.since ?? null,
         until: r.until ?? null,
       }))
@@ -256,13 +262,16 @@ export async function insertPlaces(
     if (opts.onConflict === 'replaceGeometry') {
       await geomQuery.onConflictDoUpdate({
         target: placeGeometry.placeId,
-        set: { geometry: sql`excluded.geometry` }, // preserve since/until
+        // provenance travels with the geometry; period (since/until) is preserved
+        set: { geometry: sql`excluded.geometry`, source: sql`excluded.source`, url: sql`excluded.url` },
       });
     } else {
       await geomQuery.onConflictDoUpdate({
         target: placeGeometry.placeId,
         set: {
           geometry: sql`excluded.geometry`,
+          source: sql`excluded.source`,
+          url: sql`excluded.url`,
           since: sql`excluded.since`,
           until: sql`excluded.until`,
         },

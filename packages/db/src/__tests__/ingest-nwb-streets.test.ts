@@ -1,11 +1,14 @@
 /**
- * nwb-streets ingestion: the NWB fetcher writes ALL Amsterdam streets; this source
- * keeps only the ones Adamlink is missing. It drops streets whose bagOrl Adamlink
- * already covers (via owl:sameAs) and streets with no bagOrl, and it requires the
- * Adamlink straten TTL so it can never silently duplicate Adamlink.
+ * nwb-streets ingestion. The NWB fetcher writes ALL Amsterdam streets; this source:
+ *  - skips streets Adamlink already draws (dedup by bagOrl),
+ *  - backfills streets Adamlink names but has no line for — keeping the Adamlink id/name/
+ *    dated-names and borrowing the NWB line, recording place_geometry.source = 'nwb',
+ *  - gap-fills streets absent from Adamlink as nwb-<bagOrl> places,
+ *  - drops NWB segments with no bagOrl,
+ *  - requires the Adamlink straten TTL (throws without it).
  *
- * Fixture: 3 NWB streets — one Adamlink covers (0363…0001), one gap (0363…0002),
- * one with no bagOrl (a bridge). Only the gap should survive.
+ * Fixtures: covered-street/1 (has geometry) + backfill-street/2 (no geometry, has a dated
+ * name), against NWB features 0001 (covered), 0002 (backfill), 0003 (gap), and a no-bagOrl bridge.
  */
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
@@ -14,8 +17,9 @@ import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
 
 const NWB = resolve(__dirname, 'fixtures/nwb-streets.geojson');
 const ADAMLINK = resolve(__dirname, 'fixtures/adamlink-straten.ttl');
+const BACKFILL_URI = 'https://adamlink.nl/geo/street/backfill-street/2';
 
-describe('nwb-streets ingestion (gap-fill dedup against Adamlink)', () => {
+describe('nwb-streets ingestion (dedup + backfill + gap-fill)', () => {
   beforeAll(async () => {
     await setupTestDb();
     await cleanTestDb();
@@ -28,18 +32,36 @@ describe('nwb-streets ingestion (gap-fill dedup against Adamlink)', () => {
     await teardownTestDb();
   });
 
-  test('inserts only the street Adamlink is missing (drops the covered one + the no-bagOrl bridge)', async () => {
-    const r = await db.execute<{ id: string; source: string }>(sql`SELECT id, source FROM place ORDER BY id`);
-    expect(r.rows.map(x => x.id)).toEqual(['nwb-0363300000000002']);
-    expect(r.rows[0].source).toBe('nwb');
+  test('keeps only the backfill + gap-fill streets (covered + no-bagOrl bridge dropped)', async () => {
+    const r = await db.execute<{ id: string }>(sql`SELECT id FROM place ORDER BY id`);
+    expect(r.rows.map(x => x.id).sort()).toEqual([BACKFILL_URI, 'nwb-0363300000000003'].sort());
   });
 
-  test('the kept street has its geometry (MultiLineString in RD)', async () => {
-    const r = await db.execute<{ gtype: string; srid: number }>(sql`
-      SELECT GeometryType(geometry) as gtype, ST_SRID(geometry) as srid FROM place_geometry`);
+  test('backfills the geometry-less Adamlink street under its URI with the NWB line + provenance', async () => {
+    const r = await db.execute<{ source: string; name: string; geom_source: string; geom_url: string; gtype: string }>(sql`
+      SELECT p.source, p.name, g.source AS geom_source, g.url AS geom_url, GeometryType(g.geometry) AS gtype
+      FROM place p JOIN place_geometry g ON g.place_id = p.id WHERE p.id = ${BACKFILL_URI}`);
     expect(r.rows.length).toBe(1);
-    expect(r.rows[0].gtype).toBe('MULTILINESTRING');
-    expect(r.rows[0].srid).toBe(28992);
+    const row = r.rows[0];
+    expect(row.source).toBe('adamlink');          // identity stays Adamlink
+    expect(row.name).toBe('Backfill Street');       // Adamlink's prefLabel, not the NWB name
+    expect(row.geom_source).toBe('nwb');            // geometry provenance is NWB
+    expect(row.geom_url).toContain('bagviewer');
+    expect(row.gtype).toBe('MULTILINESTRING');
+  });
+
+  test('the backfilled street carries its Adamlink dated name', async () => {
+    const r = await db.execute<{ name: string }>(sql`
+      SELECT name FROM place_historical_name WHERE place_id = ${BACKFILL_URI}`);
+    expect(r.rows.map(x => x.name)).toContain('Oude Naam');
+  });
+
+  test('gap-fill street (absent from Adamlink) is an nwb place with no geometry override', async () => {
+    const r = await db.execute<{ source: string; geom_source: string | null }>(sql`
+      SELECT p.source, g.source AS geom_source
+      FROM place p JOIN place_geometry g ON g.place_id = p.id WHERE p.id = 'nwb-0363300000000003'`);
+    expect(r.rows[0].source).toBe('nwb');
+    expect(r.rows[0].geom_source).toBeNull(); // provider matches the place, so no override
   });
 });
 

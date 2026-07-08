@@ -1,5 +1,6 @@
 {"type":"FeatureCollection","features":[
 {"type":"Feature","properties":{"id":"nwb-0363300000000001","type":"street","name":"Covered Street","source":"nwb","url":"https://bagviewer.kadaster.nl/lvbag/bag-viewer/#?searchQuery=0363300000000001"},"geometry":{"type":"MultiLineString","coordinates":[[[121000,487000],[121010,487010]]]}},
-{"type":"Feature","properties":{"id":"nwb-0363300000000002","type":"street","name":"Gap Street","source":"nwb","url":"https://bagviewer.kadaster.nl/lvbag/bag-viewer/#?searchQuery=0363300000000002"},"geometry":{"type":"MultiLineString","coordinates":[[[121100,487100],[121110,487110]]]}},
+{"type":"Feature","properties":{"id":"nwb-0363300000000002","type":"street","name":"Backfill Street NWB name","source":"nwb","url":"https://bagviewer.kadaster.nl/lvbag/bag-viewer/#?searchQuery=0363300000000002"},"geometry":{"type":"MultiLineString","coordinates":[[[121100,487100],[121110,487110]]]}},
+{"type":"Feature","properties":{"id":"nwb-0363300000000003","type":"street","name":"Gap Street","source":"nwb","url":"https://bagviewer.kadaster.nl/lvbag/bag-viewer/#?searchQuery=0363300000000003"},"geometry":{"type":"MultiLineString","coordinates":[[[121300,487300],[121310,487310]]]}},
 {"type":"Feature","properties":{"id":"nwb-363-bridge","type":"street","name":"Naamloze Brug","source":"nwb","url":null},"geometry":{"type":"MultiLineString","coordinates":[[[121200,487200],[121210,487210]]]}}
 ]}
