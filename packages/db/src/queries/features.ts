@@ -42,6 +42,8 @@ type FeatureRow = {
   place_url: string | null;
   place_provider_label: string | null;
   place_provider_url: string | null;
+  geometry_provider_label: string | null;
+  geometry_url: string | null;
   tags: string[] | null;
 };
 
@@ -289,6 +291,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         p.url as place_url,
         po.label as place_provider_label,
         po.url as place_provider_url,
+        go.label as geometry_provider_label,
+        pg.url as geometry_url,
         (SELECT a.name FROM place_historical_name a
          WHERE a.place_id = fp.place_id
            AND a.since <= f.end_date
@@ -301,6 +305,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       LEFT JOIN datasets d ON f.dataset_id = d.id
       LEFT JOIN organisations o ON d.organisation_id = o.id
       LEFT JOIN organisations po ON p.source = po.id
+      LEFT JOIN organisations go ON pg.source = go.id
       WHERE ${cellCondition}
         AND ${typeCondition}
         AND ${datasetCondition}
@@ -355,6 +360,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       place_url,
       place_provider_label,
       place_provider_url,
+      geometry_provider_label,
+      geometry_url,
       tags
     FROM ranked
     ORDER BY type_rank, record_type, id
@@ -389,6 +396,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     placeUrl: row.place_url || undefined,
     placeProviderLabel: row.place_provider_label || undefined,
     placeProviderUrl: row.place_provider_url || undefined,
+    geometryProviderLabel: row.geometry_provider_label || undefined,
+    geometryUrl: row.geometry_url || undefined,
     historicalLabel: row.historical_label || undefined
   }));
 

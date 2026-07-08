@@ -316,10 +316,14 @@ Adamlink (download the TTLs, see [Getting the data](#getting-the-data)):
 | [LPS](https://adamlink.nl/data) | Linked point set: historical address-to-geometry mappings from 7 Amsterdam registries (1832–1976) | TTL |
 | [Adressen](https://adamlink.nl/data) | Dated address observations linking to LPS points via `schema:geoContains` | TTL |
 
-Three PDOK base registries fill the gaps, fetched with `db:fetch` (scope Amsterdam + Weesp — see [Getting the data](#getting-the-data)). CBS and BAG ingest via the generic `pdok-places` source; NWB has its own `nwb-streets` source that dedups against Adamlink at ingest.
+Three PDOK base registries fill the gaps, fetched with `db:fetch` (scope Amsterdam + Weesp — see [Getting the data](#getting-the-data)). CBS and BAG ingest via the generic `pdok-places` source; NWB has its own `nwb-streets` source that reconciles against Adamlink at ingest.
 
 - **[CBS WijkenBuurten](https://service.pdok.nl/cbs/wijkenbuurten/2022/wfs/v1_0)** (`source` = `cbs`, GeoJSON) — Weesp's neighbourhoods (buurten) and districts (wijken), annexed by Amsterdam in 2022 and absent from Adamlink.
-- **[NWB Wegen](https://service.pdok.nl/rws/nwbwegen/wfs/v1_0)** (`source` = `nwb`, GeoJSON) — the fetcher pulls *all* Amsterdam streets (incl. annexed Weesp); the `nwb-streets` ingest then keeps only those Adamlink is missing, deduped against Adamlink's `owl:sameAs` BAG openbare-ruimte ids (`-x <adamlinkstraten.ttl>`, required).
+- **[NWB Wegen](https://service.pdok.nl/rws/nwbwegen/wfs/v1_0)** (`source` = `nwb`, GeoJSON) — the fetcher pulls *all* Amsterdam streets (incl. annexed Weesp); the `nwb-streets` ingest (`-x <adamlinkstraten.ttl>`, required) reconciles them against Adamlink by BAG openbare-ruimte id (`bagOrl` ↔ Adamlink `owl:sameAs`) and does two jobs:
+  - **gap-fill** — streets absent from Adamlink become `nwb-<bagOrl>` places (`source` = `nwb`);
+  - **backfill** — streets Adamlink *names* but has no line for keep their Adamlink id, name, and dated names, and borrow the NWB geometry; that borrowed line is recorded on `place_geometry.source` = `nwb` (with a link to the BAG record), so it reads as an Adamlink street with NWB geometry.
+
+  Streets Adamlink already draws are skipped, as are NWB segments without a `bagOrl` (bridges/locks).
 - **[BAG](https://service.pdok.nl/lv/bag/wfs/v2_0)** (`source` = `bag`, NDJSON) — current addresses; Adamlink's address history stops at 1943.
 
 ### Minimum required fields per feature

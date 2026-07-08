@@ -57,5 +57,10 @@ export function dataSourceFields(feature: FeatureResult, expanded: boolean): Fie
 	if (feature.placeProviderLabel && feature.placeProviderUrl) {
 		rows.push({ label: 'placeDataProvider', value: feature.placeProviderLabel, href: feature.placeProviderUrl });
 	}
+	// Only set when the geometry came from a different provider than the place
+	// (e.g. an Adamlink street whose line was backfilled from NWB).
+	if (feature.geometryProviderLabel) {
+		rows.push({ label: 'geometrySource', value: feature.geometryProviderLabel, href: feature.geometryUrl });
+	}
 	return rows;
 }

@@ -29,6 +29,7 @@ const TRANSLATIONS: Record<string, string> = {
 	dataset: 'Dataset',
 	dataProvider: 'Databron',
 	placeDataProvider: 'Locatiebron',
+	geometrySource: 'Geometriebron',
 	contentType: 'Inhoudstype',
 	topics: 'Onderwerpen',
 	source: 'Bron',

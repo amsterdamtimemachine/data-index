@@ -100,6 +100,10 @@ export interface FeatureResult {
   placeUrl?: string;
   placeProviderLabel?: string;
   placeProviderUrl?: string;
+  // Set only when the geometry comes from a different provider than the place
+  // (e.g. an Adamlink street backfilled from NWB); links to that source record.
+  geometryProviderLabel?: string;
+  geometryUrl?: string;
 }
 
 /**
