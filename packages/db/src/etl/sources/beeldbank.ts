@@ -48,6 +48,14 @@ export class BeeldbankIngestor extends Ingestor<BeeldbankData> {
   }
 }
 
+const ingestor = new BeeldbankIngestor()
+
+export async function ingest(filePath:string) {
+    await ingestor.ingest(filePath)
+}
+
+
+
 
 // /**
 //  * Import Beeldbank (Amsterdam Stadsarchief image archive) features
