@@ -80,7 +80,7 @@ export abstract class Ingestor<SourceRecord extends Record<string, any>> {
     }
 
     protected async ingestSourceRecords(sources: SourceRecord[]) {
-        const uuids = []
+        const uuids = new Set<string>();
 
         let skipped = 0
         let duplicates = 0
@@ -89,15 +89,15 @@ export abstract class Ingestor<SourceRecord extends Record<string, any>> {
             const [feature, placeId] =  await this.sourceToFeature(source)
             
             if (!placeId || !feature) { skipped++; continue; }
-            if (feature.id in uuids) { duplicates++; skipped++; continue; }
+            if (uuids.has(feature.id)) { duplicates++; skipped++; continue; }
 
             await this.writeFeature(feature, placeId)
 
-            uuids.push(feature.id)
+            uuids.add(feature.id)
         }
 
         await this.writer.flush()
-        console.log(`\nDone: ${uuids.length} features, ${duplicates} duplicates found, ${skipped} skipped (no matching neighbourhood/district)`);
+        console.log(`\nDone: ${uuids.size} features, ${duplicates} duplicates found, ${skipped} skipped (no matching neighbourhood/district)`);
     }
 
     protected readFileAsSourceRecords(filePath: string): SourceRecord[] {

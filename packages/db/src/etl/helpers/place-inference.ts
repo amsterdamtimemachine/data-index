@@ -55,8 +55,7 @@ export const inferByWKT = createCachedResolver(async (wkt) => {
 export const inferByAdamURI = createCachedResolver(async (adamlinkUri) => {
     return fetch(sql`
         SELECT p.id AS place_id,
-            p.name AS name,
-            p.type AS type
+            p.name AS name
         FROM place p
         WHERE p.name IS NOT NULL AND
             p.id = ${adamlinkUri}
@@ -64,11 +63,9 @@ export const inferByAdamURI = createCachedResolver(async (adamlinkUri) => {
         UNION
 
         SELECT pn.place_id AS place_id,
-            pn.name AS name,
-            p.type AS type
+            pn.name AS name
         FROM place_historical_name pn
-        JOIN place p ON p.id = pn.place_id
         WHERE pn.name IS NOT NULL AND
-            p.id = ${adamlinkUri}
+            pn.id = ${adamlinkUri}
     `);
 });
