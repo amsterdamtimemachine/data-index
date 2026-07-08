@@ -56,7 +56,7 @@ export async function ingest(filePath: string) {
     const lpRef = preds.find(p => p.predicate.endsWith('geoContains'))?.object;  // schema:geoContains allp:N
     if (!name || !lpRef) continue;
 
-    const placeId = `lp-${lpRef.split('/geo/lp/')[1]}`;
+    const placeId = lpRef;
     if (!places.has(placeId)) { skipped++; continue; }
 
     const since = preds.find(p => p.predicate.endsWith('hasEarliestBeginTimeStamp'))?.object || null;
