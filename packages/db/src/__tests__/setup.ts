@@ -68,15 +68,7 @@ export async function setupTestDb() {
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS place (
       id TEXT PRIMARY KEY, type TEXT NOT NULL,
-<<<<<<< HEAD
-<<<<<<< HEAD
       name TEXT
-=======
-      display_name TEXT
->>>>>>> 4bfc998 (move place geometry to its own 'place_geometry' table, rename preferred_label to display_name, rename place_name table to place_historical_name)
-=======
-      name TEXT
->>>>>>> 587fe7d (rename display_name in the db to 'name')
     )
   `);
   await db.execute(sql`
