@@ -7,6 +7,15 @@ import { FileReader } from '../helpers/file-reader';
 
 export type Draft = Omit<NewFeature, 'recordType' | 'datasetId'>
 
+/**
+ * Abstract class used for ingesting datasets. Use as follows:
+ * 1. Create new file, create a new exportable class extending this Ingestor-class
+ * 2. Create a data-interface object corresponding to the structure of an object in the dataset
+ *   2.1 Place the data-interface object as type-argument in the extension (between <>)
+ * 3. Defined all required abstract propterties
+ * 4. Implement the abstract-transform method, mapping the data-interface object to a more db-ready object
+ * 5. Define & export a ingest(filePath: string) function (call the ingest func in it) at the end of the file
+ */
 export abstract class Ingestor<SourceRecord extends Record<string, any>> {
     protected BATCH_SIZE = 1000;
 
@@ -32,6 +41,9 @@ export abstract class Ingestor<SourceRecord extends Record<string, any>> {
     protected fr: FileReader<SourceRecord> | undefined;
     protected writer: any; // TODO: could do some better type-checking here. 
 
+    /**
+     * Appends the metadata of the (concrete) class to the database
+     */
     private async upsertDatasource() {
         await upsertSource({
             organisation: { id: this.ORG_ID, label: this.ORG_LABEL, url: this.ORG_URL },
@@ -40,18 +52,23 @@ export abstract class Ingestor<SourceRecord extends Record<string, any>> {
         })
     }
 
+    /**
+     * Extract the place from a source-record. 
+     * @param source 
+     * @param draft necessary to extract the dates from the object. 
+     * @returns place_id of place found within SourceRecord
+     */
     protected async extractPlace(source: SourceRecord, draft: Draft) {
         const dateRange = { start: draft.startDate, end: draft.endDate } as DateRange
         return this.pi!.extract(source, dateRange)
     }
 
-    protected async writeFeature(feature: NewFeature, placeId: string) {
-        this.writer.addFeature(feature)
-        this.writer.addLink({ featureId: feature.id, placeId, relationId: this.RELATION_ID })
-
-        await this.writer.flushIfFull();
-    }
-
+    /**
+     * Maps the draft & entity to a complete NewFeature-object ready for database ingestion
+     * @param feature 
+     * @param entity 
+     * @returns Database-ready NewFeature-object
+     */
     protected constructFeature(feature: Draft, entity: EntityBase): NewFeature {
         return {
             ...feature,
@@ -66,6 +83,11 @@ export abstract class Ingestor<SourceRecord extends Record<string, any>> {
         // TODO: validate feature to have all required properties
     }
 
+    /**
+     * First transforms a SourceRecord to a Draft (temp object), then extracts place & creates corresponding entity. At last, construct db-ready feature-object
+     * @param source 
+     * @returns array containing the feature-object and corresponding place_id
+     */
     protected async sourceToFeature(source: SourceRecord): Promise<[NewFeature | undefined, string | undefined]> {
         const draft: Draft | undefined = this.transform(source)
 
@@ -78,6 +100,10 @@ export abstract class Ingestor<SourceRecord extends Record<string, any>> {
         return [feature, placeId]
     }
 
+    /**
+     * Loops over the provided sourcerecords, transforming them to (db-ready) features, and writing them to the database
+     * @param sources asynciterable of source-records. Can be obtained using the FileReader-class
+     */
     protected async ingestSourceRecords(sources: AsyncIterable<SourceRecord>) {
         const fMap = new Map<string, Set<string>>();
 
@@ -108,8 +134,11 @@ export abstract class Ingestor<SourceRecord extends Record<string, any>> {
         console.log(`\nDone: ${fMap.size} features, ${duplicates} duplicates found, ${skipped} skipped (no matching neighbourhood/district)`);
     }
 
-
-
+    /**
+     * function called by ingestion-script(s). It creates the necessary sub-classes, reads the data-file, & calls ingestions of the records
+     * @param filePath 
+     * @returns -
+     */
     public async ingest(filePath: string) {
         await this.upsertDatasource();
 

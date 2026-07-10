@@ -12,6 +12,9 @@ async function fetch<T = string | null>(
     return result.rows[0]?.place_id ?? fallback;
 }
 
+/**
+ * Fetches the place_id which correspond to the provided name & time-period
+ */
 export const inferByName = createCachedResolver(async (key: string): Promise<string | undefined> => {
     const { level, area, start, end } = JSON.parse(key);
     
@@ -38,6 +41,9 @@ export const inferByName = createCachedResolver(async (key: string): Promise<str
 })
 
 // TODO: could make {5} in query dynamically
+/**
+ * Fetches place_id based on the provided wkt (geo-object). Tries to find a place within 5 meters of this provided wkt.
+ */
 export const inferByWKT = createCachedResolver(async (wkt) => {
     return fetch(sql`
       SELECT p.place_id as place_id
@@ -52,6 +58,9 @@ export const inferByWKT = createCachedResolver(async (wkt) => {
     `);
 });
 
+/**
+ * Fetches place_id based solely on the provided adamlinkuri
+ */
 export const inferByAdamURI = createCachedResolver(async (adamlinkUri) => {
     return fetch(sql`
         SELECT p.id AS place_id,
