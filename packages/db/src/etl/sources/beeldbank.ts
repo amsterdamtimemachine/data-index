@@ -30,8 +30,8 @@ export class BeeldbankIngestor extends Ingestor<BeeldbankData> {
   protected RELATION_LABEL: string = 'is about';
 
   protected PLACE_EXTRACTION_METHODS: ExtractionArgs<BeeldbankData> = [
-    {method: PlaceExtractionMethod.TEXT, column: 'address'},
-    {method: PlaceExtractionMethod.TEXT, column: 'street'}
+    {method: PlaceExtractionMethod.URI, column: 'address'},
+    {method: PlaceExtractionMethod.URI, column: 'street'}
   ];
 
   protected transform(source: BeeldbankData): Draft | undefined {

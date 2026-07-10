@@ -174,7 +174,7 @@ export class PlaceIndex<SourceRecord extends Record<string, any>> {
                     break
             }
 
-            if (result) {
+            if (result && result.trim().length > 0) {
                 return result
             }
         }

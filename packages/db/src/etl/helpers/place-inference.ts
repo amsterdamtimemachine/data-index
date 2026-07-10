@@ -40,8 +40,8 @@ export const inferByName = createCachedResolver(async (key: string): Promise<str
 // TODO: could make {5} in query dynamically
 export const inferByWKT = createCachedResolver(async (wkt) => {
     return fetch(sql`
-      SELECT p.id as place_id
-      FROM place p
+      SELECT p.place_id as place_id
+      FROM place_geometry AS p
       WHERE ST_DWithin(
         p.geometry,
         ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992),

@@ -40,3 +40,10 @@ export class AmsterdamBlogsIngestor extends Ingestor<BlogData> {
         }
     }
 }
+
+const ingestor = new AmsterdamBlogsIngestor()
+
+export async function ingest(filePath:string) {
+    await ingestor.ingest(filePath)
+}
+

@@ -1,11 +1,9 @@
-import { readFileSync } from 'fs';
 import { upsertSource, createFeatureWriter, featureUuid } from '../helpers/helpers';
 import { NewFeature } from '../../schema';
-import { PlaceIndex, PlaceExtractionMethod, ExtractionArgs, DateRange } from '../helpers/place-extractor';
-import { extname } from 'path';
-import { parse } from 'csv-parse/sync';
+import { PlaceIndex, ExtractionArgs, DateRange } from '../helpers/place-extractor';
 import { createEntityFactory, EntityFactory, recordType} from '../helpers/entity-factory';
 import { EntityBase } from '@atm/shared';
+import { FileReader } from '../helpers/file-reader';
 
 export type Draft = Omit<NewFeature, 'recordType' | 'datasetId'>
 
@@ -31,6 +29,7 @@ export abstract class Ingestor<SourceRecord extends Record<string, any>> {
 
     protected pi: PlaceIndex<SourceRecord> | undefined;
     protected ef: EntityFactory<EntityBase> | undefined;
+    protected fr: FileReader<SourceRecord> | undefined;
     protected writer: any; // TODO: could do some better type-checking here. 
 
     private async upsertDatasource() {
@@ -79,40 +78,37 @@ export abstract class Ingestor<SourceRecord extends Record<string, any>> {
         return [feature, placeId]
     }
 
-    protected async ingestSourceRecords(sources: SourceRecord[]) {
-        const uuids = new Set<string>();
+    protected async ingestSourceRecords(sources: AsyncIterable<SourceRecord>) {
+        const fMap = new Map<string, Set<string>>();
 
         let skipped = 0
         let duplicates = 0
 
-        for (const source of sources) {
+        for await (const source of sources) {
             const [feature, placeId] =  await this.sourceToFeature(source)
             
-            if (!placeId || !feature) { skipped++; continue; }
-            if (uuids.has(feature.id)) { duplicates++; skipped++; continue; }
+            if (!placeId || !feature) { 
+                skipped++; continue; 
+            }
 
-            await this.writeFeature(feature, placeId)
+            if (!fMap.has(feature.id)) { 
+                this.writer.addFeature(feature)
+                fMap.set(feature.id, new Set<string>())
+            }
+            
+            if (!fMap.get(feature.id)!.has(placeId)) {
+                this.writer.addLink({ featureId: feature.id, placeId: placeId, relationId: this.RELATION_ID })
+                fMap.get(feature.id)?.add(placeId)
+            }
 
-            uuids.add(feature.id)
+            await this.writer.flushIfFull()
         }
 
         await this.writer.flush()
-        console.log(`\nDone: ${uuids.size} features, ${duplicates} duplicates found, ${skipped} skipped (no matching neighbourhood/district)`);
+        console.log(`\nDone: ${fMap.size} features, ${duplicates} duplicates found, ${skipped} skipped (no matching neighbourhood/district)`);
     }
 
-    protected readFileAsSourceRecords(filePath: string): SourceRecord[] {
-        const extension = extname(filePath);
-        const content = readFileSync(filePath, 'utf8');
 
-        switch (extension) {
-            case '.json':
-                return JSON.parse(content) as SourceRecord[]
-            case '.csv':
-                return parse(content, { columns: true, skip_empty_lines: true }) as SourceRecord[];
-            default:
-                return []
-        }
-    }
 
     public async ingest(filePath: string) {
         await this.upsertDatasource();
@@ -120,9 +116,11 @@ export abstract class Ingestor<SourceRecord extends Record<string, any>> {
         this.pi = await PlaceIndex.create(this.PLACE_EXTRACTION_METHODS)
         this.ef = createEntityFactory(this.RECORD_TYPE)
         this.writer = createFeatureWriter(this.BATCH_SIZE)
+        this.fr = new FileReader()
 
-        const sourceRecords = this.readFileAsSourceRecords(filePath)
+        const fileStream = this.fr.createFileReadStream(filePath)
+        if (!fileStream) { console.log('Failed to load & parse file to correct format.'); return; }
         
-        await this.ingestSourceRecords(sourceRecords)
+        await this.ingestSourceRecords(fileStream)
     }
 }
