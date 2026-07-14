@@ -44,6 +44,7 @@ Rather than curating or contextualising the data, the index presents sources as 
   - [First time server setup (external DB)](#first-time-server-setup-external-db)
     - [Adding staging alongside](#adding-staging-alongside)
   - [First time server setup (self-hosted)](#first-time-server-setup-self-hosted)
+    - [Adding staging alongside (self-hosted)](#adding-staging-alongside-self-hosted)
   - [CI/CD](#cicd)
   - [Deploying a new image](#deploying-a-new-image)
   - [Environment variables](#environment-variables)
@@ -408,8 +409,13 @@ bun install
 
 # Set up production env (point at the existing Postgres server)
 cp .env.example .env.prod
-# Edit .env.prod: set DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME to
-# match the production database, and set APP_PORT (defaults to 3000).
+# Edit .env.prod:
+#   ENV_FILE=../.env.prod  → the file the app container reads. Required: without
+#                            it the container falls back to ../.env, which a fresh
+#                            clone doesn't have, and compose exits with
+#                            "env file ... not found".
+#   DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME → the production database
+#   APP_PORT               → host port (defaults to 3000)
 # The app does NOT manage this server; assume it's already running and
 # reachable from the VPS.
 
@@ -441,8 +447,12 @@ docker compose --project-name data-index-prod --env-file .env.prod \
 ```bash
 cp .env.example .env.staging
 # Edit .env.staging:
-#   - DB_* → point at a staging Postgres (don't reuse production's DB)
-#   - APP_PORT=3001 (or any free port ≠ production's)
+#   ENV_FILE=../.env.staging → the file the app container reads. Without it the
+#                              container reads ../.env, so staging silently shares
+#                              PUBLIC_*, GRID_*, BIN_SIZE_* and CACHE_TTL_MINUTES
+#                              with production.
+#   DB_*                     → a staging Postgres (don't reuse production's DB)
+#   APP_PORT=3001            → any free port ≠ production's
 
 # Push schema + ingest into the staging DB
 bun --env-file=.env.staging run db:push-schema
@@ -472,15 +482,18 @@ bun install
 
 # Set up production env (defaults target the bundled DB)
 cp .env.example .env.prod
-# Edit .env.prod: change DB_PASSWORD (and DB_USER / DB_NAME if you want).
-# Leave DB_HOST=localhost (workstation CLI hits the mapped DB port; the
-# self-hosted overlay overrides DB_HOST for the app container internally).
+# Edit .env.prod:
+#   ENV_FILE=../.env.prod → the file the app container reads (see external DB above)
+#   DB_PASSWORD           → change it (and DB_USER / DB_NAME if you want)
+# Leave DB_HOST=localhost — that's the host-side CLI reaching the bundled DB on its
+# mapped port. The self-hosted overlay overrides DB_HOST to `dataindex-db` for the
+# app container, which reaches the DB over the compose network instead.
 
-# Start the bundled Postgres + PostGIS (production overlay binds it to loopback)
+# Start the bundled Postgres + PostGIS (self-hosted overlay binds it to loopback)
 docker compose --project-name data-index-prod --env-file .env.prod \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.self-hosted.yml \
-  -f docker/docker-compose.production.yml up -d dataindex-db
+  -f docker/docker-compose.production.yml up -d --wait dataindex-db
 
 # Push schema
 bun --env-file=.env.prod run db:push-schema
@@ -504,6 +517,50 @@ docker compose --project-name data-index-prod --env-file .env.prod \
   -f docker/docker-compose.production.yml up -d app
 ```
 
+#### Adding staging alongside (self-hosted)
+
+Same as above with its own env file, its own ports, and the staging overlay in place
+of production. Each deployment gets its own `pgdata` volume and its own containers,
+scoped by `--project-name`, so the two DBs never mix.
+
+```bash
+cp .env.example .env.staging
+# Edit .env.staging:
+#   ENV_FILE=../.env.staging → the file the app container reads
+#   DB_PASSWORD              → change it
+#   DB_PORT=5433             → any free port ≠ production's; this is the host-side
+#                              port only, the app still reaches the DB on 5432
+#                              inside the compose network
+#   APP_PORT=3001            → any free port ≠ production's
+# Leave DB_HOST=localhost, same as production.
+
+# Start the bundled staging DB (own volume, no collision with production's)
+docker compose --project-name data-index-staging --env-file .env.staging \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.self-hosted.yml \
+  -f docker/docker-compose.staging.yml up -d --wait dataindex-db
+
+# Push schema + ingest (host-side CLI reaches the staging DB on DB_PORT)
+bun --env-file=.env.staging run db:push-schema
+bun --env-file=.env.staging run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
+bun --env-file=.env.staging run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
+bun --env-file=.env.staging run db:ingest -s lps -f <path-to-lps.ttl>
+bun --env-file=.env.staging run db:ingest -s adressen -f <path-to-adressen.ttl>
+# …and the feature datasets, same pattern as production…
+bun --env-file=.env.staging run db:rebuild-index
+
+# Start the staging app container
+docker compose --project-name data-index-staging --env-file .env.staging \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.self-hosted.yml \
+  -f docker/docker-compose.staging.yml up -d app
+```
+
+Both deployments bind to loopback only — the app on `APP_PORT`, the bundled DB on
+`DB_PORT`. Put a reverse proxy in front to expose either publicly. The overlay order
+doesn't matter: the `-f` files only ever set what's theirs, and the DB vars are
+guarded in the base compose.
+
 ### CI/CD
 
 Two workflows publish images to GitHub Container Registry (GHCR). Both run the full test suite (inside a PostGIS service container) and only push if tests pass. Neither deploys to the server. Pulling and restarting is a manual step, which keeps the server's SSH surface private.
@@ -517,16 +574,17 @@ Use `staging` to test a build before merging to `main`: push your branch into `s
 
 ### Deploying a new image
 
-Each deployment is scoped by `--project-name` and reads its own `--env-file` so production and staging don't collide.
+Each deployment is scoped by `--project-name` and reads its own `--env-file` so production and staging don't collide. Pass the same `-f` overlays you started it with — on a self-hosted deployment that means adding `-f docker/docker-compose.self-hosted.yml`, as shown for staging below.
 
 ```bash
 ssh user@server
 cd ~/data-index
 
-# Log in to GHCR (one-time, or when token expires)
-echo $GHCR_TOKEN | docker login ghcr.io -u <github-user> --password-stdin
+# The images are public, so no docker login is needed. Only if the GHCR package is
+# ever made private:
+#   echo $GHCR_TOKEN | docker login ghcr.io -u <github-user> --password-stdin
 
-# Production
+# Production (external DB)
 docker compose --project-name data-index-prod --env-file .env.prod \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.production.yml pull app
@@ -534,20 +592,25 @@ docker compose --project-name data-index-prod --env-file .env.prod \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.production.yml up -d app
 
-# Staging
+# Staging (self-hosted — note the extra overlay, matching how it was started)
 docker compose --project-name data-index-staging --env-file .env.staging \
   -f docker/docker-compose.yml \
+  -f docker/docker-compose.self-hosted.yml \
   -f docker/docker-compose.staging.yml pull app
 docker compose --project-name data-index-staging --env-file .env.staging \
   -f docker/docker-compose.yml \
+  -f docker/docker-compose.self-hosted.yml \
   -f docker/docker-compose.staging.yml up -d app
 ```
+
+Only the `app` service is named, so `pull`/`up -d app` leaves a bundled DB running and its volume untouched.
 
 ### Environment variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `DB_HOST` | Yes | `localhost` | PostgreSQL host (use `localhost` when workstation CLI hits the self-hosted DB; use the remote host for external DB) |
+| `ENV_FILE` | No | `../.env` | Env file the app container reads, relative to `docker/`. Set it to the file's own path (e.g. `../.env.staging`) when running more than one deployment from a checkout — `--env-file` alone only drives `${...}` substitution in the compose files, so without this the container reads `../.env` |
+| `DB_HOST` | Yes | `localhost` | PostgreSQL host (use `localhost` when workstation CLI hits the self-hosted DB; use the remote host for external DB). The self-hosted overlay overrides this to `dataindex-db` for the app container |
 | `DB_PORT` | No | `5432` | PostgreSQL port |
 | `DB_USER` | Yes | `atm` | PostgreSQL user |
 | `DB_PASSWORD` | Yes | `atm_dev_password` | PostgreSQL password |

@@ -7,13 +7,19 @@
 services:
   dataindex-db:
     image: postgis/postgis:16-3.4
-    container_name: dataindex-db
+    # No container_name — a fixed name overrides compose's <project>-<service>-<n>
+    # scheme, so two stacks built on this overlay would collide on it regardless of
+    # --project-name. The app still reaches the DB at `dataindex-db`: that's the
+    # service name, resolved on the compose network, not the container name.
     environment:
       POSTGRES_USER: ${DB_USER:?DB_USER is required — copy .env.example to .env}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required — copy .env.example to .env}
       POSTGRES_DB: ${DB_NAME:?DB_NAME is required — copy .env.example to .env}
+    # Loopback only — the DB port is published for the host-side CLI (db:push-schema,
+    # db:ingest), never for anything off-box. Bare "${DB_PORT}:5432" would put
+    # Postgres on the public interface of a deployed server.
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     shm_size: 256m
     volumes:
       - pgdata:/var/lib/postgresql/data

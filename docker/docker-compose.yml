@@ -1,4 +1,6 @@
 # Base compose: application only. Assumes an external Postgres+PostGIS reachable
+# at DB_HOST. Publishes the app on all interfaces; the production and staging
+# overlays replace that with a loopback-only binding.
 
 services:
   app:
@@ -7,8 +9,24 @@ services:
       dockerfile: docker/Dockerfile.app
     ports:
       - "${APP_PORT:-3000}:3000"
+    # Defaults to ../.env. A second deployment from the same checkout points this
+    # at its own file (ENV_FILE=../.env.staging inside .env.staging) — otherwise
+    # --env-file only drives ${...} substitution here and the container would still
+    # read ../.env, silently sharing PUBLIC_*/GRID_*/BIN_SIZE_*/CACHE_TTL_MINUTES
+    # with production. Path is relative to this file's directory.
     env_file:
-      - ../.env
+      - ${ENV_FILE:-../.env}
+    # Required-var guards — fail loud if missing. They live here, not in the
+    # deployment overlays, so the self-hosted overlay can override DB_HOST for the
+    # app container whatever order the -f flags come in. Every other var
+    # (PUBLIC_*, BASE_BIN_SIZE, GRID_*, BIN_SIZE_*, CACHE_TTL_MINUTES, …) flows
+    # through via env_file above.
+    environment:
+      DB_HOST: ${DB_HOST:?DB_HOST is required — copy .env.example to .env}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER:?DB_USER is required — copy .env.example to .env}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required — copy .env.example to .env}
+      DB_NAME: ${DB_NAME:?DB_NAME is required — copy .env.example to .env}
     networks:
       - atm-network
     restart: unless-stopped
