@@ -23,7 +23,7 @@
     "test": "turbo run test",
     "test:unit": "cd packages/db && bun test src/queries/__tests__",
     "test:integration": "cd packages/db && DATABASE_URL=postgresql://test:test@localhost:5434/dataindex_test CACHE_TTL_MINUTES=0 bun test src/__tests__",
-    "test:db:up": "docker compose -f docker/docker-compose.test.yml up -d && sleep 2",
+    "test:db:up": "docker compose -f docker/docker-compose.test.yml up -d --build --wait",
     "test:db:down": "docker compose -f docker/docker-compose.test.yml down -v",
     "docker:db:up": "docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.self-hosted.yml up -d dataindex-db",
     "docker:db:down": "docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.self-hosted.yml down",

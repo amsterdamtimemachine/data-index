@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { CELL_SIZE_METERS } from '@atm/shared';
 import { db } from '../../client';
 import { placeGeometry, features, featureToPlace, placeCells, gridConfig } from '../../schema';
+import { buildCellFeatures } from './build-cell-features';
 
 type BBoxRow = {
   min_x: number;
@@ -245,6 +246,9 @@ export async function rebuildIndex() {
       }
     });
   console.log('  ✅ Grid config updated');
+
+  // Depends on place_cells, so it has to come after the rasterisation above.
+  await buildCellFeatures();
 
   console.log(`\n=== Summary ===`);
   console.log(`  Features:         ${total}`);
