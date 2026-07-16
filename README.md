@@ -41,10 +41,10 @@ Rather than curating or contextualising the data, the index presents sources as 
   - [Database UI](#database-ui)
   - [Testing](#testing)
 - [Production](#production)
-  - [First time server setup (external DB)](#first-time-server-setup-external-db)
-    - [Adding staging alongside](#adding-staging-alongside)
-  - [First time server setup (self-hosted)](#first-time-server-setup-self-hosted)
-    - [Adding staging alongside (self-hosted)](#adding-staging-alongside-self-hosted)
+  - [Run the ETL from the image, not from your checkout](#run-the-etl-from-the-image-not-from-your-checkout)
+  - [One clone per deployment](#one-clone-per-deployment)
+  - [First time server setup](#first-time-server-setup)
+  - [Adding a second deployment on the same host](#adding-a-second-deployment-on-the-same-host)
   - [CI/CD](#cicd)
   - [Deploying a new image](#deploying-a-new-image)
   - [Environment variables](#environment-variables)
@@ -393,173 +393,119 @@ bun run test:db:down   # stop and wipe the test DB
 
 ## Production
 
-The app needs a PostgreSQL + PostGIS database. In production there is **External DB** mode where Data index connects to an existing DB, and **self-hosted** mode where a Postgres container is bundled alongside the app container.
+The app always runs from a prebuilt image on GHCR — `:production` is built from `main`,
+`:staging` from `staging`. The database is either **self-hosted** (a Postgres container
+bundled alongside the app) or **external** (an existing server the app connects to).
+Those choices are independent per deployment: you can self-host staging and point
+production at a managed Postgres, or self-host both.
 
-### First time server setup (external DB)
+### Run the ETL from the image, not from your checkout
+
+The app's code comes from the image, but the schema and ETL are code too — and running
+them from a checkout means they can disagree with the image they're preparing a database
+for. Run them from the image instead:
+
+```bash
+$DC run --rm app bun run db:push-schema
+$DC run --rm -v /srv/atm-data:/data:ro app bun run db:ingest -s streets -f /data/adamlinkstraten.ttl
+```
+
+Same scripts, executed inside the container. Because they ship in the same image as the
+app, the schema, the ingestors and the app can never drift apart. It also means the
+server needs no Bun, no `bun install`, no `node_modules` and no build step — the checkout
+exists only to hold the compose files and `.env`, and the ETL reaches the database over
+the compose network rather than the published port.
+
+### One clone per deployment
+
+Give each deployment its own clone, on the branch matching its image tag:
+
+```
+~/data-index-prod      on main      → runs image :production
+~/data-index-staging   on staging   → runs image :staging
+```
+
+The branch only decides which compose files you get; all executed code comes from the
+image. So this is a one-time `git clone -b`, not a rule to remember before each command.
+
+Each clone has its own `.env`, which both Compose and Bun find by default. Deployments
+share nothing — separate volumes, container names and ports — so this is the same method
+whether they live on separate servers or on one host.
+
+### First time server setup
+
+Shown for staging with a self-hosted DB. For production, clone `main`, swap in
+`docker-compose.production.yml`, and use the default ports. For an external DB, drop the
+`self-hosted.yml` overlay and point `DB_*` at the existing server.
 
 ```bash
 ssh user@server
 
-# Install Bun
-curl -fsSL https://bun.sh/install | bash
+# Docker Engine (not Docker Desktop) + compose plugin. Needs compose >= 2.24.
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER      # log out and back in
+docker compose version
 
-# Clone repo
-git clone git@github.com:amsterdamtimemachine/data-index.git ~/data-index && cd ~/data-index
-bun install
+# Clone the branch this deployment serves. No bun install, no build — see above.
+git clone -b staging git@github.com:amsterdamtimemachine/data-index.git ~/data-index-staging
+cd ~/data-index-staging
 
-# Set up production env (point at the existing Postgres server)
-cp .env.example .env.prod
-# Edit .env.prod:
-#   ENV_FILE=../.env.prod  → the file the app container reads. Required: without
-#                            it the container falls back to ../.env, which a fresh
-#                            clone doesn't have, and compose exits with
-#                            "env file ... not found".
-#   DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME → the production database
-#   APP_PORT               → host port (defaults to 3000)
-# The app does NOT manage this server; assume it's already running and
-# reachable from the VPS.
+cp .env.example .env
+# Edit .env:
+#   COMPOSE_PROJECT_NAME=data-index-staging  → keeps this deployment's containers and
+#                                              volumes distinct from production's
+#   DB_PASSWORD                              → change it. No '#' in the value.
+#   APP_PORT=3001  DB_PORT=5433              → only needed if another deployment shares
+#                                              the host. DB_PORT is the host-side port
+#                                              only; the app and ETL reach the DB on 5432
+#                                              over the compose network regardless.
+# Leave DB_HOST=localhost — the self-hosted overlay overrides it to `dataindex-db` for
+# containers. It only applies to a psql client on the host.
 
-# Push schema into the existing DB (uses .env.prod via Bun's --env-file flag)
-bun --env-file=.env.prod run db:push-schema
-
-# Ingest place data (same env file)
-bun --env-file=.env.prod run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
-bun --env-file=.env.prod run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
-bun --env-file=.env.prod run db:ingest -s lps -f <path-to-lps.ttl>
-bun --env-file=.env.prod run db:ingest -s adressen -f <path-to-adressen.ttl>
-
-# Ingest feature datasets
-bun --env-file=.env.prod run db:ingest -s beeldbank -f <path-to-beeldbank.csv>
-bun --env-file=.env.prod run db:ingest -s joods-monument -f <path-to-results_jm.csv>
-bun --env-file=.env.prod run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
-bun --env-file=.env.prod run db:rebuild-index
-
-# Start the app (connects to the external DB defined in .env.prod)
-docker compose --project-name data-index-prod --env-file .env.prod \
-  -f docker/docker-compose.yml \
-  -f docker/docker-compose.production.yml up -d app
-```
-
-`--project-name data-index-prod` is necessary if you're running a staging deployment alongside. See below.
-
-#### Adding staging alongside
-
-```bash
-cp .env.example .env.staging
-# Edit .env.staging:
-#   ENV_FILE=../.env.staging → the file the app container reads. Without it the
-#                              container reads ../.env, so staging silently shares
-#                              PUBLIC_*, GRID_*, BIN_SIZE_* and CACHE_TTL_MINUTES
-#                              with production.
-#   DB_*                     → a staging Postgres (don't reuse production's DB)
-#   APP_PORT=3001            → any free port ≠ production's
-
-# Push schema + ingest into the staging DB
-bun --env-file=.env.staging run db:push-schema
-bun --env-file=.env.staging run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
-bun --env-file=.env.staging run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
-bun --env-file=.env.staging run db:ingest -s lps -f <path-to-lps.ttl>
-# …and the other datasets, same pattern as production…
-bun --env-file=.env.staging run db:rebuild-index
-
-# Start the staging container alongside production
-docker compose --project-name data-index-staging --env-file .env.staging \
-  -f docker/docker-compose.yml \
-  -f docker/docker-compose.staging.yml up -d app
-```
-
-### First time server setup (self-hosted)
-
-```bash
-ssh user@server
-
-# Install Bun
-curl -fsSL https://bun.sh/install | bash
-
-# Clone repo
-git clone git@github.com:amsterdamtimemachine/data-index.git ~/data-index && cd ~/data-index
-bun install
-
-# Set up production env (defaults target the bundled DB)
-cp .env.example .env.prod
-# Edit .env.prod:
-#   ENV_FILE=../.env.prod → the file the app container reads (see external DB above)
-#   DB_PASSWORD           → change it (and DB_USER / DB_NAME if you want)
-# Leave DB_HOST=localhost — that's the host-side CLI reaching the bundled DB on its
-# mapped port. The self-hosted overlay overrides DB_HOST to `dataindex-db` for the
-# app container, which reaches the DB over the compose network instead.
-
-# Start the bundled Postgres + PostGIS (self-hosted overlay binds it to loopback)
-docker compose --project-name data-index-prod --env-file .env.prod \
+export DC="docker compose --env-file .env \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.self-hosted.yml \
-  -f docker/docker-compose.production.yml up -d --wait dataindex-db
+  -f docker/docker-compose.staging.yml"
 
-# Push schema
-bun --env-file=.env.prod run db:push-schema
+# Bundled Postgres + PostGIS, bound to loopback. --wait blocks until healthy.
+$DC up -d --wait dataindex-db
 
-# Ingest place data
-bun --env-file=.env.prod run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
-bun --env-file=.env.prod run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
-bun --env-file=.env.prod run db:ingest -s lps -f <path-to-lps.ttl>
-bun --env-file=.env.prod run db:ingest -s adressen -f <path-to-adressen.ttl>
+$DC run --rm app bun run db:push-schema
 
-# Ingest feature datasets
-bun --env-file=.env.prod run db:ingest -s beeldbank -f <path-to-beeldbank.csv>
-bun --env-file=.env.prod run db:ingest -s joods-monument -f <path-to-results_jm.csv>
-bun --env-file=.env.prod run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
-bun --env-file=.env.prod run db:rebuild-index
+# Place data first — a feature that resolves to no place is dropped silently, so the
+# wrong order yields an empty index rather than an error. DATA is the host directory
+# holding the source files; it is mounted read-only at /data inside the container.
+export DATA=/srv/atm-data
+alias etl="$DC run --rm -v $DATA:/data:ro app bun run db:ingest"
 
-# Start the app container alongside the DB
-docker compose --project-name data-index-prod --env-file .env.prod \
-  -f docker/docker-compose.yml \
-  -f docker/docker-compose.self-hosted.yml \
-  -f docker/docker-compose.production.yml up -d app
+etl -s neighbourhoods-and-districts -f /data/adamlinkbuurten.ttl
+etl -s streets  -f /data/adamlinkstraten.ttl
+etl -s lps      -f /data/lps.ttl
+etl -s adressen -f /data/adressen.ttl
+
+etl -s beeldbank      -f /data/beeldbank.csv
+etl -s joods-monument -f /data/results_jm.csv
+etl -s delpher        -f /data/delpher_newspapers.csv
+
+$DC run --rm app bun run db:rebuild-index
+
+$DC up -d app
 ```
 
-#### Adding staging alongside (self-hosted)
+Run the ingest inside `tmux` or `screen` — beeldbank is multi-GB and a dropped SSH
+session would kill it partway.
 
-Same as above with its own env file, its own ports, and the staging overlay in place
-of production. Each deployment gets its own `pgdata` volume and its own containers,
-scoped by `--project-name`, so the two DBs never mix.
+Both the app and the bundled DB bind to loopback only, so nothing is reachable until you
+put a reverse proxy in front of `127.0.0.1:$APP_PORT`.
 
-```bash
-cp .env.example .env.staging
-# Edit .env.staging:
-#   ENV_FILE=../.env.staging → the file the app container reads
-#   DB_PASSWORD              → change it
-#   DB_PORT=5433             → any free port ≠ production's; this is the host-side
-#                              port only, the app still reaches the DB on 5432
-#                              inside the compose network
-#   APP_PORT=3001            → any free port ≠ production's
-# Leave DB_HOST=localhost, same as production.
+### Adding a second deployment on the same host
 
-# Start the bundled staging DB (own volume, no collision with production's)
-docker compose --project-name data-index-staging --env-file .env.staging \
-  -f docker/docker-compose.yml \
-  -f docker/docker-compose.self-hosted.yml \
-  -f docker/docker-compose.staging.yml up -d --wait dataindex-db
+Repeat the section above in a second clone: the other branch, its own `.env` with a
+different `COMPOSE_PROJECT_NAME` and free `APP_PORT` / `DB_PORT`, and `production.yml` in
+place of `staging.yml`. Nothing is shared, so the order you set them up in doesn't matter.
 
-# Push schema + ingest (host-side CLI reaches the staging DB on DB_PORT)
-bun --env-file=.env.staging run db:push-schema
-bun --env-file=.env.staging run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
-bun --env-file=.env.staging run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
-bun --env-file=.env.staging run db:ingest -s lps -f <path-to-lps.ttl>
-bun --env-file=.env.staging run db:ingest -s adressen -f <path-to-adressen.ttl>
-# …and the feature datasets, same pattern as production…
-bun --env-file=.env.staging run db:rebuild-index
-
-# Start the staging app container
-docker compose --project-name data-index-staging --env-file .env.staging \
-  -f docker/docker-compose.yml \
-  -f docker/docker-compose.self-hosted.yml \
-  -f docker/docker-compose.staging.yml up -d app
-```
-
-Both deployments bind to loopback only — the app on `APP_PORT`, the bundled DB on
-`DB_PORT`. Put a reverse proxy in front to expose either publicly. The overlay order
-doesn't matter: the `-f` files only ever set what's theirs, and the DB vars are
-guarded in the base compose.
+The overlay order on the `-f` flags doesn't matter either — each file only sets what is
+genuinely its own, and the required DB vars are guarded in the base compose.
 
 ### CI/CD
 
@@ -574,33 +520,33 @@ Use `staging` to test a build before merging to `main`: push your branch into `s
 
 ### Deploying a new image
 
-Each deployment is scoped by `--project-name` and reads its own `--env-file` so production and staging don't collide. Pass the same `-f` overlays you started it with — on a self-hosted deployment that means adding `-f docker/docker-compose.self-hosted.yml`, as shown for staging below.
+Run this from the deployment's own clone, with the same `-f` overlays you started it with. `COMPOSE_PROJECT_NAME` in that clone's `.env` keeps it pointed at its own containers.
 
 ```bash
 ssh user@server
-cd ~/data-index
+cd ~/data-index-staging
 
 # The images are public, so no docker login is needed. Only if the GHCR package is
 # ever made private:
 #   echo $GHCR_TOKEN | docker login ghcr.io -u <github-user> --password-stdin
 
-# Production (external DB)
-docker compose --project-name data-index-prod --env-file .env.prod \
+export DC="docker compose --env-file .env \
   -f docker/docker-compose.yml \
-  -f docker/docker-compose.production.yml pull app
-docker compose --project-name data-index-prod --env-file .env.prod \
-  -f docker/docker-compose.yml \
-  -f docker/docker-compose.production.yml up -d app
+  -f docker/docker-compose.self-hosted.yml \
+  -f docker/docker-compose.staging.yml"
 
-# Staging (self-hosted — note the extra overlay, matching how it was started)
-docker compose --project-name data-index-staging --env-file .env.staging \
-  -f docker/docker-compose.yml \
-  -f docker/docker-compose.self-hosted.yml \
-  -f docker/docker-compose.staging.yml pull app
-docker compose --project-name data-index-staging --env-file .env.staging \
-  -f docker/docker-compose.yml \
-  -f docker/docker-compose.self-hosted.yml \
-  -f docker/docker-compose.staging.yml up -d app
+$DC pull app
+$DC up -d app
+```
+
+Naming only `app` leaves a bundled database running and its volume untouched.
+
+If the new image changes the schema or the ingestors, re-run them from the image you just pulled — never from the checkout:
+
+```bash
+$DC run --rm app bun run db:push-schema
+$DC run --rm -v $DATA:/data:ro app bun run db:ingest -s <source> -f /data/<file>
+$DC run --rm app bun run db:rebuild-index
 ```
 
 Only the `app` service is named, so `pull`/`up -d app` leaves a bundled DB running and its volume untouched.
@@ -609,7 +555,7 @@ Only the `app` service is named, so `pull`/`up -d app` leaves a bundled DB runni
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `ENV_FILE` | No | `../.env` | Env file the app container reads, relative to `docker/`. Set it to the file's own path (e.g. `../.env.staging`) when running more than one deployment from a checkout — `--env-file` alone only drives `${...}` substitution in the compose files, so without this the container reads `../.env` |
+| `COMPOSE_PROJECT_NAME` | No | `docker` | Names this deployment's containers, network and volumes. Compose otherwise derives it from `docker/`, so two deployments on one host would collide — set a distinct value per deployment |
 | `DB_HOST` | Yes | `localhost` | PostgreSQL host (use `localhost` when workstation CLI hits the self-hosted DB; use the remote host for external DB). The self-hosted overlay overrides this to `dataindex-db` for the app container |
 | `DB_PORT` | No | `5432` | PostgreSQL port |
 | `DB_USER` | Yes | `atm` | PostgreSQL user |

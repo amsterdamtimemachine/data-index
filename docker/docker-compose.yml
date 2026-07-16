@@ -9,13 +9,11 @@ services:
       dockerfile: docker/Dockerfile.app
     ports:
       - "${APP_PORT:-3000}:3000"
-    # Defaults to ../.env. A second deployment from the same checkout points this
-    # at its own file (ENV_FILE=../.env.staging inside .env.staging) — otherwise
-    # --env-file only drives ${...} substitution here and the container would still
-    # read ../.env, silently sharing PUBLIC_*/GRID_*/BIN_SIZE_*/CACHE_TTL_MINUTES
-    # with production. Path is relative to this file's directory.
+    # Each deployment gets its own checkout and its own ../.env — see the README's
+    # "one clone per deployment". Note --env-file only drives ${...} substitution
+    # below; the container's env comes from this path.
     env_file:
-      - ${ENV_FILE:-../.env}
+      - ../.env
     # Required-var guards — fail loud if missing. They live here, not in the
     # deployment overlays, so the self-hosted overlay can override DB_HOST for the
     # app container whatever order the -f flags come in. Every other var
