@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { CELL_SIZE_METERS } from '@atm/shared';
+import { CELL_SIZE_METERS, BASE_BIN_SIZE } from '@atm/shared';
 import { db } from '../../client';
 import { placeGeometry, features, featureToPlace, placeCells, gridConfig } from '../../schema';
 import { buildCellFeatures } from './build-cell-features';
@@ -121,12 +121,11 @@ export async function rebuildIndex() {
   console.log(`  ✅ ${spatialResult.rowCount} places updated`);
 
   // Update temporal frequency on features (number of base time bins each feature spans)
-  const baseBinSize = parseInt(process.env.BASE_BIN_SIZE || '10', 10) || 10;
-  console.log(`\nUpdating temporal frequency (base bin: ${baseBinSize} years)...`);
+  console.log(`\nUpdating temporal frequency (base bin: ${BASE_BIN_SIZE} years)...`);
   const temporalResult = await db.execute(sql`
     UPDATE ${features} f
     SET temporal_frequency = GREATEST(1, CEIL(
-      (EXTRACT(YEAR FROM f.end_date) - EXTRACT(YEAR FROM f.start_date)) / ${baseBinSize}
+      (EXTRACT(YEAR FROM f.end_date) - EXTRACT(YEAR FROM f.start_date)) / ${BASE_BIN_SIZE}
     ))
     WHERE f.start_date IS NOT NULL AND f.end_date IS NOT NULL
   `);

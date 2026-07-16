@@ -609,7 +609,7 @@ Only the `app` service is named, so `pull`/`up -d app` leaves a bundled DB runni
 | `PUBLIC_DEFAULT_CELL` | No | - | Default cell to select on load |
 | `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |
 | `PUBLIC_EXACT_CELLS` | No | `false` | Reproject heatmap cells to their exact RD footprint via proj4 (removes the ~0.4° skew); default draws axis-aligned rectangles |
-| `BASE_BIN_SIZE` | No | `10` | Base time bin size (years) |
+| `BASE_BIN_SIZE` | No | `10` | Base time bin size (years). Shapes the `cell_features` buckets, so changing it requires a `db:rebuild-index` — the queries would otherwise fold base bins at the new width against buckets stored at the old one. Also caps time granularity: a requested `binSize` is rounded down to a multiple of this |
 | `CELL_SIZE_METERS` | No | `100` | Base spatial cell size (meters) |
 | `GRID_DEFAULT` | No | `75` | Default heatmap grid width (columns); rows are derived from the data's aspect ratio so cells are square |
 | `GRID_MIN` / `GRID_MAX` | No | `10` / `200` | Grid width (column count) bounds |
