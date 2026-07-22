@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import type { Histogram, HistogramBin, RecordType, PlaceType } from '@atm/shared';
-import { DEFAULT_BIN_SIZE, normaliseBinSize } from '@atm/shared';
+import { DEFAULT_BIN_SIZE } from '@atm/shared';
+import { normaliseBinSize } from './bin-size';
 import { db } from '../client';
 import { cellFeatures } from '../schema';
 import type { CountRow } from '../row-types';

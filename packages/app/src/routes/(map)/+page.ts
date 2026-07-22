@@ -1,15 +1,7 @@
-// (map)/+page.ts - Load metadata and validate URL params.
-//
-// Only metadata is fetched here (it's small, and it drives the filter shell and the
-// param validation). The heavy heatmap/histogram are fetched client-side by the page
+// Only metadata is fetched here. The heavy heatmap/histogram are fetched client-side by the page
 // component instead, so the shell renders immediately and they fill in — see
-// +page.svelte. Streaming them from this (universal) load is not an option: SvelteKit
-// re-runs a universal load's promises in the browser, which would run each query twice.
-//
-// Validation that only needs metadata stays here (record types, datasets, place types,
-// period format/chronology/availability). Validation that needs the resolved heatmap —
-// the deep-linked cell and the default period — moves to the component, since that data
-// now arrives client-side.
+// +page.svelte. 
+
 import type { PageLoad } from './$types';
 import type { VisualizationMetadata, RecordType, PlaceType } from '@atm/shared/types';
 import type { AppError } from '$types/error';
@@ -38,16 +30,13 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	const cellParam = url.searchParams.get('cell');
 	const periodParam = url.searchParams.get('period');
 
-	// The filter params, forwarded raw. The component fetches heatmap/histogram with
-	// these; an unknown value matches nothing server-side, so no cleaning is needed
-	// (an all-invalid filter shows an empty map plus the warning emitted below).
 	const filterParams = new URLSearchParams();
 	if (recordTypesParam) filterParams.set('recordTypes', recordTypesParam);
 	if (datasetsParam) filterParams.set('datasets', datasetsParam);
 	if (placeTypesParam) filterParams.set('placeTypes', placeTypesParam);
 	const filterQuery = filterParams.toString();
 
-	// Fetch metadata (awaited — small, and everything below needs it).
+	// Fetch metadata 
 	let metadata: VisualizationMetadata | null = null;
 	try {
 		const response = await fetch('/api/metadata');

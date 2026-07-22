@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import type { Heatmap, HeatmapTimeline, HeatmapResponse, HeatmapDimensions, HeatmapResolutionConfig, RecordType, PlaceType } from '@atm/shared';
-import { DEFAULT_BIN_SIZE, CELL_SIZE_METERS, normaliseBinSize } from '@atm/shared';
+import { DEFAULT_BIN_SIZE, CELL_SIZE_METERS } from '@atm/shared';
+import { normaliseBinSize } from './bin-size';
 import { db } from '../client';
 import { cellFeatures } from '../schema';
 import { computeTimeSlices } from './time-slices';

@@ -15,19 +15,3 @@ export const BIN_SIZE_MAX = parseInt(process.env.BIN_SIZE_MAX || '100', 10) || 1
 // counts go quietly wrong (an *increase* still happens to work, since the old bins nest
 // inside the new; a decrease cannot, as a bucket can't be split back apart).
 export const BASE_BIN_SIZE = parseInt(process.env.BASE_BIN_SIZE || '10', 10) || 10;
-
-/**
- * Snap a requested bin size to the display grid cell_features can answer exactly:
- * clamped to [BIN_SIZE_MIN, BIN_SIZE_MAX] and rounded down to a multiple of
- * BASE_BIN_SIZE.
- *
- * A base bin is indivisible — a feature is recorded against the whole decade it
- * touches, so a 25-year display bin would have to split one, and the counts would
- * be silently wrong rather than merely coarse. Rounding is safe because
- * generateTimeSlices already anchors slice starts to multiples of the bin size.
- */
-export function normaliseBinSize(binSize: number): number {
-  const clamped = Math.min(Math.max(binSize, BIN_SIZE_MIN), BIN_SIZE_MAX);
-  const snapped = Math.floor(clamped / BASE_BIN_SIZE) * BASE_BIN_SIZE;
-  return Math.max(snapped, BASE_BIN_SIZE);
-}
