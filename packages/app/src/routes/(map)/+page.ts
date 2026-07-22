@@ -1,9 +1,10 @@
-// Only metadata is fetched here. The heavy heatmap/histogram are fetched client-side by the page
-// component instead, so the shell renders immediately and they fill in — see
-// +page.svelte. 
+// Validates the URL's filter/period params against metadata and shapes the initial UI
+// state. Metadata itself comes from the layout load (fetched once, reused across filter
+// navigations); the heavy heatmap/histogram are fetched client-side by the page component
+// so the shell renders immediately — see +layout.ts and +page.svelte.
 
 import type { PageLoad } from './$types';
-import type { VisualizationMetadata, RecordType, PlaceType } from '@atm/shared/types';
+import type { RecordType, PlaceType } from '@atm/shared/types';
 import type { AppError } from '$types/error';
 import { createPageErrorData, createError, createValidationError, createPeriodNotFoundError } from '$utils/error';
 import { translateAll } from '$utils/translations';
@@ -18,8 +19,9 @@ function isChronologicallyValid(period: string): boolean {
 	return start < end;
 }
 
-export const load: PageLoad = async ({ fetch, url }) => {
-	const errors: AppError[] = [];
+export const load: PageLoad = async ({ url, parent }) => {
+	const { metadata, metadataErrors } = await parent();
+	const errors: AppError[] = [...metadataErrors];
 
 	// Parse URL parameters
 	const recordTypesParam = url.searchParams.get('recordTypes');
@@ -35,32 +37,6 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	if (datasetsParam) filterParams.set('datasets', datasetsParam);
 	if (placeTypesParam) filterParams.set('placeTypes', placeTypesParam);
 	const filterQuery = filterParams.toString();
-
-	// Fetch metadata 
-	let metadata: VisualizationMetadata | null = null;
-	try {
-		const response = await fetch('/api/metadata');
-		if (!response.ok) {
-			errors.push(
-				createError('error', 'API Request Failed', `Failed to fetch metadata: HTTP ${response.status}`, {
-					status: response.status,
-					statusText: response.statusText
-				})
-			);
-		} else {
-			metadata = (await response.json()) as VisualizationMetadata;
-		}
-	} catch (err) {
-		console.error('❌ Failed to load metadata:', err);
-		errors.push(
-			createError(
-				'error',
-				'Metadata Load Failed',
-				'Could not load visualization metadata. Please ensure the server is running and the binary file is available.',
-				{ error: err instanceof Error ? err.message : 'Unknown error', timestamp: new Date().toISOString() }
-			)
-		);
-	}
 
 	// Determine recordTypes to use for UI state
 	let currentRecordTypes: RecordType[] = [];
@@ -176,7 +152,6 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	}
 
 	return {
-		metadata,
 		filterQuery,
 		cellParam,
 		currentRecordTypes,
