@@ -1,10 +1,11 @@
 <!-- (map)/+page.svelte -->
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { tick } from 'svelte';
 	import { onNavigate, afterNavigate } from '$app/navigation';
 	import { goto } from '$app/navigation';
 	import { createStateController } from '$state/StateController.svelte';
-	import { createPageErrorData } from '$utils/error';
+	import { createPageErrorData, createError, createValidationError } from '$utils/error';
+	import { validateCellId } from '$utils/utils';
 	import { translateAll, reverseTranslateAll } from '$utils/translations';
 	import { loadingState } from '$lib/state/loadingState.svelte';
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
@@ -25,20 +26,29 @@
 	import Nav from '$components/Nav.svelte';
 	import NavItem from '$components/NavItem.svelte';
 	import type { PageData } from './$types';
-import type { Histogram, HeatmapTimeline } from '@atm/shared/types';
+import type { Histogram, HeatmapTimeline, HeatmapDimensions, HeatmapResponse } from '@atm/shared/types';
+import type { AppError } from '$types/error';
 import { env } from '$env/dynamic/public';
 import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 
 	let { data }: { data: PageData } = $props();
 
-	// Derived data from server
-	let dimensions = $derived(data?.heatmapDimensions);
+	// Heatmap and histogram are fetched client-side (see the effects below) rather than
+	// in the loader, so the page shell renders without waiting on them. They start null
+	// and populate when the fetch resolves; the template already guards on them.
+	let heatmapTimeline = $state<HeatmapTimeline | null>(null);
+	let dimensions = $state<HeatmapDimensions | null>(null);
+	let histogram = $state<Histogram | null>(null);
+	// Errors from the client-side fetches and the deep-link validation that depends on
+	// them — the loader's errorData can't carry these since they happen after it returns.
+	let clientErrors = $state<AppError[]>([]);
+
+	// Derived data from server (metadata is loaded and validated in +page.ts)
 	let recordTypes = $derived(data?.metadata?.recordTypes || []);
 	let tags = $derived(data?.metadata?.tags);
 	// Tags feature is not yet exposed; no tag data is fetched, so this falls back to
 	// the tag vocabulary metadata already carries.
 	let availableTagNames = $derived(data?.metadata?.tags || []);
-	let heatmapTimeline = $derived(data?.heatmapTimeline as HeatmapTimeline | null);
 
 	let currentRecordTypes = $derived(data?.currentRecordTypes || []);
 	let placeTypes = $derived(data?.metadata?.placeTypes || []);
@@ -47,10 +57,7 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 	let currentDatasets = $derived(data?.currentDatasets || []);
 	let currentTags = $derived(data?.currentTags || []);
 	let currentTagOperator = $derived(data?.currentTagOperator || 'OR');
-	let validatedCell = $derived(data?.validatedCell);
-	let validatedCellBounds = $derived(data?.cellBounds);
 	let validatedPeriod = $derived(data?.validatedPeriod);
-	let histogram = $derived(data?.histogram as Histogram | null);
 
 	// Translated content types for UI display
 	let translatedRecordTypes = $derived(recordTypes ? translateAll(recordTypes) : []);
@@ -78,11 +85,12 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 	const TAGS_FEATURE_READY = false;
 	
 
-	// Combine server errors with controller errors for ErrorHandler
+	// Combine server errors (metadata + param validation), client fetch/validation errors,
+	// and controller errors for ErrorHandler
 	let allErrors = $derived.by(() => {
 		const serverErrors = data.errorData?.errors || [];
 		const controllerErrors = controller.errors || [];
-		return createPageErrorData([...serverErrors, ...controllerErrors]);
+		return createPageErrorData([...serverErrors, ...clientErrors, ...controllerErrors]);
 	});
 
 	// Heatmap for current time period - directly from API (DB handles merging)
@@ -91,40 +99,118 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 	);
 
 
-	onMount(() => {
-		// Initialize controller with server-validated period
-		const initialPeriod = validatedPeriod || '';
-		controller.initialize(initialPeriod);
+	function getLastAvailablePeriod(timeline: HeatmapTimeline | null): string {
+		if (!timeline) return '';
+		const periods = Object.keys(timeline);
+		return periods.length > 0 ? periods[periods.length - 1] : '';
+	}
 
-		// Handle server-validated cell from URL parameter
+	// One-time setup, run when the heatmap first arrives (not onMount — the data is now
+	// fetched client-side and isn't ready at mount). The guard keeps it to the first load;
+	// later filter-change fetches just refresh the data through the reactive state above.
+	let hasInitialized = false;
+	function initializeFromHeatmap() {
+		if (hasInitialized || !dimensions || !heatmapTimeline) return;
+		hasInitialized = true;
+
+		// Period: the server-validated URL param, else the most recent loaded slice.
+		controller.initialize(validatedPeriod || getLastAvailablePeriod(heatmapTimeline));
+
 		tick().then(() => {
-			if (validatedCell && validatedCellBounds) {
-				// Use server-validated cell data
-				controller.selectCell(validatedCell, validatedCellBounds);
+			// Validate the deep-linked cell against the now-available dimensions (this used
+			// to be done in the loader, but dimensions arrive client-side now).
+			if (data.cellParam && dimensions) {
+				const validation = validateCellId(data.cellParam, dimensions);
+				if (validation.isValid) {
+					const bounds = getCellBoundsFromCellId(data.cellParam, dimensions);
+					if (bounds) controller.selectCell(data.cellParam, bounds);
+				} else {
+					clientErrors = [
+						...clientErrors,
+						createValidationError('cell', data.cellParam, validation.error || `Cell "${data.cellParam}" not found. Please select a valid cell from the map.`)
+					];
+				}
 			}
 
 			// Set URL defaults if no parameters exist
 			const hasUrlParams = window.location.search.length > 0;
 			if (!hasUrlParams && heatmapTimeline && recordTypes.length > 0) {
-				// Get the actual last period from raw dataset (not filtered data)
-				const allPeriods = Object.keys(heatmapTimeline);
-				const lastPeriod = allPeriods.length > 0 ? allPeriods[allPeriods.length - 1] : '';
+				const lastPeriod = getLastAvailablePeriod(heatmapTimeline);
 				const defaultRecordTypes = currentRecordTypes.length > 0 ? currentRecordTypes : recordTypes;
-				
+
 				if (lastPeriod && defaultRecordTypes.length > 0) {
 					controller.syncUrlParameters(lastPeriod, currentTagOperator, defaultRecordTypes);
 
-					// Set default cell selection
 					if (env.PUBLIC_DEFAULT_CELL && dimensions) {
-						// Calculate bounds on-demand from dimensions
 						const bounds = getCellBoundsFromCellId(env.PUBLIC_DEFAULT_CELL, dimensions);
-						if (bounds) {
-							controller.selectCell(env.PUBLIC_DEFAULT_CELL, bounds);
-						}
+						if (bounds) controller.selectCell(env.PUBLIC_DEFAULT_CELL, bounds);
 					}
 				}
 			}
 		});
+	}
+
+	// Fetch heatmap + histogram on the client, re-fetching when the filters change. They
+	// go through the raw filter query the loader forwarded (an all-invalid filter yields
+	// an empty map, matching the loader's warning). Each fetch cancels a superseded one so
+	// a slow earlier response can't overwrite a newer filter's data.
+	$effect(() => {
+		const qs = data.filterQuery ? `?${data.filterQuery}` : '';
+		let cancelled = false;
+		loadingState.startLoading();
+
+		fetch(`/api/heatmaps${qs}`)
+			.then((r) => (r.ok ? (r.json() as Promise<HeatmapResponse>) : Promise.reject(r)))
+			.then((res) => {
+				if (cancelled) return;
+				heatmapTimeline = res.timeline;
+				dimensions = res.dimensions;
+				initializeFromHeatmap();
+			})
+			.catch(() => {
+				if (cancelled) return;
+				clientErrors = [
+					...clientErrors,
+					createError('warning', 'Heatmap Load Error', 'Could not load heatmap. Spatial visualization may be limited.', {
+						recordTypes: currentRecordTypes
+					})
+				];
+			})
+			.finally(() => loadingState.stopLoading());
+
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	$effect(() => {
+		const qs = data.filterQuery ? `?${data.filterQuery}` : '';
+		let cancelled = false;
+
+		fetch(`/api/histogram${qs}`)
+			.then((r) => (r.ok ? (r.json() as Promise<Histogram>) : Promise.reject(r)))
+			.then((res) => {
+				if (!cancelled) histogram = res;
+			})
+			.catch(() => {
+				if (cancelled) return;
+				clientErrors = [
+					...clientErrors,
+					createError('warning', 'Histogram Load Error', 'Could not load histogram. Temporal data may be limited.', {
+						recordTypes: currentRecordTypes
+					})
+				];
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	// A filter change reloads the page data (new errorData); drop the previous load's
+	// client-side errors so they don't accumulate across navigations.
+	afterNavigate(() => {
+		clientErrors = [];
 	});
 
 

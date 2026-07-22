@@ -7,19 +7,24 @@ type BuildStatsRow = { buckets: string; bytes: string };
 type UncoveredRow = { uncovered: string };
 
 /**
- * Rebuild cell_features: which features occupy each cell + base time bin + category.
+ * Precomputes the data behind the map's heatmap and histogram so both stay fast and
+ * exact at any zoom or filter, doing their spatial/temporal aggregation at ingest time
+ * rather than per request.
  *
- * This runs the join the heatmap and histogram used to do per request — features ×
- * their places' cells × the base bins their date range touches — once, and stores
- * each bucket's feature set as a roaring bitmap. Requests then filter buckets and
- * union the bitmaps, which dedupes, so rolling base cells up into any display grid
- * stays an exact distinct count.
+ * Rebuilds cell_features — the precomputed index the heatmap and histogram queries read.
  *
- * The surrogate is the reason this works at all: roaringbitmap stores int4 and
- * features.id is a 128-bit uuid, so ids are renumbered 1..N for the build. The
- * mapping is deliberately thrown away — every consumer reads cardinality, never
- * identity. Any future bitmap that must intersect with these (e.g. per-tag sets)
- * has to be built in the same pass off the same numbering, or the ids won't line up.
+ * Each feature is exploded across its places' 100m cells and the base time bins its
+ * date range spans, then grouped into buckets keyed by
+ * (cell, bin, record_type, dataset, place_type). Each bucket stores the set of features
+ * in it as a roaring bitmap, so a query unions the bitmaps of the buckets it selects —
+ * union deduplicates, letting base cells roll up into any display grid as an exact
+ * distinct count.
+ *
+ * Roaring bitmaps hold int4, but features.id is a uuid, so the build assigns each
+ * feature a dense integer (row_number, 1..N) and packs those instead. That numbering is
+ * scoped to this run and discarded — only cardinality is read back, never a feature's
+ * identity. (A future bitmap that must intersect with these, e.g. per-tag sets, would
+ * have to be built in the same pass off the same numbering.)
  */
 export async function buildCellFeatures() {
   console.log(`\nRebuilding cell_features (base bin: ${BASE_BIN_SIZE} years)...`);
