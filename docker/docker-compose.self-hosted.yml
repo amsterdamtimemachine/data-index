@@ -6,7 +6,13 @@
 #     -f docker/docker-compose.self-hosted.yml up
 services:
   dataindex-db:
-    image: postgis/postgis:16-3.4
+    # Postgres + PostGIS + pg_roaringbitmap. Not the stock postgis image: the schema
+    # declares a roaringbitmap column (cell_features), so db:push-schema cannot create
+    # the table without the type. An external DB needs the extension installed too.
+    image: ghcr.io/amsterdamtimemachine/data-index/db:16-3.4
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.db
     # No container_name — a fixed name overrides compose's <project>-<service>-<n>
     # scheme, so two stacks built on this overlay would collide on it regardless of
     # --project-name. The app still reaches the DB at `dataindex-db`: that's the

@@ -1,0 +1,39 @@
+# Postgres 16 + PostGIS 3.4 + pg_roaringbitmap.
+#
+# roaringbitmap backs the precomputed heatmap/histogram rollup: it stores the set
+# of feature ids per (cell, bin, filter) bucket, so rolling up to any display grid
+# is a bitmap union (which dedupes) rather than a COUNT(DISTINCT) over the whole
+# cell-expanded join.
+#
+# Built with the portable Makefile, NOT Makefile_native: a SIMD-optimised build
+# SIGILLs on a CPU lacking the instructions, and the build host (CI) is not the
+# runtime host (the VPS).
+#
+# with_llvm=no skips PGXS's LLVM bitcode step (it wants a clang the image lacks).
+# The bitcode only feeds JIT inlining, and JIT is off on this workload anyway.
+FROM postgis/postgis:16-3.4
+
+ARG ROARINGBITMAP_VERSION=v1.2.0
+
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        git \
+        postgresql-server-dev-16; \
+    git clone --depth 1 --branch "${ROARINGBITMAP_VERSION}" \
+        https://github.com/ChenHuajun/pg_roaringbitmap.git /tmp/pg_roaringbitmap; \
+    cd /tmp/pg_roaringbitmap; \
+    make with_llvm=no; \
+    make install with_llvm=no; \
+    cd /; \
+    rm -rf /tmp/pg_roaringbitmap; \
+    apt-get purge -y --auto-remove build-essential git postgresql-server-dev-16; \
+    rm -rf /var/lib/apt/lists/*
+
+# Runs on first init of a fresh data directory, alongside the image's own postgis
+# scripts. db:push-schema needs the roaringbitmap type to already exist before it
+# can create cell_features. An existing database needs this run once by hand.
+RUN printf 'CREATE EXTENSION IF NOT EXISTS roaringbitmap;\n' \
+      > /docker-entrypoint-initdb.d/20_roaringbitmap.sql

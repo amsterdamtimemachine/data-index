@@ -129,6 +129,16 @@ erDiagram
         smallint cell_y  "0-199"
     }
 
+    cell_features {
+        smallint cell_x  "0-199"
+        smallint cell_y  "0-199"
+        smallint time_bin  "e.g. 1940 # BASE_BIN_SIZE bin"
+        text record_type  "e.g. image"
+        text dataset_id  "e.g. stadsarchief-beeldbank"
+        text place_type  "e.g. street"
+        roaringbitmap feature_ids  "set of features in this bucket"
+    }
+
     grid_config {
         text id PK "always 'current'"
         smallint min_cell_x  "0"
@@ -169,6 +179,8 @@ erDiagram
     relation||--o{feature_to_place:"describes"
     features||--o{feature_tags:"tagged"
     tags||--o{feature_tags:"links"
+    place_cells||..o{cell_features:"rolled up into"
+    features||..o{cell_features:"counted in"
 ```
 
 - **organisations**: Institutions that provide datasets
@@ -179,6 +191,7 @@ erDiagram
 - **tags**: Thematic categories (e.g. Nature, Transport, Living) assigned to features. Work in progress, generated via AI classification across datasets
 - **features**: Images, texts, persons, or other content items linked to places and displayed in the UI
 - **place_cells**: Pre-computed spatial grid that powers the heatmap. Each place is mapped to the 100m cells its geometry covers (one cell for a point, many for a street or neighbourhood). Features inherit cell coverage through their place link, cell assignments are stored once per place rather than duplicated per feature.
+- **cell_features**: Which features occupy each cell, base time bin and category — the cell-major counterpart of `place_cells`, written by `rebuild-index`. It materialises the `features → feature_to_place → place → place_cells` hop plus the time bin, so the heatmap and histogram read one table instead of re-running that join per request. Each bucket holds its feature set as a **roaring bitmap** rather than a count: merging buckets is then a set union, which de-duplicates a feature spanning several cells or place types, so base cells can be rolled up into *any* display grid and still yield an exact distinct count. The bitmap stores a dense integer surrogate assigned during the rebuild (roaringbitmap holds int4; `features.id` is a 128-bit uuid) — only cardinality is ever read back, never identity, so the mapping is discarded.
 - **grid_config**: Single row (`id = 'current'`) of grid metadata written by `rebuild-index`: the RD/28992 grid origin (`min_x`, `min_y`), the base-cell index extent, the WGS84 bounds of the cell grid, and the max spatial/temporal frequencies used to normalise relevance. Read once per heatmap/feature request.
 
 ## Indexing
@@ -187,7 +200,9 @@ The data index is restricted to historical features that can be both spatially l
 
 ### Spatial indexing
 
-Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a geometry (POINT, LINESTRING, or POLYGON) in **RD New (EPSG:28992, metres)**. Query responses reproject to **WGS84 (EPSG:4326)** before sending to the client. `rebuild-index` overlays the city with a regular grid of `CELL_SIZE_METERS`-wide cells (default 100m) whose origin is the south-west corner of the bounding box of all feature-linked `place` geometries, and writes the cells each of those feature-linked places covers to `place_cells` — one set of cells per place, not per feature. Places with no linked feature are skipped entirely, so ingesting unreferenced geometry (e.g. the present-day districts until a dataset uses them) adds no cells and never enlarges the grid. A point lands in one cell, a line in the cells it crosses, and a polygon is filled (its interior, not just its outline). These mappings are computed in PostGIS: points with `ST_DumpPoints`, lines and polygons by rasterising each candidate cell with `ST_Intersects` against its `ST_MakeEnvelope`. Features inherit cell coverage through their place link. Heatmap requests join `place_cells` → `feature_to_place` → `features` and compute `COUNT(DISTINCT feature_id)` per cell, instead of scanning every feature row.
+Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a geometry (POINT, LINESTRING, or POLYGON) in **RD New (EPSG:28992, metres)**. Query responses reproject to **WGS84 (EPSG:4326)** before sending to the client. `rebuild-index` overlays the city with a regular grid of `CELL_SIZE_METERS`-wide cells (default 100m) whose origin is the south-west corner of the bounding box of all feature-linked `place` geometries, and writes the cells each of those feature-linked places covers to `place_cells` — one set of cells per place, not per feature. Places with no linked feature are skipped entirely, so ingesting unreferenced geometry (e.g. the present-day districts until a dataset uses them) adds no cells and never enlarges the grid. A point lands in one cell, a line in the cells it crosses, and a polygon is filled (its interior, not just its outline). These mappings are computed in PostGIS: points with `ST_DumpPoints`, lines and polygons by rasterising each candidate cell with `ST_Intersects` against its `ST_MakeEnvelope`. Features inherit cell coverage through their place link.
+
+`rebuild-index` then rolls that join up into `cell_features`, one bucket per (base cell, base time bin, record type, dataset, place type), each holding the set of features it contains. Heatmap and histogram requests read only that table — filtering buckets and unioning their bitmaps — instead of re-joining `place_cells` → `feature_to_place` → `features` and computing `COUNT(DISTINCT feature_id)` on every request. The union is what makes it exact: a street spanning several base cells that fold into one display cell is counted once, so any display resolution can be served from the same buckets. On the full dataset that took the heatmap from ~13s to under a second.
 
 The grid lives in RD metres: a cell index is `floor((coord − origin) / CELL_SIZE_METERS)`, so cell `(0,0)` is the 100m square at the origin. `rebuild-index` persists that origin (`min_x`, `min_y`) and the cell extent to the single-row `grid_config` table, together with the **WGS84 bounds of the grid rectangle** — the origin extended by `(maxCell + 1)` cells, reprojected to EPSG:4326. The frontend divides those grid-aligned bounds into display cells, so what it draws tiles the exact grid the counts were computed on rather than the looser data envelope; the reverse lookup (click a cell → list its features) inverts the same bounds, keeping hover counts and feature lists in agreement.
 
@@ -220,7 +235,7 @@ The naming model above determines what the API returns per place type. `getFeatu
 
 Each feature has `start_date` and `end_date`, both inclusive at the year level. A feature with `start_date=1900-06-15` and `end_date=1900-08-30` covers exactly the year 1900. Time is divided into base bins of `BASE_BIN_SIZE` years (default 10), each spanning `[bin_start, bin_end)`: start year inclusive, end year exclusive. A feature is assigned to every bin its year range overlaps: a feature spanning 1900–1925 with 10-year bins falls into `[1900,1910)`, `[1910,1920)`, and `[1920,1930)`. Its `temporal_frequency` is the count of those bins (3 here).
 
-The timeline (rendered as a histogram) uses the same overlap logic but at the display bin size requested by the client. Display bin size is clamped to `[BIN_SIZE_MIN, BIN_SIZE_MAX]`.
+The timeline (rendered as a histogram) uses the same overlap logic but at the display bin size requested by the client. Display bin size is clamped to `[BIN_SIZE_MIN, BIN_SIZE_MAX]` and rounded down to a multiple of `BASE_BIN_SIZE` — the `cell_features` rollup stores counts per base bin, so a display bin has to be a whole number of them (a 25-year bin can't split a decade).
 
 Timeline bar heights use the same log normalisation as the heatmap.
 
@@ -316,7 +331,7 @@ bun run db:ingest -s <dataset-name> -f <path-to-file>
 bun run db:rebuild-index
 ```
 
-`rebuild-index` computes spatial grid cells and frequency values. Must run after every data change.
+`rebuild-index` computes spatial grid cells, the `cell_features` rollup the heatmap and histogram read, and frequency values. Must run after every data change — a feature ingested without it won't appear on the map.
 
 ### Re-ingesting and corrections
 
@@ -399,6 +414,18 @@ bundled alongside the app) or **external** (an existing server the app connects 
 Those choices are independent per deployment: you can self-host staging and point
 production at a managed Postgres, or self-host both.
 
+**The database is not stock Postgres.** It needs PostGIS *and* `pg_roaringbitmap`, which
+backs the `cell_features` rollup — `db:push-schema` cannot create that table without the
+type. The self-hosted overlay builds the right image from `docker/Dockerfile.db`, so it's
+handled for you. An **external** database must have both extensions installed, and the
+role running `db:push-schema` needs rights to `CREATE EXTENSION` (managed providers vary:
+RDS and Cloud SQL ship roaringbitmap; some do not). A database that already exists needs
+it once by hand — fresh ones self-provision on first init:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS roaringbitmap;
+```
+
 ### Run the ETL from the image, not from your checkout
 
 The app's code comes from the image, but the schema and ETL are code too — and running
@@ -467,8 +494,10 @@ export DC="docker compose --env-file .env \
   -f docker/docker-compose.self-hosted.yml \
   -f docker/docker-compose.staging.yml"
 
-# Bundled Postgres + PostGIS, bound to loopback. --wait blocks until healthy.
-$DC up -d --wait dataindex-db
+# Bundled Postgres + PostGIS + pg_roaringbitmap, bound to loopback. --build compiles
+# the DB image from docker/Dockerfile.db (first run only; cached after). --wait blocks
+# until healthy.
+$DC up -d --build --wait dataindex-db
 
 $DC run --rm app bun run db:push-schema
 
@@ -487,6 +516,9 @@ etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
 
+# Builds place_cells, the cell_features rollup, frequencies and grid_config. Takes a
+# minute or so on a full dataset — it runs the heavy aggregation once here so requests
+# don't. Mandatory: features ingested without it won't appear on the map.
 $DC run --rm app bun run db:rebuild-index
 
 $DC up -d app
@@ -549,6 +581,18 @@ $DC run --rm -v $DATA:/data:ro app bun run db:ingest -s <source> -f /data/<file>
 $DC run --rm app bun run db:rebuild-index
 ```
 
+**Upgrading a deployment that predates `cell_features`.** Its database was initialised by
+the stock postgis image, so the extension hook never ran on that volume — the data is
+fine, but `db:push-schema` will fail until the extension exists. Recreate the DB container
+on the new image (the volume, and the data, survive), add the extension once, then rebuild:
+
+```bash
+$DC up -d --build --wait dataindex-db      # new image, same pgdata volume
+$DC exec dataindex-db psql -U "$DB_USER" -d "$DB_NAME" -c 'CREATE EXTENSION IF NOT EXISTS roaringbitmap;'
+$DC run --rm app bun run db:push-schema    # creates cell_features
+$DC run --rm app bun run db:rebuild-index  # populates it — the map is empty until this runs
+```
+
 Only the `app` service is named, so `pull`/`up -d app` leaves a bundled DB running and its volume untouched.
 
 ### Environment variables
@@ -565,7 +609,7 @@ Only the `app` service is named, so `pull`/`up -d app` leaves a bundled DB runni
 | `PUBLIC_DEFAULT_CELL` | No | - | Default cell to select on load |
 | `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |
 | `PUBLIC_EXACT_CELLS` | No | `false` | Reproject heatmap cells to their exact RD footprint via proj4 (removes the ~0.4° skew); default draws axis-aligned rectangles |
-| `BASE_BIN_SIZE` | No | `10` | Base time bin size (years) |
+| `BASE_BIN_SIZE` | No | `10` | Base time bin size (years). Shapes the `cell_features` buckets, so changing it requires a `db:rebuild-index` — the queries would otherwise fold base bins at the new width against buckets stored at the old one. Also caps time granularity: a requested `binSize` is rounded down to a multiple of this |
 | `CELL_SIZE_METERS` | No | `100` | Base spatial cell size (meters) |
 | `GRID_DEFAULT` | No | `75` | Default heatmap grid width (columns); rows are derived from the data's aspect ratio so cells are square |
 | `GRID_MIN` / `GRID_MAX` | No | `10` / `200` | Grid width (column count) bounds |

@@ -2,7 +2,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { HeatmapResolutionConfig } from '@atm/shared/types';
-import { GRID_DEFAULT, GRID_MIN, GRID_MAX, DEFAULT_BIN_SIZE, BIN_SIZE_MIN, BIN_SIZE_MAX } from '@atm/shared';
+import { GRID_DEFAULT, GRID_MIN, GRID_MAX, DEFAULT_BIN_SIZE } from '@atm/shared';
 import { getHeatmap, getHeatmapTimeline } from '@atm/db/queries';
 import { parseRecordTypes, parseDatasets, parsePlaceTypes } from '$lib/server/query-params';
 
@@ -26,10 +26,9 @@ export const GET: RequestHandler = async ({ url }) => {
 		const resolution: HeatmapResolutionConfig = { cols };
 
 		// Parse bin size
+		// Forwarded as-is; the query layer clamps and snaps it to a valid bin (normaliseBinSize).
 		const binSizeParam = url.searchParams.get('binSize');
-		const binSize = binSizeParam
-			? Math.min(Math.max(parseInt(binSizeParam, 10) || DEFAULT_BIN_SIZE, BIN_SIZE_MIN), BIN_SIZE_MAX)
-			: DEFAULT_BIN_SIZE;
+		const binSize = binSizeParam ? parseInt(binSizeParam, 10) || DEFAULT_BIN_SIZE : DEFAULT_BIN_SIZE;
 
 		console.log(
 			`🔥 Heatmaps API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, timeSlice: ${timeSliceParam || 'all'}, grid width: ${cols} cols, binSize: ${binSize}`

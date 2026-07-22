@@ -15,7 +15,7 @@ const config = {
 		vitePreprocess({
 			script: true // Make sure this is enabled for TypeScript
 		}),
-		mdsvex({ extensions: ['.svx'], layout: join(root, 'src/routes/about/Layout.svelte') }),
+		mdsvex({ extensions: ['.svx'], layout: join(root, 'src/lib/components/markdown/MdsvexLayout.svelte') }),
 		preprocessMeltUI()
 	]),
 
