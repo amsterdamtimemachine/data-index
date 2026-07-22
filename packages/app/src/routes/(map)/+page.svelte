@@ -35,9 +35,9 @@ import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
 	let dimensions = $derived(data?.heatmapDimensions);
 	let recordTypes = $derived(data?.metadata?.recordTypes || []);
 	let tags = $derived(data?.metadata?.tags);
-	let availableTagNames = $derived(
-		data?.availableTags?.tags?.map((tag: { name: string }) => tag.name) || data?.metadata?.tags || []
-	);
+	// Tags feature is not yet exposed; no tag data is fetched, so this falls back to
+	// the tag vocabulary metadata already carries.
+	let availableTagNames = $derived(data?.metadata?.tags || []);
 	let heatmapTimeline = $derived(data?.heatmapTimeline as HeatmapTimeline | null);
 
 	let currentRecordTypes = $derived(data?.currentRecordTypes || []);

@@ -1,4 +1,11 @@
-// (map)/+page.ts - Load metadata, histogram, and heatmap timeline from new API with error accumulation
+// (map)/+page.ts - Load metadata, histogram, and heatmap timeline from the API.
+//
+// metadata, heatmap and histogram are fetched together in one Promise.all — the
+// data fetches used to wait behind metadata so they could be handed cleaned filter
+// params, but the endpoints treat an unknown filter value as matching nothing
+// (identical to dropping it), so they can take the raw URL params directly and run
+// in parallel. The metadata-based validation still runs afterwards, but only to
+// drive the filter UI and surface warnings — it no longer gates the data.
 import type { PageLoad } from './$types';
 import type {
 	VisualizationMetadata,
@@ -21,11 +28,6 @@ function isValidPeriodFormat(period: string): boolean {
 	return /^\d{4}_\d{4}$/.test(period);
 }
 
-function getPeriodDuration(period: string): number {
-	const [start, end] = period.split('_').map(Number);
-	return end - start;
-}
-
 function isChronologicallyValid(period: string): boolean {
 	const [start, end] = period.split('_').map(Number);
 	return start < end;
@@ -41,11 +43,6 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	loadingState.startLoading();
 
 	const errors: AppError[] = [];
-	let metadata: VisualizationMetadata | null = null;
-	let histogram: Histogram | null = null;
-	let heatmapTimeline: HeatmapTimeline | null = null;
-	let heatmapDimensions: HeatmapDimensions | null = null;
-	let availableTags: any = null;
 
 	// Parse URL parameters
 	const recordTypesParam = url.searchParams.get('recordTypes');
@@ -56,38 +53,129 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	const cellParam = url.searchParams.get('cell');
 	const periodParam = url.searchParams.get('period');
 
-	try {
-		const response = await fetch('/api/metadata');
+	// Forward the filter params to the data endpoints exactly as they arrived. An
+	// unknown value simply matches no rows server-side, so no metadata-based cleaning
+	// is needed before fetching. Heatmap and histogram filter identically, so one
+	// query string serves both.
+	const filterParams = new URLSearchParams();
+	if (recordTypesParam) filterParams.set('recordTypes', recordTypesParam);
+	if (datasetsParam) filterParams.set('datasets', datasetsParam);
+	if (placeTypesParam) filterParams.set('placeTypes', placeTypesParam);
+	const filterQuery = filterParams.toString();
+	const withFilters = (path: string) => (filterQuery ? `${path}?${filterQuery}` : path);
 
-		if (!response.ok) {
+	// Read a SvelteKit error-response body for its message, falling back to status text.
+	const errorMessageFrom = async (response: Response): Promise<string> => {
+		try {
+			const body = await response.json();
+			if (body?.message) return body.message;
+		} catch {
+			// fall through
+		}
+		return response.statusText || `HTTP ${response.status}`;
+	};
+
+	// Metadata promise — fetched alongside the data, no longer a barrier. Each promise
+	// returns its value (or null) rather than mutating outer state, so the results are
+	// properly typed after the await and error handling stays local.
+	const metadataPromise = (async (): Promise<VisualizationMetadata | null> => {
+		try {
+			const response = await fetch('/api/metadata');
+			if (!response.ok) {
+				errors.push(
+					createError('error', 'API Request Failed', `Failed to fetch metadata: HTTP ${response.status}`, {
+						status: response.status,
+						statusText: response.statusText
+					})
+				);
+				return null;
+			}
+			return (await response.json()) as VisualizationMetadata;
+		} catch (err) {
+			console.error('❌ Failed to load metadata:', err);
 			errors.push(
 				createError(
 					'error',
-					'API Request Failed',
-					`Failed to fetch metadata: HTTP ${response.status}`,
-					{ status: response.status, statusText: response.statusText }
+					'Metadata Load Failed',
+					'Could not load visualization metadata. Please ensure the server is running and the binary file is available.',
+					{ error: err instanceof Error ? err.message : 'Unknown error', timestamp: new Date().toISOString() }
 				)
 			);
-		} else {
-			metadata = (await response.json()) as VisualizationMetadata;
+			return null;
 		}
-	} catch (err) {
-		console.error('❌ Failed to load metadata:', err);
+	})();
 
-		errors.push(
-			createError(
-				'error',
-				'Metadata Load Failed',
-				'Could not load visualization metadata. Please ensure the server is running and the binary file is available.',
-				{
-					error: err instanceof Error ? err.message : 'Unknown error',
-					timestamp: new Date().toISOString()
-				}
-			)
-		);
-	}
+	// Histogram promise
+	const histogramPromise = (async (): Promise<Histogram | null> => {
+		try {
+			const response = await fetch(withFilters('/api/histogram'));
+			if (!response.ok) {
+				errors.push(
+					createError('warning', 'Histogram Load Failed', await errorMessageFrom(response), {
+						recordTypes: recordTypesParam,
+						status: response.status
+					})
+				);
+				return null;
+			}
+			return (await response.json()) as Histogram;
+		} catch (err) {
+			console.error('❌ Failed to load histogram:', err);
+			errors.push(
+				createError(
+					'warning',
+					'Histogram Load Error',
+					'Could not load histogram data. The map will still function but temporal data may be limited.',
+					{ recordTypes: recordTypesParam, error: err instanceof Error ? err.message : 'Unknown error' }
+				)
+			);
+			return null;
+		}
+	})();
 
-	// Determine recordTypes to use for API requests and UI state
+	// Heatmap timeline promise
+	const heatmapPromise = (async (): Promise<HeatmapResponse | null> => {
+		try {
+			const response = await fetch(withFilters('/api/heatmaps'));
+			if (!response.ok) {
+				errors.push(
+					createError('warning', 'Heatmap Load Failed', await errorMessageFrom(response), {
+						recordTypes: recordTypesParam,
+						status: response.status
+					})
+				);
+				return null;
+			}
+			return (await response.json()) as HeatmapResponse;
+		} catch (err) {
+			console.error('❌ Failed to load heatmap timeline:', err);
+			errors.push(
+				createError(
+					'warning',
+					'Heatmap Load Error',
+					'Could not load heatmap timeline. Spatial visualization may be limited.',
+					{ recordTypes: recordTypesParam, error: err instanceof Error ? err.message : 'Unknown error' }
+				)
+			);
+			return null;
+		}
+	})();
+
+	// One barrier: metadata and the data resolve together.
+	const [metadata, histogram, heatmapData] = await Promise.all([
+		metadataPromise,
+		histogramPromise,
+		heatmapPromise
+	]);
+	const heatmapTimeline: HeatmapTimeline | null = heatmapData?.timeline ?? null;
+	const heatmapDimensions: HeatmapDimensions | null = heatmapData?.dimensions ?? null;
+
+	// ────────────────────────────────────────────────────────────────────────────
+	// Validation for the UI only — filter chips, warnings and deep-link handling.
+	// This no longer gates the fetches above; it annotates what was already loaded.
+	// ────────────────────────────────────────────────────────────────────────────
+
+	// Determine recordTypes to use for UI state
 	let currentRecordTypes: RecordType[] = [];
 
 	if (metadata?.recordTypes) {
@@ -111,15 +199,16 @@ export const load: PageLoad = async ({ fetch, url }) => {
 				}
 				currentRecordTypes = validTypes;
 			} else {
-				// No valid types found - show single comprehensive error message
+				// No valid types found - warn and reflect all types in the UI. The data
+				// fetch already ran with the raw param, so an all-invalid selection shows
+				// an empty map alongside this warning.
 				errors.push(
 					createValidationError(
 						'recordTypes',
 						recordTypesParam,
-						`No valid content types found. Defaulting to all content types: ${translateAll(metadata.recordTypes).join(', ')}`
+						`No valid content types found. Showing all content types: ${translateAll(metadata.recordTypes).join(', ')}`
 					)
 				);
-				// Default to all record types for better UX
 				currentRecordTypes = metadata.recordTypes;
 			}
 		} else {
@@ -157,7 +246,9 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		}
 	}
 
-	// Parse tags if provided - need to validate combinations, not just existence
+	// Parse tags if provided. Existence is validated against metadata here; the tags
+	// feature is not yet exposed in the UI, so no tag data is fetched (the
+	// available-tags / tag-combinations endpoints stay for when it is).
 	let currentTags: string[] | undefined;
 
 	// Parse tagOperator with default to OR (advanced search is AND)
@@ -166,11 +257,9 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	if (metadata?.tags && tagsParam) {
 		const requestedTags = tagsParam.split(',').map((t) => t.trim()) as string[];
 
-		// First filter: tags that exist in metadata
 		const existingTags = requestedTags.filter((tag) => metadata.tags.includes(tag));
 		const nonExistentTags = requestedTags.filter((tag) => !metadata.tags.includes(tag));
 
-		// Add errors for non-existent tags
 		for (const invalidTag of nonExistentTags) {
 			errors.push(
 				createError(
@@ -182,191 +271,8 @@ export const load: PageLoad = async ({ fetch, url }) => {
 			);
 		}
 
-		// Second filter: validate tag combinations with current record types
-		// We'll validate this after we have currentRecordTypes determined
-		currentTags = existingTags; // For now, will validate combinations later
+		currentTags = existingTags;
 	}
-
-	// Histogram promise
-	const histogramPromise = (async () => {
-		try {
-			let histogramUrl = '/api/histogram';
-			const histogramParams = new URLSearchParams();
-			if (currentRecordTypes.length > 0) {
-				histogramParams.set('recordTypes', currentRecordTypes.join(','));
-			}
-			if (currentDatasets.length > 0) {
-				histogramParams.set('datasets', currentDatasets.join(','));
-			}
-			if (currentPlaceTypes.length > 0) {
-				histogramParams.set('placeTypes', currentPlaceTypes.join(','));
-			}
-			if (histogramParams.toString()) {
-				histogramUrl += '?' + histogramParams.toString();
-			}
-			const histogramResponse = await fetch(histogramUrl);
-
-			if (!histogramResponse.ok) {
-				// Parse error message from SvelteKit error response
-				let errorMessage = `HTTP ${histogramResponse.status}`;
-				try {
-					const errorData = await histogramResponse.json();
-					if (errorData.message) {
-						errorMessage = errorData.message;
-					}
-				} catch {
-					// Fallback to status text if JSON parsing fails
-					errorMessage = histogramResponse.statusText || errorMessage;
-				}
-
-				errors.push(
-					createError('warning', 'Histogram Load Failed', errorMessage, {
-						recordTypes: currentRecordTypes,
-						tags: currentTags,
-						status: histogramResponse.status
-					})
-				);
-			} else {
-				histogram = (await histogramResponse.json()) as Histogram;
-			}
-		} catch (err) {
-			console.error('❌ Failed to load histogram:', err);
-
-			errors.push(
-				createError(
-					'warning',
-					'Histogram Load Error',
-					'Could not load histogram data. The map will still function but temporal data may be limited.',
-					{
-						recordTypes: currentRecordTypes,
-						tags: currentTags,
-						error: err instanceof Error ? err.message : 'Unknown error'
-					}
-				)
-			);
-		}
-	})();
-
-	// Heatmap timeline promise
-	const heatmapPromise = (async () => {
-		try {
-			let heatmapUrl = '/api/heatmaps';
-			const heatmapParams = new URLSearchParams();
-			if (currentRecordTypes.length > 0) {
-				heatmapParams.set('recordTypes', currentRecordTypes.join(','));
-			}
-			if (currentDatasets.length > 0) {
-				heatmapParams.set('datasets', currentDatasets.join(','));
-			}
-			if (currentPlaceTypes.length > 0) {
-				heatmapParams.set('placeTypes', currentPlaceTypes.join(','));
-			}
-			if (heatmapParams.toString()) {
-				heatmapUrl += '?' + heatmapParams.toString();
-			}
-			const heatmapResponse = await fetch(heatmapUrl);
-
-			if (!heatmapResponse.ok) {
-				// Parse error message from SvelteKit error response
-				let errorMessage = `HTTP ${heatmapResponse.status}`;
-				try {
-					const errorData = await heatmapResponse.json();
-					if (errorData.message) {
-						errorMessage = errorData.message;
-					}
-				} catch {
-					// Fallback to status text if JSON parsing fails
-					errorMessage = heatmapResponse.statusText || errorMessage;
-				}
-
-				errors.push(
-					createError('warning', 'Heatmap Load Failed', errorMessage, {
-						recordTypes: currentRecordTypes,
-						tags: currentTags,
-						status: heatmapResponse.status
-					})
-				);
-			} else {
-				const heatmapData = (await heatmapResponse.json()) as HeatmapResponse;
-				heatmapTimeline = heatmapData.timeline;
-				heatmapDimensions = heatmapData.dimensions;
-			}
-		} catch (err) {
-			console.error('❌ Failed to load heatmap timeline:', err);
-
-			errors.push(
-				createError(
-					'warning',
-					'Heatmap Load Error',
-					'Could not load heatmap timeline. Spatial visualization may be limited.',
-					{
-						recordTypes: currentRecordTypes,
-						tags: currentTags,
-						error: err instanceof Error ? err.message : 'Unknown error'
-					}
-				)
-			);
-		}
-	})();
-
-	// Available tags promise
-	const availableTagsPromise = (async () => {
-		try {
-			const tagsParams = new URLSearchParams();
-			if (currentRecordTypes.length > 0) {
-				tagsParams.set('recordTypes', currentRecordTypes.join(','));
-			}
-			if (currentDatasets.length > 0) {
-				tagsParams.set('datasets', currentDatasets.join(','));
-			}
-			if (currentPlaceTypes.length > 0) {
-				tagsParams.set('placeTypes', currentPlaceTypes.join(','));
-			}
-			const tagsUrl = `/api/available-tags${tagsParams.toString() ? '?' + tagsParams.toString() : ''}`;
-			const tagsResponse = await fetch(tagsUrl);
-
-			if (!tagsResponse.ok) {
-				// Parse error message from SvelteKit error response
-				let errorMessage = `HTTP ${tagsResponse.status}`;
-				try {
-					const errorData = await tagsResponse.json();
-					if (errorData.message) {
-						errorMessage = errorData.message;
-					}
-				} catch {
-					// Fallback to status text if JSON parsing fails
-					errorMessage = tagsResponse.statusText || errorMessage;
-				}
-
-				errors.push(
-					createError('warning', 'Available Tags Load Failed', errorMessage, {
-						recordTypes: currentRecordTypes,
-						status: tagsResponse.status
-					})
-				);
-			} else {
-				const tagsData = await tagsResponse.json();
-				availableTags = tagsData;
-			}
-		} catch (err) {
-			console.error('❌ Failed to load available tags:', err);
-
-			errors.push(
-				createError(
-					'warning',
-					'Available Tags Load Error',
-					'Could not load available tags. All tags will be shown in the interface.',
-					{
-						recordTypes: currentRecordTypes,
-						error: err instanceof Error ? err.message : 'Unknown error'
-					}
-				)
-			);
-		}
-	})();
-
-	// Wait for all data requests to complete
-	await Promise.all([histogramPromise, heatmapPromise, availableTagsPromise]);
 
 	// Validate cell parameter if provided
 	let validatedCell: string | null = null;
@@ -400,7 +306,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		// Get available periods from metadata (all periods that exist in dataset)
 		const metadataPeriods = metadata.timeSlices.map(slice => slice.key);
 		const timelineData = heatmapTimeline ? heatmapTimeline : {};
-		
+
 		// 1. Format validation
 		if (!isValidPeriodFormat(periodParam)) {
 			errors.push(
@@ -421,26 +327,16 @@ export const load: PageLoad = async ({ fetch, url }) => {
 				)
 			);
 		}
-		// 3. Duration validation
-		else if (getPeriodDuration(periodParam) > 50) {
-			const duration = getPeriodDuration(periodParam);
-			errors.push(
-				createValidationError(
-					'period',
-					periodParam,
-					`spans ${duration} years. Maximum 50 years supported. Defaulting to most recent period`
-				)
-			);
-		}
-		// 4. Availability validation - check if period exists in metadata
+		// 3. Availability — must be one of the actual time slices. This also bounds the
+		// duration: a slice is one bin wide, so an over-wide period simply isn't a slice
+		// and is rejected here (the old hard-coded 50-year cap didn't track binSize).
 		else if (!metadataPeriods.includes(periodParam)) {
-			// Use the same fallback logic as the default period assignment
 			const fallbackPeriod = getLastAvailablePeriod(timelineData) || metadataPeriods[metadataPeriods.length - 1] || '';
 			errors.push(
 				createPeriodNotFoundError(periodParam, metadataPeriods, fallbackPeriod)
 			);
 		}
-		// 5. Valid period (exists in metadata, even if no data)
+		// 4. Valid period (exists in metadata, even if no data)
 		else {
 			validatedPeriod = periodParam;
 		}
@@ -449,62 +345,12 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	// Default to last available period if validation fails or no period provided
 	const defaultPeriod = validatedPeriod || getLastAvailablePeriod(heatmapTimeline ? heatmapTimeline : null);
 
-	// Only validate tag combinations for AND operator (OR allows any combination)
-	if (
-		currentTagOperator === 'AND' &&
-		currentTags &&
-		currentTags.length > 0 &&
-		currentRecordTypes &&
-		metadata?.recordTypes
-	) {
-		try {
-			// Use the "show all" exception: if no current record types, use all record types
-			const effectiveRecordTypes =
-				currentRecordTypes.length > 0 ? currentRecordTypes : metadata.recordTypes;
-
-			// Send all tags to validate in a single API call
-			const placeTypesQuery = currentPlaceTypes.length > 0 ? `&placeTypes=${currentPlaceTypes.join(',')}` : '';
-			const response = await fetch(
-				`/api/tag-combinations?recordTypes=${effectiveRecordTypes.join(',')}&selected=${currentTags.join(',')}${placeTypesQuery}&validateAll=true`
-			);
-
-			if (response.ok) {
-				const data = await response.json();
-
-				// API should return validTags and invalidTags when validateAll=true
-				const validCombinations = data.validTags || [];
-				const invalidCombinations = data.invalidTags || [];
-
-				// Update currentTags to only valid combinations
-				currentTags = validCombinations.length > 0 ? validCombinations : undefined;
-
-				// Add errors for invalid combinations
-				for (const invalidTag of invalidCombinations) {
-					errors.push(
-						createError(
-							'warning',
-							'Invalid Tag Combination Removed',
-							`"${invalidTag}" is not available with the current selection and was removed from your search.`,
-							{ invalidTag, recordTypes: effectiveRecordTypes, validTags: validCombinations }
-						)
-					);
-				}
-			} else {
-				console.error('Failed to validate tag combinations - API error:', response.status);
-			}
-		} catch (error) {
-			console.error('Failed to validate tag combinations in route loader:', error);
-			// On error, don't modify currentTags
-		}
-	}
-
 	loadingState.stopLoading();
 	return {
 		metadata,
 		histogram,
 		heatmapTimeline,
 		heatmapDimensions,
-		availableTags,
 		currentRecordTypes,
 		currentPlaceTypes,
 		currentDatasets,
