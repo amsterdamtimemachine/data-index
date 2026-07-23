@@ -413,7 +413,10 @@ bun run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
 bun run db:ingest -s lps -f <path-to-lps.ttl>
 bun run db:ingest -s adressen -f <path-to-adressen.ttl>
 
-# PDOK gap-fills (Amsterdam + Weesp; fetch them first, see Getting the data)
+# PDOK gap-fills (Amsterdam + Weesp) — fetch the base registries from PDOK, then ingest
+bun run db:fetch  -s cbs-areas     -o <data-dir>/cbs-areas.geojson
+bun run db:fetch  -s nwb-streets   -o <data-dir>/nwb-streets.geojson
+bun run db:fetch  -s bag-addresses -o <data-dir>/bag-addresses.ndjson
 bun run db:ingest -s pdok-places -f <data-dir>/cbs-areas.geojson
 bun run db:ingest -s nwb-streets -f <data-dir>/nwb-streets.geojson -x <data-dir>/adamlinkstraten.ttl
 bun run db:ingest -s pdok-places -f <data-dir>/bag-addresses.ndjson
@@ -500,13 +503,17 @@ $DC run --rm app bun run db:push-schema
 # SSH session would kill it partway.
 export DATA=/srv/atm-data
 alias etl="$DC run --rm -v $DATA:/data:ro app bun run db:ingest"
+alias fetch="$DC run --rm -v $DATA:/data app bun run db:fetch"   # writable mount (etl is read-only)
 
 etl -s neighbourhoods-and-districts -f /data/adamlinkbuurten.ttl
 etl -s streets  -f /data/adamlinkstraten.ttl
 etl -s lps      -f /data/lps.ttl
 etl -s adressen -f /data/adressen.ttl
 
-# PDOK gap-fills (Amsterdam + Weesp; fetch them first — see "Getting the data")
+# PDOK gap-fills (Amsterdam + Weesp) — fetch the base registries into /data, then ingest
+fetch -s cbs-areas     -o /data/cbs-areas.geojson
+fetch -s nwb-streets   -o /data/nwb-streets.geojson
+fetch -s bag-addresses -o /data/bag-addresses.ndjson
 etl -s pdok-places -f /data/cbs-areas.geojson
 etl -s nwb-streets -f /data/nwb-streets.geojson -x /data/adamlinkstraten.ttl
 etl -s pdok-places -f /data/bag-addresses.ndjson
@@ -555,11 +562,15 @@ $DC pull app                                      # prebuilt image from GHCR; el
 $DC run --rm app bun run db:push-schema
 export DATA=/srv/atm-data
 alias etl="$DC run --rm -v $DATA:/data:ro app bun run db:ingest"
+alias fetch="$DC run --rm -v $DATA:/data app bun run db:fetch"   # writable mount (etl is read-only)
 etl -s neighbourhoods-and-districts -f /data/adamlinkbuurten.ttl
 etl -s streets  -f /data/adamlinkstraten.ttl
 etl -s lps      -f /data/lps.ttl
 etl -s adressen -f /data/adressen.ttl
-# PDOK gap-fills (Amsterdam + Weesp; fetch them first — see "Getting the data")
+# PDOK gap-fills (Amsterdam + Weesp) — fetch the base registries into /data, then ingest
+fetch -s cbs-areas     -o /data/cbs-areas.geojson
+fetch -s nwb-streets   -o /data/nwb-streets.geojson
+fetch -s bag-addresses -o /data/bag-addresses.ndjson
 etl -s pdok-places -f /data/cbs-areas.geojson
 etl -s nwb-streets -f /data/nwb-streets.geojson -x /data/adamlinkstraten.ttl
 etl -s pdok-places -f /data/bag-addresses.ndjson
