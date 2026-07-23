@@ -2,7 +2,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { HeatmapResolutionConfig } from '@atm/shared/types';
-import { GRID_DEFAULT, GRID_MIN, GRID_MAX, DEFAULT_BIN_SIZE, BIN_SIZE_MIN, BIN_SIZE_MAX } from '@atm/shared';
+import { DISPLAY_GRID_DEFAULT_COLS, DISPLAY_GRID_MIN_COLS, DISPLAY_GRID_MAX_COLS, DISPLAY_TIME_BIN_DEFAULT_YEARS } from '@atm/shared';
 import { getHeatmap, getHeatmapTimeline } from '@atm/db/queries';
 import { parseRecordTypes, parseDatasets, parsePlaceTypes } from '$lib/server/query-params';
 
@@ -10,7 +10,7 @@ function parseGridParam(value: string | null, defaultVal: number): number {
 	if (value === null) return defaultVal;
 	const parsed = parseInt(value, 10);
 	if (isNaN(parsed)) return defaultVal;
-	return Math.min(Math.max(parsed, GRID_MIN), GRID_MAX);
+	return Math.min(Math.max(parsed, DISPLAY_GRID_MIN_COLS), DISPLAY_GRID_MAX_COLS);
 }
 
 export const GET: RequestHandler = async ({ url }) => {
@@ -22,14 +22,13 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		// Parse grid resolution — only width (cols); rows are derived from the data's
 		// aspect ratio server-side so display cells are square.
-		const cols = parseGridParam(url.searchParams.get('cols'), GRID_DEFAULT);
+		const cols = parseGridParam(url.searchParams.get('cols'), DISPLAY_GRID_DEFAULT_COLS);
 		const resolution: HeatmapResolutionConfig = { cols };
 
 		// Parse bin size
+		// Forwarded as-is; the query layer clamps and snaps it to a valid bin (normaliseBinSize).
 		const binSizeParam = url.searchParams.get('binSize');
-		const binSize = binSizeParam
-			? Math.min(Math.max(parseInt(binSizeParam, 10) || DEFAULT_BIN_SIZE, BIN_SIZE_MIN), BIN_SIZE_MAX)
-			: DEFAULT_BIN_SIZE;
+		const binSize = binSizeParam ? parseInt(binSizeParam, 10) || DISPLAY_TIME_BIN_DEFAULT_YEARS : DISPLAY_TIME_BIN_DEFAULT_YEARS;
 
 		console.log(
 			`🔥 Heatmaps API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, timeSlice: ${timeSliceParam || 'all'}, grid width: ${cols} cols, binSize: ${binSize}`

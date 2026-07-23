@@ -47,12 +47,16 @@ export async function setupTestDb() {
   await db.execute(sql`DROP EXTENSION IF EXISTS postgis_tiger_geocoder CASCADE`);
 
   await db.execute(sql`CREATE EXTENSION IF NOT EXISTS postgis`);
+  // cell_features stores feature sets as roaring bitmaps. The DB image installs the
+  // extension on first init, but create it here too so an already-initialised test DB
+  // (the container persists between runs) picks it up without being recreated.
+  await db.execute(sql`CREATE EXTENSION IF NOT EXISTS roaringbitmap`);
 
   // The test DB persists between runs, and CREATE TABLE IF NOT EXISTS won't apply
   // schema changes (e.g. a newly added column) to an already-created table. Drop
   // first so the schema always matches this file — otherwise drift silently breaks
   // rebuild-index (which is how the missing grid_config.min_x/min_y went unnoticed).
-  await db.execute(sql`DROP TABLE IF EXISTS grid_config, place_cells, feature_tags, feature_to_place, features, place_historical_name, place_geometry, place, relation, tags, datasets, organisations CASCADE`);
+  await db.execute(sql`DROP TABLE IF EXISTS cell_features, grid_config, place_cells, feature_tags, feature_to_place, features, place_historical_name, place_geometry, place, relation, tags, datasets, organisations CASCADE`);
 
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS organisations (
@@ -125,6 +129,18 @@ export async function setupTestDb() {
       PRIMARY KEY (place_id, cell_x, cell_y)
     )
   `);
+  // Rebuilt by rebuild-index; feature_ids holds the ephemeral int surrogate, not
+  // features.id (roaringbitmap is int4, feature ids are uuids).
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS cell_features (
+      cell_x SMALLINT NOT NULL, cell_y SMALLINT NOT NULL,
+      time_bin SMALLINT NOT NULL,
+      record_type TEXT NOT NULL, dataset_id TEXT NOT NULL, place_type TEXT NOT NULL,
+      feature_ids roaringbitmap NOT NULL,
+      PRIMARY KEY (cell_x, cell_y, time_bin, record_type, dataset_id, place_type)
+    )
+  `);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_cell_features_filters ON cell_features(record_type, dataset_id, place_type)`);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS grid_config (
       id TEXT PRIMARY KEY,
@@ -141,7 +157,7 @@ export async function setupTestDb() {
 
 export async function cleanTestDb() {
   await assertTestDb();
-  await db.execute(sql`TRUNCATE grid_config, place_cells, feature_tags, feature_to_place, features, place_historical_name, place_geometry, place, relation, tags, datasets, organisations CASCADE`);
+  await db.execute(sql`TRUNCATE cell_features, grid_config, place_cells, feature_tags, feature_to_place, features, place_historical_name, place_geometry, place, relation, tags, datasets, organisations CASCADE`);
 }
 
 export async function teardownTestDb() {

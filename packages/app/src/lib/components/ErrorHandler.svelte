@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { PageErrorData, AppError } from '$lib/types/error';
-	import { addToast } from '$components/Toaster.svelte';
+	import { addToast } from '$state/toaster.svelte';
 
 	interface Props {
 		errorData: PageErrorData;

@@ -1,30 +1,20 @@
 import { sql } from 'drizzle-orm';
 import type { Heatmap, HeatmapTimeline, HeatmapResponse, HeatmapDimensions, HeatmapResolutionConfig, RecordType, PlaceType } from '@atm/shared';
-import { DEFAULT_BIN_SIZE, CELL_SIZE_METERS } from '@atm/shared';
+import { DISPLAY_TIME_BIN_DEFAULT_YEARS, PRECOMP_GRID_CELL_METERS } from '@atm/shared';
+import { normaliseBinSize } from './bin-size';
 import { db } from '../client';
-import { placeCells, features, featureToPlace, place } from '../schema';
+import { cellFeatures } from '../schema';
 import { computeTimeSlices } from './time-slices';
 import { getRecordTypes } from './record-types';
 import { getGridConfig } from './grid-config';
-import { featureYearOverlap, slicesCTE } from './time-filter';
-import { andIn } from './filters';
+import { countExpr, displayBinExpr, gridColExpr, gridRowExpr, categoryFilter, binWindow } from './cell-features';
 
 // Query result types
 type GridCellCount = { grid_col: number; grid_row: number; count: string };
-type GridCellCountWithTime = { grid_col: number; grid_row: number; time_bin: string; count: string };
-
-/**
- * SQL expressions that map a base cell (place_cells) to a display grid cell.
- * Forward partition: display = floor(cell * gridN / (maxN + 1)), clamped.
- * getFeatures uses the exact inverse of this partition, so heatmap counts and
- * the per-cell feature list always agree.
- */
-function gridColExpr(gridCols: number, maxX: number) {
-  return sql`LEAST(FLOOR(${placeCells.cellX}::numeric * ${gridCols} / ${maxX + 1})::int, ${gridCols - 1})`;
-}
-function gridRowExpr(gridRows: number, maxY: number) {
-  return sql`LEAST(FLOOR(${placeCells.cellY}::numeric * ${gridRows} / ${maxY + 1})::int, ${gridRows - 1})`;
-}
+// display_bin, not time_bin: cell_features has a real time_bin column, and GROUP BY
+// resolves an unqualified name to the input column before the output alias — so an
+// alias of `time_bin` would silently group by the base bin instead of the display bin.
+type GridCellCountWithTime = { grid_col: number; grid_row: number; display_bin: string; count: string };
 
 /**
  * Build sparse heatmap from counts map
@@ -73,8 +63,8 @@ function buildRd(minX: number, minY: number, maxCellX: number, maxCellY: number,
   return {
     originX: minX,
     originY: minY,
-    cellWidth: ((maxCellX + 1) * CELL_SIZE_METERS) / gridCols,
-    cellHeight: ((maxCellY + 1) * CELL_SIZE_METERS) / gridRows
+    cellWidth: ((maxCellX + 1) * PRECOMP_GRID_CELL_METERS) / gridCols,
+    cellHeight: ((maxCellY + 1) * PRECOMP_GRID_CELL_METERS) / gridRows
   };
 }
 
@@ -102,7 +92,7 @@ export async function getHeatmap(
   recordTypes?: RecordType[],
   datasetIds?: string[],
   placeTypes?: PlaceType[],
-  binSizeYears: number = DEFAULT_BIN_SIZE
+  binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
 
@@ -114,6 +104,10 @@ export async function getHeatmap(
       timeline: { [timeSliceKey]: buildSparseHeatmap(new Map()) }
     };
   }
+
+  // cell_features buckets at PRECOMP_TIME_BIN_YEARS; a display bin that isn't a whole number
+  // of base bins can't be answered exactly, so snap before deriving slices.
+  binSizeYears = normaliseBinSize(binSizeYears);
 
   const timeSlices = await computeTimeSlices(binSizeYears);
   const timeSlice = timeSlices.find(ts => ts.key === timeSliceKey);
@@ -138,15 +132,10 @@ export async function getHeatmap(
     SELECT
       ${gridColExpr(gridCols, maxX)} as grid_col,
       ${gridRowExpr(gridRows, maxY)} as grid_row,
-      COUNT(DISTINCT ${features.id}) as count
-    FROM ${placeCells}
-    JOIN ${featureToPlace} ON ${placeCells.placeId} = ${featureToPlace.placeId}
-    JOIN ${features} ON ${featureToPlace.featureId} = ${features.id}
-    JOIN ${place} ON ${placeCells.placeId} = ${place.id}
-    WHERE ${features.recordType} IN ${types}
-      ${andIn(sql`${features.datasetId}`, datasetIds)}
-      ${andIn(sql`${place.type}`, placeTypes)}
-      AND ${featureYearOverlap(sql`${features.startDate}`, sql`${features.endDate}`, startYear, endYear)}
+      ${countExpr} as count
+    FROM ${cellFeatures}
+    WHERE ${categoryFilter(types, datasetIds, placeTypes)}
+      AND ${binWindow(startYear, endYear)}
     GROUP BY grid_col, grid_row
   `);
 
@@ -172,9 +161,10 @@ export async function getHeatmapTimeline(
   recordTypes?: RecordType[],
   datasetIds?: string[],
   placeTypes?: PlaceType[],
-  binSizeYears: number = DEFAULT_BIN_SIZE
+  binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
+  binSizeYears = normaliseBinSize(binSizeYears);
   const timeSlices = await computeTimeSlices(binSizeYears);
 
   if (types.length === 0 || timeSlices.length === 0) {
@@ -194,27 +184,23 @@ export async function getHeatmapTimeline(
   const firstSlice = timeSlices[0];
   const lastSlice = timeSlices[timeSlices.length - 1];
 
+  // No slices CTE and no range join: each bucket already knows its base bin, so the
+  // display bin is integer division and the whole timeline is one grouped scan.
   const result = await db.execute<GridCellCountWithTime>(sql`
-    WITH ${slicesCTE(firstSlice.startYear, lastSlice.startYear, binSizeYears)}
     SELECT
       ${gridColExpr(gridCols, maxX)} as grid_col,
       ${gridRowExpr(gridRows, maxY)} as grid_row,
-      s.bin_start as time_bin,
-      COUNT(DISTINCT ${features.id}) as count
-    FROM ${placeCells}
-    JOIN ${featureToPlace} ON ${placeCells.placeId} = ${featureToPlace.placeId}
-    JOIN ${features} ON ${featureToPlace.featureId} = ${features.id}
-    JOIN ${place} ON ${placeCells.placeId} = ${place.id}
-    JOIN slices s ON ${featureYearOverlap(sql`${features.startDate}`, sql`${features.endDate}`, sql`s.bin_start`, sql`s.bin_end`)}
-    WHERE ${features.recordType} IN ${types}
-      ${andIn(sql`${features.datasetId}`, datasetIds)}
-      ${andIn(sql`${place.type}`, placeTypes)}
-    GROUP BY grid_col, grid_row, s.bin_start
+      ${displayBinExpr(binSizeYears)} as display_bin,
+      ${countExpr} as count
+    FROM ${cellFeatures}
+    WHERE ${categoryFilter(types, datasetIds, placeTypes)}
+      AND ${binWindow(firstSlice.startYear, lastSlice.endYear)}
+    GROUP BY grid_col, grid_row, display_bin
   `);
 
   const countsBySlice = new Map<number, Map<number, number>>();
   for (const row of result.rows) {
-    const timeBin = parseInt(row.time_bin);
+    const timeBin = parseInt(row.display_bin);
     if (!countsBySlice.has(timeBin)) {
       countsBySlice.set(timeBin, new Map());
     }

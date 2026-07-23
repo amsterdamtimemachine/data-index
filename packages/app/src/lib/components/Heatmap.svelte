@@ -2,7 +2,15 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { onMount, onDestroy } from 'svelte';
 	import { env } from '$env/dynamic/public';
-	import maplibre, { type Map as MapLibreMap } from 'maplibre-gl';
+	// v6 is ESM-only with no default export — namespace import for maplibre.Map / .StyleSpecification.
+	import * as maplibre from 'maplibre-gl';
+	import type { Map as MapLibreMap } from 'maplibre-gl';
+	// v6 builds its worker URL dynamically (new URL(`./${name}`, import.meta.url)), which bundlers
+	// can't statically emit — so the file 404s in production. Hand Vite the worker explicitly and
+	// point maplibre at it. ?worker&url (not plain ?url) bundles the shared-chunk sibling in, so the
+	// emitted worker is self-contained.
+	import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+	maplibre.setWorkerUrl(maplibreWorkerUrl);
 
 	const tileSourceUrl = env.PUBLIC_TILE_SOURCE_URL || 'https://tiles.openfreemap.org/planet';
 	const BASE_STYLE: maplibre.StyleSpecification = {

@@ -56,12 +56,16 @@
 
 	let sortedItems = $derived([...items].sort());
 
+	// Props seed the builder's initial config; the live state is the $value store below.
 	const {
 		elements: { root, item },
 		states: { value }
 	} = createToggleGroup({
+		// svelte-ignore state_referenced_locally
 		type,
+		// svelte-ignore state_referenced_locally
 		defaultValue: type === 'single' ? selectedItems[0] : selectedItems,
+		// svelte-ignore state_referenced_locally
 		orientation: orientation,
 		onValueChange: ({ curr, next }) => {
 			// If requireOneItemSelected is true, prevent empty selection

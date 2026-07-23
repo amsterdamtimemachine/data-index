@@ -9,6 +9,14 @@ const geometry = customType<{ data: string; driverData: string }>({
   }
 });
 
+// Compressed set of int4s (pg_roaringbitmap). Unions dedupe, so buckets can be
+// merged into any display grid without double-counting a feature that spans them.
+const roaringbitmap = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return 'roaringbitmap';
+  }
+});
+
 // ============================================================================
 // ORGANISATIONS - Institutions that provide datasets (via datasets.organisation_id)
 // or place geometry (via place.source: Adamlink, CBS, NWB/Rijkswaterstaat, BAG/Kadaster)
@@ -147,6 +155,34 @@ export const placeCells = pgTable('place_cells', {
   primaryKey({ columns: [table.placeId, table.cellX, table.cellY] }),
   index('idx_place_cells_cell').on(table.cellX, table.cellY),
   index('idx_place_cells_place').on(table.placeId)
+]);
+
+// ============================================================================
+// CELL_FEATURES - Which features occupy each cell + period + category
+// Cell-major inverse of place_cells: place_cells is "the cells each place covers",
+// this is "the features in each cell". Materialises the feature -> feature_to_place
+// -> place -> place_cells hop plus the time bin, so heatmap/histogram read one
+// table instead of re-joining 2.7M rows per request. Rebuilt by rebuild-index.
+//
+// feature_ids holds a dense int surrogate, not features.id: roaringbitmap stores
+// int4 and features.id is a 128-bit uuid. The surrogate is assigned during the
+// rebuild and never persisted — only cardinality is ever read back, never identity.
+//
+// time_bin is the PRECOMP_TIME_BIN_YEARS bin the feature's date range touches (one row per
+// bin). Display bins are unions of whole base bins, which is why binSize must be a
+// multiple of PRECOMP_TIME_BIN_YEARS (see normaliseBinSize).
+// ============================================================================
+export const cellFeatures = pgTable('cell_features', {
+  cellX: smallint('cell_x').notNull(),
+  cellY: smallint('cell_y').notNull(),
+  timeBin: smallint('time_bin').notNull(),
+  recordType: text('record_type').notNull(),
+  datasetId: text('dataset_id').notNull(),
+  placeType: text('place_type').notNull(),
+  featureIds: roaringbitmap('feature_ids').notNull()
+}, (table) => [
+  primaryKey({ columns: [table.cellX, table.cellY, table.timeBin, table.recordType, table.datasetId, table.placeType] }),
+  index('idx_cell_features_filters').on(table.recordType, table.datasetId, table.placeType)
 ]);
 
 // ============================================================================

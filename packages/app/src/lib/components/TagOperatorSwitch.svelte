@@ -20,11 +20,14 @@
 		allLabel = 'All'
 	}: Props = $props();
 
+	// Props seed the builder's initial config; the live state is the $checked store below.
 	const {
 		elements: { root, input },
 		states: { checked }
 	} = createSwitch({
+		// svelte-ignore state_referenced_locally
 		defaultChecked: operator === 'AND',
+		// svelte-ignore state_referenced_locally
 		disabled,
 		onCheckedChange: ({ next }) => {
 			const newOperator = next ? 'AND' : 'OR';
