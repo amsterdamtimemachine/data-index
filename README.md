@@ -416,15 +416,44 @@ production at a managed Postgres, or self-host both.
 
 **The database is not stock Postgres.** It needs PostGIS *and* `pg_roaringbitmap`, which
 backs the `cell_features` rollup — `db:push-schema` cannot create that table without the
-type. The self-hosted overlay builds the right image from `docker/Dockerfile.db`, so it's
-handled for you. An **external** database must have both extensions installed, and the
-role running `db:push-schema` needs rights to `CREATE EXTENSION` (managed providers vary:
-RDS and Cloud SQL ship roaringbitmap; some do not). A database that already exists needs
-it once by hand — fresh ones self-provision on first init:
+type. The self-hosted image (`docker/Dockerfile.db`) bundles both, so a self-hosted
+deployment is handled for you. Pointing at your own existing Postgres, you'll likely need
+to add `pg_roaringbitmap` yourself (PostGIS you probably already have) — see below — then
+enable it in the ATM database (as a role with `CREATE EXTENSION` rights, i.e. superuser):
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS roaringbitmap;
 ```
+
+A fresh self-hosted image self-provisions this on first init; an existing database needs
+it run once by hand.
+
+### Installing pg_roaringbitmap on an existing Postgres
+
+`pg_roaringbitmap` isn't in the usual package repos, so build it from source against your
+server's Postgres major version — the same steps `docker/Dockerfile.db` runs. On the DB
+host:
+
+```bash
+psql -c "SHOW server_version;"        # note the major (e.g. 16) — the build targets it
+
+sudo apt-get install -y build-essential git postgresql-server-dev-16   # match the major
+git clone --depth 1 --branch v1.2.0 https://github.com/ChenHuajun/pg_roaringbitmap.git
+cd pg_roaringbitmap
+make with_llvm=no                     # portable build; skips the clang bitcode step
+sudo make install with_llvm=no
+```
+
+Then run the `CREATE EXTENSION` above in the ATM database. Notes:
+
+- **No restart, no config change.** It's a plain type/functions extension — it does not use
+  `shared_preload_libraries`, so it loads live on `CREATE EXTENSION`.
+- **Match the major version.** The compiled library is tied to the Postgres major (16 ≠ 17)
+  and the CPU architecture.
+- **No compilers allowed on the DB host?** Build on a separate box with the *same* Postgres
+  major and OS/architecture, then copy the three artifacts (`roaringbitmap.so`,
+  `roaringbitmap.control`, `roaringbitmap--*.sql`) into that instance's `lib/` and
+  `share/extension/` directories.
 
 ### Run the ETL from the image, not from your checkout
 
