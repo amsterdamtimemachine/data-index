@@ -18,6 +18,7 @@
     "db:generate": "bunx drizzle-kit generate --config=packages/db/drizzle.config.ts",
     "db:push-schema": "bunx drizzle-kit push --config=packages/db/drizzle.config.ts",
     "db:ingest": "bun run packages/db/src/etl/index.ts ingest",
+    "db:fetch": "bun run packages/db/src/etl/index.ts fetch",
     "db:rebuild-index": "bun run packages/db/src/etl/index.ts rebuild-index",
     "db:studio": "bunx drizzle-kit studio --config=packages/db/drizzle.config.ts",
     "test": "turbo run test",

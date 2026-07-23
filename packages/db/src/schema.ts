@@ -1,4 +1,5 @@
 import { pgTable, text, date, smallint, integer, uuid, jsonb, real, doublePrecision, customType, primaryKey, index } from 'drizzle-orm/pg-core';
+import type { PlaceSource } from '@atm/shared';
 
 // Custom PostGIS geometry type - stored in RD (Dutch) coordinates
 // Transform to WGS84 (4326) for frontend display
@@ -17,7 +18,8 @@ const roaringbitmap = customType<{ data: string; driverData: string }>({
 });
 
 // ============================================================================
-// ORGANISATIONS - Institutions that provide datasets
+// ORGANISATIONS - Institutions that provide datasets (via datasets.organisation_id)
+// or place geometry (via place.source: Adamlink, CBS, NWB/Rijkswaterstaat, BAG/Kadaster)
 // ============================================================================
 export const organisations = pgTable('organisations', {
   id: text('id').primaryKey(),
@@ -41,9 +43,11 @@ export const datasets = pgTable('datasets', {
 // PLACE - Physical geographic locations (identity); geometry in place_geometry
 // ============================================================================
 export const place = pgTable('place', {
-  id: text('id').primaryKey(),                    // Adamlink URI, e.g. "https://adamlink.nl/geo/lp/1000001"
+  id: text('id').primaryKey(),                    // Adamlink URI ("https://adamlink.nl/geo/{street,district,lp}/…") or PDOK "{cbs,nwb,bag}-<code>"
   type: text('type').notNull(),                   // "address" | "street" | "neighbourhood" (buurt) | "district" (wijk)
-  name: text('name')                             // name shown for the place; dated past names live in place_historical_name
+  name: text('name'),                            // name shown for the place; dated past names live in place_historical_name
+  source: text('source').$type<PlaceSource>().references(() => organisations.id), // provider org, seeded from PLACE_PROVIDERS
+  url: text('url')                               // canonical record at the source (adamlink.nl / bag.basisregistraties.overheid.nl / …)
 });
 
 // ============================================================================
@@ -53,6 +57,10 @@ export const placeGeometry = pgTable('place_geometry', {
   placeId: text('place_id').primaryKey().references(() => place.id),
   geometry: geometry('geometry'),                 // POINT, LINESTRING, or POLYGON
   spatialFrequency: integer('spatial_frequency'), // number of base cells this geometry spans
+  // Geometry provenance, set ONLY when it differs from the place's own (place.source/url) —
+  // e.g. NWB backfilling an Adamlink street that has no line. null = same provider as the place.
+  source: text('source').$type<PlaceSource>().references(() => organisations.id),
+  url: text('url'),                               // link to the geometry's source record
   // Period this geometry was the city's division — set ONLY for neighbourhood/district
   // (null for address/street). until null = open/current.
   since: date('since'),

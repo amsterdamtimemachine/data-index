@@ -130,7 +130,7 @@ export async function ingest(filePath: string) {
   console.log(`Resolved ${districts.length} places: ${wijken} districts (wijken), ${buurten} neighbourhoods (buurten)${skipped ? `, ${skipped} skipped` : ''}`);
 
   const inserted = await insertPlaces(
-    districts.map(d => ({ id: d.uri, type: d.type, label: d.label, wkt: d.wkt, since: d.since, until: d.until })),
+    districts.map(d => ({ id: d.uri, type: d.type, label: d.label, source: 'adamlink', url: d.uri, wkt: d.wkt, since: d.since, until: d.until })),
     { sourceSrid: 4326, onConflict: 'replaceAll' }
   );
 

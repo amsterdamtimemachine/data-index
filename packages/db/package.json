@@ -24,6 +24,7 @@
     "pg": "^8.22.0"
   },
   "devDependencies": {
+    "@types/geojson": "^7946.0.16",
     "@types/n3": "^1.26.1",
     "@types/pg": "^8.20.0",
     "drizzle-kit": "^0.31.10",

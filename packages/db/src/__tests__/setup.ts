@@ -72,7 +72,7 @@ export async function setupTestDb() {
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS place (
       id TEXT PRIMARY KEY, type TEXT NOT NULL,
-      name TEXT
+      name TEXT, source TEXT REFERENCES organisations(id), url TEXT
     )
   `);
   await db.execute(sql`
@@ -80,6 +80,8 @@ export async function setupTestDb() {
       place_id TEXT PRIMARY KEY REFERENCES place(id),
       geometry geometry(Geometry, 28992),
       spatial_frequency INTEGER,
+      source TEXT REFERENCES organisations(id),
+      url TEXT,
       since DATE, until DATE
     )
   `);

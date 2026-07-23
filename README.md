@@ -29,6 +29,7 @@ Rather than curating or contextualising the data, the index presents sources as 
   - [Dates sources](#dates-sources)
   - [Dates resolution](#dates-resolution)
 - [Data ingestion](#data-ingestion)
+  - [Getting the data](#getting-the-data)
   - [Place data ingestion](#place-data-ingestion)
     - [Place datasets](#place-datasets)
   - [Minimum required fields per feature](#minimum-required-fields-per-feature)
@@ -78,22 +79,26 @@ erDiagram
     }
 
     place {
-        text id PK "e.g. lp-1000001"
+        text id PK "e.g. https://adamlink.nl/geo/lp/1000001"
         text type  "address | street | neighbourhood | district"
         text name  "e.g. Prins Hendrikkade 93"
+        text source FK "provider org: adamlink | cbs | nwb | bag"
+        text url  "link to the origin record"
     }
 
     place_geometry {
-        text place_id PK "e.g. lp-1000001"
+        text place_id PK "e.g. https://adamlink.nl/geo/lp/1000001"
         geometry geometry  "POINT, LINESTRING, or POLYGON"
         integer spatial_frequency  "e.g. 47 # cells spanned"
+        text source  "geometry provider when it differs from place.source (e.g. nwb); null = same"
+        text url  "link to the geometry's source record; null = same as place.url"
         date since  "neighbourhood/district era start; null for address/street"
         date until  "era end; null = open/current"
     }
 
     place_historical_name {
         text id PK "e.g. https://adamlink.nl/geo/address/A1"
-        text place_id FK "e.g. lp-1000001"
+        text place_id FK "e.g. https://adamlink.nl/geo/lp/1000001"
         text name  "e.g. Prins Hendrikkade 93"
         date since  "e.g. 1943-01-01"
         date until  "e.g. 1976-01-01"
@@ -168,6 +173,7 @@ erDiagram
     }
 
     organisations||--o{datasets:"has datasets"
+    organisations||--o{place:"provides geometry"
     datasets||--o{features:"has"
     place||--||place_geometry:"has geometry"
     place||--o{place_historical_name:"has historical names"
@@ -181,9 +187,9 @@ erDiagram
     features||..o{cell_features:"counted in"
 ```
 
-- **organisations**: Institutions that provide datasets
+- **organisations**: Institutions that provide datasets, or place geometry (referenced by `place.source`)
 - **datasets**: Data collections from organisations
-- **place**: Physical location identity (id, type, name)
+- **place**: Physical location identity (id, type, name); `source` is the provider organisation
 - **place_geometry**: A place's geometry (RD / EPSG:28992) and the period it was valid (1:1 with place)
 - **place_historical_name**: Dated past names linked to places (addresses, streets), used to show what a location was called at a given time
 - **tags**: Thematic categories (e.g. Nature, Transport, Living) assigned to features. Work in progress, generated via AI classification across datasets
@@ -281,13 +287,31 @@ Both name- and geometry-windows run from `since` up to but not including `until`
 
 ## Data ingestion
 
+### Getting the data
+
+Ingestion reads files from a local data directory; how you obtain each differs by source:
+
+- **Adamlink place data** — download the TTLs from [adamlink.nl/data](https://adamlink.nl/data): the neighbourhoods & districts, streets, LPS, and adressen files. Static, versioned downloads.
+- **PDOK base registries (CBS / NWB / BAG)** — not downloaded by hand. `db:fetch` queries the [PDOK](https://www.pdok.nl) WFS and writes a ground-truth file:
+
+  ```bash
+  bun run db:fetch -s cbs-areas     -o <data-dir>/cbs-areas.geojson
+  bun run db:fetch -s nwb-streets   -o <data-dir>/nwb-streets.geojson
+  bun run db:fetch -s bag-addresses -o <data-dir>/bag-addresses.ndjson
+  ```
+
+  Splitting fetch from ingest keeps ingestion offline and reproducible and pins each PDOK snapshot as an inspectable file; re-run a fetch to refresh it.
+- **Feature datasets (Beeldbank, Joods Monument, Delpher)** — currently private derivatives of mostly-public source collections, so they are not publicly distributable.
+
+All files land in the data directory; the ingestion steps below read them.
+
 ### Place data ingestion
 
 The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Adamlink is a Linked Open Data service that connects historical Amsterdam address registries to point geometries, enabling features to be linked to physical locations with historical address names.
 
 Adamlink place data must be ingested before any dataset. See the [Development](#development) or [Production](#production) sections for the full ingestion order.
 
-Every `place` row is sourced from Adamlink. A feature is skipped at ingest if it can't be resolved to an existing place, or if it lacks the stable source identifier its `id` is derived from — no feature row is created and nothing unlinked lands in the database.
+Adamlink is the backbone, but it doesn't cover everything — its addresses stop at 1943, it doesn't include the recently-annexed municipality of Weesp, and it misses some Amsterdam streets. Three national base registries fill those gaps (see [Place datasets](#place-datasets)), and every `place` row records its `source` (`adamlink` / `cbs` / `nwb` / `bag`) and a `url` to the origin record. A feature is skipped at ingest if it can't be resolved to an existing place, or if it lacks the stable source identifier its `id` is derived from — no feature row is created and nothing unlinked lands in the database.
 
 If you are deploying this for **another Dutch city**, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. The `geometry-point-template.ts` example shows how to match incoming coordinates to existing places; for creating new places, adapt the pattern from `lps.ts`. The core requirement is that each feature links to a `place` row that has a geometry.
 
@@ -295,7 +319,9 @@ For a city **outside the Netherlands** there is one more step: the Dutch nationa
 
 #### Place datasets
 
-All place geometry comes from these public Adamlink datasets.
+Place data comes from two kinds of source, distinguished by the `source` column. **Adamlink** is the backbone — historical geometry and address history. Three **PDOK base registries** fill what Adamlink lacks, for Amsterdam and the annexed municipality of Weesp.
+
+Adamlink (download the TTLs, see [Getting the data](#getting-the-data)):
 
 | Dataset | Description | Format |
 |---------|-------------|--------|
@@ -303,6 +329,16 @@ All place geometry comes from these public Adamlink datasets.
 | [Streets](https://adamlink.nl/data) | Street geometries (LINESTRING) with historical name variants | TTL |
 | [LPS](https://adamlink.nl/data) | Linked point set: historical address-to-geometry mappings from 7 Amsterdam registries (1832–1976) | TTL |
 | [Adressen](https://adamlink.nl/data) | Dated address observations linking to LPS points via `schema:geoContains` | TTL |
+
+Three PDOK base registries fill the gaps, fetched with `db:fetch` (scope Amsterdam + Weesp — see [Getting the data](#getting-the-data)). CBS and BAG ingest via the generic `pdok-places` source; NWB has its own `nwb-streets` source that reconciles against Adamlink at ingest.
+
+- **[CBS WijkenBuurten](https://service.pdok.nl/cbs/wijkenbuurten/2022/wfs/v1_0)** (`source` = `cbs`, GeoJSON) — Weesp's neighbourhoods (buurten) and districts (wijken), annexed by Amsterdam in 2022 and absent from Adamlink.
+- **[NWB Wegen](https://service.pdok.nl/rws/nwbwegen/wfs/v1_0)** (`source` = `nwb`, GeoJSON) — the fetcher pulls *all* Amsterdam streets (incl. annexed Weesp); the `nwb-streets` ingest (`-x <adamlinkstraten.ttl>`, required) reconciles them against Adamlink by BAG openbare-ruimte id (`bagOrl` ↔ Adamlink `owl:sameAs`) and does two jobs:
+  - **gap-fill** — streets absent from Adamlink become `nwb-<bagOrl>` places (`source` = `nwb`);
+  - **backfill** — streets Adamlink *names* but has no line for keep their Adamlink id, name, and dated names, and borrow the NWB geometry; that borrowed line is recorded on `place_geometry.source` = `nwb` (with a link to the BAG record), so it reads as an Adamlink street with NWB geometry.
+
+  Streets Adamlink already draws are skipped, as are NWB segments without a `bagOrl` (bridges/locks).
+- **[BAG](https://service.pdok.nl/lv/bag/wfs/v2_0)** (`source` = `bag`, NDJSON) — current addresses; Adamlink's address history stops at 1943.
 
 ### Minimum required fields per feature
 
@@ -376,6 +412,11 @@ bun run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.tt
 bun run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
 bun run db:ingest -s lps -f <path-to-lps.ttl>
 bun run db:ingest -s adressen -f <path-to-adressen.ttl>
+
+# PDOK gap-fills (Amsterdam + Weesp; fetch them first, see Getting the data)
+bun run db:ingest -s pdok-places -f <data-dir>/cbs-areas.geojson
+bun run db:ingest -s nwb-streets -f <data-dir>/nwb-streets.geojson -x <data-dir>/adamlinkstraten.ttl
+bun run db:ingest -s pdok-places -f <data-dir>/bag-addresses.ndjson
 
 # Ingest datasets (any order)
 bun run db:ingest -s <dataset-name> -f <path-to-file>
@@ -465,6 +506,11 @@ etl -s streets  -f /data/adamlinkstraten.ttl
 etl -s lps      -f /data/lps.ttl
 etl -s adressen -f /data/adressen.ttl
 
+# PDOK gap-fills (Amsterdam + Weesp; fetch them first — see "Getting the data")
+etl -s pdok-places -f /data/cbs-areas.geojson
+etl -s nwb-streets -f /data/nwb-streets.geojson -x /data/adamlinkstraten.ttl
+etl -s pdok-places -f /data/bag-addresses.ndjson
+
 etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
@@ -513,6 +559,10 @@ etl -s neighbourhoods-and-districts -f /data/adamlinkbuurten.ttl
 etl -s streets  -f /data/adamlinkstraten.ttl
 etl -s lps      -f /data/lps.ttl
 etl -s adressen -f /data/adressen.ttl
+# PDOK gap-fills (Amsterdam + Weesp; fetch them first — see "Getting the data")
+etl -s pdok-places -f /data/cbs-areas.geojson
+etl -s nwb-streets -f /data/nwb-streets.geojson -x /data/adamlinkstraten.ttl
+etl -s pdok-places -f /data/bag-addresses.ndjson
 etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
