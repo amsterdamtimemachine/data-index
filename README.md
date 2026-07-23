@@ -41,12 +41,10 @@ Rather than curating or contextualising the data, the index presents sources as 
   - [Database UI](#database-ui)
   - [Testing](#testing)
 - [Production](#production)
-  - [Run the ETL from the image, not from your checkout](#run-the-etl-from-the-image-not-from-your-checkout)
-  - [One clone per deployment](#one-clone-per-deployment)
-  - [First time server setup](#first-time-server-setup)
-  - [Adding a second deployment on the same host](#adding-a-second-deployment-on-the-same-host)
-  - [CI/CD](#cicd)
+  - [Self-hosted setup](#self-hosted-setup)
+  - [Existing Postgres setup](#existing-postgres-setup)
   - [Deploying a new image](#deploying-a-new-image)
+  - [Adding a second deployment on the same host](#adding-a-second-deployment-on-the-same-host)
   - [Environment variables](#environment-variables)
 
 ## Stack
@@ -408,91 +406,20 @@ bun run test:db:down   # stop and wipe the test DB
 
 ## Production
 
-The app always runs from a prebuilt image on GHCR — `:production` is built from `main`,
-`:staging` from `staging`. The database is either **self-hosted** (a Postgres container
-bundled alongside the app) or **external** (an existing server the app connects to).
-Those choices are independent per deployment: you can self-host staging and point
-production at a managed Postgres, or self-host both.
+The app runs from a prebuilt GHCR image — `:production` from `main`, `:staging` from
+`staging`. Its database is either **self-hosted** (a bundled Postgres container) or an
+**existing Postgres** you point it at. Both need PostGIS *and* `pg_roaringbitmap` (it backs
+the `cell_features` rollup): the self-hosted image bundles both; an existing server needs
+roaringbitmap added — see [Existing Postgres setup](#existing-postgres-setup).
 
-**The database is not stock Postgres.** It needs PostGIS *and* `pg_roaringbitmap`, which
-backs the `cell_features` rollup — `db:push-schema` cannot create that table without the
-type. The self-hosted image (`docker/Dockerfile.db`) bundles both, so a self-hosted
-deployment is handled for you. Pointing at your own existing Postgres, you'll likely need
-to add `pg_roaringbitmap` yourself (PostGIS you probably already have) — see below — then
-enable it in the ATM database (as a role with `CREATE EXTENSION` rights, i.e. superuser):
+Images build in CI on push once tests pass; pulling and restarting on the server is manual
+— see [Deploying a new image](#deploying-a-new-image).
 
-```sql
-CREATE EXTENSION IF NOT EXISTS roaringbitmap;
-```
+### Self-hosted setup
 
-A fresh self-hosted image self-provisions this on first init; an existing database needs
-it run once by hand.
-
-### Installing pg_roaringbitmap on an existing Postgres
-
-`pg_roaringbitmap` isn't in the usual package repos, so build it from source against your
-server's Postgres major version — the same steps `docker/Dockerfile.db` runs. On the DB
-host:
-
-```bash
-psql -c "SHOW server_version;"        # note the major (e.g. 16) — the build targets it
-
-sudo apt-get install -y build-essential git postgresql-server-dev-16   # match the major
-git clone --depth 1 --branch v1.2.0 https://github.com/ChenHuajun/pg_roaringbitmap.git
-cd pg_roaringbitmap
-make with_llvm=no                     # portable build; skips the clang bitcode step
-sudo make install with_llvm=no
-```
-
-Then run the `CREATE EXTENSION` above in the ATM database. Notes:
-
-- **No restart, no config change.** It's a plain type/functions extension — it does not use
-  `shared_preload_libraries`, so it loads live on `CREATE EXTENSION`.
-- **Match the major version.** The compiled library is tied to the Postgres major (16 ≠ 17)
-  and the CPU architecture.
-- **No compilers allowed on the DB host?** Build on a separate box with the *same* Postgres
-  major and OS/architecture, then copy the three artifacts (`roaringbitmap.so`,
-  `roaringbitmap.control`, `roaringbitmap--*.sql`) into that instance's `lib/` and
-  `share/extension/` directories.
-
-### Run the ETL from the image, not from your checkout
-
-The app's code comes from the image, but the schema and ETL are code too — and running
-them from a checkout means they can disagree with the image they're preparing a database
-for. Run them from the image instead:
-
-```bash
-$DC run --rm app bun run db:push-schema
-$DC run --rm -v /srv/atm-data:/data:ro app bun run db:ingest -s streets -f /data/adamlinkstraten.ttl
-```
-
-Same scripts, executed inside the container. Because they ship in the same image as the
-app, the schema, the ingestors and the app can never drift apart. It also means the
-server needs no Bun, no `bun install`, no `node_modules` and no build step — the checkout
-exists only to hold the compose files and `.env`, and the ETL reaches the database over
-the compose network rather than the published port.
-
-### One clone per deployment
-
-Give each deployment its own clone, on the branch matching its image tag:
-
-```
-~/data-index-prod      on main      → runs image :production
-~/data-index-staging   on staging   → runs image :staging
-```
-
-The branch only decides which compose files you get; all executed code comes from the
-image. So this is a one-time `git clone -b`, not a rule to remember before each command.
-
-Each clone has its own `.env`, which both Compose and Bun find by default. Deployments
-share nothing — separate volumes, container names and ports — so this is the same method
-whether they live on separate servers or on one host.
-
-### First time server setup
-
-Shown for staging with a self-hosted DB. For production, clone `main`, swap in
-`docker-compose.production.yml`, and use the default ports. For an external DB, drop the
-`self-hosted.yml` overlay and point `DB_*` at the existing server.
+Bundled Postgres + PostGIS + `pg_roaringbitmap`. One clone per deployment, on the branch
+matching its image tag; all code runs from the image. Shown for staging — for production
+clone `main` and swap `staging.yml` → `production.yml`.
 
 ```bash
 ssh user@server
@@ -502,22 +429,14 @@ curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER      # log out and back in
 docker compose version
 
-# Clone the branch this deployment serves. No bun install, no build — see above.
+# Clone the branch this deployment serves — no bun install, no build (code runs from the image).
 git clone -b staging git@github.com:amsterdamtimemachine/data-index.git ~/data-index-staging
 cd ~/data-index-staging
 
-cp .env.example .env
-# Edit .env:
-#   COMPOSE_PROJECT_NAME=data-index-staging  → keeps this deployment's containers and
-#                                              volumes distinct from production's
-#   DB_PASSWORD                              → change it. No '#' in the value.
-#   APP_PORT=3001  DB_PORT=5433              → only needed if another deployment shares
-#                                              the host. DB_PORT is the host-side port
-#                                              only; the app and ETL reach the DB on 5432
-#                                              over the compose network regardless.
-# Leave DB_HOST=localhost — the self-hosted overlay overrides it to `dataindex-db` for
-# containers. It only applies to a psql client on the host.
+cp .env.example .env                             # edit per the Environment variables table below
 
+# $DC = docker compose preloaded with this deployment's overlays. Reuse it for every command
+# below and later (e.g. `$DC pull app`). For production, swap staging.yml → production.yml.
 export DC="docker compose --env-file .env \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.self-hosted.yml \
@@ -530,9 +449,10 @@ $DC up -d --build --wait dataindex-db
 
 $DC run --rm app bun run db:push-schema
 
-# Place data first — a feature that resolves to no place is dropped silently, so the
-# wrong order yields an empty index rather than an error. DATA is the host directory
-# holding the source files; it is mounted read-only at /data inside the container.
+# Place data first — a feature that resolves to no place is dropped silently, so the wrong
+# order yields an empty index rather than an error. DATA holds the source files, mounted
+# read-only at /data. Run the ingest in tmux/screen — beeldbank is multi-GB, and a dropped
+# SSH session would kill it partway.
 export DATA=/srv/atm-data
 alias etl="$DC run --rm -v $DATA:/data:ro app bun run db:ingest"
 
@@ -550,34 +470,48 @@ etl -s delpher        -f /data/delpher_newspapers.csv
 # don't. Mandatory: features ingested without it won't appear on the map.
 $DC run --rm app bun run db:rebuild-index
 
-$DC up -d app
+$DC up -d app        # app + DB bind to loopback only — put a reverse proxy in front of 127.0.0.1:$APP_PORT
 ```
 
-Run the ingest inside `tmux` or `screen` — beeldbank is multi-GB and a dropped SSH
-session would kill it partway.
+### Existing Postgres setup
 
-Both the app and the bundled DB bind to loopback only, so nothing is reachable until you
-put a reverse proxy in front of `127.0.0.1:$APP_PORT`.
+Point the app at a Postgres you already run — no bundled DB container. It needs
+`pg_roaringbitmap`; PostGIS you likely already have.
 
-### Adding a second deployment on the same host
+```bash
+# 1. On the DB host — add pg_roaringbitmap. It isn't packaged, so build from source against
+#    the server's Postgres major version (the same steps docker/Dockerfile.db runs).
+psql -c "SHOW server_version;"                    # note the major, e.g. 16
+sudo apt-get install -y build-essential git postgresql-server-dev-16   # match the major
+git clone --depth 1 --branch v1.2.0 https://github.com/ChenHuajun/pg_roaringbitmap.git
+cd pg_roaringbitmap && make with_llvm=no && sudo make install with_llvm=no
+psql -d <atm_db> -c "CREATE EXTENSION IF NOT EXISTS roaringbitmap;"    # superuser; no restart
 
-Repeat the section above in a second clone: the other branch, its own `.env` with a
-different `COMPOSE_PROJECT_NAME` and free `APP_PORT` / `DB_PORT`, and `production.yml` in
-place of `staging.yml`. Nothing is shared, so the order you set them up in doesn't matter.
+# 2. On the app host — clone, configure, run schema + ETL against that DB.
+git clone -b main git@github.com:amsterdamtimemachine/data-index.git ~/data-index-prod
+cd ~/data-index-prod
+cp .env.example .env                              # point DB_* at the existing server (reachable
+                                                  # from the app container); rest per the table below
 
-The overlay order on the `-f` flags doesn't matter either — each file only sets what is
-genuinely its own, and the required DB vars are guarded in the base compose.
+# No self-hosted overlay — the app uses your DB_* instead of a bundled container.
+export DC="docker compose --env-file .env \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.production.yml"
 
-### CI/CD
+$DC run --rm app bun run db:push-schema
+export DATA=/srv/atm-data
+alias etl="$DC run --rm -v $DATA:/data:ro app bun run db:ingest"
+etl -s neighbourhoods-and-districts -f /data/adamlinkbuurten.ttl
+etl -s streets  -f /data/adamlinkstraten.ttl
+etl -s lps      -f /data/lps.ttl
+etl -s adressen -f /data/adressen.ttl
+etl -s beeldbank      -f /data/beeldbank.csv
+etl -s joods-monument -f /data/results_jm.csv
+etl -s delpher        -f /data/delpher_newspapers.csv
+$DC run --rm app bun run db:rebuild-index
 
-Two workflows publish images to GitHub Container Registry (GHCR). Both run the full test suite (inside a PostGIS service container) and only push if tests pass. Neither deploys to the server. Pulling and restarting is a manual step, which keeps the server's SSH surface private.
-
-| Branch | Workflow | Image tags |
-|---|---|---|
-| `main` | `.github/workflows/production.yml` | `production`, `production-<sha>` |
-| `staging` | `.github/workflows/staging.yml` | `staging`, `staging-<sha>` |
-
-Use `staging` to test a build before merging to `main`: push your branch into `staging`, wait for the workflow, then pull the staging image on the VPS to verify.
+$DC up -d app
+```
 
 ### Deploying a new image
 
@@ -623,6 +557,13 @@ $DC run --rm app bun run db:rebuild-index  # populates it — the map is empty u
 ```
 
 Only the `app` service is named, so `pull`/`up -d app` leaves a bundled DB running and its volume untouched.
+
+### Adding a second deployment on the same host
+
+Repeat a setup section in a second clone: the other branch, its own `.env` with a distinct
+`COMPOSE_PROJECT_NAME` and free `APP_PORT` / `DB_PORT`, and `production.yml` in place of
+`staging.yml`. Nothing is shared — separate volumes, container names and ports — so the
+order you set them up in doesn't matter, and neither does the `-f` overlay order.
 
 ### Environment variables
 
