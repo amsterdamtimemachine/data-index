@@ -447,6 +447,10 @@ export DC="docker compose --env-file .env \
 # until healthy.
 $DC up -d --build --wait dataindex-db
 
+# Pull the prebuilt app image from GHCR (public — no login). The app service also has a build
+# section, so without this Compose would build it locally instead of running the released image.
+$DC pull app
+
 $DC run --rm app bun run db:push-schema
 
 # Place data first — a feature that resolves to no place is dropped silently, so the wrong
@@ -498,6 +502,10 @@ export DC="docker compose --env-file .env \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.production.yml"
 
+# Must print only `app` and never `dataindex-db`, confirming no bundled DB is in scope.
+$DC config --services
+
+$DC pull app                                      # prebuilt image from GHCR; else Compose builds it locally
 $DC run --rm app bun run db:push-schema
 export DATA=/srv/atm-data
 alias etl="$DC run --rm -v $DATA:/data:ro app bun run db:ingest"
