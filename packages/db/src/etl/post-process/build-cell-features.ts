@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { BASE_BIN_SIZE } from '@atm/shared';
+import { PRECOMP_TIME_BIN_YEARS } from '@atm/shared';
 import { db } from '../../client';
 import { cellFeatures, features, featureToPlace, place, placeCells } from '../../schema';
 
@@ -27,7 +27,7 @@ type UncoveredRow = { uncovered: string };
  * have to be built in the same pass off the same numbering.)
  */
 export async function buildCellFeatures() {
-  console.log(`\nRebuilding cell_features (base bin: ${BASE_BIN_SIZE} years)...`);
+  console.log(`\nRebuilding cell_features (base bin: ${PRECOMP_TIME_BIN_YEARS} years)...`);
 
   await db.execute(sql`TRUNCATE ${cellFeatures}`);
 
@@ -55,9 +55,9 @@ export async function buildCellFeatures() {
       -- every base bin the feature's date range touches, floored to the bin grid so
       -- it lines up with generateTimeSlices' round boundaries
       CROSS JOIN LATERAL generate_series(
-        (FLOOR(EXTRACT(YEAR FROM f.start_date) / ${BASE_BIN_SIZE}::int) * ${BASE_BIN_SIZE}::int)::int,
-        (FLOOR(EXTRACT(YEAR FROM f.end_date) / ${BASE_BIN_SIZE}::int) * ${BASE_BIN_SIZE}::int)::int,
-        ${BASE_BIN_SIZE}::int
+        (FLOOR(EXTRACT(YEAR FROM f.start_date) / ${PRECOMP_TIME_BIN_YEARS}::int) * ${PRECOMP_TIME_BIN_YEARS}::int)::int,
+        (FLOOR(EXTRACT(YEAR FROM f.end_date) / ${PRECOMP_TIME_BIN_YEARS}::int) * ${PRECOMP_TIME_BIN_YEARS}::int)::int,
+        ${PRECOMP_TIME_BIN_YEARS}::int
       ) AS b(bin)
     )
     SELECT cell_x, cell_y, time_bin, record_type, dataset_id, place_type, rb_build_agg(n)

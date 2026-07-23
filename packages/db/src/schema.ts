@@ -160,9 +160,9 @@ export const placeCells = pgTable('place_cells', {
 // int4 and features.id is a 128-bit uuid. The surrogate is assigned during the
 // rebuild and never persisted — only cardinality is ever read back, never identity.
 //
-// time_bin is the BASE_BIN_SIZE bin the feature's date range touches (one row per
+// time_bin is the PRECOMP_TIME_BIN_YEARS bin the feature's date range touches (one row per
 // bin). Display bins are unions of whole base bins, which is why binSize must be a
-// multiple of BASE_BIN_SIZE (see normaliseBinSize).
+// multiple of PRECOMP_TIME_BIN_YEARS (see normaliseBinSize).
 // ============================================================================
 export const cellFeatures = pgTable('cell_features', {
   cellX: smallint('cell_x').notNull(),

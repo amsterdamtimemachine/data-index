@@ -1,5 +1,5 @@
 import { sql, type SQL } from 'drizzle-orm';
-import { BASE_BIN_SIZE } from '@atm/shared';
+import { PRECOMP_TIME_BIN_YEARS } from '@atm/shared';
 import { cellFeatures } from '../schema';
 import { andIn } from './filters';
 
@@ -18,7 +18,7 @@ export const countExpr = sql`rb_cardinality(rb_or_agg(${cellFeatures.featureIds}
  * Fold a base bin into its display bin. Both are anchored to round multiples of
  * their size (generateTimeSlices floors slice starts), so integer division lands a
  * base bin in the display bin that contains it — provided binSize is a multiple of
- * BASE_BIN_SIZE, which normaliseBinSize guarantees.
+ * PRECOMP_TIME_BIN_YEARS, which normaliseBinSize guarantees.
  *
  * Parenthesised so callers can append a cast: `::` binds tighter than `*`, so an
  * unwrapped expression would cast only the trailing operand.
@@ -56,10 +56,10 @@ export function categoryFilter(
 /**
  * Restrict to the base bins covered by the half-open display window [fromYear, toYear).
  * A base bin belongs to the window iff its start does — bins never straddle a display
- * boundary, because binSize is a multiple of BASE_BIN_SIZE.
+ * boundary, because binSize is a multiple of PRECOMP_TIME_BIN_YEARS.
  */
 export function binWindow(fromYear: number, toYear: number): SQL {
   return sql`${cellFeatures.timeBin} >= ${fromYear} AND ${cellFeatures.timeBin} < ${toYear}`;
 }
 
-export { BASE_BIN_SIZE };
+export { PRECOMP_TIME_BIN_YEARS };

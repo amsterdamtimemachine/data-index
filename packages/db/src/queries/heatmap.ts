@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { Heatmap, HeatmapTimeline, HeatmapResponse, HeatmapDimensions, HeatmapResolutionConfig, RecordType, PlaceType } from '@atm/shared';
-import { DEFAULT_BIN_SIZE, CELL_SIZE_METERS } from '@atm/shared';
+import { DISPLAY_TIME_BIN_DEFAULT_YEARS, PRECOMP_GRID_CELL_METERS } from '@atm/shared';
 import { normaliseBinSize } from './bin-size';
 import { db } from '../client';
 import { cellFeatures } from '../schema';
@@ -63,8 +63,8 @@ function buildRd(minX: number, minY: number, maxCellX: number, maxCellY: number,
   return {
     originX: minX,
     originY: minY,
-    cellWidth: ((maxCellX + 1) * CELL_SIZE_METERS) / gridCols,
-    cellHeight: ((maxCellY + 1) * CELL_SIZE_METERS) / gridRows
+    cellWidth: ((maxCellX + 1) * PRECOMP_GRID_CELL_METERS) / gridCols,
+    cellHeight: ((maxCellY + 1) * PRECOMP_GRID_CELL_METERS) / gridRows
   };
 }
 
@@ -92,7 +92,7 @@ export async function getHeatmap(
   recordTypes?: RecordType[],
   datasetIds?: string[],
   placeTypes?: PlaceType[],
-  binSizeYears: number = DEFAULT_BIN_SIZE
+  binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
 
@@ -105,7 +105,7 @@ export async function getHeatmap(
     };
   }
 
-  // cell_features buckets at BASE_BIN_SIZE; a display bin that isn't a whole number
+  // cell_features buckets at PRECOMP_TIME_BIN_YEARS; a display bin that isn't a whole number
   // of base bins can't be answered exactly, so snap before deriving slices.
   binSizeYears = normaliseBinSize(binSizeYears);
 
@@ -161,7 +161,7 @@ export async function getHeatmapTimeline(
   recordTypes?: RecordType[],
   datasetIds?: string[],
   placeTypes?: PlaceType[],
-  binSizeYears: number = DEFAULT_BIN_SIZE
+  binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
   binSizeYears = normaliseBinSize(binSizeYears);

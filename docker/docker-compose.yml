@@ -17,7 +17,7 @@ services:
     # Required-var guards — fail loud if missing. They live here, not in the
     # deployment overlays, so the self-hosted overlay can override DB_HOST for the
     # app container whatever order the -f flags come in. Every other var
-    # (PUBLIC_*, BASE_BIN_SIZE, GRID_*, BIN_SIZE_*, CACHE_TTL_MINUTES, …) flows
+    # (PUBLIC_*, PRECOMP_*, DISPLAY_*, CACHE_TTL_MINUTES, …) flows
     # through via env_file above.
     environment:
       DB_HOST: ${DB_HOST:?DB_HOST is required — copy .env.example to .env}

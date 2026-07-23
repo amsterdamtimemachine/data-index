@@ -2,7 +2,9 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { onMount, onDestroy } from 'svelte';
 	import { env } from '$env/dynamic/public';
-	import maplibre, { type Map as MapLibreMap } from 'maplibre-gl';
+	// v6 is ESM-only with no default export — namespace import for maplibre.Map / .StyleSpecification.
+	import * as maplibre from 'maplibre-gl';
+	import type { Map as MapLibreMap } from 'maplibre-gl';
 
 	const tileSourceUrl = env.PUBLIC_TILE_SOURCE_URL || 'https://tiles.openfreemap.org/planet';
 	const BASE_STYLE: maplibre.StyleSpecification = {
