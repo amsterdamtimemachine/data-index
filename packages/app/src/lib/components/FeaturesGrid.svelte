@@ -3,17 +3,17 @@
 	import FeatureCard from '$components/FeatureCard.svelte';
 	import { createMasonryMemoized, type MasonryMemoizedInstance } from '$utils/masonry';
 	import debounce from 'lodash.debounce';
-	import type { Feature } from '@atm/shared/types';
+	import type { FeatureResult } from '@atm/shared/types';
 
 	type Props = {
-		features: Feature[];
+		features: FeatureResult[];
 		columns?: number;
 		layoutMemory?: Map<string, number>;
 	};
 	let { features, columns, layoutMemory }: Props = $props();
 
 	// Use programmatic responsive columns if no explicit columns prop provided
-	const useResponsiveColumns = columns === undefined;
+	const useResponsiveColumns = $derived(columns === undefined);
 
 	let masonryContainer = $state<HTMLElement>();
 	let masonry: MasonryMemoizedInstance | null = null;
@@ -91,7 +91,7 @@
 				<div class="masonry-column"></div>
 			{/each}
 			{#each features as feature, index (index)}
-				<div class="masonry-item" data-feature-url={feature.url}>
+				<div class="masonry-item" data-feature-id={feature.id}>
 					<FeatureCard {feature} />
 				</div>
 			{/each}

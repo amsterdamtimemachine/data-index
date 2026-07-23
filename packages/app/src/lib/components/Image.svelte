@@ -22,9 +22,9 @@
 	}: Props = $props();
 
 	// Use href from svelte-markdown if available, otherwise use src
-	const imageSrc = href ?? src ?? '';
+	const imageSrc = $derived(href ?? src ?? '');
 	// Use text from svelte-markdown if available, otherwise use alt
-	const imageAlt = text ?? alt ?? '';
+	const imageAlt = $derived(text ?? alt ?? '');
 
 	const baseClasses = 'h-auto rounded-md shadow-[0_0_20px_0_rgba(0,0,0,0.15)]';
 	const figureClasses = 'mb-6 flex flex-col items-center';

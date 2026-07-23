@@ -50,6 +50,7 @@
 		{@const barWidth = 100 / bins.length}
 		{@const barHeight = barHeights[i]}
 		{@const x = (i / bins.length) * 100}
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<rect
 			x="{x}%"
 			y={timelineHeight - barHeight}

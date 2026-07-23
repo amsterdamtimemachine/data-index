@@ -1,0 +1,15 @@
+# Production overlay: pulls image from GHCR, binds to loopback only. Works against
+# an external DB by default. Layer docker-compose.self-hosted.yml on as well if you
+# want the bundled DB — either order, the DB vars are guarded in the base.
+#
+#   docker compose --env-file .env \
+#     -f docker/docker-compose.yml \
+#     -f docker/docker-compose.production.yml up -d
+services:
+  app:
+    image: ghcr.io/amsterdamtimemachine/data-index/app:production
+    # !override replaces the base's port list rather than appending to it. Without
+    # it the base's "${APP_PORT}:3000" (all interfaces) survives the merge, which
+    # both defeats the loopback binding below and collides with it on the same port.
+    ports: !override
+      - "127.0.0.1:${APP_PORT:-3000}:3000"

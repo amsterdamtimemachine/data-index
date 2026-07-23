@@ -1,15 +1,13 @@
 <script lang="ts">
-	import type { RawFeature, Feature } from '@atm/shared/types';
+	import type { FeatureResult } from '@atm/shared/types';
 	import ArrowsOut from 'phosphor-svelte/lib/ArrowsOut';
-	import ArrowSquareOut from 'phosphor-svelte/lib/ArrowSquareOut';
-	import X from 'phosphor-svelte/lib/X';
 	import { formatDatasetTitle } from '$utils/format';
 	import { mergeCss } from '$utils/utils';
 	import Button from '$components/Button.svelte';
 	import Link from '$components/Link.svelte';
 
 	type Props = {
-		feature: Feature;
+		feature: FeatureResult;
 		class?: string;
 		onExpand: () => void;
 		expanded?: boolean;
@@ -25,11 +23,19 @@
 		className
 	)}
 >
-	{#if feature.url}
-		<Link href={feature.url} target="_blank" rel="noopener noreferrer" class="text-base">
-			{formatDatasetTitle(feature.ds)} →
-		</Link>
-	{/if}
+	<div class="flex items-center gap-2 text-base">
+		{#if expanded && feature.organisationLabel && feature.organisationUrl}
+			<Link href={feature.organisationUrl} target="_blank" rel="noopener noreferrer">
+				{feature.organisationLabel}
+			</Link>
+			<span class="text-gray-400">›</span>
+		{/if}
+		{#if feature.url}
+			<Link href={feature.url} target="_blank" rel="noopener noreferrer">
+				{feature.datasetLabel ? formatDatasetTitle(feature.datasetLabel) : 'Source'} →
+			</Link>
+		{/if}
+	</div>
 
 	{#if !expanded}
 		<Button onclick={onExpand} icon={ArrowsOut} aria-label="View feature details">Expand</Button>

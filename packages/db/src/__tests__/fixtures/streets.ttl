@@ -1,0 +1,9 @@
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+
+# One street with a single undated geometry node (the "current" version the parser
+# picks: no EarliestBegin/EarliestEnd on the geom node). LINESTRING in WGS84.
+<https://adamlink.nl/geo/street/S1>
+    skos:prefLabel "Test Street" ;
+    geo:hasGeometry _:gs1 .
+_:gs1 geo:asWKT "LINESTRING(4.90 52.37, 4.91 52.371)" .

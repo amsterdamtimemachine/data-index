@@ -10,10 +10,11 @@
 	interface Props {
 		class?: string;
 		isExpanded: boolean;
+		header?: Snippet;
 		children?: Snippet;
 	}
 
-	let { class: className, isExpanded = $bindable(true), children }: Props = $props();
+	let { class: className, isExpanded = $bindable(true), header, children }: Props = $props();
 
 	const navPosition = tweened(isExpanded ? 0 : -100, {
 		duration: 200,
@@ -53,7 +54,14 @@
 		size={18}
 		aria-label={isExpanded ? 'Close navigation menu' : 'Open navigation menu'}
 	/>
-	<div class="w-full h-full" inert={!isExpanded}>
-		{@render children?.()}
+	<div class="w-full h-full flex flex-col" inert={!isExpanded}>
+		{#if header}
+			<div class="shrink-0">
+				{@render header()}
+			</div>
+		{/if}
+		<div class="flex-1 overflow-y-auto">
+			{@render children?.()}
+		</div>
 	</div>
 </div>

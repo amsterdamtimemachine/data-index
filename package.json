@@ -4,29 +4,41 @@
   "engines": {
     "bun": "latest"
   },
-  "packageManager": "bun@1.1.38",
+  "packageManager": "bun@1.3.14",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
-    "sync:env": "scripts/sync-env.sh",
     "dev": "turbo run dev --filter=@atm/app",
     "build": "turbo run build",
-    "generate": "turbo run generate --filter=@atm/preprocessor",
     "lint": "turbo run lint",
-    "build:app": "scripts/sync-env.sh && turbo run build --filter=@atm/app",
+    "build:app": "turbo run build --filter=@atm/app",
     "clean": "turbo run clean",
-    "docker:up": "docker compose up",
-    "docker:up:build": "docker compose up --build",
-    "docker:down": "docker compose down",
-    "docker:regenerate": "rm -f data/docker/visualization.bin && docker compose up --build",
-    "docker:logs": "docker compose logs -f",
-    "docker:logs:app": "docker compose logs -f app",
-    "docker:logs:init": "docker compose logs -f data-init",
-    "docker:restart": "docker compose restart",
-    "docker:restart:app": "docker compose restart app"
+    "db:migrate": "bunx drizzle-kit migrate --config=packages/db/drizzle.config.ts",
+    "db:generate": "bunx drizzle-kit generate --config=packages/db/drizzle.config.ts",
+    "db:push-schema": "bunx drizzle-kit push --config=packages/db/drizzle.config.ts",
+    "db:ingest": "bun run packages/db/src/etl/index.ts ingest",
+    "db:rebuild-index": "bun run packages/db/src/etl/index.ts rebuild-index",
+    "db:studio": "bunx drizzle-kit studio --config=packages/db/drizzle.config.ts",
+    "test": "turbo run test",
+    "test:unit": "cd packages/db && bun test src/queries/__tests__",
+    "test:integration": "cd packages/db && DATABASE_URL=postgresql://test:test@localhost:5434/dataindex_test CACHE_TTL_MINUTES=0 bun test src/__tests__",
+    "test:db:up": "docker compose -f docker/docker-compose.test.yml up -d --build --wait",
+    "test:db:down": "docker compose -f docker/docker-compose.test.yml down -v",
+    "docker:db:up": "docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.self-hosted.yml up -d dataindex-db",
+    "docker:db:down": "docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.self-hosted.yml down",
+    "docker:up": "docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.self-hosted.yml up",
+    "docker:up:build": "docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.self-hosted.yml up --build",
+    "docker:down": "docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.self-hosted.yml down",
+    "docker:logs": "docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.self-hosted.yml logs -f",
+    "docker:logs:app": "docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.self-hosted.yml logs -f app",
+    "docker:restart": "docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.self-hosted.yml restart",
+    "docker:restart:app": "docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.self-hosted.yml restart app"
   },
   "devDependencies": {
-    "turbo": "^2.5.6"
+    "turbo": "^2.9.18"
+  },
+  "overrides": {
+    "protocol-buffers-schema": "3.6.1"
   }
 }

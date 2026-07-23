@@ -1,12 +1,12 @@
 <script lang="ts">
-	import type { RawFeature } from '@atm/shared/types';
+	import type { FeatureResult } from '@atm/shared/types';
 	import { mergeCss } from '$utils/utils';
 	import { formatTimePeriod } from '$utils/format';
-	import { translateContentType } from '$utils/translations';
+	import { translate } from '$utils/translations';
 	import Tag from './Tag.svelte';
 
 	type Props = {
-		feature: RawFeature;
+		feature: FeatureResult;
 		class?: string;
 	};
 
@@ -16,11 +16,18 @@
 <div class={mergeCss('border-b border-atm-sand-border', className)}>
 	<!-- Dataset and Record Type -->
 	<div class="flex w-full flex-wrap justify-between items-center gap-2">
-		<Tag variant="outline" class="flex-shrink-0">
-			{translateContentType(feature.recordType)}
-		</Tag>
+		<div class="flex flex-wrap items-center gap-2">
+			<Tag variant="outline" class="flex-shrink-0">
+				{translate(feature.recordType)}
+			</Tag>
+			{#if feature.placeType}
+				<Tag variant="outline" class="flex-shrink-0">
+					{translate(feature.placeType)}
+				</Tag>
+			{/if}
+		</div>
 		<span class="text-base text-black flex-shrink-0">
-			{formatTimePeriod(feature.per)}
+			{formatTimePeriod(feature.dateRange)}
 		</span>
 	</div>
 </div>

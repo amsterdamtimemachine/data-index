@@ -1,52 +1,31 @@
 // src/routes/api/metadata/+server.ts
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDataService } from '$lib/server/dataServiceSingleton';
-import type { VisualizationMetadata } from '@atm/shared/types';
-
-interface MetadataApiResponse extends VisualizationMetadata {
-	success: boolean;
-	message?: string;
-}
+import { getMetadata } from '@atm/db';
 
 export const GET: RequestHandler = async () => {
 	try {
 		console.log('📋 Metadata API request');
 
-		const dataService = await getDataService();
-		const metadata = await dataService.getVisualizationMetadata();
+		const metadata = await getMetadata();
 
 		console.log(
 			`✅ Metadata API success - ${metadata.timeSlices.length} time slices, ${metadata.recordTypes.length} record types`
 		);
 
-		return json(
-			{
-				...metadata,
-				success: true
-			},
-			{
-				headers: {
-					'Cache-Control': 'public, max-age=86400', // Cache for 24 hours (metadata rarely changes)
-					'Access-Control-Allow-Origin': '*'
-				}
-			}
-		);
-	} catch (err) {
-		console.error('❌ Metadata API error:', err);
+		const headers = {
+			'Cache-Control': 'public, max-age=86400', // Cache for 24 hours
+			'Access-Control-Allow-Origin': '*'
+		};
 
-		return json(
-			{
-				success: false,
-				message: err instanceof Error ? err.message : 'Internal server error'
-			},
-			{
-				status: 500,
-				headers: {
-					'Access-Control-Allow-Origin': '*'
-				}
-			}
-		);
+		return json(metadata, { headers });
+	} catch (err) {
+		if (err && typeof err === 'object' && 'status' in err) throw err;
+		console.error('❌ Metadata API error:', err);
+		throw error(500, {
+			code: 'INTERNAL_ERROR',
+			message: 'Failed to load metadata'
+		});
 	}
 };
 

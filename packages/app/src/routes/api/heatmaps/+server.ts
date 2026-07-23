@@ -1,183 +1,77 @@
 // src/routes/api/heatmaps/+server.ts
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RecordType, HeatmapTimelineApiResponse, HeatmapTimeline } from '@atm/shared/types';
-import { getDataService } from '$lib/server/dataServiceSingleton';
-import { mergeHeatmapTimeline } from '$utils/heatmap';
+import type { HeatmapResolutionConfig } from '@atm/shared/types';
+import { DISPLAY_GRID_DEFAULT_COLS, DISPLAY_GRID_MIN_COLS, DISPLAY_GRID_MAX_COLS, DISPLAY_TIME_BIN_DEFAULT_YEARS } from '@atm/shared';
+import { getHeatmap, getHeatmapTimeline } from '@atm/db/queries';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes } from '$lib/server/query-params';
+
+function parseGridParam(value: string | null, defaultVal: number): number {
+	if (value === null) return defaultVal;
+	const parsed = parseInt(value, 10);
+	if (isNaN(parsed)) return defaultVal;
+	return Math.min(Math.max(parsed, DISPLAY_GRID_MIN_COLS), DISPLAY_GRID_MAX_COLS);
+}
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
-		// Parse query parameters
-		const recordTypesParam = url.searchParams.get('recordTypes');
-		const tagsParam = url.searchParams.get('tags');
-		const tagOperatorParam = url.searchParams.get('tagOperator');
+		const timeSliceParam = url.searchParams.get('timeSlice');
+		const recordTypes = parseRecordTypes(url);
+		const datasetIds = parseDatasets(url);
+		const placeTypes = parsePlaceTypes(url);
 
-		// Get API service to access metadata for defaulting
-		const dataService = await getDataService();
+		// Parse grid resolution — only width (cols); rows are derived from the data's
+		// aspect ratio server-side so display cells are square.
+		const cols = parseGridParam(url.searchParams.get('cols'), DISPLAY_GRID_DEFAULT_COLS);
+		const resolution: HeatmapResolutionConfig = { cols };
 
-		// Parse recordTypes - default to all available recordTypes if none specified
-		let recordTypes: RecordType[];
-		if (!recordTypesParam) {
-			const metadata = await dataService.getVisualizationMetadata();
-			recordTypes = metadata.recordTypes;
-			console.log(`🔥 No recordTypes specified, defaulting to all: ${recordTypes.join(', ')}`);
-		} else {
-			recordTypes = recordTypesParam.split(',').map((t) => t.trim()) as RecordType[];
-		}
-
-		// Parse tags if provided
-		let tags: string[] | undefined;
-		if (tagsParam) {
-			tags = tagsParam
-				.split(',')
-				.map((tag) => tag.trim())
-				.filter((tag) => tag.length > 0);
-		}
+		// Parse bin size
+		// Forwarded as-is; the query layer clamps and snaps it to a valid bin (normaliseBinSize).
+		const binSizeParam = url.searchParams.get('binSize');
+		const binSize = binSizeParam ? parseInt(binSizeParam, 10) || DISPLAY_TIME_BIN_DEFAULT_YEARS : DISPLAY_TIME_BIN_DEFAULT_YEARS;
 
 		console.log(
-			`🔥 Heatmaps API request - recordTypes: ${recordTypes.join(', ')}, tags: ${tags?.join(', ') || 'none'}, operator: ${tagOperatorParam || 'AND'}`
+			`🔥 Heatmaps API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, timeSlice: ${timeSliceParam || 'all'}, grid width: ${cols} cols, binSize: ${binSize}`
 		);
 
-		let response: HeatmapTimelineApiResponse;
+		if (timeSliceParam) {
+			const heatmapResponse = await getHeatmap(timeSliceParam, resolution, recordTypes, datasetIds, placeTypes, binSize);
+			const cellCount = Object.values(heatmapResponse.timeline)[0]?.indices.length ?? 0;
+			console.log(`✅ Heatmap for ${timeSliceParam}: ${cellCount} cells`);
 
-		// Handle OR operation by merging individual tags
-		if (tagOperatorParam === 'OR' && tags && tags.length > 1) {
-			console.log(`🔀 OR operation: fetching and merging individual tags`);
-
-			// Import merging utilities
-			const { mergeHeatmaps } = await import('$utils/heatmap');
-
-			// Fetch each tag individually
-			const individualResponses = await Promise.all(
-				tags.map((tag) => dataService.getHeatmapTimeline(recordTypes, [tag]))
-			);
-
-			// Check if all individual requests succeeded
-			const failedResponses = individualResponses.filter((r) => !r.success);
-			if (failedResponses.length > 0) {
-				console.error(`❌ Some individual tag requests failed:`, failedResponses);
-				response = {
-					heatmapTimeline: {},
-					recordTypes,
-					tags,
-					resolution: '',
-					success: false,
-					message: 'Failed to fetch some individual tags for OR operation'
-				};
-			} else {
-				// Merge timelines by merging heatmaps for each time slice
-				const timelines = individualResponses.map((r) => r.heatmapTimeline);
-				const mergedTimeline: any = {};
-
-				// Get all unique time slice keys from all timelines
-				const allTimeSliceKeys = new Set<string>();
-				timelines.forEach((timeline) => {
-					Object.keys(timeline).forEach((key) => allTimeSliceKeys.add(key));
-				});
-
-				// Merge each time slice
-				for (const timeSliceKey of allTimeSliceKeys) {
-					mergedTimeline[timeSliceKey] = {};
-
-					// For each recordType, merge heatmaps from all timelines
-					for (const recordType of recordTypes) {
-						const heatmapsToMerge: any[] = [];
-
-						// Collect heatmaps from all timelines for this time slice and record type
-						timelines.forEach((timeline) => {
-							const timeSliceData = timeline[timeSliceKey];
-							if (timeSliceData && timeSliceData[recordType] && timeSliceData[recordType].base) {
-								heatmapsToMerge.push(timeSliceData[recordType].base);
-							}
-						});
-
-						if (heatmapsToMerge.length > 0) {
-							// Merge all heatmaps for this recordType and time slice
-							const mergedHeatmap = mergeHeatmaps(heatmapsToMerge);
-
-							// Create the merged recordType data structure
-							mergedTimeline[timeSliceKey][recordType] = {
-								base: mergedHeatmap,
-								tags: {} // OR results don't need individual tag data
-							};
-						}
-					}
+			return json(heatmapResponse, {
+				headers: {
+					'Cache-Control': 'no-cache',
+					'Access-Control-Allow-Origin': '*'
 				}
-
-				response = {
-					heatmapTimeline: mergedTimeline,
-					recordTypes,
-					tags,
-					resolution: individualResponses[0].resolution,
-					success: true,
-					processingTime: individualResponses.reduce((sum, r) => sum + (r.processingTime || 0), 0)
-				};
-			}
-		} else {
-			// Standard AND operation or single tag
-			response = await dataService.getHeatmapTimeline(recordTypes, tags);
-		}
-
-		// Auto-merge record types server-side for payload optimization when no tags are used
-		if (response.success && !tags) {
-			console.log(`🔀 Server-side merging ${recordTypes.length} record types (no tags) for optimization`);
-			
-			const mergedTimeline = mergeHeatmapTimeline(
-				response.heatmapTimeline as HeatmapTimeline,
-				recordTypes,
-				undefined, // No tags - using base heatmaps
-				undefined  // No blueprint needed for merging
-			);
-			
-			response.heatmapTimeline = mergedTimeline;
-		}
-
-		// Set appropriate cache headers
-		const headers = {
-			'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
-			'Access-Control-Allow-Origin': '*'
-		};
-
-		if (response.success) {
-			const timeSliceCount = Object.keys(response.heatmapTimeline).length;
-			
-			// Calculate data size for logging
-			let totalHeatmaps = 0;
-			let totalDataPoints = 0;
-			Object.values(response.heatmapTimeline).forEach(timeSlice => {
-				Object.values(timeSlice).forEach(recordTypeData => {
-					if (recordTypeData.base) {
-						totalHeatmaps++;
-						totalDataPoints += recordTypeData.base.densityArray.length;
-					}
-					Object.values(recordTypeData.tags || {}).forEach(tagHeatmap => {
-						totalHeatmaps++;
-						totalDataPoints += tagHeatmap.densityArray.length;
-					});
-				});
 			});
-			
-			console.log(
-				`✅ Heatmaps API success - ${timeSliceCount} time periods, ${totalHeatmaps} total heatmaps, ${totalDataPoints.toLocaleString()} data points (${Math.round(totalDataPoints * 8 / 1024 / 1024)}MB estimated) at resolution ${response.resolution}`
-			);
-			return json(response, { headers });
 		} else {
-			console.error(`❌ Heatmaps API error: ${response.message}`);
-			throw error(500, {
-				code: 'HEATMAP_LOAD_ERROR',
-				message: response.message || 'Failed to load heatmap data'
+			const heatmapResponse = await getHeatmapTimeline(resolution, recordTypes, datasetIds, placeTypes, binSize);
+			const timeSliceCount = Object.keys(heatmapResponse.timeline).length;
+			const totalCells = Object.values(heatmapResponse.timeline).reduce(
+				(sum, h) => sum + h.indices.length,
+				0
+			);
+
+			console.log(`✅ Heatmap timeline: ${timeSliceCount} slices, ${totalCells} total cells`);
+
+			return json(heatmapResponse, {
+				headers: {
+					'Cache-Control': 'no-cache',
+					'Access-Control-Allow-Origin': '*'
+				}
 			});
 		}
 	} catch (err) {
-		console.error('❌ Heatmaps API unexpected error:', err);
+		if (err && typeof err === 'object' && 'status' in err) throw err;
+		console.error('❌ Heatmaps API error:', err);
 		throw error(500, {
 			code: 'INTERNAL_ERROR',
-			message: err instanceof Error ? err.message : 'Internal server error'
+			message: 'Failed to load heatmap data'
 		});
 	}
 };
 
-// Handle preflight requests for CORS
 export const OPTIONS: RequestHandler = async () => {
 	return new Response(null, {
 		status: 204,

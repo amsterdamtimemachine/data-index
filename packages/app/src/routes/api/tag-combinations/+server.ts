@@ -1,59 +1,33 @@
-// src/routes/api/tag-combinations/+server.ts
+// WIP: Not currently exposed in the UI (TAGS_FEATURE_READY = false).
+// validateTagCombination runs one COUNT query per selected tag sequentially.
+// With large feature_tags tables (1M+ rows), consider caching or replacing
+// with a single query that validates all tags at once.
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RecordType } from '@atm/shared/types';
-import { getDataService } from '$lib/server/dataServiceSingleton';
-
-interface TagCombinationsResponse {
-	availableTags: Array<{ name: string; totalFeatures: number }>;
-	currentSelection: string[];
-	recordTypes: RecordType[];
-	success: boolean;
-	message?: string;
-	// New fields for validation
-	validTags?: string[];
-	invalidTags?: string[];
-}
+import { getTagCombinations, validateTagCombination } from '@atm/db';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
-		// Parse query parameters
-		const recordTypesParam = url.searchParams.get('recordTypes');
-		const selectedParam = url.searchParams.get('selected');
 		const validateAllParam = url.searchParams.get('validateAll');
 
-		// Get API service
-		const dataService = await getDataService();
-
-		// Parse recordTypes - default to all available recordTypes if none specified
-		let recordTypes: RecordType[] | undefined;
-		if (recordTypesParam) {
-			recordTypes = recordTypesParam.split(',').map((t) => t.trim()) as RecordType[];
-		}
-
-		// Parse selected tags
-		let selectedTags: string[] = [];
-		if (selectedParam) {
-			selectedTags = selectedParam
-				.split(',')
-				.map((t) => t.trim())
-				.filter((t) => t.length > 0);
-		}
+		const recordTypes = parseRecordTypes(url);
+		const datasetIds = parseDatasets(url);
+		const placeTypes = parsePlaceTypes(url);
+		const selectedTags = parseList(url, 'selected') ?? [];
 
 		console.log(
-			`🔗 Tag combinations API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, selected: ${selectedTags.join(', ') || 'none'}, validateAll: ${validateAllParam}`
+			`🔗 Tag combinations API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, selected: ${selectedTags.join(', ') || 'none'}, validateAll: ${validateAllParam}`
 		);
+
+		const headers = {
+			'Cache-Control': 'public, max-age=86400',
+			'Access-Control-Allow-Origin': '*'
+		};
 
 		// Handle validation mode
 		if (validateAllParam === 'true' && selectedTags.length > 0) {
-			// Use direct validation against precomputed combinations
-			const validationResult = await dataService.validateTagCombination(recordTypes, selectedTags);
-
-			// Set appropriate cache headers
-			const headers = {
-				'Cache-Control': 'public, max-age=1800',
-				'Access-Control-Allow-Origin': '*'
-			};
+			const validationResult = await validateTagCombination(recordTypes, datasetIds, placeTypes, selectedTags);
 
 			console.log(
 				`✅ Tag validation complete - valid: ${validationResult.validTags.join(', ')}, invalid: ${validationResult.invalidTags.join(', ')}`
@@ -64,7 +38,6 @@ export const GET: RequestHandler = async ({ url }) => {
 					availableTags: [],
 					currentSelection: validationResult.validTags,
 					recordTypes: recordTypes || [],
-					success: true,
 					validTags: validationResult.validTags,
 					invalidTags: validationResult.invalidTags
 				},
@@ -73,33 +46,21 @@ export const GET: RequestHandler = async ({ url }) => {
 		}
 
 		// Normal mode: get available next tags
-		const response = await dataService.getTagCombinations(recordTypes, selectedTags);
+		const result = await getTagCombinations(recordTypes, datasetIds, placeTypes, selectedTags);
 
-		// Set appropriate cache headers
-		const headers = {
-			'Cache-Control': 'public, max-age=1800', // Cache for 30 minutes
-			'Access-Control-Allow-Origin': '*'
-		};
+		const tagCount = result.availableTags.length;
+		const totalFeatures = result.availableTags.reduce((sum, tag) => sum + tag.totalFeatures, 0);
+		console.log(
+			`✅ Tag combinations API success - ${tagCount} available next tags with ${totalFeatures} total features`
+		);
 
-		if (response.success) {
-			const tagCount = response.availableTags.length;
-			const totalFeatures = response.availableTags.reduce((sum, tag) => sum + tag.totalFeatures, 0);
-			console.log(
-				`✅ Tag combinations API success - ${tagCount} available next tags with ${totalFeatures} total features`
-			);
-			return json(response, { headers });
-		} else {
-			console.error(`❌ Tag combinations API error: ${response.message}`);
-			throw error(500, {
-				code: 'TAG_COMBINATIONS_LOAD_ERROR',
-				message: response.message || 'Failed to load tag combinations'
-			});
-		}
+		return json(result, { headers });
 	} catch (err) {
-		console.error('❌ Tag combinations API unexpected error:', err);
+		if (err && typeof err === 'object' && 'status' in err) throw err;
+		console.error('❌ Tag combinations API error:', err);
 		throw error(500, {
 			code: 'INTERNAL_ERROR',
-			message: err instanceof Error ? err.message : 'Internal server error'
+			message: 'Failed to load tag combinations'
 		});
 	}
 };

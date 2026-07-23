@@ -1,0 +1,39 @@
+# Base compose: application only. Assumes an external Postgres+PostGIS reachable
+# at DB_HOST. Publishes the app on all interfaces; the production and staging
+# overlays replace that with a loopback-only binding.
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.app
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    # Each deployment gets its own checkout and its own ../.env — see the README's
+    # "one clone per deployment". Note --env-file only drives ${...} substitution
+    # below; the container's env comes from this path.
+    env_file:
+      - ../.env
+    # Required-var guards — fail loud if missing. They live here, not in the
+    # deployment overlays, so the self-hosted overlay can override DB_HOST for the
+    # app container whatever order the -f flags come in. Every other var
+    # (PUBLIC_*, PRECOMP_*, DISPLAY_*, CACHE_TTL_MINUTES, …) flows
+    # through via env_file above.
+    environment:
+      DB_HOST: ${DB_HOST:?DB_HOST is required — copy .env.example to .env}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER:?DB_USER is required — copy .env.example to .env}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required — copy .env.example to .env}
+      DB_NAME: ${DB_NAME:?DB_NAME is required — copy .env.example to .env}
+    networks:
+      - atm-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/metadata"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  atm-network:
+    driver: bridge

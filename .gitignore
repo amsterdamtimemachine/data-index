@@ -1,40 +1,17 @@
-node_modules
-backend/preprocessor/temp/
-aux/cell_map/output/*
-
-# Assets
-data/*
-!data/docker/
-data/docker/*
+node_modules/
 dist/
-public/*
-build/**
 build/
-.bin
-*.bin
-.csv
-.yalc/*
-.yalc/
-.yalc
-.geojson
-.mbt
-.pbf
 
-# Output
-.output
-.vercel
-/.svelte-kit
-/build
+# SvelteKit
 .svelte-kit/
-.turbo/*
-vocabulary.json
 
-# OS
-.DS_Store
-Thumbs.db
+# Turbo
+.turbo/
+
+# Claude
+.claude/
 
 # Env
-
 .env
 .env.*
 !.env.example
@@ -44,12 +21,21 @@ Thumbs.db
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Python
-env/
+# OS
+.DS_Store
+Thumbs.db
 
-# Turbo
-.turbo/cookies/*
-.turbo
+# Fonts
+packages/app/static/fonts/
 
-# misc
-issue.md
+# Plans
+geom_plan.md
+super_entity_plan.md
+place_cells_plan.md
+
+# Local scripts
+reingest.sh
+
+# Binaries
+*.bin
+bench-cells.ts

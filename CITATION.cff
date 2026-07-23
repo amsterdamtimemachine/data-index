@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+title: Amsterdam Time Machine Data Index
+message: "If you use this software, please cite it as below."
+type: software
+url: "https://data.amsterdamtimemachine.nl"
+license: EUPL-1.2
+authors:
+  - family-names: Solčány
+    given-names: Matúš
+    affiliation: The Humanities Lab, University of Amsterdam
+    orcid: "https://orcid.org/0009-0002-0531-313X"
+  - family-names: Kisjes
+    given-names: Ivan
+    affiliation: Amsterdam Time Machine / CREATE Lab, University of Amsterdam
+  - family-names: van Wissen
+    given-names: Leon
+    affiliation: Amsterdam Time Machine / CREATE Lab, University of Amsterdam
+    orcid: "https://orcid.org/0000-0001-8672-025X"
+  - family-names: Noordegraaf
+    given-names: Julia
+    affiliation: Amsterdam Time Machine / CREATE Lab, University of Amsterdam
+    orcid: "https://orcid.org/0000-0003-0146-642X"
+  - family-names: Verheul
+    given-names: Ingeborg
+    affiliation: Amsterdam Time Machine / CREATE Lab, University of Amsterdam
+    orcid: "https://orcid.org/0000-0003-4093-3190"
+  - family-names: Koopmans
+    given-names: Boudewijn
+    affiliation: Amsterdam Time Machine / CREATE Lab, University of Amsterdam
+keywords:
+  - digital humanities
+  - cultural heritage
+  - linked open data
+  - spatial history
+  - amsterdam
+  - time machine

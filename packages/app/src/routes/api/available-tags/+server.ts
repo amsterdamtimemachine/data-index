@@ -1,60 +1,39 @@
 // src/routes/api/available-tags/+server.ts
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RecordType } from '@atm/shared/types';
-import { getDataService } from '$lib/server/dataServiceSingleton';
-
-interface AvailableTagsResponse {
-	tags: Array<{ name: string; totalFeatures: number; recordTypes: RecordType[] }>;
-	recordTypes: RecordType[];
-	success: boolean;
-	message?: string;
-}
+import { getAvailableTags } from '@atm/db';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
-		// Parse query parameters
-		const recordTypesParam = url.searchParams.get('recordTypes');
+		const recordTypes = parseRecordTypes(url);
+		const datasetIds = parseDatasets(url);
+		const placeTypes = parsePlaceTypes(url);
 
-		// Get API service
-		const dataService = await getDataService();
+		console.log(`🏷️ Available tags API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}`);
 
-		// Parse recordTypes - default to all available recordTypes if none specified
-		let recordTypes: RecordType[] | undefined;
-		if (recordTypesParam) {
-			recordTypes = recordTypesParam.split(',').map((t) => t.trim()) as RecordType[];
-		}
+		// Get available tags from database
+		const result = await getAvailableTags(recordTypes, datasetIds, placeTypes);
 
-		console.log(`🏷️ Available tags API request - recordTypes: ${recordTypes?.join(', ') || 'all'}`);
-
-		// Get available tags from service
-		const response = await dataService.getAvailableTags(recordTypes);
+		const tagCount = result.tags.length;
+		const totalFeatures = result.tags.reduce((sum, tag) => sum + tag.totalFeatures, 0);
+		console.log(
+			`✅ Available tags API success - ${tagCount} tags with ${totalFeatures} total features`
+		);
 
 		// Set appropriate cache headers
 		const headers = {
-			'Cache-Control': 'public, max-age=1800', // Cache for 30 minutes (shorter than other data)
+			'Cache-Control': 'no-cache',
 			'Access-Control-Allow-Origin': '*'
 		};
 
-		if (response.success) {
-			const tagCount = response.tags.length;
-			const totalFeatures = response.tags.reduce((sum, tag) => sum + tag.totalFeatures, 0);
-			console.log(
-				`✅ Available tags API success - ${tagCount} tags with ${totalFeatures} total features`
-			);
-			return json(response, { headers });
-		} else {
-			console.error(`❌ Available tags API error: ${response.message}`);
-			throw error(500, {
-				code: 'TAGS_LOAD_ERROR',
-				message: response.message || 'Failed to load available tags'
-			});
-		}
+		return json(result, { headers });
 	} catch (err) {
-		console.error('❌ Available tags API unexpected error:', err);
+		if (err && typeof err === 'object' && 'status' in err) throw err;
+		console.error('❌ Available tags API error:', err);
 		throw error(500, {
 			code: 'INTERNAL_ERROR',
-			message: err instanceof Error ? err.message : 'Internal server error'
+			message: 'Failed to load available tags'
 		});
 	}
 };

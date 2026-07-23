@@ -1,0 +1,13 @@
+# Staging overlay: same as production overlay but pulls the `staging`-tagged
+# image instead of `production`. Use in place of docker-compose.production.yml
+# when you want to run the staging build for testing.
+#
+#   docker compose --env-file .env \
+#     -f docker/docker-compose.yml \
+#     -f docker/docker-compose.staging.yml up -d
+services:
+  app:
+    image: ghcr.io/amsterdamtimemachine/data-index/app:staging
+    # See the production overlay for why this is !override rather than a plain list.
+    ports: !override
+      - "127.0.0.1:${APP_PORT:-3000}:3000"

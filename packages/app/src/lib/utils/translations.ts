@@ -1,93 +1,94 @@
-import type { RecordType } from '@atm/shared/types';
+// Single translation map: all UI strings in one place
+const TRANSLATIONS: Record<string, string> = {
+	// Placeholders
+	unknown: 'Onbekend',
 
-// Content type translations: English (server/API) → Dutch (UI display)
-const CONTENT_TYPE_TRANSLATIONS: Record<string, string> = {
+	// Record types
 	image: 'Afbeelding',
 	person: 'Persoon',
-	text: 'Tekst'
-} as const;
+	text: 'Tekst',
 
-// Reverse mapping: Dutch (UI display) → English (server/API) 
-const REVERSE_CONTENT_TYPE_TRANSLATIONS: Record<string, string> = Object.fromEntries(
-	Object.entries(CONTENT_TYPE_TRANSLATIONS).map(([english, dutch]) => [dutch, english])
-);
+	// Place types
+	address: 'Adres',
+	street: 'Straat',
+	neighbourhood: 'Buurt',
+	district: 'Wijk',
 
-/**
- * Translate English content type to Dutch for UI display
- */
-export function translateContentType(englishType: string): string {
-	return CONTENT_TYPE_TRANSLATIONS[englishType] || englishType;
-}
+	// Relations
+	isAbout: 'Gaat over',
+	hadLastLivingLocation: 'Laatste woonadres',
 
-/**
- * Translate Dutch content type back to English for API calls
- */
-export function reverseTranslateContentType(dutchType: string): string {
-	return REVERSE_CONTENT_TYPE_TRANSLATIONS[dutchType] || dutchType;
-}
+	// Entity fields
+	born: 'Geboren',
+	died: 'Overleden',
+	date: 'Datum',
+	author: 'Auteur',
 
-/**
- * Translate array of English content types to Dutch
- */
-export function translateContentTypes(englishTypes: string[]): string[] {
-	return englishTypes.map(translateContentType);
-}
+	// UI labels
+	filters: 'Filters',
+	dataset: 'Dataset',
+	contentType: 'Inhoudstype',
+	topics: 'Onderwerpen',
+	source: 'Bron',
 
-/**
- * Translate array of Dutch content types back to English
- */
-export function reverseTranslateContentTypes(dutchTypes: string[]): string[] {
-	return dutchTypes.map(reverseTranslateContentType);
-}
-
-/**
- * Create translated content type objects with both keys for easy handling
- */
-export function createTranslatedContentTypes(englishTypes: RecordType[]) {
-	return englishTypes.map(type => ({
-		key: type,                        // English for API calls
-		label: translateContentType(type) // Dutch for display
-	}));
-}
-
-// Error message translations: English → Dutch
-const ERROR_MESSAGE_TRANSLATIONS: Record<string, string> = {
+	// Error titles
 	'Invalid Content Type Removed': 'Ongeldig inhoudstype verwijderd',
 	'Invalid Input': 'Ongeldige invoer',
 	'Period Not Found': 'Periode niet gevonden',
-	'Invalid Cell': 'Ongeldige cel'
-} as const;
+	'Invalid Cell': 'Ongeldige cel',
+
+	// Error messages
+	'is not a valid content type and was removed from your selection': 'is geen geldig inhoudstype en is verwijderd uit uw selectie',
+	'No valid content types found. Defaulting to all content types': 'Geen geldige inhoudstypes gevonden. Standaard ingesteld op alle inhoudstypes',
+	'invalid format. Expected YYYY_YYYY': 'ongeldig formaat. Verwacht YYYY_YYYY',
+	'Defaulting to most recent period': 'Standaard ingesteld op meest recente periode',
+	'invalid range. Start year must be less than end year': 'ongeldig bereik. Beginjaar moet kleiner zijn dan eindjaar',
+	spans: 'beslaat',
+	'years. Maximum 50 years supported': 'jaar. Maximaal 50 jaar ondersteund',
+	"doesn't exist in the dataset. Defaulting to most recent period": 'bestaat niet in de dataset. Standaard ingesteld op meest recente periode',
+	'not found. Please select a valid cell from the map': 'niet gevonden. Selecteer een geldige cel op de kaart'
+};
+
+// Reverse map (built once)
+const REVERSE: Record<string, string> = Object.fromEntries(
+	Object.entries(TRANSLATIONS).map(([k, v]) => [v, k])
+);
 
 /**
- * Translate error titles to Dutch
+ * Translate a key to Dutch. Returns the key itself if no translation exists.
  */
-export function translateErrorTitle(englishTitle: string): string {
-	return ERROR_MESSAGE_TRANSLATIONS[englishTitle] || englishTitle;
+export function translate(key: string): string {
+	return TRANSLATIONS[key] || key;
 }
 
 /**
- * Translate error messages with content type placeholders to Dutch
+ * Reverse translate a Dutch string back to its English key.
  */
-export function translateErrorMessage(englishMessage: string): string {
-	// Common validation message patterns
-	const translations = {
-		'is not a valid content type and was removed from your selection': 'is geen geldig inhoudstype en is verwijderd uit uw selectie',
-		'No valid content types found. Defaulting to all content types': 'Geen geldige inhoudstypes gevonden. Standaard ingesteld op alle inhoudstypes',
-		'invalid format. Expected YYYY_YYYY': 'ongeldig formaat. Verwacht YYYY_YYYY',
-		'Defaulting to most recent period': 'Standaard ingesteld op meest recente periode',
-		'invalid range. Start year must be less than end year': 'ongeldig bereik. Beginjaar moet kleiner zijn dan eindjaar',
-		'spans': 'beslaat',
-		'years. Maximum 50 years supported': 'jaar. Maximaal 50 jaar ondersteund',
-		"doesn't exist in the dataset. Defaulting to most recent period": 'bestaat niet in de dataset. Standaard ingesteld op meest recente periode',
-		'not found. Please select a valid cell from the map': 'niet gevonden. Selecteer een geldige cel op de kaart'
-	};
+export function reverseTranslate(dutch: string): string {
+	return REVERSE[dutch] || dutch;
+}
 
-	let translatedMessage = englishMessage;
+/** Translate an array of keys to Dutch. */
+export function translateAll(keys: string[]): string[] {
+	return keys.map(translate);
+}
 
-	// Apply translations for common patterns
-	Object.entries(translations).forEach(([english, dutch]) => {
-		translatedMessage = translatedMessage.replace(english, dutch);
-	});
+/** Reverse translate an array of Dutch strings back to their English keys. */
+export function reverseTranslateAll(dutch: string[]): string[] {
+	return dutch.map(reverseTranslate);
+}
 
-	return translatedMessage;
+/**
+ * Translate an error message by substring replacement (not a key lookup), so
+ * dynamic messages with interpolated values still get their known phrases translated.
+ */
+export function translateErrorMessage(message: string): string {
+	let translated = message;
+	// Apply translations for error message patterns
+	for (const [english, dutch] of Object.entries(TRANSLATIONS)) {
+		if (english.length > 20) { // Only match longer error message strings
+			translated = translated.replace(english, dutch);
+		}
+	}
+	return translated;
 }

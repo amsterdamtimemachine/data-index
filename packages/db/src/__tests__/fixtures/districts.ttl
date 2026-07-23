@@ -1,0 +1,41 @@
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix hg: <https://erfgoed.amsterdam/hg#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+# Historical wijk (beginYear 1600) → type 'district', single POLYGON (WGS84).
+<https://adamlink.nl/geo/district/D1>
+    skos:prefLabel "Wijk 1" ;
+    geo:hasGeometry _:g1 ;
+    hg:hasEarliestBeginTimeStamp "1600" ;
+    hg:hasEarliestEndTimeStamp "1850" .
+_:g1 geo:asWKT "POLYGON((4.90 52.37, 4.91 52.37, 4.91 52.38, 4.90 52.38, 4.90 52.37))" .
+
+# Historical buurt (beginYear 1850) → type 'neighbourhood', MULTIPOLYGON (two disjoint parts).
+<https://adamlink.nl/geo/district/D2>
+    skos:prefLabel "Buurt A" ;
+    geo:hasGeometry _:g2 ;
+    hg:hasEarliestBeginTimeStamp "1850" ;
+    hg:hasEarliestEndTimeStamp "1909" .
+_:g2 geo:asWKT "MULTIPOLYGON(((4.92 52.37, 4.93 52.37, 4.93 52.38, 4.92 52.38, 4.92 52.37)), ((4.94 52.37, 4.95 52.37, 4.95 52.38, 4.94 52.38, 4.94 52.37)))" .
+
+# Present-day CBS wijk (dc:identifier WK…, no begin year) → type 'district'.
+<https://adamlink.nl/geo/district/D3>
+    skos:prefLabel "CBS Wijk" ;
+    geo:hasGeometry _:g3 ;
+    dc:identifier "WK036399" .
+_:g3 geo:asWKT "POLYGON((4.96 52.37, 4.97 52.37, 4.97 52.38, 4.96 52.38, 4.96 52.37))" .
+
+# Present-day CBS buurt (dc:identifier BU…, no begin year) → type 'neighbourhood'.
+<https://adamlink.nl/geo/district/D4>
+    skos:prefLabel "CBS Buurt" ;
+    geo:hasGeometry _:g4 ;
+    dc:identifier "BU03639988" .
+_:g4 geo:asWKT "POLYGON((4.98 52.37, 4.99 52.37, 4.99 52.38, 4.98 52.38, 4.98 52.37))" .
+
+# Unclassifiable (no CBS code, begin year outside the 1600/1850/1909 systems) → skipped.
+<https://adamlink.nl/geo/district/D5>
+    skos:prefLabel "Mystery" ;
+    geo:hasGeometry _:g5 ;
+    hg:hasEarliestBeginTimeStamp "2020" .
+_:g5 geo:asWKT "POLYGON((5.00 52.37, 5.01 52.37, 5.01 52.38, 5.00 52.38, 5.00 52.37))" .

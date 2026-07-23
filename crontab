@@ -1,4 +1,0 @@
-# Run preprocessor daily at 2 AM (when cron is enabled)
-0 2 * * * cd /app/packages/preprocessor && /usr/local/bin/bun run src/main_discovery.ts >> /var/log/preprocessor.log 2>&1
-
-# Empty line required for cron
