@@ -62,7 +62,7 @@ program
 
       await sourceModule.ingest(opts.file, { adamlinkStreets: opts.adamlinkStreets });
 
-      console.log('\nRun `bun run db:rebuild-index` to rebuild the spatial grid index and compute temporal and spatial frequencies.');
+      console.log('\nRun `db:rebuild-index` once all sources are ingested.');
       process.exit(0);
     } catch (error) {
       console.error('Ingestion failed:', error);

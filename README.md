@@ -461,9 +461,9 @@ Images build in CI on push once tests pass; pulling and restarting on the server
 
 ### Self-hosted setup
 
-Bundled Postgres + PostGIS + `pg_roaringbitmap`. One clone per deployment, on the branch
-matching its image tag; all code runs from the image. Shown for staging — for production
-clone `main` and swap `staging.yml` → `production.yml`.
+Bundled Postgres + PostGIS + `pg_roaringbitmap`; all code runs from the image (one clone
+per deployment, on the branch matching its image tag). Shown for **production** — the
+**Staging** note after the block covers the two differences.
 
 ```bash
 ssh user@server
@@ -474,17 +474,17 @@ sudo usermod -aG docker $USER      # log out and back in
 docker compose version
 
 # Clone the branch this deployment serves — no bun install, no build (code runs from the image).
-git clone -b staging git@github.com:amsterdamtimemachine/data-index.git ~/data-index-staging
-cd ~/data-index-staging
+git clone -b main git@github.com:amsterdamtimemachine/data-index.git ~/data-index-prod
+cd ~/data-index-prod
 
 cp .env.example .env                             # edit per the Environment variables table below
 
 # $DC = docker compose preloaded with this deployment's overlays. Reuse it for every command
-# below and later (e.g. `$DC pull app`). For production, swap staging.yml → production.yml.
+# below and later (e.g. `$DC pull app`). For a staging build, swap production.yml → staging.yml.
 export DC="docker compose --env-file .env \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.self-hosted.yml \
-  -f docker/docker-compose.staging.yml"
+  -f docker/docker-compose.production.yml"
 
 # Bundled Postgres + PostGIS + pg_roaringbitmap, bound to loopback. --build compiles
 # the DB image from docker/Dockerfile.db (first run only; cached after). --wait blocks
@@ -497,10 +497,11 @@ $DC pull app
 
 $DC run --rm app bun run db:push-schema
 
-# Place data first — a feature that resolves to no place is dropped silently, so the wrong
-# order yields an empty index rather than an error. DATA holds the source files, mounted
-# read-only at /data. Run the ingest in tmux/screen — beeldbank is multi-GB, and a dropped
-# SSH session would kill it partway.
+# Put the source files in DATA first: the Adamlink TTLs and feature CSVs (obtained by hand,
+# see "Getting the data"); the PDOK files are fetched into DATA below. DATA is an ABSOLUTE
+# host path bind-mounted to /data in the container, so ingest/fetch args are /data/… (not
+# $DATA/…). etl mounts it read-only; fetch needs it writable. Ingest places before datasets —
+# a feature that resolves to no place is dropped silently. Run in tmux/screen (beeldbank is multi-GB).
 export DATA=/srv/atm-data
 alias etl="$DC run --rm -v $DATA:/data:ro app bun run db:ingest"
 alias fetch="$DC run --rm -v $DATA:/data app bun run db:fetch"   # writable mount (etl is read-only)
@@ -522,13 +523,15 @@ etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
 
-# Builds place_cells, the cell_features rollup, frequencies and grid_config. Takes a
-# minute or so on a full dataset — it runs the heavy aggregation once here so requests
-# don't. Mandatory: features ingested without it won't appear on the map.
+# Builds place_cells, the cell_features rollup, frequencies and grid_config. Mandatory —
+# features ingested without it won't appear on the map. On a large dataset (BAG adds ~582k
+# addresses) individual statements run long, so raise DB_STATEMENT_TIMEOUT_MS in .env first.
 $DC run --rm app bun run db:rebuild-index
 
 $DC up -d app        # app + DB bind to loopback only — put a reverse proxy in front of 127.0.0.1:$APP_PORT
 ```
+
+**Staging.** Same procedure, with two changes: clone `-b staging` (into e.g. `~/data-index-staging`) and use `docker/docker-compose.staging.yml` instead of `production.yml` — the overlays are identical apart from the image tag (`:staging` vs `:production`). If staging runs on the **same host** as production, also give its `.env` a distinct `COMPOSE_PROJECT_NAME` and a free `APP_PORT` / `DB_PORT` so the two don't collide — see [Adding a second deployment on the same host](#adding-a-second-deployment-on-the-same-host).
 
 ### Existing Postgres setup
 
