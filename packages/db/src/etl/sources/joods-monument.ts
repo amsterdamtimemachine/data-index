@@ -1,8 +1,8 @@
-import { recordType } from "../helpers/entity-factory";
-import { ExtractionArgs, PlaceExtractionMethod } from "../helpers/place-extractor";
+import { RecordType } from "@atm/shared";
+import { ExtractionArgs, PlaceExtractionMethod } from "../helpers/places/place-index";
 import { Draft, Ingestor } from "./ingestor";
 
-interface JoodsMonumentData {
+type JoodsMonumentData = {
   person: string;
   name: string;
   location: string;
@@ -23,7 +23,7 @@ export class JoodsMonumentIngestor extends Ingestor<JoodsMonumentData> {
   protected DATASET_LABEL = 'Joods Monument';
   protected DATASET_URL = 'https://www.joodsmonument.nl';
 
-  protected RECORD_TYPE = recordType.PERSON;
+  protected RECORD_TYPE: RecordType = 'person';
   protected RELATION_ID = 'hadLastLivingLocation';
   protected RELATION_LABEL = 'Had last living location';
 

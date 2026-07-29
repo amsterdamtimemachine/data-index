@@ -40,8 +40,5 @@
   },
   "overrides": {
     "protocol-buffers-schema": "3.6.1"
-  },
-  "dependencies": {
-    "@streamparser/json": "^0.0.22"
   }
 }

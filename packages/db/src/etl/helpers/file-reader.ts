@@ -2,6 +2,7 @@ import { extname } from 'path';
 import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { Tokenizer, TokenParser } from '@streamparser/json';
+import { pipeline } from 'node:stream';
 
 export class FileReader<SourceRecord> {
     createJSONStream(filePath: string) {
@@ -31,9 +32,14 @@ export class FileReader<SourceRecord> {
     }
 
     createCSVFileStream(filePath: string) {
-        return createReadStream(filePath).pipe(
-            parse({ columns: true, relax_column_count: true, relax_quotes: true })
-        );
+        const fileStream = createReadStream(filePath);
+        const parser = parse({ columns: true, relax_column_count: true, relax_quotes: true, bom: true });
+
+        return pipeline(fileStream, parser, (err) => {
+            if (err) {
+                parser.destroy(err);
+            }
+        });
     }
 
     createFileReadStream(filePath: string): AsyncIterable<SourceRecord> | undefined {

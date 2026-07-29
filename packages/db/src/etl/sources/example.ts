@@ -1,28 +1,46 @@
+import { RecordType } from "@atm/shared"
+import { ExtractionArgs, PlaceExtractionMethod } from "../helpers/places/place-index"
+import { Draft, Ingestor } from "./ingestor"
+
+type ExampleObject = {
+  id: string,
+  text: string,
+  street: string,
+  amount: number
 }
 
-export class Delpher extends Ingestor<DelpherSourceData> {
-  // ═══════════════════════════════════════════════════════════════
-  //  Organisation
-  // ═══════════════════════════════════════════════════════════════
-  protected ORG_ID = 'kb';
-  protected ORG_LABEL = 'Koninklijke Bibliotheek';
-  protected ORG_URL = 'https://www.kb.nl';
-
-  // ═══════════════════════════════════════════════════════════════
-  //  Dataset
-  // ═══════════════════════════════════════════════════════════════
-  protected DATASET_ID = 'delpher';
-  protected DATASET_LABEL = 'Delpher Kranten';
-  protected DATASET_URL = 'https://www.delpher.nl';
-
-  // ═══════════════════════════════════════════════════════════════
-  //  Feature metadata
-  // ═══════════════════════════════════════════════════════════════
-  protected RECORD_TYPE = 'text';
-  protected RELATION_ID = 'isAbout';
-  protected RELATION_LABEL = 'Is About';
-  protected transform(source: DelpherSourceData): Omit<TargetRecord, 'area' | 'level'> & { area?: string; level?: string; } {
-    throw new Error('Method not implemented.');
-  }
+export class ExampleIngestor extends Ingestor<ExampleObject> {
+  protected ORG_ID: string = 'test'
+  protected ORG_LABEL: string = 'Test'
+  protected ORG_URL: string = 'test.com'
+  protected DATASET_ID: string = 'example'
+  protected DATASET_LABEL: string = 'Example'
+  protected DATASET_URL: string = 'example.test.com'
+  protected RECORD_TYPE: RecordType = 'unknown'
+  protected RELATION_ID: string = 'testing'
+  protected RELATION_LABEL: string = 'is testing'
   
+  // Will first try to find a place in the text-column, if not found, fallback on the street-column
+  protected PLACE_EXTRACTION_METHODS: ExtractionArgs<ExampleObject> = [
+    { method: PlaceExtractionMethod.TEXT, column: 'text' },
+    { method: PlaceExtractionMethod.URI, column: 'street'}
+  ]
+
+  protected transform(source: ExampleObject): Draft | undefined {
+    if (!source.id) { return undefined }
+    
+    return {
+      id: source.id,
+      url: 'www.' + source.id + '.com',
+      label: source.text,
+      startDate: '1900',
+      endDate: '1901'
+    }
+  }
+}
+
+const ingestor = new ExampleIngestor()
+
+export async function ingest(filePath:string) {
+    await ingestor.ingest(filePath)
 }

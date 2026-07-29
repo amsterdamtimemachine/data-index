@@ -1,9 +1,9 @@
 import { upsertSource, createFeatureWriter, featureUuid } from '../helpers/helpers';
 import { NewFeature } from '../../schema';
-import { PlaceIndex, ExtractionArgs, DateRange } from '../helpers/place-extractor';
-import { createEntityFactory, EntityFactory, recordType} from '../helpers/entity-factory';
-import { EntityBase } from '@atm/shared';
+import { createEntityFactory, EntityFactory } from '../helpers/entity-factory';
+import { EntityBase, RecordType } from '@atm/shared';
 import { FileReader } from '../helpers/file-reader';
+import { DateRange, ExtractionArgs, PlaceIndex } from '../helpers/places/place-index';
 
 export type Draft = Omit<NewFeature, 'recordType' | 'datasetId'>
 
@@ -16,7 +16,7 @@ export type Draft = Omit<NewFeature, 'recordType' | 'datasetId'>
  * 4. Implement the abstract-transform method, mapping the data-interface object to a more db-ready object
  * 5. Define & export a ingest(filePath: string) function (call the ingest func in it) at the end of the file
  */
-export abstract class Ingestor<SourceRecord extends Record<string, any>> {
+export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
     protected BATCH_SIZE = 1000;
 
     protected abstract ORG_ID: string; // Example: 'my-org';
@@ -28,7 +28,7 @@ export abstract class Ingestor<SourceRecord extends Record<string, any>> {
     protected abstract DATASET_LABEL: string; // Example: 'My Dataset';
     protected abstract DATASET_URL: string; // Example: 'https://dataset-url.com';
 
-    protected abstract RECORD_TYPE: recordType; // Possible values: 'image' | 'text' | 'person'
+    protected abstract RECORD_TYPE: RecordType; // Possible values: 'image' | 'text' | 'person'
     protected abstract RELATION_ID: string; // Example: 'isAbout';
     protected abstract RELATION_LABEL: string; // Example: 'Is About';
 
@@ -79,10 +79,6 @@ export abstract class Ingestor<SourceRecord extends Record<string, any>> {
         } as NewFeature
     }
 
-    protected validate(feature: NewFeature) {
-        // TODO: validate feature to have all required properties
-    }
-
     /**
      * First transforms a SourceRecord to a Draft (temp object), then extracts place & creates corresponding entity. At last, construct db-ready feature-object
      * @param source 
@@ -111,20 +107,25 @@ export abstract class Ingestor<SourceRecord extends Record<string, any>> {
         let duplicates = 0
 
         for await (const source of sources) {
-            const [feature, placeId] =  await this.sourceToFeature(source)
-            
-            if (!placeId || !feature) { 
-                skipped++; continue; 
-            }
+            try {
+                const [feature, placeId] =  await this.sourceToFeature(source)
+                
+                if (!placeId || !feature) { 
+                    skipped++; continue; 
+                }
 
-            if (!fMap.has(feature.id)) { 
-                this.writer.addFeature(feature)
-                fMap.set(feature.id, new Set<string>())
-            }
-            
-            if (!fMap.get(feature.id)!.has(placeId)) {
-                this.writer.addLink({ featureId: feature.id, placeId: placeId, relationId: this.RELATION_ID })
-                fMap.get(feature.id)?.add(placeId)
+                if (!fMap.has(feature.id)) { 
+                    this.writer.addFeature(feature)
+                    fMap.set(feature.id, new Set<string>())
+                }
+                
+                if (!fMap.get(feature.id)!.has(placeId)) {
+                    this.writer.addLink({ featureId: feature.id, placeId: placeId, relationId: this.RELATION_ID })
+                    fMap.get(feature.id)?.add(placeId)
+                }
+            } catch (error) {
+                console.error(`Failed to process row: ${source}:`, error)
+                skipped++;
             }
 
             await this.writer.flushIfFull()

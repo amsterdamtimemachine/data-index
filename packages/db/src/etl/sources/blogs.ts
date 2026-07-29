@@ -1,10 +1,8 @@
-import { recordType } from "../helpers/entity-factory";
-import { ExtractionArgs, PlaceExtractionMethod } from "../helpers/place-extractor";
+import { RecordType } from "@atm/shared";
+import { ExtractionArgs, PlaceExtractionMethod } from "../helpers/places/place-index";
 import { Draft, Ingestor } from "./ingestor";
-import { TestSourceData } from "./test";
 
-
-interface BlogData {
+type BlogData = {
     identifier: string;
     "@id": string;
     headline: string;
@@ -21,15 +19,15 @@ export class AmsterdamBlogsIngestor extends Ingestor<BlogData> {
     protected DATASET_LABEL: string = 'Corona Blogs';
     protected DATASET_URL: string = '---';
     
-    protected RECORD_TYPE: recordType = recordType.TEXT;
+    protected RECORD_TYPE: RecordType = 'text';
     protected RELATION_ID: string = 'isAbout';
     protected RELATION_LABEL: string = 'Is About';
 
-    protected PLACE_EXTRACTION_METHODS: ExtractionArgs<TestSourceData> = [
-        { method: PlaceExtractionMethod.TEXT, column: 'articleBody' }
+    protected PLACE_EXTRACTION_METHODS: ExtractionArgs<BlogData> = [
+        { method: PlaceExtractionMethod.TEXT, column: 'articleBody'}
     ];
 
-    protected transform(source: TestSourceData): Draft {
+    protected transform(source: BlogData): Draft {
         return {
             id: source['@id'],
             url: source['@id'],

@@ -8,11 +8,11 @@
  * Usage: bun run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
  */
 import { Draft, Ingestor } from './ingestor';
-import { recordType } from '../helpers/entity-factory';
 import { NewFeature } from '../../schema';
-import { ExtractionArgs, PlaceExtractionMethod } from '../helpers/place-extractor';
+import { ExtractionArgs, PlaceExtractionMethod } from '../helpers/places/place-index';
+import { RecordType } from '@atm/shared';
 
-interface DelpherSourceData {
+type DelpherSourceData = {
   id: string;
   url: string;
   title: string;
@@ -32,7 +32,7 @@ export class DelpherIngestor extends Ingestor<DelpherSourceData> {
   protected DATASET_LABEL = 'Delpher Kranten';
   protected DATASET_URL = 'https://www.delpher.nl';
 
-  protected RECORD_TYPE = recordType.TEXT;
+  protected RECORD_TYPE: RecordType = 'text';
   protected RELATION_ID = 'isAbout';
   protected RELATION_LABEL = 'Is About';
 
@@ -41,12 +41,9 @@ export class DelpherIngestor extends Ingestor<DelpherSourceData> {
   ];
 
   private parsePeriod(period: string): { startDate: string | null; endDate: string | null } {
-    // Format: [start,end) — inclusive start, exclusive end
-    const match = period.match(/[\[(\s]*(\d{4}-\d{2}-\d{2})\s*,\s*(\d{4}-\d{2}-\d{2})\s*[)\]]/);
+    const match = period.match(/[\[(\s]*(\d{4}-\d{2}-\d{2})\s*,\s*(\d{4}-\d{2}-\d{2})\s*[)\]]/); // Format: [start,end) — inclusive start, exclusive end
     
-    if (!match) {
-      return { startDate: null,  endDate: null }
-    };
+    if (!match) { return { startDate: null,  endDate: null } };
     
     return { startDate: match[1], endDate: match[2]};
   }  
@@ -66,8 +63,12 @@ export class DelpherIngestor extends Ingestor<DelpherSourceData> {
     await this.writer.flushIfFull();
   }
   
-  protected transform(source: DelpherSourceData): Draft {
+  protected transform(source: DelpherSourceData): Draft | undefined {
     const dates = this.parsePeriod(source.period)
+
+    if (!dates.startDate || !dates.endDate) {
+      return undefined
+    }
 
     return {
       id: source.url,
@@ -76,9 +77,8 @@ export class DelpherIngestor extends Ingestor<DelpherSourceData> {
       label: source.title || '',
       description: source.text || '',
       startDate: dates.startDate,
-      endDate: dates.endDate,
-      wkt: source.geom_wkt
-    } as Draft
+      endDate: dates.endDate
+    }
   }
 }
 
