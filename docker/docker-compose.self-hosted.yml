@@ -9,10 +9,11 @@ services:
     # Postgres + PostGIS + pg_roaringbitmap. Not the stock postgis image: the schema
     # declares a roaringbitmap column (cell_features), so db:push-schema cannot create
     # the table without the type. An external DB needs the extension installed too.
-    image: ghcr.io/amsterdamtimemachine/data-index/db:16-3.4
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.db
+    #
+    # Pulled from GHCR — built + published by .github/workflows/db-image.yml, so a
+    # self-hosting deploy pulls it instead of compiling roaringbitmap locally. To build
+    # it by hand: docker build -f docker/Dockerfile.db -t ghcr.io/amsterdamtimemachine/data-index/db:16 .
+    image: ghcr.io/amsterdamtimemachine/data-index/db:16
     # No container_name — a fixed name overrides compose's <project>-<service>-<n>
     # scheme, so two stacks built on this overlay would collide on it regardless of
     # --project-name. The app still reaches the DB at `dataindex-db`: that's the

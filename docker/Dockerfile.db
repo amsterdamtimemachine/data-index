@@ -1,4 +1,4 @@
-# Postgres 16 + PostGIS 3.4 + pg_roaringbitmap.
+# Postgres 16 + latest PostGIS 3.x + pg_roaringbitmap.
 #
 # roaringbitmap backs the precomputed heatmap/histogram rollup: it stores the set
 # of feature ids per (cell, bin, filter) bucket, so rolling up to any display grid
@@ -11,7 +11,12 @@
 #
 # with_llvm=no skips PGXS's LLVM bitcode step (it wants a clang the image lacks).
 # The bitcode only feeds JIT inlining, and JIT is off on this workload anyway.
-FROM postgis/postgis:16-3.4
+#
+# The `16` tag (not `16-3.4`) floats the PostGIS minor: a rebuild picks up the newest
+# PostGIS on Postgres 16. Reproducibility trades for auto-updates — a minor bump may need
+# `ALTER EXTENSION postgis UPDATE;` on an existing volume. postgresql-server-dev-16 stays
+# pinned to the PG major (16), which is what pg_roaringbitmap compiles against.
+FROM postgis/postgis:16
 
 ARG ROARINGBITMAP_VERSION=v1.2.0
 

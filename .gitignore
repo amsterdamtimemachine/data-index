@@ -1,7 +1,7 @@
 node_modules/
 dist/
 build/
-
+packages/db/src/etl/proto/
 # SvelteKit
 .svelte-kit/
 

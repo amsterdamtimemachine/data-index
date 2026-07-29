@@ -486,10 +486,11 @@ export DC="docker compose --env-file .env \
   -f docker/docker-compose.self-hosted.yml \
   -f docker/docker-compose.production.yml"
 
-# Bundled Postgres + PostGIS + pg_roaringbitmap, bound to loopback. --build compiles
-# the DB image from docker/Dockerfile.db (first run only; cached after). --wait blocks
+# Bundled Postgres + PostGIS + pg_roaringbitmap, bound to loopback. The DB image is
+# prebuilt on GHCR (public — no login), same as the app; no local compile. --wait blocks
 # until healthy.
-$DC up -d --build --wait dataindex-db
+$DC pull dataindex-db
+$DC up -d --wait dataindex-db
 
 # Pull the prebuilt app image from GHCR (public — no login). The app service also has a build
 # section, so without this Compose would build it locally instead of running the released image.
@@ -622,7 +623,8 @@ fine, but `db:push-schema` will fail until the extension exists. Recreate the DB
 on the new image (the volume, and the data, survive), add the extension once, then rebuild:
 
 ```bash
-$DC up -d --build --wait dataindex-db      # new image, same pgdata volume
+$DC pull dataindex-db                      # latest DB image from GHCR
+$DC up -d --wait dataindex-db              # new image, same pgdata volume
 $DC exec dataindex-db psql -U "$DB_USER" -d "$DB_NAME" -c 'CREATE EXTENSION IF NOT EXISTS roaringbitmap;'
 $DC run --rm app bun run db:push-schema    # creates cell_features
 $DC run --rm app bun run db:rebuild-index  # populates it — the map is empty until this runs
