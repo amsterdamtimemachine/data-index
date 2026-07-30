@@ -13,7 +13,7 @@
 // bins using the new width while the table still holds buckets at the old one, and the
 // counts go quietly wrong (an *increase* still happens to work, since the old bins nest
 // inside the new; a decrease cannot, as a bucket can't be split back apart).
-export const PRECOMP_TIME_BIN_YEARS = parseInt(process.env.PRECOMP_TIME_BIN_YEARS || '10', 10) || 10;
+export const PRECOMP_TIME_BIN_YEARS = parseInt(process.env.PRECOMP_TIME_BIN_YEARS || '50', 10) || 50;
 
 // Default display bin size (years) when a request doesn't specify one.
 export const DISPLAY_TIME_BIN_DEFAULT_YEARS = parseInt(process.env.DISPLAY_TIME_BIN_DEFAULT_YEARS || '50', 10) || 50;
