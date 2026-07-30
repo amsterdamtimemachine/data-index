@@ -53,7 +53,7 @@ Rather than curating or contextualising the data, the index presents sources as 
 ```
 packages/
   shared/       TypeScript types and configuration
-  db/           PostgreSQL 16 + PostGIS 3.4, Drizzle ORM, ETL scripts
+  db/           PostgreSQL 16 + PostGIS, Drizzle ORM, ETL scripts
   app/          SvelteKit 5, MapLibre GL, TailwindCSS
 ```
 
@@ -607,7 +607,7 @@ $DC pull app
 $DC up -d app
 ```
 
-Naming only `app` leaves a bundled database running and its volume untouched.
+Naming only `app` leaves a bundled database running and its volume untouched. To move it to a newer db image, `pull`/`up -d dataindex-db` too; if that bumped the PostGIS minor, reconcile the existing volume once with `$DC exec dataindex-db update-postgis.sh`.
 
 If the new image changes the schema or the ingestors, re-run them from the image you just pulled — never from the checkout:
 
