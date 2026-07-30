@@ -71,6 +71,8 @@
 
 			availableTagsForSelection = data.availableTags.map((tag: { name: string }) => tag.name);
 		} catch (error) {
+			// TODO: surface via toast (createError → ErrorHandler) when the tags feature ships;
+			// console-only for now since this whole component is gated behind TAGS_FEATURE_READY.
 			console.error('Failed to load available tag combinations:', error);
 			// On error, show all tags as available
 			availableTagsForSelection = availableTags;
@@ -96,6 +98,7 @@
 					return;
 				}
 			} catch (error) {
+				// TODO: surface via toast when the tags feature ships (see note above).
 				console.error('TagsSelector validation failed:', error);
 			}
 		}

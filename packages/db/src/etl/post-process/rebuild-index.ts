@@ -1,7 +1,8 @@
 import { sql } from 'drizzle-orm';
-import { CELL_SIZE_METERS } from '@atm/shared';
+import { PRECOMP_GRID_CELL_METERS, PRECOMP_TIME_BIN_YEARS } from '@atm/shared';
 import { db } from '../../client';
 import { placeGeometry, features, featureToPlace, placeCells, gridConfig } from '../../schema';
+import { buildCellFeatures } from './build-cell-features';
 
 type BBoxRow = {
   min_x: number;
@@ -36,12 +37,12 @@ export async function rebuildIndex() {
 
   const width = max_x - min_x;
   const height = max_y - min_y;
-  const gridCols = Math.ceil(width / CELL_SIZE_METERS);
-  const gridRows = Math.ceil(height / CELL_SIZE_METERS);
+  const gridCols = Math.ceil(width / PRECOMP_GRID_CELL_METERS);
+  const gridRows = Math.ceil(height / PRECOMP_GRID_CELL_METERS);
 
   console.log(`Bounds (RD): (${min_x.toFixed(0)}, ${min_y.toFixed(0)}) → (${max_x.toFixed(0)}, ${max_y.toFixed(0)})`);
   console.log(`Extent: ${width.toFixed(0)}m × ${height.toFixed(0)}m`);
-  console.log(`Cell size: ${CELL_SIZE_METERS}m`);
+  console.log(`Cell size: ${PRECOMP_GRID_CELL_METERS}m`);
   console.log(`Grid dimensions: ${gridCols} × ${gridRows} (max ${gridCols * gridRows} cells)\n`);
 
   // Clear existing data
@@ -58,8 +59,8 @@ export async function rebuildIndex() {
     INSERT INTO place_cells (place_id, cell_x, cell_y)
     SELECT DISTINCT
       pg.place_id as place_id,
-      FLOOR((ST_X((dp).geom) - ${min_x}) / ${CELL_SIZE_METERS})::smallint as cell_x,
-      FLOOR((ST_Y((dp).geom) - ${min_y}) / ${CELL_SIZE_METERS})::smallint as cell_y
+      FLOOR((ST_X((dp).geom) - ${min_x}) / ${PRECOMP_GRID_CELL_METERS})::smallint as cell_x,
+      FLOOR((ST_Y((dp).geom) - ${min_y}) / ${PRECOMP_GRID_CELL_METERS})::smallint as cell_y
     FROM ${placeGeometry} pg
     CROSS JOIN LATERAL ST_DumpPoints(pg.geometry) dp
     WHERE GeometryType(pg.geometry) IN ('POINT', 'MULTIPOINT')
@@ -83,20 +84,20 @@ export async function rebuildIndex() {
     SELECT f.id, gx::smallint, gy::smallint
     FROM featured f
     CROSS JOIN LATERAL generate_series(
-      FLOOR((ST_XMin(f.geometry) - ${min_x}::float8) / ${CELL_SIZE_METERS}::float8)::int,
-      FLOOR((ST_XMax(f.geometry) - ${min_x}::float8) / ${CELL_SIZE_METERS}::float8)::int
+      FLOOR((ST_XMin(f.geometry) - ${min_x}::float8) / ${PRECOMP_GRID_CELL_METERS}::float8)::int,
+      FLOOR((ST_XMax(f.geometry) - ${min_x}::float8) / ${PRECOMP_GRID_CELL_METERS}::float8)::int
     ) AS gx
     CROSS JOIN LATERAL generate_series(
-      FLOOR((ST_YMin(f.geometry) - ${min_y}::float8) / ${CELL_SIZE_METERS}::float8)::int,
-      FLOOR((ST_YMax(f.geometry) - ${min_y}::float8) / ${CELL_SIZE_METERS}::float8)::int
+      FLOOR((ST_YMin(f.geometry) - ${min_y}::float8) / ${PRECOMP_GRID_CELL_METERS}::float8)::int,
+      FLOOR((ST_YMax(f.geometry) - ${min_y}::float8) / ${PRECOMP_GRID_CELL_METERS}::float8)::int
     ) AS gy
     WHERE ST_Intersects(
       f.geometry,
       ST_MakeEnvelope(
-        ${min_x}::float8 + gx * ${CELL_SIZE_METERS}::float8,
-        ${min_y}::float8 + gy * ${CELL_SIZE_METERS}::float8,
-        ${min_x}::float8 + (gx + 1) * ${CELL_SIZE_METERS}::float8,
-        ${min_y}::float8 + (gy + 1) * ${CELL_SIZE_METERS}::float8,
+        ${min_x}::float8 + gx * ${PRECOMP_GRID_CELL_METERS}::float8,
+        ${min_y}::float8 + gy * ${PRECOMP_GRID_CELL_METERS}::float8,
+        ${min_x}::float8 + (gx + 1) * ${PRECOMP_GRID_CELL_METERS}::float8,
+        ${min_y}::float8 + (gy + 1) * ${PRECOMP_GRID_CELL_METERS}::float8,
         28992
       )
     )
@@ -120,12 +121,11 @@ export async function rebuildIndex() {
   console.log(`  ✅ ${spatialResult.rowCount} places updated`);
 
   // Update temporal frequency on features (number of base time bins each feature spans)
-  const baseBinSize = parseInt(process.env.BASE_BIN_SIZE || '10', 10) || 10;
-  console.log(`\nUpdating temporal frequency (base bin: ${baseBinSize} years)...`);
+  console.log(`\nUpdating temporal frequency (base bin: ${PRECOMP_TIME_BIN_YEARS} years)...`);
   const temporalResult = await db.execute(sql`
     UPDATE ${features} f
     SET temporal_frequency = GREATEST(1, CEIL(
-      (EXTRACT(YEAR FROM f.end_date) - EXTRACT(YEAR FROM f.start_date)) / ${baseBinSize}
+      (EXTRACT(YEAR FROM f.end_date) - EXTRACT(YEAR FROM f.start_date)) / ${PRECOMP_TIME_BIN_YEARS}
     ))
     WHERE f.start_date IS NOT NULL AND f.end_date IS NOT NULL
   `);
@@ -178,8 +178,8 @@ export async function rebuildIndex() {
   // different size. We transform that rectangle to WGS84 and store its bbox, so
   // the frontend's linear interpolation lands cells where the counts actually are.
   console.log('\nPre-computing grid bounds...');
-  const gridMaxX = min_x + (s.max_x + 1) * CELL_SIZE_METERS;
-  const gridMaxY = min_y + (s.max_y + 1) * CELL_SIZE_METERS;
+  const gridMaxX = min_x + (s.max_x + 1) * PRECOMP_GRID_CELL_METERS;
+  const gridMaxY = min_y + (s.max_y + 1) * PRECOMP_GRID_CELL_METERS;
   type BoundsRow = { min_lon: string; max_lon: string; min_lat: string; max_lat: string };
   type MaxFreqRow = { max_spatial: string; max_temporal: string };
 
@@ -245,6 +245,9 @@ export async function rebuildIndex() {
       }
     });
   console.log('  ✅ Grid config updated');
+
+  // Depends on place_cells, so it has to come after the rasterisation above.
+  await buildCellFeatures();
 
   console.log(`\n=== Summary ===`);
   console.log(`  Features:         ${total}`);

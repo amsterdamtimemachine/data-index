@@ -162,13 +162,16 @@
 		{#if !initialLoading && totalCount > 0}
 			<FeaturesCount totalFeatures={totalCount} {currentPage} featuresPerPage={pageSize} />
 			{#if totalCount > pageSize}
-				<Pagination
-					totalItems={totalCount}
-					{currentPage}
-					itemsPerPage={pageSize}
-					onPageChange={handlePageChange}
-					{loading}
-				/>
+				<!-- Re-seed the builder (count/perPage are captured once) when the dataset changes -->
+				{#key `${totalCount}-${pageSize}`}
+					<Pagination
+						totalItems={totalCount}
+						{currentPage}
+						itemsPerPage={pageSize}
+						onPageChange={handlePageChange}
+						{loading}
+					/>
+				{/key}
 			{/if}
 		{/if}
 	</div>

@@ -24,13 +24,19 @@
 		class: className
 	}: Props = $props();
 
+	// Seeds the builder's initial config. count/perPage are captured once, so the parent
+	// keys this component on totalItems/itemsPerPage to re-seed it when the dataset changes.
 	const {
 		elements: { root, pageTrigger, prevButton, nextButton },
 		states: { pages, range }
 	} = createPagination({
+		// svelte-ignore state_referenced_locally
 		count: totalItems,
+		// svelte-ignore state_referenced_locally
 		perPage: itemsPerPage,
+		// svelte-ignore state_referenced_locally
 		defaultPage: currentPage,
+		// svelte-ignore state_referenced_locally
 		siblingCount,
 		onPageChange: ({ curr, next }) => {
 			if (onPageChange) {

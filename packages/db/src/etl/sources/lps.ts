@@ -25,7 +25,7 @@ export async function ingest(filePath: string) {
     if (!q.predicate.value.endsWith('asWKT')) continue;
     const lp = q.subject.value.split('/geo/lp/')[1];
     if (!lp) continue;
-    placeRows.push({ id: q.subject.value, type: 'address', wkt: q.object.value });
+    placeRows.push({ id: q.subject.value, type: 'address', source: 'adamlink', url: q.subject.value, wkt: q.object.value });
   }
 
   // LPS geometry is WGS84 (EPSG:4326) and is reprojected to RD on insert.

@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { TimeSlice, TimeRange } from '@atm/shared';
-import { DEFAULT_BIN_SIZE } from '@atm/shared';
+import { DISPLAY_TIME_BIN_DEFAULT_YEARS } from '@atm/shared';
 import { db } from '../client';
 import { features } from '../schema';
 import { createTTLCache } from './cache';
@@ -51,7 +51,7 @@ export function generateTimeSlices(minYear: number, maxYear: number, binSizeYear
  * Compute time slices from actual data extent.
  * Bins are anchored to round boundaries (multiples of binSize).
  */
-export async function computeTimeSlices(binSizeYears: number = DEFAULT_BIN_SIZE): Promise<TimeSlice[]> {
+export async function computeTimeSlices(binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS): Promise<TimeSlice[]> {
   const cache = getCache(binSizeYears);
   const cached = cache.get();
   if (cached) return cached;
@@ -76,7 +76,7 @@ export async function computeTimeSlices(binSizeYears: number = DEFAULT_BIN_SIZE)
 /**
  * Derive time range from computed slices.
  */
-export async function computeTimeRange(binSizeYears: number = DEFAULT_BIN_SIZE): Promise<TimeRange> {
+export async function computeTimeRange(binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS): Promise<TimeRange> {
   const slices = await computeTimeSlices(binSizeYears);
   if (slices.length === 0) {
     return { start: '', end: '' };

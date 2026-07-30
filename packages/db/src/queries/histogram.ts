@@ -1,31 +1,39 @@
 import { sql } from 'drizzle-orm';
 import type { Histogram, HistogramBin, RecordType, PlaceType } from '@atm/shared';
-import { DEFAULT_BIN_SIZE } from '@atm/shared';
+import { DISPLAY_TIME_BIN_DEFAULT_YEARS } from '@atm/shared';
+import { normaliseBinSize } from './bin-size';
 import { db } from '../client';
-import { features } from '../schema';
+import { cellFeatures } from '../schema';
 import type { CountRow } from '../row-types';
 import { computeTimeSlices, computeTimeRange } from './time-slices';
 import { getRecordTypes } from './record-types';
-import { featureYearOverlap, slicesCTE } from './time-filter';
-import { andIn, placeTypeJoin } from './filters';
+import { countExpr, displayBinExpr, categoryFilter, binWindow } from './cell-features';
 
 // Query result types
 type BinRow = { bin_start: string; count: string };
 
 /**
- * Get histogram data for combined record types
+ * Get histogram data for combined record types.
+ *
+ * Reads the same cell_features buckets as the heatmap, just summed over space
+ * instead of grouped by cell — so the two can't disagree about how many features
+ * a period holds. (This is why it counts features that are *on the map*: a feature
+ * whose place has no geometry has no cells and so appears in neither. buildCellFeatures
+ * warns when any exist; ingest should make that impossible.)
  */
 export async function getHistogram(
   recordTypes?: RecordType[],
   datasetIds?: string[],
   placeTypes?: PlaceType[],
-  binSizeYears: number = DEFAULT_BIN_SIZE
+  binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS
 ): Promise<Histogram> {
   const types = recordTypes || await getRecordTypes();
 
   if (types.length === 0) {
     return { bins: [], maxCount: 0, timeRange: { start: '', end: '' }, totalFeatures: 0 };
   }
+
+  binSizeYears = normaliseBinSize(binSizeYears);
 
   const [timeSlices, timeRange] = await Promise.all([
     computeTimeSlices(binSizeYears),
@@ -40,16 +48,12 @@ export async function getHistogram(
   const lastSlice = timeSlices[timeSlices.length - 1];
 
   const result = await db.execute<BinRow>(sql`
-    WITH ${slicesCTE(firstSlice.startYear, lastSlice.startYear, binSizeYears)}
-    SELECT s.bin_start::text as bin_start, COUNT(DISTINCT f.id) as count
-    FROM ${features} f
-    ${placeTypeJoin(placeTypes, sql`f.id`)}
-    JOIN slices s ON ${featureYearOverlap(sql`f.start_date`, sql`f.end_date`, sql`s.bin_start`, sql`s.bin_end`)}
-    WHERE f.record_type IN ${types}
-      ${andIn(sql`f.dataset_id`, datasetIds)}
-      ${andIn(sql`p.type`, placeTypes)}
-    GROUP BY s.bin_start
-    ORDER BY s.bin_start
+    SELECT (${displayBinExpr(binSizeYears)})::text as bin_start, ${countExpr} as count
+    FROM ${cellFeatures}
+    WHERE ${categoryFilter(types, datasetIds, placeTypes)}
+      AND ${binWindow(firstSlice.startYear, lastSlice.endYear)}
+    GROUP BY 1
+    ORDER BY 1
   `);
 
   // Build bin map from results
@@ -64,15 +68,13 @@ export async function getHistogram(
   }));
 
   // True distinct total. Summing bin counts would over-count any feature whose
-  // date range spans multiple bins (COUNT DISTINCT counts it once per bin).
+  // date range spans multiple bins (it is counted once per bin it touches). Unioning
+  // every bucket's bitmap collapses it back to one set.
   const totalResult = await db.execute<CountRow>(sql`
-    SELECT COUNT(DISTINCT f.id) as count
-    FROM ${features} f
-    ${placeTypeJoin(placeTypes, sql`f.id`)}
-    WHERE f.record_type IN ${types}
-      ${andIn(sql`f.dataset_id`, datasetIds)}
-      ${andIn(sql`p.type`, placeTypes)}
-      AND ${featureYearOverlap(sql`f.start_date`, sql`f.end_date`, firstSlice.startYear, lastSlice.endYear)}
+    SELECT ${countExpr} as count
+    FROM ${cellFeatures}
+    WHERE ${categoryFilter(types, datasetIds, placeTypes)}
+      AND ${binWindow(firstSlice.startYear, lastSlice.endYear)}
   `);
   const totalFeatures = parseInt(totalResult.rows[0].count);
   const maxCount = Math.max(...bins.map(b => b.count), 0);

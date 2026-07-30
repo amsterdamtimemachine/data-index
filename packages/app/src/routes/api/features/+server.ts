@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { FeaturesSortField, SortDirection, TagOperator } from '@atm/shared/types';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_MAX } from '@atm/shared';
 import { getFeatures } from '@atm/db';
 import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList } from '$lib/server/query-params';
 
@@ -33,6 +34,16 @@ export const GET: RequestHandler = async ({ url }) => {
 				message: 'Bounds must be valid numbers'
 			});
 		}
+		// Reject inverted/degenerate boxes up front (min must be below max on both
+		// axes) rather than doing a grid lookup + empty query for a box that can
+		// never contain anything. getFeatures already clamps a valid box to the data
+		// extent, so an oversized-but-ordered box is handled there.
+		if (bounds.minLon >= bounds.maxLon || bounds.minLat >= bounds.maxLat) {
+			throw error(400, {
+				code: 'INVALID_BOUNDS',
+				message: 'Bounds must have minLon < maxLon and minLat < maxLat'
+			});
+		}
 
 		// Parse optional parameters
 		const recordTypes = parseRecordTypes(url);
@@ -53,7 +64,10 @@ export const GET: RequestHandler = async ({ url }) => {
 		}
 
 		const page = parseInt(url.searchParams.get('page') || '1', 10) || 1;
-		const pageSize = Math.min(parseInt(url.searchParams.get('pageSize') || '50', 10) || 50, 200);
+		const pageSize = Math.min(
+			Math.max(parseInt(url.searchParams.get('pageSize') || String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE, 1),
+			PAGE_SIZE_MAX
+		);
 
 		console.log(
 			`📦 Features API request - bounds: [${bounds.minLon.toFixed(4)}, ${bounds.minLat.toFixed(4)}] to [${bounds.maxLon.toFixed(4)}, ${bounds.maxLat.toFixed(4)}], ` +

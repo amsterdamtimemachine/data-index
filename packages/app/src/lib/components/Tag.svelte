@@ -3,7 +3,7 @@
 
 	interface Props {
 		class?: string;
-		variant?: 'default' | 'selected' | 'outline' | 'selected-outline';
+		variant?: 'default' | 'selected' | 'outline' | 'selected-outline' | 'link';
 		disabled?: boolean;
 		interactive?: boolean;
 		children: import('svelte').Snippet;
@@ -27,6 +27,10 @@
 		} else if (variant === 'selected-outline') {
 			classes = 'border border-atm-blue text-black bg-transparent';
 			if (interactive) classes += ' hover:bg-atm-blue/50';
+		} else if (variant === 'link') {
+			// Gold outline signals the tag links to its source record.
+			classes = 'border border-atm-gold text-black bg-transparent';
+			if (interactive) classes += ' hover:bg-atm-gold/50';
 		} else {
 			classes = 'bg-atm-gold-gray text-black';
 			if (interactive) classes += ' hover:bg-atm-gold';

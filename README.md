@@ -29,6 +29,7 @@ Rather than curating or contextualising the data, the index presents sources as 
   - [Dates sources](#dates-sources)
   - [Dates resolution](#dates-resolution)
 - [Data ingestion](#data-ingestion)
+  - [Getting the data](#getting-the-data)
   - [Place data ingestion](#place-data-ingestion)
     - [Place datasets](#place-datasets)
   - [Minimum required fields per feature](#minimum-required-fields-per-feature)
@@ -41,11 +42,10 @@ Rather than curating or contextualising the data, the index presents sources as 
   - [Database UI](#database-ui)
   - [Testing](#testing)
 - [Production](#production)
-  - [First time server setup (external DB)](#first-time-server-setup-external-db)
-    - [Adding staging alongside](#adding-staging-alongside)
-  - [First time server setup (self-hosted)](#first-time-server-setup-self-hosted)
-  - [CI/CD](#cicd)
+  - [Self-hosted setup](#self-hosted-setup)
+  - [Existing Postgres setup](#existing-postgres-setup)
   - [Deploying a new image](#deploying-a-new-image)
+  - [Adding a second deployment on the same host](#adding-a-second-deployment-on-the-same-host)
   - [Environment variables](#environment-variables)
 
 ## Stack
@@ -79,22 +79,26 @@ erDiagram
     }
 
     place {
-        text id PK "e.g. lp-1000001"
+        text id PK "e.g. https://adamlink.nl/geo/lp/1000001"
         text type  "address | street | neighbourhood | district"
         text name  "e.g. Prins Hendrikkade 93"
+        text source FK "provider org: adamlink | cbs | nwb | bag"
+        text url  "link to the origin record"
     }
 
     place_geometry {
-        text place_id PK "e.g. lp-1000001"
+        text place_id PK "e.g. https://adamlink.nl/geo/lp/1000001"
         geometry geometry  "POINT, LINESTRING, or POLYGON"
         integer spatial_frequency  "e.g. 47 # cells spanned"
+        text source  "geometry provider when it differs from place.source (e.g. nwb); null = same"
+        text url  "link to the geometry's source record; null = same as place.url"
         date since  "neighbourhood/district era start; null for address/street"
         date until  "era end; null = open/current"
     }
 
     place_historical_name {
         text id PK "e.g. https://adamlink.nl/geo/address/A1"
-        text place_id FK "e.g. lp-1000001"
+        text place_id FK "e.g. https://adamlink.nl/geo/lp/1000001"
         text name  "e.g. Prins Hendrikkade 93"
         date since  "e.g. 1943-01-01"
         date until  "e.g. 1976-01-01"
@@ -128,6 +132,16 @@ erDiagram
         smallint cell_y  "0-199"
     }
 
+    cell_features {
+        smallint cell_x  "0-199"
+        smallint cell_y  "0-199"
+        smallint time_bin  "e.g. 1940 # PRECOMP_TIME_BIN_YEARS bin"
+        text record_type  "e.g. image"
+        text dataset_id  "e.g. stadsarchief-beeldbank"
+        text place_type  "e.g. street"
+        roaringbitmap feature_ids  "set of features in this bucket"
+    }
+
     grid_config {
         text id PK "always 'current'"
         smallint min_cell_x  "0"
@@ -159,6 +173,7 @@ erDiagram
     }
 
     organisations||--o{datasets:"has datasets"
+    organisations||--o{place:"provides geometry"
     datasets||--o{features:"has"
     place||--||place_geometry:"has geometry"
     place||--o{place_historical_name:"has historical names"
@@ -168,16 +183,19 @@ erDiagram
     relation||--o{feature_to_place:"describes"
     features||--o{feature_tags:"tagged"
     tags||--o{feature_tags:"links"
+    place_cells||..o{cell_features:"rolled up into"
+    features||..o{cell_features:"counted in"
 ```
 
-- **organisations**: Institutions that provide datasets
+- **organisations**: Institutions that provide datasets, or place geometry (referenced by `place.source`)
 - **datasets**: Data collections from organisations
-- **place**: Physical location identity (id, type, name)
+- **place**: Physical location identity (id, type, name); `source` is the provider organisation
 - **place_geometry**: A place's geometry (RD / EPSG:28992) and the period it was valid (1:1 with place)
 - **place_historical_name**: Dated past names linked to places (addresses, streets), used to show what a location was called at a given time
 - **tags**: Thematic categories (e.g. Nature, Transport, Living) assigned to features. Work in progress, generated via AI classification across datasets
 - **features**: Images, texts, persons, or other content items linked to places and displayed in the UI
 - **place_cells**: Pre-computed spatial grid that powers the heatmap. Each place is mapped to the 100m cells its geometry covers (one cell for a point, many for a street or neighbourhood). Features inherit cell coverage through their place link, cell assignments are stored once per place rather than duplicated per feature.
+- **cell_features**: Which features occupy each cell, base time bin and category — the cell-major counterpart of `place_cells`, written by `rebuild-index`. It materialises the `features → feature_to_place → place → place_cells` hop plus the time bin, so the heatmap and histogram read one table instead of re-running that join per request. Each bucket holds its feature set as a **roaring bitmap** rather than a count: merging buckets is then a set union, which de-duplicates a feature spanning several cells or place types, so base cells can be rolled up into *any* display grid and still yield an exact distinct count. The bitmap stores a dense integer surrogate assigned during the rebuild (roaringbitmap holds int4; `features.id` is a 128-bit uuid) — only cardinality is ever read back, never identity, so the mapping is discarded.
 - **grid_config**: Single row (`id = 'current'`) of grid metadata written by `rebuild-index`: the RD/28992 grid origin (`min_x`, `min_y`), the base-cell index extent, the WGS84 bounds of the cell grid, and the max spatial/temporal frequencies used to normalise relevance. Read once per heatmap/feature request.
 
 ## Indexing
@@ -186,9 +204,11 @@ The data index is restricted to historical features that can be both spatially l
 
 ### Spatial indexing
 
-Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a geometry (POINT, LINESTRING, or POLYGON) in **RD New (EPSG:28992, metres)**. Query responses reproject to **WGS84 (EPSG:4326)** before sending to the client. `rebuild-index` overlays the city with a regular grid of `CELL_SIZE_METERS`-wide cells (default 100m) whose origin is the south-west corner of the bounding box of all feature-linked `place` geometries, and writes the cells each of those feature-linked places covers to `place_cells` — one set of cells per place, not per feature. Places with no linked feature are skipped entirely, so ingesting unreferenced geometry (e.g. the present-day districts until a dataset uses them) adds no cells and never enlarges the grid. A point lands in one cell, a line in the cells it crosses, and a polygon is filled (its interior, not just its outline). These mappings are computed in PostGIS: points with `ST_DumpPoints`, lines and polygons by rasterising each candidate cell with `ST_Intersects` against its `ST_MakeEnvelope`. Features inherit cell coverage through their place link. Heatmap requests join `place_cells` → `feature_to_place` → `features` and compute `COUNT(DISTINCT feature_id)` per cell, instead of scanning every feature row.
+Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a geometry (POINT, LINESTRING, or POLYGON) in **RD New (EPSG:28992, metres)**. Query responses reproject to **WGS84 (EPSG:4326)** before sending to the client. `rebuild-index` overlays the city with a regular grid of `PRECOMP_GRID_CELL_METERS`-wide cells (default 100m) whose origin is the south-west corner of the bounding box of all feature-linked `place` geometries, and writes the cells each of those feature-linked places covers to `place_cells` — one set of cells per place, not per feature. Places with no linked feature are skipped entirely, so ingesting unreferenced geometry (e.g. the present-day districts until a dataset uses them) adds no cells and never enlarges the grid. A point lands in one cell, a line in the cells it crosses, and a polygon is filled (its interior, not just its outline). These mappings are computed in PostGIS: points with `ST_DumpPoints`, lines and polygons by rasterising each candidate cell with `ST_Intersects` against its `ST_MakeEnvelope`. Features inherit cell coverage through their place link.
 
-The grid lives in RD metres: a cell index is `floor((coord − origin) / CELL_SIZE_METERS)`, so cell `(0,0)` is the 100m square at the origin. `rebuild-index` persists that origin (`min_x`, `min_y`) and the cell extent to the single-row `grid_config` table, together with the **WGS84 bounds of the grid rectangle** — the origin extended by `(maxCell + 1)` cells, reprojected to EPSG:4326. The frontend divides those grid-aligned bounds into display cells, so what it draws tiles the exact grid the counts were computed on rather than the looser data envelope; the reverse lookup (click a cell → list its features) inverts the same bounds, keeping hover counts and feature lists in agreement.
+`rebuild-index` then rolls that join up into `cell_features`, one bucket per (base cell, base time bin, record type, dataset, place type), each holding the set of features it contains. Heatmap and histogram requests read only that table — filtering buckets and unioning their bitmaps — instead of re-joining `place_cells` → `feature_to_place` → `features` and computing `COUNT(DISTINCT feature_id)` on every request. The union is what makes it exact: a street spanning several base cells that fold into one display cell is counted once, so any display resolution can be served from the same buckets. On the full dataset that took the heatmap from ~13s to under a second.
+
+The grid lives in RD metres: a cell index is `floor((coord − origin) / PRECOMP_GRID_CELL_METERS)`, so cell `(0,0)` is the 100m square at the origin. `rebuild-index` persists that origin (`min_x`, `min_y`) and the cell extent to the single-row `grid_config` table, together with the **WGS84 bounds of the grid rectangle** — the origin extended by `(maxCell + 1)` cells, reprojected to EPSG:4326. The frontend divides those grid-aligned bounds into display cells, so what it draws tiles the exact grid the counts were computed on rather than the looser data envelope; the reverse lookup (click a cell → list its features) inverts the same bounds, keeping hover counts and feature lists in agreement.
 
 Heatmap density is rendered with log-normalised counts (`log(count+1) / log(maxCount+1)`).
 
@@ -217,9 +237,9 @@ The naming model above determines what the API returns per place type. `getFeatu
 
 ### Temporal indexing
 
-Each feature has `start_date` and `end_date`, both inclusive at the year level. A feature with `start_date=1900-06-15` and `end_date=1900-08-30` covers exactly the year 1900. Time is divided into base bins of `BASE_BIN_SIZE` years (default 10), each spanning `[bin_start, bin_end)`: start year inclusive, end year exclusive. A feature is assigned to every bin its year range overlaps: a feature spanning 1900–1925 with 10-year bins falls into `[1900,1910)`, `[1910,1920)`, and `[1920,1930)`. Its `temporal_frequency` is the count of those bins (3 here).
+Each feature has `start_date` and `end_date`, both inclusive at the year level. A feature with `start_date=1900-06-15` and `end_date=1900-08-30` covers exactly the year 1900. Time is divided into base bins of `PRECOMP_TIME_BIN_YEARS` years (default 10), each spanning `[bin_start, bin_end)`: start year inclusive, end year exclusive. A feature is assigned to every bin its year range overlaps: a feature spanning 1900–1925 with 10-year bins falls into `[1900,1910)`, `[1910,1920)`, and `[1920,1930)`. Its `temporal_frequency` is the count of those bins (3 here).
 
-The timeline (rendered as a histogram) uses the same overlap logic but at the display bin size requested by the client. Display bin size is clamped to `[BIN_SIZE_MIN, BIN_SIZE_MAX]`.
+The timeline (rendered as a histogram) uses the same overlap logic but at the display bin size requested by the client. Display bin size is clamped to `[DISPLAY_TIME_BIN_MIN_YEARS, DISPLAY_TIME_BIN_MAX_YEARS]` and rounded down to a multiple of `PRECOMP_TIME_BIN_YEARS` — the `cell_features` rollup stores counts per base bin, so a display bin has to be a whole number of them (a 25-year bin can't split a decade).
 
 Timeline bar heights use the same log normalisation as the heatmap.
 
@@ -267,13 +287,31 @@ Both name- and geometry-windows run from `since` up to but not including `until`
 
 ## Data ingestion
 
+### Getting the data
+
+Ingestion reads files from a local data directory; how you obtain each differs by source:
+
+- **Adamlink place data** — download the TTLs from [adamlink.nl/data](https://adamlink.nl/data): the neighbourhoods & districts, streets, LPS, and adressen files. Static, versioned downloads.
+- **PDOK base registries (CBS / NWB / BAG)** — not downloaded by hand. `db:fetch` queries the [PDOK](https://www.pdok.nl) WFS and writes a ground-truth file:
+
+  ```bash
+  bun run db:fetch -s cbs-areas     -o <data-dir>/cbs-areas.geojson
+  bun run db:fetch -s nwb-streets   -o <data-dir>/nwb-streets.geojson
+  bun run db:fetch -s bag-addresses -o <data-dir>/bag-addresses.ndjson
+  ```
+
+  Splitting fetch from ingest keeps ingestion offline and reproducible and pins each PDOK snapshot as an inspectable file; re-run a fetch to refresh it.
+- **Feature datasets (Beeldbank, Joods Monument, Delpher)** — currently private derivatives of mostly-public source collections, so they are not publicly distributable.
+
+All files land in the data directory; the ingestion steps below read them.
+
 ### Place data ingestion
 
 The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Adamlink is a Linked Open Data service that connects historical Amsterdam address registries to point geometries, enabling features to be linked to physical locations with historical address names.
 
 Adamlink place data must be ingested before any dataset. See the [Development](#development) or [Production](#production) sections for the full ingestion order.
 
-Every `place` row is sourced from Adamlink. A feature is skipped at ingest if it can't be resolved to an existing place, or if it lacks the stable source identifier its `id` is derived from — no feature row is created and nothing unlinked lands in the database.
+Adamlink is the backbone, but it doesn't cover everything — its addresses stop at 1943, it doesn't include the recently-annexed municipality of Weesp, and it misses some Amsterdam streets. Three national base registries fill those gaps (see [Place datasets](#place-datasets)), and every `place` row records its `source` (`adamlink` / `cbs` / `nwb` / `bag`) and a `url` to the origin record. A feature is skipped at ingest if it can't be resolved to an existing place, or if it lacks the stable source identifier its `id` is derived from — no feature row is created and nothing unlinked lands in the database.
 
 If you are deploying this for **another Dutch city**, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. The `geometry-point-template.ts` example shows how to match incoming coordinates to existing places; for creating new places, adapt the pattern from `lps.ts`. The core requirement is that each feature links to a `place` row that has a geometry.
 
@@ -281,7 +319,9 @@ For a city **outside the Netherlands** there is one more step: the Dutch nationa
 
 #### Place datasets
 
-All place geometry comes from these public Adamlink datasets.
+Place data comes from two kinds of source, distinguished by the `source` column. **Adamlink** is the backbone — historical geometry and address history. Three **PDOK base registries** fill what Adamlink lacks, for Amsterdam and the annexed municipality of Weesp.
+
+Adamlink (download the TTLs, see [Getting the data](#getting-the-data)):
 
 | Dataset | Description | Format |
 |---------|-------------|--------|
@@ -289,6 +329,16 @@ All place geometry comes from these public Adamlink datasets.
 | [Streets](https://adamlink.nl/data) | Street geometries (LINESTRING) with historical name variants | TTL |
 | [LPS](https://adamlink.nl/data) | Linked point set: historical address-to-geometry mappings from 7 Amsterdam registries (1832–1976) | TTL |
 | [Adressen](https://adamlink.nl/data) | Dated address observations linking to LPS points via `schema:geoContains` | TTL |
+
+Three PDOK base registries fill the gaps, fetched with `db:fetch` (scope Amsterdam + Weesp — see [Getting the data](#getting-the-data)). CBS and BAG ingest via the generic `pdok-places` source; NWB has its own `nwb-streets` source that reconciles against Adamlink at ingest.
+
+- **[CBS WijkenBuurten](https://service.pdok.nl/cbs/wijkenbuurten/2022/wfs/v1_0)** (`source` = `cbs`, GeoJSON) — Weesp's neighbourhoods (buurten) and districts (wijken), annexed by Amsterdam in 2022 and absent from Adamlink.
+- **[NWB Wegen](https://service.pdok.nl/rws/nwbwegen/wfs/v1_0)** (`source` = `nwb`, GeoJSON) — the fetcher pulls *all* Amsterdam streets (incl. annexed Weesp); the `nwb-streets` ingest (`-x <adamlinkstraten.ttl>`, required) reconciles them against Adamlink by BAG openbare-ruimte id (`bagOrl` ↔ Adamlink `owl:sameAs`) and does two jobs:
+  - **gap-fill** — streets absent from Adamlink become `nwb-<bagOrl>` places (`source` = `nwb`);
+  - **backfill** — streets Adamlink *names* but has no line for keep their Adamlink id, name, and dated names, and borrow the NWB geometry; that borrowed line is recorded on `place_geometry.source` = `nwb` (with a link to the BAG record), so it reads as an Adamlink street with NWB geometry.
+
+  Streets Adamlink already draws are skipped, as are NWB segments without a `bagOrl` (bridges/locks).
+- **[BAG](https://service.pdok.nl/lv/bag/wfs/v2_0)** (`source` = `bag`, NDJSON) — current addresses; Adamlink's address history stops at 1943.
 
 ### Minimum required fields per feature
 
@@ -315,7 +365,7 @@ bun run db:ingest -s <dataset-name> -f <path-to-file>
 bun run db:rebuild-index
 ```
 
-`rebuild-index` computes spatial grid cells and frequency values. Must run after every data change.
+`rebuild-index` computes spatial grid cells, the `cell_features` rollup the heatmap and histogram read, and frequency values. Must run after every data change — a feature ingested without it won't appear on the map.
 
 ### Re-ingesting and corrections
 
@@ -363,6 +413,14 @@ bun run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
 bun run db:ingest -s lps -f <path-to-lps.ttl>
 bun run db:ingest -s adressen -f <path-to-adressen.ttl>
 
+# PDOK gap-fills (Amsterdam + Weesp) — fetch the base registries from PDOK, then ingest
+bun run db:fetch  -s cbs-areas     -o <data-dir>/cbs-areas.geojson
+bun run db:fetch  -s nwb-streets   -o <data-dir>/nwb-streets.geojson
+bun run db:fetch  -s bag-addresses -o <data-dir>/bag-addresses.ndjson
+bun run db:ingest -s pdok-places -f <data-dir>/cbs-areas.geojson
+bun run db:ingest -s nwb-streets -f <data-dir>/nwb-streets.geojson -x <data-dir>/adamlinkstraten.ttl
+bun run db:ingest -s pdok-places -f <data-dir>/bag-addresses.ndjson
+
 # Ingest datasets (any order)
 bun run db:ingest -s <dataset-name> -f <path-to-file>
 
@@ -392,162 +450,199 @@ bun run test:db:down   # stop and wipe the test DB
 
 ## Production
 
-The app needs a PostgreSQL + PostGIS database. In production there is **External DB** mode where Data index connects to an existing DB, and **self-hosted** mode where a Postgres container is bundled alongside the app container.
+The app runs from a prebuilt GHCR image — `:production` from `main`, `:staging` from
+`staging`. Its database is either **self-hosted** (a bundled Postgres container) or an
+**existing Postgres** you point it at. Both need PostGIS *and* `pg_roaringbitmap` (it backs
+the `cell_features` rollup): the self-hosted image bundles both; an existing server needs
+roaringbitmap added — see [Existing Postgres setup](#existing-postgres-setup).
 
-### First time server setup (external DB)
+Images build in CI on push once tests pass; pulling and restarting on the server is manual
+— see [Deploying a new image](#deploying-a-new-image).
 
-```bash
-ssh user@server
+### Self-hosted setup
 
-# Install Bun
-curl -fsSL https://bun.sh/install | bash
-
-# Clone repo
-git clone git@github.com:amsterdamtimemachine/data-index.git ~/data-index && cd ~/data-index
-bun install
-
-# Set up production env (point at the existing Postgres server)
-cp .env.example .env.prod
-# Edit .env.prod: set DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME to
-# match the production database, and set APP_PORT (defaults to 3000).
-# The app does NOT manage this server; assume it's already running and
-# reachable from the VPS.
-
-# Push schema into the existing DB (uses .env.prod via Bun's --env-file flag)
-bun --env-file=.env.prod run db:push-schema
-
-# Ingest place data (same env file)
-bun --env-file=.env.prod run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
-bun --env-file=.env.prod run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
-bun --env-file=.env.prod run db:ingest -s lps -f <path-to-lps.ttl>
-bun --env-file=.env.prod run db:ingest -s adressen -f <path-to-adressen.ttl>
-
-# Ingest feature datasets
-bun --env-file=.env.prod run db:ingest -s beeldbank -f <path-to-beeldbank.csv>
-bun --env-file=.env.prod run db:ingest -s joods-monument -f <path-to-results_jm.csv>
-bun --env-file=.env.prod run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
-bun --env-file=.env.prod run db:rebuild-index
-
-# Start the app (connects to the external DB defined in .env.prod)
-docker compose --project-name data-index-prod --env-file .env.prod \
-  -f docker/docker-compose.yml \
-  -f docker/docker-compose.production.yml up -d app
-```
-
-`--project-name data-index-prod` is necessary if you're running a staging deployment alongside. See below.
-
-#### Adding staging alongside
-
-```bash
-cp .env.example .env.staging
-# Edit .env.staging:
-#   - DB_* → point at a staging Postgres (don't reuse production's DB)
-#   - APP_PORT=3001 (or any free port ≠ production's)
-
-# Push schema + ingest into the staging DB
-bun --env-file=.env.staging run db:push-schema
-bun --env-file=.env.staging run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
-bun --env-file=.env.staging run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
-bun --env-file=.env.staging run db:ingest -s lps -f <path-to-lps.ttl>
-# …and the other datasets, same pattern as production…
-bun --env-file=.env.staging run db:rebuild-index
-
-# Start the staging container alongside production
-docker compose --project-name data-index-staging --env-file .env.staging \
-  -f docker/docker-compose.yml \
-  -f docker/docker-compose.staging.yml up -d app
-```
-
-### First time server setup (self-hosted)
+Bundled Postgres + PostGIS + `pg_roaringbitmap`; all code runs from the image (one clone
+per deployment, on the branch matching its image tag). Shown for **production** — the
+**Staging** note after the block covers the two differences.
 
 ```bash
 ssh user@server
 
-# Install Bun
-curl -fsSL https://bun.sh/install | bash
+# Docker Engine (not Docker Desktop) + compose plugin. Needs compose >= 2.24.
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER      # log out and back in
+docker compose version
 
-# Clone repo
-git clone git@github.com:amsterdamtimemachine/data-index.git ~/data-index && cd ~/data-index
-bun install
+# Clone the branch this deployment serves — no bun install, no build (code runs from the image).
+git clone -b main git@github.com:amsterdamtimemachine/data-index.git ~/data-index-prod
+cd ~/data-index-prod
 
-# Set up production env (defaults target the bundled DB)
-cp .env.example .env.prod
-# Edit .env.prod: change DB_PASSWORD (and DB_USER / DB_NAME if you want).
-# Leave DB_HOST=localhost (workstation CLI hits the mapped DB port; the
-# self-hosted overlay overrides DB_HOST for the app container internally).
+cp .env.example .env                             # edit per the Environment variables table below
 
-# Start the bundled Postgres + PostGIS (production overlay binds it to loopback)
-docker compose --project-name data-index-prod --env-file .env.prod \
+# $DC = docker compose preloaded with this deployment's overlays. Reuse it for every command
+# below and later (e.g. `$DC pull app`). For a staging build, swap production.yml → staging.yml.
+export DC="docker compose --env-file .env \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.self-hosted.yml \
-  -f docker/docker-compose.production.yml up -d dataindex-db
+  -f docker/docker-compose.production.yml"
 
-# Push schema
-bun --env-file=.env.prod run db:push-schema
+# Bundled Postgres + PostGIS + pg_roaringbitmap, bound to loopback. --build compiles
+# the DB image from docker/Dockerfile.db (first run only; cached after). --wait blocks
+# until healthy.
+$DC up -d --build --wait dataindex-db
 
-# Ingest place data
-bun --env-file=.env.prod run db:ingest -s neighbourhoods-and-districts -f <path-to-adamlinkbuurten.ttl>
-bun --env-file=.env.prod run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
-bun --env-file=.env.prod run db:ingest -s lps -f <path-to-lps.ttl>
-bun --env-file=.env.prod run db:ingest -s adressen -f <path-to-adressen.ttl>
+# Pull the prebuilt app image from GHCR (public — no login). The app service also has a build
+# section, so without this Compose would build it locally instead of running the released image.
+$DC pull app
 
-# Ingest feature datasets
-bun --env-file=.env.prod run db:ingest -s beeldbank -f <path-to-beeldbank.csv>
-bun --env-file=.env.prod run db:ingest -s joods-monument -f <path-to-results_jm.csv>
-bun --env-file=.env.prod run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
-bun --env-file=.env.prod run db:rebuild-index
+$DC run --rm app bun run db:push-schema
 
-# Start the app container alongside the DB
-docker compose --project-name data-index-prod --env-file .env.prod \
-  -f docker/docker-compose.yml \
-  -f docker/docker-compose.self-hosted.yml \
-  -f docker/docker-compose.production.yml up -d app
+# Put the source files in DATA first: the Adamlink TTLs and feature CSVs (obtained by hand,
+# see "Getting the data"); the PDOK files are fetched into DATA below. DATA is an ABSOLUTE
+# host path bind-mounted to /data in the container, so ingest/fetch args are /data/… (not
+# $DATA/…). etl mounts it read-only; fetch needs it writable. Ingest places before datasets —
+# a feature that resolves to no place is dropped silently. Run in tmux/screen (beeldbank is multi-GB).
+export DATA=/srv/atm-data
+alias etl="$DC run --rm -v $DATA:/data:ro app bun run db:ingest"
+alias fetch="$DC run --rm -v $DATA:/data app bun run db:fetch"   # writable mount (etl is read-only)
+
+etl -s neighbourhoods-and-districts -f /data/adamlinkbuurten.ttl
+etl -s streets  -f /data/adamlinkstraten.ttl
+etl -s lps      -f /data/lps.ttl
+etl -s adressen -f /data/adressen.ttl
+
+# PDOK gap-fills (Amsterdam + Weesp) — fetch the base registries into /data, then ingest
+fetch -s cbs-areas     -o /data/cbs-areas.geojson
+fetch -s nwb-streets   -o /data/nwb-streets.geojson
+fetch -s bag-addresses -o /data/bag-addresses.ndjson
+etl -s pdok-places -f /data/cbs-areas.geojson
+etl -s nwb-streets -f /data/nwb-streets.geojson -x /data/adamlinkstraten.ttl
+etl -s pdok-places -f /data/bag-addresses.ndjson
+
+etl -s beeldbank      -f /data/beeldbank.csv
+etl -s joods-monument -f /data/results_jm.csv
+etl -s delpher        -f /data/delpher_newspapers.csv
+
+# Builds place_cells, the cell_features rollup, frequencies and grid_config. Mandatory —
+# features ingested without it won't appear on the map. On a large dataset (BAG adds ~582k
+# addresses) individual statements run long, so raise DB_STATEMENT_TIMEOUT_MS in .env first.
+$DC run --rm app bun run db:rebuild-index
+
+$DC up -d app        # app + DB bind to loopback only — put a reverse proxy in front of 127.0.0.1:$APP_PORT
 ```
 
-### CI/CD
+**Staging.** Same procedure, with two changes: clone `-b staging` (into e.g. `~/data-index-staging`) and use `docker/docker-compose.staging.yml` instead of `production.yml` — the overlays are identical apart from the image tag (`:staging` vs `:production`). If staging runs on the **same host** as production, also give its `.env` a distinct `COMPOSE_PROJECT_NAME` and a free `APP_PORT` / `DB_PORT` so the two don't collide — see [Adding a second deployment on the same host](#adding-a-second-deployment-on-the-same-host).
 
-Two workflows publish images to GitHub Container Registry (GHCR). Both run the full test suite (inside a PostGIS service container) and only push if tests pass. Neither deploys to the server. Pulling and restarting is a manual step, which keeps the server's SSH surface private.
+### Existing Postgres setup
 
-| Branch | Workflow | Image tags |
-|---|---|---|
-| `main` | `.github/workflows/production.yml` | `production`, `production-<sha>` |
-| `staging` | `.github/workflows/staging.yml` | `staging`, `staging-<sha>` |
+Point the app at a Postgres you already run — no bundled DB container. It needs
+`pg_roaringbitmap`; PostGIS you likely already have.
 
-Use `staging` to test a build before merging to `main`: push your branch into `staging`, wait for the workflow, then pull the staging image on the VPS to verify.
+```bash
+# 1. On the DB host — add pg_roaringbitmap. It isn't packaged, so build from source against
+#    the server's Postgres major version (the same steps docker/Dockerfile.db runs).
+psql -c "SHOW server_version;"                    # note the major, e.g. 16
+sudo apt-get install -y build-essential git postgresql-server-dev-16   # match the major
+git clone --depth 1 --branch v1.2.0 https://github.com/ChenHuajun/pg_roaringbitmap.git
+cd pg_roaringbitmap && make with_llvm=no && sudo make install with_llvm=no
+psql -d <atm_db> -c "CREATE EXTENSION IF NOT EXISTS roaringbitmap;"    # superuser; no restart
+
+# 2. On the app host — clone, configure, run schema + ETL against that DB.
+git clone -b main git@github.com:amsterdamtimemachine/data-index.git ~/data-index-prod
+cd ~/data-index-prod
+cp .env.example .env                              # point DB_* at the existing server (reachable
+                                                  # from the app container); rest per the table below
+
+# No self-hosted overlay — the app uses your DB_* instead of a bundled container.
+export DC="docker compose --env-file .env \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.production.yml"
+
+# Must print only `app` and never `dataindex-db`, confirming no bundled DB is in scope.
+$DC config --services
+
+$DC pull app                                      # prebuilt image from GHCR; else Compose builds it locally
+$DC run --rm app bun run db:push-schema
+export DATA=/srv/atm-data
+alias etl="$DC run --rm -v $DATA:/data:ro app bun run db:ingest"
+alias fetch="$DC run --rm -v $DATA:/data app bun run db:fetch"   # writable mount (etl is read-only)
+etl -s neighbourhoods-and-districts -f /data/adamlinkbuurten.ttl
+etl -s streets  -f /data/adamlinkstraten.ttl
+etl -s lps      -f /data/lps.ttl
+etl -s adressen -f /data/adressen.ttl
+# PDOK gap-fills (Amsterdam + Weesp) — fetch the base registries into /data, then ingest
+fetch -s cbs-areas     -o /data/cbs-areas.geojson
+fetch -s nwb-streets   -o /data/nwb-streets.geojson
+fetch -s bag-addresses -o /data/bag-addresses.ndjson
+etl -s pdok-places -f /data/cbs-areas.geojson
+etl -s nwb-streets -f /data/nwb-streets.geojson -x /data/adamlinkstraten.ttl
+etl -s pdok-places -f /data/bag-addresses.ndjson
+etl -s beeldbank      -f /data/beeldbank.csv
+etl -s joods-monument -f /data/results_jm.csv
+etl -s delpher        -f /data/delpher_newspapers.csv
+$DC run --rm app bun run db:rebuild-index
+
+$DC up -d app
+```
 
 ### Deploying a new image
 
-Each deployment is scoped by `--project-name` and reads its own `--env-file` so production and staging don't collide.
+Run this from the deployment's own clone, with the same `-f` overlays you started it with. `COMPOSE_PROJECT_NAME` in that clone's `.env` keeps it pointed at its own containers.
 
 ```bash
 ssh user@server
-cd ~/data-index
+cd ~/data-index-staging
 
-# Log in to GHCR (one-time, or when token expires)
-echo $GHCR_TOKEN | docker login ghcr.io -u <github-user> --password-stdin
+# The images are public, so no docker login is needed. Only if the GHCR package is
+# ever made private:
+#   echo $GHCR_TOKEN | docker login ghcr.io -u <github-user> --password-stdin
 
-# Production
-docker compose --project-name data-index-prod --env-file .env.prod \
+export DC="docker compose --env-file .env \
   -f docker/docker-compose.yml \
-  -f docker/docker-compose.production.yml pull app
-docker compose --project-name data-index-prod --env-file .env.prod \
-  -f docker/docker-compose.yml \
-  -f docker/docker-compose.production.yml up -d app
+  -f docker/docker-compose.self-hosted.yml \
+  -f docker/docker-compose.staging.yml"
 
-# Staging
-docker compose --project-name data-index-staging --env-file .env.staging \
-  -f docker/docker-compose.yml \
-  -f docker/docker-compose.staging.yml pull app
-docker compose --project-name data-index-staging --env-file .env.staging \
-  -f docker/docker-compose.yml \
-  -f docker/docker-compose.staging.yml up -d app
+$DC pull app
+$DC up -d app
 ```
+
+Naming only `app` leaves a bundled database running and its volume untouched.
+
+If the new image changes the schema or the ingestors, re-run them from the image you just pulled — never from the checkout:
+
+```bash
+$DC run --rm app bun run db:push-schema
+$DC run --rm -v $DATA:/data:ro app bun run db:ingest -s <source> -f /data/<file>
+$DC run --rm app bun run db:rebuild-index
+```
+
+**Upgrading a deployment that predates `cell_features`.** Its database was initialised by
+the stock postgis image, so the extension hook never ran on that volume — the data is
+fine, but `db:push-schema` will fail until the extension exists. Recreate the DB container
+on the new image (the volume, and the data, survive), add the extension once, then rebuild:
+
+```bash
+$DC up -d --build --wait dataindex-db      # new image, same pgdata volume
+$DC exec dataindex-db psql -U "$DB_USER" -d "$DB_NAME" -c 'CREATE EXTENSION IF NOT EXISTS roaringbitmap;'
+$DC run --rm app bun run db:push-schema    # creates cell_features
+$DC run --rm app bun run db:rebuild-index  # populates it — the map is empty until this runs
+```
+
+Only the `app` service is named, so `pull`/`up -d app` leaves a bundled DB running and its volume untouched.
+
+### Adding a second deployment on the same host
+
+Repeat a setup section in a second clone: the other branch, its own `.env` with a distinct
+`COMPOSE_PROJECT_NAME` and free `APP_PORT` / `DB_PORT`, and `production.yml` in place of
+`staging.yml`. Nothing is shared — separate volumes, container names and ports — so the
+order you set them up in doesn't matter, and neither does the `-f` overlay order.
 
 ### Environment variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `DB_HOST` | Yes | `localhost` | PostgreSQL host (use `localhost` when workstation CLI hits the self-hosted DB; use the remote host for external DB) |
+| `COMPOSE_PROJECT_NAME` | No | `docker` | Names this deployment's containers, network and volumes. Compose otherwise derives it from `docker/`, so two deployments on one host would collide — set a distinct value per deployment |
+| `DB_HOST` | Yes | `localhost` | PostgreSQL host (use `localhost` when workstation CLI hits the self-hosted DB; use the remote host for external DB). The self-hosted overlay overrides this to `dataindex-db` for the app container |
 | `DB_PORT` | No | `5432` | PostgreSQL port |
 | `DB_USER` | Yes | `atm` | PostgreSQL user |
 | `DB_PASSWORD` | Yes | `atm_dev_password` | PostgreSQL password |
@@ -556,10 +651,10 @@ docker compose --project-name data-index-staging --env-file .env.staging \
 | `PUBLIC_DEFAULT_CELL` | No | - | Default cell to select on load |
 | `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |
 | `PUBLIC_EXACT_CELLS` | No | `false` | Reproject heatmap cells to their exact RD footprint via proj4 (removes the ~0.4° skew); default draws axis-aligned rectangles |
-| `BASE_BIN_SIZE` | No | `10` | Base time bin size (years) |
-| `CELL_SIZE_METERS` | No | `100` | Base spatial cell size (meters) |
-| `GRID_DEFAULT` | No | `75` | Default heatmap grid width (columns); rows are derived from the data's aspect ratio so cells are square |
-| `GRID_MIN` / `GRID_MAX` | No | `10` / `200` | Grid width (column count) bounds |
-| `DEFAULT_BIN_SIZE` | No | `50` | Default display bin size (years) |
-| `BIN_SIZE_MIN` / `BIN_SIZE_MAX` | No | `10` / `100` | Bin size bounds (years) |
+| `PRECOMP_TIME_BIN_YEARS` | No | `10` | Base time bin size (years). Shapes the `cell_features` buckets, so changing it requires a `db:rebuild-index` — the queries would otherwise fold base bins at the new width against buckets stored at the old one. Also caps time granularity: a requested `binSize` is rounded down to a multiple of this |
+| `PRECOMP_GRID_CELL_METERS` | No | `100` | Base spatial cell size (meters) |
+| `DISPLAY_GRID_DEFAULT_COLS` | No | `75` | Default heatmap grid width (columns); rows are derived from the data's aspect ratio so cells are square |
+| `DISPLAY_GRID_MIN_COLS` / `DISPLAY_GRID_MAX_COLS` | No | `10` / `200` | Grid width (column count) bounds |
+| `DISPLAY_TIME_BIN_DEFAULT_YEARS` | No | `50` | Default display bin size (years) |
+| `DISPLAY_TIME_BIN_MIN_YEARS` / `DISPLAY_TIME_BIN_MAX_YEARS` | No | `10` / `100` | Bin size bounds (years) |
 | `CACHE_TTL_MINUTES` | No | `10` | TTL for cached DB queries |
