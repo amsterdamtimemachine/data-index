@@ -413,7 +413,7 @@ bun run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
 bun run db:ingest -s lps -f <path-to-lps.ttl>
 bun run db:ingest -s adressen -f <path-to-adressen.ttl>
 
-# PDOK gap-fills (Amsterdam + Weesp) — fetch the base registries from PDOK, then ingest
+# PDOK gap-fills: fetch, then ingest
 bun run db:fetch  -s cbs-areas     -o <data-dir>/cbs-areas.geojson
 bun run db:fetch  -s nwb-streets   -o <data-dir>/nwb-streets.geojson
 bun run db:fetch  -s bag-addresses -o <data-dir>/bag-addresses.ndjson
@@ -468,51 +468,39 @@ per deployment, on the branch matching its image tag). Shown for **production** 
 ```bash
 ssh user@server
 
-# Docker Engine (not Docker Desktop) + compose plugin. Needs compose >= 2.24.
+# Docker Engine + compose plugin (>= 2.24)
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER      # log out and back in
 docker compose version
 
-# Clone the branch this deployment serves — no bun install, no build (code runs from the image).
 git clone -b main git@github.com:amsterdamtimemachine/data-index.git ~/data-index-prod
 cd ~/data-index-prod
 
-cp .env.example .env                             # edit per the Environment variables table below
+cp .env.example .env                             # fill in per the Environment variables table below
 
-# $DC = docker compose preloaded with this deployment's overlays. Reuse it for every command
-# below and later (e.g. `$DC pull app`). For a staging build, swap production.yml → staging.yml.
+# reuse $DC for every command below; for staging, swap production.yml → staging.yml
 export DC="docker compose --env-file .env \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.self-hosted.yml \
   -f docker/docker-compose.production.yml"
 
-# Bundled Postgres + PostGIS + pg_roaringbitmap, bound to loopback. The DB image is
-# prebuilt on GHCR (public — no login), same as the app; no local compile. --wait blocks
-# until healthy.
 $DC pull dataindex-db
 $DC up -d --wait dataindex-db
-
-# Pull the prebuilt app image from GHCR (public — no login). The app service also has a build
-# section, so without this Compose would build it locally instead of running the released image.
 $DC pull app
 
 $DC run --rm app bun run db:push-schema
 
-# Put the source files in DATA first: the Adamlink TTLs and feature CSVs (obtained by hand,
-# see "Getting the data"); the PDOK files are fetched into DATA below. DATA is an ABSOLUTE
-# host path bind-mounted to /data in the container, so ingest/fetch args are /data/… (not
-# $DATA/…). etl mounts it read-only; fetch needs it writable. Ingest places before datasets —
-# a feature that resolves to no place is dropped silently. Run in tmux/screen (beeldbank is multi-GB).
+# put the source files in DATA first (see "Getting the data"); paths are /data/… not $DATA/…. Run in tmux.
 export DATA=/srv/atm-data
 alias etl="$DC run --rm -v $DATA:/data:ro app bun run db:ingest"
-alias fetch="$DC run --rm -v $DATA:/data app bun run db:fetch"   # writable mount (etl is read-only)
+alias fetch="$DC run --rm -v $DATA:/data app bun run db:fetch"
 
 etl -s neighbourhoods-and-districts -f /data/adamlinkbuurten.ttl
 etl -s streets  -f /data/adamlinkstraten.ttl
 etl -s lps      -f /data/lps.ttl
 etl -s adressen -f /data/adressen.ttl
 
-# PDOK gap-fills (Amsterdam + Weesp) — fetch the base registries into /data, then ingest
+# PDOK gap-fills: fetch, then ingest
 fetch -s cbs-areas     -o /data/cbs-areas.geojson
 fetch -s nwb-streets   -o /data/nwb-streets.geojson
 fetch -s bag-addresses -o /data/bag-addresses.ndjson
@@ -524,12 +512,10 @@ etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
 
-# Builds place_cells, the cell_features rollup, frequencies and grid_config. Mandatory —
-# features ingested without it won't appear on the map. On a large dataset (BAG adds ~582k
-# addresses) individual statements run long, so raise DB_STATEMENT_TIMEOUT_MS in .env first.
+# required, or the map stays empty; raise DB_STATEMENT_TIMEOUT_MS in .env if it times out
 $DC run --rm app bun run db:rebuild-index
 
-$DC up -d app        # app + DB bind to loopback only — put a reverse proxy in front of 127.0.0.1:$APP_PORT
+$DC up -d app        # loopback only — front with a reverse proxy on 127.0.0.1:$APP_PORT
 ```
 
 **Staging.** Same procedure, with two changes: clone `-b staging` (into e.g. `~/data-index-staging`) and use `docker/docker-compose.staging.yml` instead of `production.yml` — the overlays are identical apart from the image tag (`:staging` vs `:production`). If staging runs on the **same host** as production, also give its `.env` a distinct `COMPOSE_PROJECT_NAME` and a free `APP_PORT` / `DB_PORT` so the two don't collide — see [Adding a second deployment on the same host](#adding-a-second-deployment-on-the-same-host).
@@ -540,8 +526,7 @@ Point the app at a Postgres you already run — no bundled DB container. It need
 `pg_roaringbitmap`; PostGIS you likely already have.
 
 ```bash
-# 1. On the DB host — add pg_roaringbitmap. It isn't packaged, so build from source against
-#    the server's Postgres major version (the same steps docker/Dockerfile.db runs).
+# 1. On the DB host — build pg_roaringbitmap from source against the server's Postgres major:
 psql -c "SHOW server_version;"                    # note the major, e.g. 16
 sudo apt-get install -y build-essential git postgresql-server-dev-16   # match the major
 git clone --depth 1 --branch v1.2.0 https://github.com/ChenHuajun/pg_roaringbitmap.git
@@ -554,24 +539,22 @@ cd ~/data-index-prod
 cp .env.example .env                              # point DB_* at the existing server (reachable
                                                   # from the app container); rest per the table below
 
-# No self-hosted overlay — the app uses your DB_* instead of a bundled container.
 export DC="docker compose --env-file .env \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.production.yml"
 
-# Must print only `app` and never `dataindex-db`, confirming no bundled DB is in scope.
-$DC config --services
+$DC config --services                             # should list only: app
 
-$DC pull app                                      # prebuilt image from GHCR; else Compose builds it locally
+$DC pull app
 $DC run --rm app bun run db:push-schema
 export DATA=/srv/atm-data
 alias etl="$DC run --rm -v $DATA:/data:ro app bun run db:ingest"
-alias fetch="$DC run --rm -v $DATA:/data app bun run db:fetch"   # writable mount (etl is read-only)
+alias fetch="$DC run --rm -v $DATA:/data app bun run db:fetch"
 etl -s neighbourhoods-and-districts -f /data/adamlinkbuurten.ttl
 etl -s streets  -f /data/adamlinkstraten.ttl
 etl -s lps      -f /data/lps.ttl
 etl -s adressen -f /data/adressen.ttl
-# PDOK gap-fills (Amsterdam + Weesp) — fetch the base registries into /data, then ingest
+# PDOK gap-fills: fetch, then ingest
 fetch -s cbs-areas     -o /data/cbs-areas.geojson
 fetch -s nwb-streets   -o /data/nwb-streets.geojson
 fetch -s bag-addresses -o /data/bag-addresses.ndjson
@@ -586,48 +569,28 @@ $DC run --rm app bun run db:rebuild-index
 $DC up -d app
 ```
 
-### Deploying a new image
-
-Run this from the deployment's own clone, with the same `-f` overlays you started it with. `COMPOSE_PROJECT_NAME` in that clone's `.env` keeps it pointed at its own containers.
+### Updating the app image
 
 ```bash
 ssh user@server
-cd ~/data-index-staging
-
-# The images are public, so no docker login is needed. Only if the GHCR package is
-# ever made private:
-#   echo $GHCR_TOKEN | docker login ghcr.io -u <github-user> --password-stdin
+cd ~/data-index-prod
 
 export DC="docker compose --env-file .env \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.self-hosted.yml \
-  -f docker/docker-compose.staging.yml"
+  -f docker/docker-compose.production.yml"
 
 $DC pull app
-$DC up -d app
-```
+$DC up -d app                                    # recreates app only; the bundled DB is untouched
 
-Naming only `app` leaves a bundled database running and its volume untouched. To move it to a newer db image, `pull`/`up -d dataindex-db` too; if that bumped the PostGIS minor, reconcile the existing volume once with `$DC exec dataindex-db update-postgis.sh`.
-
-If the new image changes the schema or the ingestors, re-run them from the image you just pulled — never from the checkout:
-
-```bash
+# only if the new image changed the schema or ingestors:
 $DC run --rm app bun run db:push-schema
 $DC run --rm -v $DATA:/data:ro app bun run db:ingest -s <source> -f /data/<file>
 $DC run --rm app bun run db:rebuild-index
-```
 
-**Upgrading a deployment that predates `cell_features`.** Its database was initialised by
-the stock postgis image, so the extension hook never ran on that volume — the data is
-fine, but `db:push-schema` will fail until the extension exists. Recreate the DB container
-on the new image (the volume, and the data, survive), add the extension once, then rebuild:
-
-```bash
-$DC pull dataindex-db                      # latest DB image from GHCR
-$DC up -d --wait dataindex-db              # new image, same pgdata volume
-$DC exec dataindex-db psql -U "$DB_USER" -d "$DB_NAME" -c 'CREATE EXTENSION IF NOT EXISTS roaringbitmap;'
-$DC run --rm app bun run db:push-schema    # creates cell_features
-$DC run --rm app bun run db:rebuild-index  # populates it — the map is empty until this runs
+# to move the bundled DB to a newer image too:
+$DC pull dataindex-db && $DC up -d --wait dataindex-db
+$DC exec dataindex-db update-postgis.sh          # only if the PostGIS minor changed
 ```
 
 Only the `app` service is named, so `pull`/`up -d app` leaves a bundled DB running and its volume untouched.
