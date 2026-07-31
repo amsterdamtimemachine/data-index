@@ -13,7 +13,7 @@
     "db:studio": "drizzle-kit studio",
     "db:ingest": "bun run src/etl/index.ts ingest",
     "db:rebuild-index": "bun run src/etl/index.ts rebuild-index",
-    "test": "DATABASE_URL=postgresql://test:test@localhost:5434/dataindex_test CACHE_TTL_MINUTES=0 bun test"
+    "test": "bun test --env-file=../../.env.test"
   },
   "dependencies": {
     "@atm/shared": "workspace:*",
