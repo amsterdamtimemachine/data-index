@@ -5,7 +5,7 @@
  * the dated-name extraction, and the owl:sameAs bagOrl crosswalk never drift apart.
  */
 import { Parser } from 'n3';
-import { createNameWriter } from '../helpers';
+import { createNameWriter } from '../helpers/helpers';
 
 export interface StreetName {
   label: string;
