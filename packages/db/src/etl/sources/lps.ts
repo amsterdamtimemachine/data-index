@@ -12,7 +12,7 @@
  */
 import { readFileSync } from 'fs';
 import { Parser } from 'n3';
-import { insertPlaces, type PlaceInsert } from '../helpers';
+import { insertPlaces, type PlaceInsert } from '../helpers/helpers';
 
 export async function ingest(filePath: string) {
   console.log(`Parsing ${filePath}...`);

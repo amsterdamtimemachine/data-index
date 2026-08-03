@@ -21,7 +21,8 @@
     "csv-parse": "^6.2.1",
     "drizzle-orm": "^0.45.2",
     "n3": "^2.1.1",
-    "pg": "^8.22.0"
+    "pg": "^8.22.0",
+    "@streamparser/json": "^0.0.22"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.16",

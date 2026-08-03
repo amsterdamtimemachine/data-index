@@ -22,7 +22,7 @@
  */
 import { readFileSync } from 'fs';
 import { Parser } from 'n3';
-import { insertPlaces } from '../helpers';
+import { insertPlaces } from '../helpers/helpers';
 
 type DistrictType = 'district' | 'neighbourhood';
 

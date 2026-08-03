@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "bun",
+      "request": "launch",
+      "name": "Debug db:ingest",
+      "program": "${workspaceFolder}/packages/db/src/etl/index.ts",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "ingest",
+        "-s", "blogs",
+        "-f", "/Users/stijn-h/Projects/atm/data/amsterdammuseum_uva_blogs.json"
+      ],
+      "stopOnEntry": true
+    }
+  ]
+}

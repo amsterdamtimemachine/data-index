@@ -17,7 +17,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
-import { featureUuid, createFeatureWriter, insertPlaces, upsertSource } from '../etl/helpers';
+import { featureUuid, createFeatureWriter, insertPlaces, upsertSource } from '../etl/helpers/helpers';
 import type { PlaceIdRow } from '../row-types';
 
 async function placeRow(id: string) {
@@ -104,7 +104,7 @@ describe('ETL idempotency', () => {
 
     // Run 1: feature v1 linked to A.
     const w1 = createFeatureWriter();
-    w1.addFeature({ id, url, recordType: 'image', label: 'v1', datasetId: 'idem-ds' });
+    w1.addFeature({ id, url, recordType: 'image', label: 'v1', datasetId: 'idem-ds', startDate: '2024-01-01', endDate: '2024-12-31' });;
     w1.addLink({ featureId: id, placeId: 'idem-A', relationId: 'isAbout' });
     await w1.flush();
 
@@ -113,7 +113,7 @@ describe('ETL idempotency', () => {
 
     // Run 2: corrected file — same url (so same id), new label, linked to B instead.
     const w2 = createFeatureWriter();
-    w2.addFeature({ id, url, recordType: 'image', label: 'v2-corrected', datasetId: 'idem-ds' });
+    w2.addFeature({ id, url, recordType: 'image', label: 'v2-corrected', datasetId: 'idem-ds', startDate: '2024-01-01', endDate: '2024-12-31' });;
     w2.addLink({ featureId: id, placeId: 'idem-B', relationId: 'isAbout' });
     await w2.flush();
 

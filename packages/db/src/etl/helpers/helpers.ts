@@ -10,7 +10,7 @@
 import { sql, inArray } from 'drizzle-orm';
 import { createHash } from 'crypto';
 import { PLACE_PROVIDERS, type PlaceSource } from '@atm/shared';
-import { db } from '../client';
+import { db } from '../../client';
 import {
   organisations,
   datasets,
@@ -22,7 +22,7 @@ import {
   placeGeometry,
   type NewFeature,
   type NewPlaceHistoricalName,
-} from '../schema';
+} from '../../schema';
 
 type Link = { featureId: string; placeId: string; relationId: string };
 
@@ -151,12 +151,11 @@ export function createFeatureWriter(batchSize = 1000) {
  * same key (address URI, street URI, geometry WKT), so this avoids repeat queries.
  */
 export function createCachedResolver(
-  lookup: (key: string) => Promise<string | null>
-): (key: string) => Promise<string | null> {
-  const cache = new Map<string, string | null>();
-  return async (key: string): Promise<string | null> => {
-    const cached = cache.get(key);
-    if (cached !== undefined) return cached;
+  lookup: (key: string) => Promise<string | undefined>
+): (key: string) => Promise<string | undefined> {
+  const cache = new Map<string, string | undefined>();
+  return async (key: string): Promise<string | undefined> => {
+    if (cache.has(key)) return cache.get(key);
     const result = await lookup(key);
     cache.set(key, result);
     return result;

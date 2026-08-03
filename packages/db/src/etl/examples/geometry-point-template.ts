@@ -20,7 +20,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../../client';
 import type { PlaceIdRow } from '../../row-types';
 import type { CreativeWorkEntity } from '@atm/shared';
-import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers';
+import { upsertSource, createFeatureWriter, createCachedResolver, formatDateRange, featureUuid } from '../helpers/helpers';
 
 // ═══════════════════════════════════════════════════════════════
 //  Organisation

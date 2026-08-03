@@ -9,8 +9,24 @@
  * Usage: bun run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
  */
 import { readFileSync } from 'fs';
-import { insertPlaces } from '../helpers';
+import { Parser } from 'n3';
+import { insertPlaces, createNameWriter } from '../helpers/helpers';
 import { parseAdamlinkStreets, insertStreetNames } from './adamlink-streets';
+
+const BATCH_SIZE = 100;
+
+interface StreetName {
+  label: string;
+  since: string | null;
+  until: string | null;
+}
+
+interface Street {
+  uri: string;
+  prefLabel: string;
+  wkt: string;
+  names: StreetName[];
+}
 
 export async function ingest(filePath: string) {
   console.log(`Parsing ${filePath}...`);
