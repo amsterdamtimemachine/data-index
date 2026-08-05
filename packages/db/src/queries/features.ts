@@ -379,8 +379,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     description: row.description?.slice(0, 128) || undefined,
     contentUrl: row.content_url || undefined,
     dateRange: [
-      row.start_date ? new Date(row.start_date).getFullYear() : 0,
-      row.end_date ? new Date(row.end_date).getFullYear() : 0
+      row.start_date ? parseInt(row.start_date.slice(0, 4), 10) : 0,
+      row.end_date ? parseInt(row.end_date.slice(0, 4), 10) : 0
     ] as [number, number],
     tags: row.tags || [],
     datasetLabel: row.dataset_label || undefined,

@@ -3,7 +3,7 @@ import { NewFeature } from '../../schema';
 import { createEntityFactory, EntityFactory } from '../helpers/entity-factory';
 import { EntityBase, RecordType } from '@atm/shared';
 import { FileReader } from '../helpers/file-reader';
-import { DateRange, ExtractionArgs, PlaceIndex } from '../helpers/places/place-index';
+import { DateRange, ExtractionArgs, PlaceIndex, Resolved, SkipReason } from '../helpers/places/place-index';
 
 export type Draft = Omit<NewFeature, 'recordType' | 'datasetId'>
 
@@ -84,16 +84,16 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
      * @param source 
      * @returns array containing the feature-object and corresponding place_id
      */
-    protected async sourceToFeature(source: SourceRecord): Promise<[NewFeature | undefined, string | undefined]> {
+    protected async sourceToFeature(source: SourceRecord): Promise<[NewFeature | undefined, Resolved | undefined]> {
         const draft: Draft | undefined = this.transform(source)
 
         if (!draft) { return [undefined, undefined] }
 
-        const placeId = await this.extractPlace(source, draft)
+        const resolved = await this.extractPlace(source, draft)
         const entity: EntityBase = this.ef!.create(draft, new Map<string, any>(Object.entries(source as object)))
         const feature = this.constructFeature(draft, entity) as NewFeature
 
-        return [feature, placeId]
+        return [feature, resolved]
     }
 
     /**
@@ -103,36 +103,40 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
     protected async ingestSourceRecords(sources: AsyncIterable<SourceRecord>) {
         const fMap = new Map<string, Set<string>>();
 
-        let skipped = 0
-        let duplicates = 0
+        const skips: Record<SkipReason, number> = { ambiguous: 0, 'cap-miss': 0, undated: 0, 'no-match': 0 }
+        let noData = 0   // transform produced no draft
+        let errors = 0
 
         for await (const source of sources) {
             try {
-                const [feature, placeId] =  await this.sourceToFeature(source)
-                
-                if (!placeId || !feature) { 
-                    skipped++; continue; 
-                }
+                const [feature, resolved] = await this.sourceToFeature(source)
 
-                if (!fMap.has(feature.id)) { 
+                if (!feature || !resolved) { noData++; continue }
+                if ('skip' in resolved) { skips[resolved.skip]++; continue }
+
+                const placeId = resolved.placeId
+                if (!fMap.has(feature.id)) {
                     this.writer.addFeature(feature)
                     fMap.set(feature.id, new Set<string>())
                 }
-                
+
                 if (!fMap.get(feature.id)!.has(placeId)) {
-                    this.writer.addLink({ featureId: feature.id, placeId: placeId, relationId: this.RELATION_ID })
+                    this.writer.addLink({ featureId: feature.id, placeId, relationId: this.RELATION_ID })
                     fMap.get(feature.id)?.add(placeId)
                 }
             } catch (error) {
                 console.error(`Failed to process row: ${source}:`, error)
-                skipped++;
+                errors++
             }
 
             await this.writer.flushIfFull()
         }
 
         await this.writer.flush()
-        console.log(`\nDone: ${fMap.size} features, ${duplicates} duplicates found, ${skipped} skipped (no matching neighbourhood/district)`);
+        const skipped = skips.ambiguous + skips['cap-miss'] + skips.undated + skips['no-match'] + noData + errors
+        console.log(`\nDone: ${fMap.size} features linked, ${skipped} skipped`)
+        console.log(`  unresolved — no-match ${skips['no-match']}, ambiguous ${skips.ambiguous}, cap-miss ${skips['cap-miss']}, undated ${skips.undated}` +
+            (noData ? `; no-data ${noData}` : '') + (errors ? `; errors ${errors}` : ''))
     }
 
     /**

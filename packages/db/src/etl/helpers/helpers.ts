@@ -150,16 +150,25 @@ export function createFeatureWriter(batchSize = 1000) {
  * Wrap a place-id lookup with a per-run in-memory cache. Many rows resolve the
  * same key (address URI, street URI, geometry WKT), so this avoids repeat queries.
  */
-export function createCachedResolver(
-  lookup: (key: string) => Promise<string | undefined>
-): (key: string) => Promise<string | undefined> {
-  const cache = new Map<string, string | undefined>();
-  return async (key: string): Promise<string | undefined> => {
-    if (cache.has(key)) return cache.get(key);
+const resolverCaches: Map<string, unknown>[] = [];
+
+export function createCachedResolver<T>(
+  lookup: (key: string) => Promise<T>
+): (key: string) => Promise<T> {
+  const cache = new Map<string, T>();
+  resolverCaches.push(cache as Map<string, unknown>);
+  return async (key: string): Promise<T> => {
+    if (cache.has(key)) return cache.get(key)!;
     const result = await lookup(key);
     cache.set(key, result);
     return result;
   };
+}
+
+/** Clear every createCachedResolver cache. For tests that reseed the DB between cases —
+ *  the caches are module-level with process lifetime and are NOT the query-layer TTL cache. */
+export function clearResolverCaches(): void {
+  for (const cache of resolverCaches) cache.clear();
 }
 
 /** Batched writer for place_historical_name rows. */

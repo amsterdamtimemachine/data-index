@@ -45,7 +45,7 @@ describe('delpher ingestion (nearest-place match + period parse)', () => {
     expect(f.dataset_id).toBe('delpher');
     expect(f.url).toBe('https://www.delpher.nl/article/a1');
     expect(f.start).toBe('1925-01-01');
-    expect(f.end).toBe('1925-12-31');
+    expect(f.end).toBe('1925-12-31'); // period [1925-01-01,1926-01-01) is half-open → inclusive last day
   });
 
   test('the matched feature links to the nearest place', async () => {

@@ -2,6 +2,8 @@ import { db } from '../../../client';
 import { createCachedResolver } from '../helpers';
 import { PlaceIdRow } from '../../../row-types';
 import { sql } from 'drizzle-orm/sql';
+import { getCandidatesByPoint, getCandidatesByName, pickFinest, resolveNamePool } from './place-candidates';
+import type { Resolved } from './place-index';
 
 const allPlacesCTE = sql`
     SELECT LOWER(p.name) AS name, p.type AS type
@@ -17,60 +19,44 @@ const allPlacesCTE = sql`
 `
 
 /**
- * Fetches the place_id which correspond to the provided name & time-period
+ * Resolve a place-name string to the single place it names — exact case-insensitive
+ * match (LOWER(name) =), nearest-in-time by the feature date range, unique winner by
+ * gap → finest type. Returns a tagged skip (→ the cascade tries the next method, else
+ * the feature is skipped): 'no-match' when the name matches nothing (or is empty),
+ * 'ambiguous' for two equal-gap same-type places, 'undated' when the feature has no date.
+ * Cache key is JSON `{area, start, end}` — the trie's type is NOT a filter (a
+ * name-collision map makes it unreliable; resolveNamePool's finest-type tiebreak decides).
+ * NB: `%`/`_` in a name are now literal, not wildcards (was ILIKE) — flag for the co-dev.
  */
-export const inferByName = createCachedResolver(async (key: string): Promise<string | undefined> => {
-    const { level, area, start, end } = JSON.parse(key);
-    
-    const result = await db.execute<PlaceIdRow>(sql`
-        WITH ${allPlacesCTE}
-        SELECT apn.place_id AS place_id
-        FROM all_place_names apn
-        JOIN place_geometry pg ON pg.place_id = apn.place_id
-        WHERE apn.name ILIKE ${area}
-        AND (
-            (pg.since IS NULL AND pg.until IS NULL)
-            OR (
-                pg.since <= ${end}::date
-                AND (pg.until IS NULL OR pg.until > ${start}::date)
-            )
-        )
-        ORDER BY GREATEST(
-                    0,
-                    LEAST(${end}::date, COALESCE(pg.until, 'infinity'::date))
-                    - GREATEST(${start}::date, pg.since)
-                ) DESC,
-                pg.since DESC
-        LIMIT 1
-    `);
-
-    return result.rows[0]?.place_id ?? undefined
+export const inferByName = createCachedResolver(async (key: string): Promise<Resolved> => {
+    const { area, start, end } = JSON.parse(key);
+    if (!area) { return { skip: 'no-match' } }
+    if (!start || !end) { return { skip: 'undated' } }
+    const r = resolveNamePool(await getCandidatesByName(area, start, end));
+    if (r.kind === 'resolved') { return { placeId: r.winner.placeId } }
+    return { skip: r.kind === 'ambiguous' ? 'ambiguous' : 'no-match' };
 })
 
-// TODO: could make {5} in query dynamically
 /**
- * Fetches place_id based on the provided wkt (geo-object). Tries to find a place within 5 meters of this provided wkt.
+ * Resolve a point WKT (WGS84) to the single most-specific place — nearest address
+ * (≤30m) / street (≤50m) per source, else the containing area — era-ranked by the
+ * feature date range. Returns a tagged skip (→ the cascade tries the next method, else
+ * the feature is skipped): 'cap-miss' when nothing sits within the caps, 'undated' when
+ * the feature has no date (a point can't be era-placed without one; spec §5), 'no-match'
+ * when no coordinate was given. Cache key is JSON `{wkt, start, end}`.
  */
-export const inferByWKT = createCachedResolver(async (wkt) => {
-    const result = await db.execute<PlaceIdRow>(sql`
-      SELECT p.place_id as place_id
-      FROM place_geometry AS p
-      WHERE ST_DWithin(
-        p.geometry,
-        ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992),
-        5 
-      )
-      ORDER BY p.geometry <-> ST_Transform(ST_GeomFromText(${wkt}, 4326), 28992)
-      LIMIT 1
-    `);
-
-    return result.rows[0]?.place_id ?? undefined
+export const inferByPoint = createCachedResolver(async (key: string): Promise<Resolved> => {
+    const { wkt, start, end } = JSON.parse(key);
+    if (!wkt) { return { skip: 'no-match' } }
+    if (!start || !end) { return { skip: 'undated' } }
+    const best = pickFinest(await getCandidatesByPoint(wkt, start, end));
+    return best ? { placeId: best.placeId } : { skip: 'cap-miss' };
 });
 
 /**
  * Fetches place_id based solely on the provided adamlinkuri
  */
-export const inferByAdamURI = createCachedResolver(async (adamlinkUri) => {
+export const inferByAdamURI = createCachedResolver(async (adamlinkUri: string): Promise<Resolved> => {
     const result = await db.execute<PlaceIdRow>(sql`
         SELECT p.id AS place_id,
             p.name AS name
@@ -87,7 +73,8 @@ export const inferByAdamURI = createCachedResolver(async (adamlinkUri) => {
             pn.id = ${adamlinkUri}
     `);
 
-    return result.rows[0]?.place_id ?? undefined
+    const id = result.rows[0]?.place_id;
+    return id ? { placeId: id } : { skip: 'no-match' };
 });
 
 /**

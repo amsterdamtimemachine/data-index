@@ -23,6 +23,15 @@ type DelpherSourceData = {
   tags: string;
 }
 
+// Postgres daterange output is canonically [start,end): exclusive upper bound. The rest of
+// the app reads end_date INCLUSIVELY, so map the exclusive bound to the inclusive last day
+// (end − 1). UTC-safe — avoids the local-tz year-shift that afflicts new Date(dateOnly).
+function inclusiveEnd(iso: string): string {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export class DelpherIngestor extends Ingestor<DelpherSourceData> {
   protected ORG_ID = 'kb';
   protected ORG_LABEL = 'Koninklijke Bibliotheek';
@@ -41,12 +50,17 @@ export class DelpherIngestor extends Ingestor<DelpherSourceData> {
   ];
 
   private parsePeriod(period: string): { startDate: string | null; endDate: string | null } {
-    const match = period.match(/[\[(\s]*(\d{4}-\d{2}-\d{2})\s*,\s*(\d{4}-\d{2}-\d{2})\s*[)\]]/); // Format: [start,end) — inclusive start, exclusive end
-    
-    if (!match) { return { startDate: null,  endDate: null } };
-    
-    return { startDate: match[1], endDate: match[2]};
-  }  
+    const match = period.match(/[\[(\s]*(\d{4}-\d{2}-\d{2})\s*,\s*(\d{4}-\d{2}-\d{2})\s*([)\]])/);
+    if (!match) { return { startDate: null, endDate: null } }
+
+    const startDate = match[1];
+    // exclusive ')' end → inclusive last day (end − 1); an inclusive ']' closer stays as-is.
+    const endDate = match[3] === ')' ? inclusiveEnd(match[2]) : match[2];
+    // degenerate/empty range (e.g. [d,d)) inverts after the shift → treat as undated (skip).
+    if (endDate < startDate) { return { startDate: null, endDate: null } }
+
+    return { startDate, endDate };
+  }
 
   private truncate(text: string): string {
     return text ? text.slice(0, 128) : '';
