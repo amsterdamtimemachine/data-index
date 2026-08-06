@@ -1,9 +1,10 @@
 /**
  * Import Delpher newspaper articles
  *
- * Parses CSV of newspaper articles with geometry points.
- * Matches each point to the nearest address place via spatial lookup.
- * Unmatched features (no place within threshold) are skipped.
+ * Parses a CSV of articles carrying a WGS84 geometry point and a PostgreSQL date range.
+ * Each point resolves through the WKT cascade (inferByPoint): the nearest place per source
+ * within the per-type distance caps, era-ranked by the article's date. Articles that
+ * resolve no place — or whose range is absent or degenerate — are skipped.
  *
  * Usage: bun run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
  */

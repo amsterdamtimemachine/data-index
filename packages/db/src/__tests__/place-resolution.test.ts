@@ -8,7 +8,7 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
-import { getCandidatesByPoint, getCandidatesByName, pickFinest, resolveNamePool } from '../etl/helpers/places/place-candidates';
+import { getCandidatesByPoint, getCandidatesByName, pickFinest, resolveNamePool, rank, type Candidate } from '../etl/helpers/places/place-candidates';
 import { inferByPoint, inferByName } from '../etl/helpers/places/place-inference';
 import { clearResolverCaches } from '../etl/helpers/helpers';
 
@@ -105,5 +105,112 @@ describe('feature → place resolution', () => {
     expect(await inferByName(nkey('Kerkstraat', null, null))).toEqual({ skip: 'undated' });
     expect(await inferByPoint(pkey(null, null))).toEqual({ skip: 'undated' });
     expect(await inferByName(nkey('Nowhere', '1920-01-01', '1920-01-01'))).toEqual({ skip: 'no-match' });
+  });
+
+  // ── §1: the req-18 dated tiebreak lives in rank(), not in row order ──
+  test('req-18 dated tiebreak is in rank(): dated wins from either input order', () => {
+    const datedAdamlink: Candidate = { placeId: 'histD', name: 'H', type: 'district', source: 'adamlink', distanceM: 0, overlapDays: 100, eraFit: true, dated: true };
+    const undatedCbs: Candidate = { placeId: 'cbsD', name: 'C', type: 'district', source: 'cbs', distanceM: 0, overlapDays: 100, eraFit: true, dated: false };
+    expect([undatedCbs, datedAdamlink].sort(rank)[0].placeId).toBe('histD');
+    expect([datedAdamlink, undatedCbs].sort(rank)[0].placeId).toBe('histD');
+  });
+
+  // ── §2: CURRENT_ANCHOR pivots current-name vs historical-name by feature date ──
+  test('current vs historical name scoring pivots on the feature date', async () => {
+    await place('cur', 'street', 'adamlink', 'Beurstraat');                    // current name
+    await place('hst', 'street', 'adamlink', null);
+    await histName('h-hst', 'hst', 'Beurstraat', '1905-01-01', '1915-01-01');  // historical window
+    expect(await inferByName(nkey('Beurstraat', '1910-01-01', '1910-01-01'))).toEqual({ placeId: 'hst' });
+    expect(await inferByName(nkey('Beurstraat', '2020-01-01', '2020-01-01'))).toEqual({ placeId: 'cur' });
+  });
+
+  // ── §3: real (multi-year) ranges exercise the overlap SQL ──
+  test('area overlap ranking: the vintage with the larger overlap wins', async () => {
+    await place('d1900', 'district', 'adamlink', 'D1900', AREA, '1900-01-01', '1925-01-01');
+    await place('d1925', 'district', 'adamlink', 'D1925', AREA, '1925-01-01', '1960-01-01');
+    // feature [1920,1950]: ~5y overlap with d1900, ~25y with d1925 → d1925
+    expect(pickFinest(await point(Q, '1920-01-01', '1950-01-01'))?.placeId).toBe('d1925');
+  });
+
+  test('era straddle: a range crossing ERA_CUTOFF makes both address layers era-fit → nearest wins', async () => {
+    await place('adam-a', 'address', 'adamlink', 'Oude 1', 'POINT(120005 485000)'); // 5m
+    await place('bag-a', 'address', 'bag', 'Nieuwe 1', 'POINT(120001 485000)');      // 1m
+    expect(pickFinest(await point(Q, '1940-01-01', '1950-01-01'))?.placeId).toBe('bag-a');
+  });
+
+  // ── §4: street granularity (caps, era preference, priority) ──
+  test('point street cap: a street beyond 50m is not linked; within is', async () => {
+    await place('far-s', 'street', 'adamlink', 'Far St', 'LINESTRING(119950 485060, 120050 485060)');  // 60m
+    expect(pickFinest(await point(Q, '1920-01-01', '1920-01-01'))).toBeUndefined();
+    await place('near-s', 'street', 'adamlink', 'Near St', 'LINESTRING(119950 485040, 120050 485040)'); // 40m
+    expect(pickFinest(await point(Q, '1920-01-01', '1920-01-01'))?.placeId).toBe('near-s');
+  });
+
+  test('point street era preference: adamlink wins over a nearer nwb street', async () => {
+    await place('adam-s', 'street', 'adamlink', 'Adam St', 'LINESTRING(119950 485040, 120050 485040)'); // 40m
+    await place('nwb-s', 'street', 'nwb', 'NWB St', 'LINESTRING(119950 485020, 120050 485020)');        // 20m, nearer
+    expect(pickFinest(await point(Q, '1920-01-01', '1920-01-01'))?.placeId).toBe('adam-s');
+  });
+
+  test('point granularity: address wins over street', async () => {
+    await place('a', 'address', 'bag', 'A', 'POINT(120000 485000)');
+    await place('s', 'street', 'adamlink', 'S', 'LINESTRING(119950 485040, 120050 485040)');
+    expect(pickFinest(await point(Q, '1990-01-01', '1990-01-01'))?.placeId).toBe('a');
+  });
+
+  test('point granularity: street wins over district', async () => {
+    await place('s', 'street', 'adamlink', 'S', 'LINESTRING(119950 485040, 120050 485040)');
+    await place('d', 'district', 'cbs', 'D', AREA);
+    expect(pickFinest(await point(Q, '1990-01-01', '1990-01-01'))?.placeId).toBe('s');
+  });
+
+  // ── §5: dirty name strings ──
+  test('name matching folds diacritic case (collation-dependent)', async () => {
+    await place('cur', 'street', 'adamlink', 'Curaçaostraat');
+    expect((await getCandidatesByName('CURAÇAOSTRAAT', '1990-01-01', '1990-01-01')).length).toBe(1);
+  });
+
+  test('name matching handles an apostrophe in the name', async () => {
+    await place('kol', 'street', 'adamlink', "'t Kolkje");
+    expect((await getCandidatesByName("'t kolkje", '1990-01-01', '1990-01-01')).length).toBe(1);
+  });
+
+  test('name match is exact: _ is a literal, not a wildcard', async () => {
+    await place('k', 'street', 'adamlink', 'Kerkstraat');
+    expect((await getCandidatesByName('Kerkstra_t', '1990-01-01', '1990-01-01')).length).toBe(0);
+  });
+
+  test('name match does not trim: untrimmed whitespace fails to match (the cascade trims, the query does not)', async () => {
+    await place('k', 'street', 'adamlink', 'Kerkstraat');
+    expect((await getCandidatesByName(' Kerkstraat ', '1990-01-01', '1990-01-01')).length).toBe(0);
+  });
+
+  test('name match does not repair an OCR-style internal split (fuzzy deferred)', async () => {
+    await place('k', 'street', 'adamlink', 'Kerkstraat');
+    expect((await getCandidatesByName('Kerk straat', '1990-01-01', '1990-01-01')).length).toBe(0);
+  });
+
+  test('name match does not Unicode-normalise: an NFD query misses an NFC name (fuzzy deferred)', async () => {
+    await place('cur', 'street', 'adamlink', 'Curaçaostraat');                                          // NFC (precomposed ç)
+    expect((await getCandidatesByName('Curac\u0327aostraat', '1990-01-01', '1990-01-01')).length).toBe(0);   // NFD (c + combining cedilla)
+  });
+
+  test('name query is parameterized: injection-shaped input matches nothing and leaves the table intact', async () => {
+    await place('k', 'street', 'adamlink', 'Kerkstraat');
+    expect((await getCandidatesByName("'; DROP TABLE place; --", '1990-01-01', '1990-01-01')).length).toBe(0);
+    const r = await db.execute<{ count: string }>(sql`SELECT COUNT(*) AS count FROM place`);
+    expect(parseInt(r.rows[0].count)).toBe(1);
+  });
+
+  // ── §6: point-path garbage ──
+  test('point path rejects malformed WKT', async () => {
+    await expect(inferByPoint(JSON.stringify({ wkt: 'POINT(4.9)', start: '1920-01-01', end: '1920-01-01' }))).rejects.toThrow();
+  });
+
+  test('point path: a coordinate that lands nowhere → cap-miss', async () => {
+    await place('somewhere', 'address', 'bag', 'X', 'POINT(120000 485000)');
+    // swapped lon/lat: POINT(52.37 4.9) in 4326 lands far outside the seeded area
+    expect(await inferByPoint(JSON.stringify({ wkt: 'POINT(52.37 4.9)', start: '1920-01-01', end: '1920-01-01' })))
+      .toEqual({ skip: 'cap-miss' });
   });
 });

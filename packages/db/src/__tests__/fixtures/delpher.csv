@@ -1,3 +1,5 @@
 id,url,title,text,period,geom_wkt,dataset,tags
 a1,https://www.delpher.nl/article/a1,Matched Article,Body text one,"[1925-01-01,1926-01-01)",POINT(4.9 52.37),delpher-krant,
 a2,https://www.delpher.nl/article/a2,Unmatched Article,Body text two,"[1930-01-01,1930-12-31)",POINT(5.25 52.45),delpher-krant,
+a3,https://www.delpher.nl/article/a3,Bracket Closer Article,Body text three,"[1930-01-01,1930-12-31]",POINT(4.9 52.37),delpher-krant,
+a4,https://www.delpher.nl/article/a4,Degenerate Range Article,Body text four,"[1931-01-01,1931-01-01)",POINT(4.9 52.37),delpher-krant,

@@ -1,16 +1,17 @@
 /**
- * Delpher ingestion (previously untested): unlike the Adamlink-URI sources, Delpher
- * matches each article's POINT to the *nearest existing Adamlink place* (source='adamlink')
- * within a threshold (ST_DWithin 5m) and parses a PostgreSQL date range into start/end —
- * it targets the historical LP layer, not current BAG points. Fixture has one point on
- * top of a seeded place (matched) and one far away (skipped).
+ * Delpher ingestion: unlike the Adamlink-URI sources, Delpher carries a WGS84 POINT and a
+ * PostgreSQL date range. Each point resolves through the WKT cascade (inferByPoint) —
+ * nearest place per source within the per-type caps, era-ranked by the article's date —
+ * and the range parser maps a half-open ')' end to the inclusive last day, keeps an
+ * inclusive ']' end as-is, and skips a degenerate range. Fixture: one matched point, one
+ * far (cap-miss, skipped), one ']'-closer (matched), one degenerate range (skipped).
  */
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { resolve } from 'path';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
 
-describe('delpher ingestion (nearest-place match + period parse)', () => {
+describe('delpher ingestion (WKT cascade match + period parse)', () => {
   beforeAll(async () => {
     await setupTestDb();
     await cleanTestDb();
@@ -31,26 +32,44 @@ describe('delpher ingestion (nearest-place match + period parse)', () => {
     await teardownTestDb();
   });
 
-  test('creates a text feature for the matched article and skips the far one', async () => {
+  test('creates a feature only for the resolvable, well-dated articles', async () => {
     const r = await db.execute<{ count: string }>(sql`SELECT COUNT(*) AS count FROM features`);
-    expect(parseInt(r.rows[0].count)).toBe(1); // a2 (5.25, 52.45) is > 5m from any place
+    // a1 + a3 matched; a2 is far (cap-miss) and a4 is a degenerate range (undated) → both skipped
+    expect(parseInt(r.rows[0].count)).toBe(2);
   });
 
   test('the matched feature is a Delpher text record with the parsed date range', async () => {
     const r = await db.execute<{ record_type: string; dataset_id: string; url: string; start: string; end: string }>(sql`
-      SELECT record_type, dataset_id, url, start_date::text AS start, end_date::text AS end FROM features
+      SELECT record_type, dataset_id, url, start_date::text AS start, end_date::text AS end
+      FROM features WHERE url = 'https://www.delpher.nl/article/a1'
     `);
     const f = r.rows[0];
     expect(f.record_type).toBe('text');
     expect(f.dataset_id).toBe('delpher');
-    expect(f.url).toBe('https://www.delpher.nl/article/a1');
     expect(f.start).toBe('1925-01-01');
     expect(f.end).toBe('1925-12-31'); // period [1925-01-01,1926-01-01) is half-open → inclusive last day
   });
 
-  test('the matched feature links to the nearest place', async () => {
-    const r = await db.execute<{ place_id: string }>(sql`SELECT place_id FROM feature_to_place`);
+  test('an inclusive "]" closer keeps the end day as-is (no −1 shift)', async () => {
+    const r = await db.execute<{ start: string; end: string }>(sql`
+      SELECT start_date::text AS start, end_date::text AS end
+      FROM features WHERE url = 'https://www.delpher.nl/article/a3'
+    `);
     expect(r.rows.length).toBe(1);
-    expect(r.rows[0].place_id).toBe('delpher-place');
+    expect(r.rows[0].start).toBe('1930-01-01');
+    expect(r.rows[0].end).toBe('1930-12-31'); // "]" is inclusive → stays, unlike ")" which shifts −1 day
+  });
+
+  test('a degenerate range [d,d) collapses after the −1 shift → the article is skipped', async () => {
+    const r = await db.execute<{ count: string }>(sql`
+      SELECT COUNT(*) AS count FROM features WHERE url = 'https://www.delpher.nl/article/a4'
+    `);
+    expect(parseInt(r.rows[0].count)).toBe(0);
+  });
+
+  test('the matched articles link to the place under their point', async () => {
+    const r = await db.execute<{ place_id: string }>(sql`SELECT place_id FROM feature_to_place`);
+    expect(r.rows.length).toBe(2); // a1 and a3, both over delpher-place
+    expect(r.rows.every((row) => row.place_id === 'delpher-place')).toBe(true);
   });
 });
