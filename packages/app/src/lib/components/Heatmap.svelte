@@ -252,11 +252,14 @@
 			maxZoom: mapStyle.maxZoom,
 			zoom: mapStyle.defaultZoom,
 			dragRotate: false,
-			touchZoomRotate: false,
+			// pinch-zoom is the only zoom path on touch devices; rotation stays locked below
+			touchZoomRotate: true,
+			touchPitch: false,
 			dragPan: true,
 			keyboard: true,
 			scrollZoom: true
 		});
+		map.touchZoomRotate.disableRotation();
 
 		map.on('load', () => {
 			if (!map || !dimensions) return; // Guard for TypeScript

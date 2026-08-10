@@ -21,7 +21,7 @@
 	import type { Histogram, HeatmapTimeline, HeatmapDimensions, HeatmapResponse } from '@atm/shared/types';
 	import type { AppError } from '$types/error';
 	import { env } from '$env/dynamic/public';
-	import { createEmptyHeatmap, getCellBoundsFromCellId } from '$utils/heatmap';
+	import { createEmptyHeatmap, getCellBoundsFromCellId, getCellIdFromLonLat } from '$utils/heatmap';
 
 	let { data }: { data: PageData } = $props();
 
@@ -108,9 +108,13 @@
 				if (lastPeriod && defaultRecordTypes.length > 0) {
 					controller.syncUrlParameters(lastPeriod, currentTagOperator, defaultRecordTypes);
 
-					if (env.PUBLIC_DEFAULT_CELL && dimensions) {
-						const bounds = getCellBoundsFromCellId(env.PUBLIC_DEFAULT_CELL, dimensions);
-						if (bounds) controller.selectCell(env.PUBLIC_DEFAULT_CELL, bounds);
+					if (env.PUBLIC_DEFAULT_CENTER && dimensions) {
+						const [lon, lat] = env.PUBLIC_DEFAULT_CENTER.split(',').map(Number);
+						if (Number.isFinite(lon) && Number.isFinite(lat)) {
+							const cellId = getCellIdFromLonLat(lon, lat, dimensions);
+							const bounds = getCellBoundsFromCellId(cellId, dimensions);
+							if (bounds) controller.selectCell(cellId, bounds);
+						}
 					}
 				}
 			}
@@ -192,7 +196,9 @@
 
 <ErrorHandler errorData={allErrors} />
 
-<div class="relative flex flex-col w-screen h-screen">
+<!-- inline 100dvh tracks the mobile browser chrome; browsers without dvh drop the
+     declaration and fall back to the h-screen class -->
+<div class="relative flex flex-col w-screen h-screen" style:height="100dvh">
 	<div class="relative flex-1">
 		{#if currentHeatmap && dimensions}
 			<Heatmap
@@ -239,7 +245,7 @@
 
 		{#if showCellModal && selectedCellId}
 			<div
-				class="z-30 absolute top-0 right-0 w-1/2 h-full bg-atm-sand overflow-y-auto border-l border-solid border-atm-sand-border shadow-[-5px_0px_20px_5px_rgba(0,0,0,0.07)]"
+				class="z-30 absolute top-0 right-0 w-full md:w-1/2 h-full bg-atm-sand overflow-y-auto border-l border-solid border-atm-sand-border shadow-[-5px_0px_20px_5px_rgba(0,0,0,0.07)]"
 			>
 				<FeaturesPanel
 					cellId={selectedCellId}

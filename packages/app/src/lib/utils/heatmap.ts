@@ -87,6 +87,22 @@ export function getCellBoundsFromCellId(
 	return calculateCellBounds(row, col, dimensions);
 }
 
+function clamp(n: number, lo: number, hi: number): number {
+	return Math.max(lo, Math.min(hi, n));
+}
+
+/**
+ * Map a WGS84 point to the display cell containing it — the inverse of
+ * calculateCellBounds, clamped into range so an edge/outside point resolves to the
+ * nearest valid cell instead of out of bounds.
+ */
+export function getCellIdFromLonLat(lon: number, lat: number, dimensions: HeatmapDimensions): string {
+	const { minLon, maxLon, minLat, maxLat, colsAmount, rowsAmount } = dimensions;
+	const col = clamp(Math.floor(((lon - minLon) / (maxLon - minLon)) * colsAmount), 0, colsAmount - 1);
+	const row = clamp(Math.floor(((lat - minLat) / (maxLat - minLat)) * rowsAmount), 0, rowsAmount - 1);
+	return getCellIdFromRowCol(row, col);
+}
+
 /**
  * Generate cellId map (index -> cellId)
  */
