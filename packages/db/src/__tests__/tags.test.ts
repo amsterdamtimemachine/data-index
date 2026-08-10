@@ -12,7 +12,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
-import { upsertSource } from '../etl/helpers/helpers';
+import { upsertSource } from '../etl/writers/feature-writer';
 import { getAvailableTags, getTagCombinations, validateTagCombination } from '../queries/tags';
 
 const F1 = '55555555-5555-5555-5555-555555555501';

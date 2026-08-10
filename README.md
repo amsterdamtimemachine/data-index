@@ -363,6 +363,7 @@ A dataset is a subclass of `Ingestor` (`packages/db/src/etl/sources/ingestor.ts`
 Copy the existing source closest to your data and edit its metadata, `transform`, and methods:
 
 - `delpher.ts` — coordinate (`WKT`) features
+- `blogs.ts` — free-text (`TEXT`) features, place names scanned from the article body
 - `beeldbank.ts` — Adamlink `URI` features, with an address-URI → street-URI fallback cascade
 - `joods-monument.ts` — `URI` person features
 

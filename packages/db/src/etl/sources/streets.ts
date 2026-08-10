@@ -10,7 +10,7 @@
  */
 import { readFileSync } from 'fs';
 import { Parser } from 'n3';
-import { insertPlaces, createNameWriter } from '../helpers/helpers';
+import { insertPlaces, createNameWriter } from '../writers/place-writer';
 import { parseAdamlinkStreets, insertStreetNames } from './adamlink-streets';
 
 const BATCH_SIZE = 100;

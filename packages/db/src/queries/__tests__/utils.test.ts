@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { formatDateRange } from '../../etl/helpers/helpers';
+import { formatDateRange } from '../../etl/util/dates';
 
 describe('formatDateRange', () => {
   test('formats range from two different dates', () => {

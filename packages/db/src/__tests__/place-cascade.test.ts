@@ -9,8 +9,8 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
-import { PlaceIndex, PlaceExtractionMethod } from '../etl/helpers/places/place-index';
-import { clearResolverCaches } from '../etl/helpers/helpers';
+import { PlaceIndex, PlaceExtractionMethod } from '../etl/places/place-index';
+import { clearResolverCaches } from '../etl/places/cache';
 
 const W = 'POINT(4.9 52.37)'; // WGS84 query point (transformed to RD for the seeded geometry)
 const dated = { start: '1920-01-01', end: '1920-01-01' };

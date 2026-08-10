@@ -1,6 +1,6 @@
 import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, RecordType } from "@atm/shared";
-import { formatDateRange } from "./helpers";
-import { Draft } from "../sources/ingestor";
+import { formatDateRange } from "../util/dates";
+import { Draft } from "./ingestor";
 
 export abstract class EntityFactory<T extends EntityBase> {
     abstract create(feature: Draft, data: Map<string, unknown>): T

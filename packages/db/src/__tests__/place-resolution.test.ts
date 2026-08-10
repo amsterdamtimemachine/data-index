@@ -8,9 +8,9 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
-import { getCandidatesByPoint, getCandidatesByName, pickFinest, resolveNamePool, rank, type Candidate } from '../etl/helpers/places/place-candidates';
-import { inferByPoint, inferByName } from '../etl/helpers/places/place-inference';
-import { clearResolverCaches } from '../etl/helpers/helpers';
+import { getCandidatesByPoint, getCandidatesByName, pickFinest, resolveNamePool, rank, type Candidate } from '../etl/places/place-candidates';
+import { inferByPoint, inferByName } from '../etl/places/place-inference';
+import { clearResolverCaches } from '../etl/places/cache';
 
 const Q = 'POINT(120000 485000)'; // RD query point
 

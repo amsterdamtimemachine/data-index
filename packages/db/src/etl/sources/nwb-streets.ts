@@ -14,7 +14,7 @@
  * Usage: bun run db:ingest -s nwb-streets -f <nwb-streets.geojson> -x <adamlinkstraten.ttl>
  */
 import { readFileSync } from 'fs';
-import { insertPlaces, type PlaceInsert } from '../helpers/helpers';
+import { insertPlaces, type PlaceInsert } from '../writers/place-writer';
 import { readFeatures, pdokRow } from './pdok-places';
 import { parseAdamlinkStreets, insertStreetNames, type AdamlinkStreet } from './adamlink-streets';
 

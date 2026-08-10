@@ -1,6 +1,6 @@
 import { RecordType } from "@atm/shared";
-import { ExtractionArgs, PlaceExtractionMethod } from "../helpers/places/place-index";
-import { Draft, Ingestor } from "./ingestor";
+import { ExtractionArgs, PlaceExtractionMethod } from "../places/place-index";
+import { Draft, Ingestor } from "../ingest/ingestor";
 
 type JoodsMonumentData = {
   person: string;

@@ -9,7 +9,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
-import { upsertSource } from '../etl/helpers/helpers';
+import { upsertSource } from '../etl/writers/feature-writer';
 import { rebuildIndex } from '../etl/post-process/rebuild-index';
 
 const POLY_ID = 'poly-fill';

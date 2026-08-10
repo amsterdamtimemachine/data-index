@@ -1,9 +1,10 @@
-import { upsertSource, createFeatureWriter, featureUuid } from '../helpers/helpers';
+import { upsertSource, createFeatureWriter } from '../writers/feature-writer';
+import { featureUuid } from '../util/ids';
 import { NewFeature } from '../../schema';
-import { createEntityFactory, EntityFactory } from '../helpers/entity-factory';
+import { createEntityFactory, EntityFactory } from './entity-factory';
 import { EntityBase, RecordType } from '@atm/shared';
-import { FileReader } from '../helpers/file-reader';
-import { DateRange, ExtractionArgs, PlaceIndex, Resolved, SkipReason } from '../helpers/places/place-index';
+import { FileReader } from './file-reader';
+import { DateRange, ExtractionArgs, PlaceIndex, Resolved, SkipReason } from '../places/place-index';
 
 export type Draft = Omit<NewFeature, 'recordType' | 'datasetId'>
 

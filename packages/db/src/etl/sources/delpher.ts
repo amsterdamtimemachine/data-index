@@ -8,9 +8,9 @@
  *
  * Usage: bun run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
  */
-import { Draft, Ingestor } from './ingestor';
+import { Draft, Ingestor } from '../ingest/ingestor';
 import { NewFeature } from '../../schema';
-import { ExtractionArgs, PlaceExtractionMethod } from '../helpers/places/place-index';
+import { ExtractionArgs, PlaceExtractionMethod } from '../places/place-index';
 import { RecordType } from '@atm/shared';
 
 type DelpherSourceData = {

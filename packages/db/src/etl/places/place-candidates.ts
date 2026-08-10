@@ -9,7 +9,7 @@
  * The point fetcher rides the GiST index; the name fetcher needs the btree lower(name)
  * expression indexes on place and place_historical_name.
  */
-import { db } from '../../../client';
+import { db } from '../../client';
 import { sql } from 'drizzle-orm/sql';
 import { ADDRESS_MAX_DISTANCE_M, STREET_MAX_DISTANCE_M, ERA_CUTOFF, CURRENT_ANCHOR } from '@atm/shared';
 
