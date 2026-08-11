@@ -22,6 +22,7 @@
 	import type { AppError } from '$types/error';
 	import { env } from '$env/dynamic/public';
 	import { createEmptyHeatmap, getCellBoundsFromCellId, getCellIdFromLonLat } from '$utils/heatmap';
+	import { MOBILE_MAX_WIDTH } from '$lib/constants';
 
 	let { data }: { data: PageData } = $props();
 
@@ -108,7 +109,8 @@
 				if (lastPeriod && defaultRecordTypes.length > 0) {
 					controller.syncUrlParameters(lastPeriod, currentTagOperator, defaultRecordTypes);
 
-					if (env.PUBLIC_DEFAULT_CENTER && dimensions) {
+					// Skip the default cell on mobile — the map opens unfiltered there.
+					if (window.innerWidth > MOBILE_MAX_WIDTH && env.PUBLIC_DEFAULT_CENTER && dimensions) {
 						const [lon, lat] = env.PUBLIC_DEFAULT_CENTER.split(',').map(Number);
 						if (Number.isFinite(lon) && Number.isFinite(lat)) {
 							const cellId = getCellIdFromLonLat(lon, lat, dimensions);
