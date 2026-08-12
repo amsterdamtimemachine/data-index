@@ -38,17 +38,6 @@
 	let errors = $state<AppError[]>([]);
 	let errorData = $derived(createPageErrorData(errors));
 
-	// Layout memory for stable masonry across pagination
-	let layoutMemory = new Map<string, number>(); // featureId -> columnIndex
-	let currentContext = $state(''); // Track current data context
-
-	/**
-	 * Clear layout memory when data context changes
-	 */
-	function clearLayoutMemory() {
-		layoutMemory.clear();
-	}
-
 	async function loadCellData(page: number = 1) {
 		loading = true;
 		loadingState.startLoading();
@@ -119,17 +108,6 @@
 		loadCellData(newPage);
 	}
 
-	// Detect context changes and clear memory when needed
-	$effect(() => {
-		// Create context key from always-available props
-		const newContext = `${cellId}_${period}`;
-
-		if (currentContext !== newContext) {
-			clearLayoutMemory();
-			currentContext = newContext;
-		}
-	});
-
 	$effect(() => {
 		// Reset state when cellId or period changes
 		allFeatures = [];
@@ -180,7 +158,7 @@
 
 <div class="min-h-full bg-atm-sand-dark">
 	{#if allFeatures.length > 0}
-		<FeaturesGrid features={allFeatures} {layoutMemory} />
+		<FeaturesGrid features={allFeatures} />
 	{:else if !initialLoading && !loading}
 		<div class="text-base text-gray-500 p-4">No features found for this cell and period</div>
 	{/if}

@@ -237,7 +237,7 @@ The naming model above determines what the API returns per place type. `getFeatu
 
 ### Temporal indexing
 
-Each feature has `start_date` and `end_date`, both inclusive at the year level. A feature with `start_date=1900-06-15` and `end_date=1900-08-30` covers exactly the year 1900. Time is divided into base bins of `PRECOMP_TIME_BIN_YEARS` years (default 10), each spanning `[bin_start, bin_end)`: start year inclusive, end year exclusive. A feature is assigned to every bin its year range overlaps: a feature spanning 1900–1925 with 10-year bins falls into `[1900,1910)`, `[1910,1920)`, and `[1920,1930)`. Its `temporal_frequency` is the count of those bins (3 here).
+Each feature has `start_date` and `end_date`, both inclusive at the year level. A feature with `start_date=1900-06-15` and `end_date=1900-08-30` covers exactly the year 1900. Time is divided into base bins of `PRECOMP_TIME_BIN_YEARS` years (default 50), each spanning `[bin_start, bin_end)`: start year inclusive, end year exclusive. A feature is assigned to every bin its year range overlaps: a feature spanning 1900–1925 with 10-year bins falls into `[1900,1910)`, `[1910,1920)`, and `[1920,1930)`. Its `temporal_frequency` is the count of those bins (3 here).
 
 The timeline (rendered as a histogram) uses the same overlap logic but at the display bin size requested by the client. Display bin size is clamped to `[DISPLAY_TIME_BIN_MIN_YEARS, DISPLAY_TIME_BIN_MAX_YEARS]` and rounded down to a multiple of `PRECOMP_TIME_BIN_YEARS` — the `cell_features` rollup stores counts per base bin, so a display bin has to be a whole number of them (a 25-year bin can't split a decade).
 
@@ -283,6 +283,8 @@ A street or address feature shows its historical name (from `place_historical_na
 
 Neighbourhood and district geometry, unlike a street's or address's, changes across history: each era's division is its own `place` row with its own `place_geometry` (polygon + `[since, until)` window). Which era a feature attaches to is decided **at ingest, not query time** — it's linked to the `place` whose window overlaps the feature's `[start, end]` the most. At query time the heatmap then counts that feature against its historical geometry's footprint, **even though the basemap shows the modern city**.
 
+A feature located by **coordinate** links to the place of its own era: addresses exist in two layers — historical Adamlink (up to 1943) and present-day BAG — so a feature dated before `ERA_CUTOFF` (1943) resolves to the Adamlink address, on/after it to the BAG address at the same point, always at the finest granularity that resolves (address > street > neighbourhood > district) within a per-type distance cap. A feature located by **name** instead resolves to the place whose name was in force nearest its date. Either way, a name matching two equally-plausible places, or a coordinate with nothing in range, is skipped rather than linked to a guess.
+
 Both name- and geometry-windows run from `since` up to but not including `until` (at year granularity), so a boundary year falls in exactly one window; `until = null` means "still current".
 
 ## Data ingestion
@@ -313,7 +315,7 @@ Adamlink place data must be ingested before any dataset. See the [Development](#
 
 Adamlink is the backbone, but it doesn't cover everything — its addresses stop at 1943, it doesn't include the recently-annexed municipality of Weesp, and it misses some Amsterdam streets. Three national base registries fill those gaps (see [Place datasets](#place-datasets)), and every `place` row records its `source` (`adamlink` / `cbs` / `nwb` / `bag`) and a `url` to the origin record. A feature is skipped at ingest if it can't be resolved to an existing place, or if it lacks the stable source identifier its `id` is derived from — no feature row is created and nothing unlinked lands in the database.
 
-If you are deploying this for **another Dutch city**, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. The `geometry-point-template.ts` example shows how to match incoming coordinates to existing places; for creating new places, adapt the pattern from `lps.ts`. The core requirement is that each feature links to a `place` row that has a geometry.
+If you are deploying this for **another Dutch city**, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. A `WKT`-method source like `delpher.ts` shows how a dataset matches incoming coordinates to existing places; for creating new places, adapt the pattern from `lps.ts`. The core requirement is that each feature links to a `place` row that has a geometry.
 
 For a city **outside the Netherlands** there is one more step: the Dutch national grid (RD / EPSG:28992) is hardcoded across the stack — the `place` geometry column, `insertPlaces`, `rebuild-index`, the grid-config and heatmap queries, and the frontend `proj4` definition — so you must swap that SRID for the target region's metric CRS in each of those spots and re-verify the grid math. RD is only valid over the Netherlands, so this step is unavoidable abroad.
 
@@ -352,13 +354,20 @@ Optional: `description`, `content_url` (media), `entity` (schema.org JSONB), `ur
 
 ### Adding a dataset
 
-1. Pick a template from `packages/db/src/etl/examples/`: 
-   - `adamlink-point-template.ts` for data referencing Adamlink address URIs
-   - `geometry-point-template.ts` for data without Adamlink references (matches coordinates to nearest place)
-   - `neighbourhood-template.ts` for area-level data (matches a buurt/wijk by name + date to the right era)
-2. Copy it to `packages/db/src/etl/sources/<your-dataset>.ts`
-3. Update organisation, dataset, relation, and field mappings
-4. Run:
+A dataset is a subclass of `Ingestor` (`packages/db/src/etl/sources/ingestor.ts`) that declares its organisation/dataset metadata, a `transform` mapping each source row to a feature, and a `PLACE_EXTRACTION_METHODS` cascade — the ordered signals used to resolve each feature to a place, tried in turn until one resolves (else the feature is skipped and tallied by reason). Three signals are available:
+
+- `WKT` — a coordinate, matched to the nearest era-appropriate place within a distance cap (see [Dates resolution](#dates-resolution))
+- `TEXT` — a free-text field, scanned for known place names
+- `URI` — an Adamlink place URI, matched exactly
+
+Copy the existing source closest to your data and edit its metadata, `transform`, and methods:
+
+- `delpher.ts` — coordinate (`WKT`) features
+- `blogs.ts` — free-text (`TEXT`) features, place names scanned from the article body
+- `beeldbank.ts` — Adamlink `URI` features, with an address-URI → street-URI fallback cascade
+- `joods-monument.ts` — `URI` person features
+
+Then run:
 
 ```bash
 bun run db:ingest -s <dataset-name> -f <path-to-file>
@@ -613,13 +622,17 @@ order you set them up in doesn't matter, and neither does the `-f` overlay order
 | `DB_PASSWORD` | Yes | `atm_dev_password` | PostgreSQL password |
 | `DB_NAME` | Yes | `amsterdam_time_machine` | PostgreSQL database name |
 | `APP_PORT` | No | `3000` | App port on host |
-| `PUBLIC_DEFAULT_CELL` | No | - | Default cell to select on load |
+| `PUBLIC_DEFAULT_CENTER` | No | - | Map centre (WGS84 `lon,lat`) auto-selected on load, resolved to the cell containing it |
 | `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |
 | `PUBLIC_EXACT_CELLS` | No | `false` | Reproject heatmap cells to their exact RD footprint via proj4 (removes the ~0.4° skew); default draws axis-aligned rectangles |
-| `PRECOMP_TIME_BIN_YEARS` | No | `10` | Base time bin size (years). Shapes the `cell_features` buckets, so changing it requires a `db:rebuild-index` — the queries would otherwise fold base bins at the new width against buckets stored at the old one. Also caps time granularity: a requested `binSize` is rounded down to a multiple of this |
+| `PRECOMP_TIME_BIN_YEARS` | No | `50` | Base time bin size (years). Shapes the `cell_features` buckets, so changing it requires a `db:rebuild-index` — the queries would otherwise fold base bins at the new width against buckets stored at the old one. Also caps time granularity: a requested `binSize` is rounded down to a multiple of this |
 | `PRECOMP_GRID_CELL_METERS` | No | `100` | Base spatial cell size (meters) |
-| `DISPLAY_GRID_DEFAULT_COLS` | No | `75` | Default heatmap grid width (columns); rows are derived from the data's aspect ratio so cells are square |
+| `DISPLAY_GRID_DEFAULT_COLS` | No | `125` | Default heatmap grid width (columns); rows are derived from the data's aspect ratio so cells are square |
 | `DISPLAY_GRID_MIN_COLS` / `DISPLAY_GRID_MAX_COLS` | No | `10` / `200` | Grid width (column count) bounds |
 | `DISPLAY_TIME_BIN_DEFAULT_YEARS` | No | `50` | Default display bin size (years) |
 | `DISPLAY_TIME_BIN_MIN_YEARS` / `DISPLAY_TIME_BIN_MAX_YEARS` | No | `10` / `100` | Bin size bounds (years) |
+| `ADDRESS_MAX_DISTANCE_M` | No | `30` | Max metres a feature's coordinate may sit from an address before it won't link to it |
+| `STREET_MAX_DISTANCE_M` | No | `50` | Same, for streets (areas link by containment, no radius) |
+| `ERA_CUTOFF` | No | `1943-01-01` | Historical↔present address boundary: a feature dated before this resolves to an Adamlink address, on/after to a BAG one |
+| `CURRENT_ANCHOR` | No | `2020-01-01` | Present-day reference date for scoring current place names |
 | `CACHE_TTL_MINUTES` | No | `10` | TTL for cached DB queries |

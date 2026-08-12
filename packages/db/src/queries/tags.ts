@@ -10,8 +10,9 @@ import type {
 import { db } from '../client';
 import type { CountRow } from '../row-types';
 import { getRecordTypes } from './record-types';
-import { andIn, placeTypeJoin } from './filters';
+import { andIn, placeTypeJoin, featureIdsWithAllTags } from './filters';
 import { features, tags, featureTags } from '../schema';
+import type { SQL } from 'drizzle-orm';
 
 // Query result types (internal)
 type TagStatsRow = {
@@ -24,6 +25,35 @@ type SimpleTagStatsRow = {
   tag_label: string;
   total_features: string;
 };
+
+/**
+ * The shared tag-stats query: per-tag distinct feature counts under the
+ * recordTypes / datasetIds / placeTypes filter triple. getAvailableTags adds the
+ * record_types aggregate; getTagCombinations' no-selection branch omits it —
+ * everything else is identical by construction.
+ */
+function tagStatsQuery(
+  types: string[],
+  datasetIds: string[] | undefined,
+  placeTypes: string[] | undefined,
+  withRecordTypes: boolean
+): SQL {
+  return sql`
+    SELECT
+      ${tags.id} as tag_id,
+      ${tags.label} as tag_label,
+      COUNT(DISTINCT ${featureTags.featureId}) as total_features${withRecordTypes ? sql`,
+      ARRAY_AGG(DISTINCT ${features.recordType}) as record_types` : sql``}
+    FROM ${tags}
+    JOIN ${featureTags} ON ${tags.id} = ${featureTags.tagId}
+    JOIN ${features} ON ${featureTags.featureId} = ${features.id}
+    ${placeTypeJoin(placeTypes, sql`${features.id}`)}
+    WHERE ${features.recordType} IN ${types}
+      ${andIn(sql`${features.datasetId}`, datasetIds)}
+      ${andIn(sql`p.type`, placeTypes)}
+    GROUP BY ${tags.id}, ${tags.label}
+    ORDER BY total_features DESC`;
+}
 
 /**
  * Get available tags with feature counts and associated record types.
@@ -42,22 +72,7 @@ export async function getAvailableTags(
   }
 
   // Single query that gets tag stats with record types array
-  const result = await db.execute<TagStatsRow>(sql`
-    SELECT
-      ${tags.id} as tag_id,
-      ${tags.label} as tag_label,
-      COUNT(DISTINCT ${featureTags.featureId}) as total_features,
-      ARRAY_AGG(DISTINCT ${features.recordType}) as record_types
-    FROM ${tags}
-    JOIN ${featureTags} ON ${tags.id} = ${featureTags.tagId}
-    JOIN ${features} ON ${featureTags.featureId} = ${features.id}
-    ${placeTypeJoin(placeTypes, sql`${features.id}`)}
-    WHERE ${features.recordType} IN ${types}
-      ${andIn(sql`${features.datasetId}`, datasetIds)}
-      ${andIn(sql`p.type`, placeTypes)}
-    GROUP BY ${tags.id}, ${tags.label}
-    ORDER BY total_features DESC
-  `);
+  const result = await db.execute<TagStatsRow>(tagStatsQuery(types, datasetIds, placeTypes, true));
 
   const tagStats: TagStats[] = result.rows.map(row => ({
     name: row.tag_label,
@@ -89,20 +104,7 @@ export async function getTagCombinations(
 
   if (selectedTags.length === 0) {
     // No selection - return all tags
-    const result = await db.execute<SimpleTagStatsRow>(sql`
-      SELECT
-        ${tags.label} as tag_label,
-        COUNT(DISTINCT ${featureTags.featureId}) as total_features
-      FROM ${tags}
-      JOIN ${featureTags} ON ${tags.id} = ${featureTags.tagId}
-      JOIN ${features} ON ${featureTags.featureId} = ${features.id}
-      ${placeTypeJoin(placeTypes, sql`${features.id}`)}
-      WHERE ${features.recordType} IN ${types}
-        ${andIn(sql`${features.datasetId}`, datasetIds)}
-        ${andIn(sql`p.type`, placeTypes)}
-      GROUP BY ${tags.id}, ${tags.label}
-      ORDER BY total_features DESC
-    `);
+    const result = await db.execute<SimpleTagStatsRow>(tagStatsQuery(types, datasetIds, placeTypes, false));
 
     return {
       availableTags: result.rows.map(row => ({
@@ -117,17 +119,7 @@ export async function getTagCombinations(
   // Find features that have ALL selected tags, then find other tags on those features
   const result = await db.execute<SimpleTagStatsRow>(sql`
     WITH features_with_all_tags AS (
-      SELECT ft.feature_id
-      FROM ${featureTags} ft
-      JOIN ${features} f ON ft.feature_id = f.id
-      JOIN ${tags} t ON ft.tag_id = t.id
-      ${placeTypeJoin(placeTypes, sql`f.id`)}
-      WHERE f.record_type IN ${types}
-        AND t.label IN ${selectedTags}
-        ${andIn(sql`f.dataset_id`, datasetIds)}
-        ${andIn(sql`p.type`, placeTypes)}
-      GROUP BY ft.feature_id
-      HAVING COUNT(DISTINCT t.id) = ${selectedTags.length}
+      ${featureIdsWithAllTags(selectedTags, { recordTypes: types, datasetIds, placeTypes })}
     )
     SELECT
       t.label as tag_label,
@@ -183,17 +175,7 @@ export async function validateTagCombination(
     const result = await db.execute<CountRow>(sql`
       SELECT COUNT(*) as count
       FROM (
-        SELECT ft.feature_id
-        FROM ${featureTags} ft
-        JOIN ${features} f ON ft.feature_id = f.id
-        JOIN ${tags} t ON ft.tag_id = t.id
-        ${placeTypeJoin(placeTypes, sql`f.id`)}
-        WHERE f.record_type IN ${types}
-          AND t.label IN ${tagsToCheck}
-          ${andIn(sql`f.dataset_id`, datasetIds)}
-          ${andIn(sql`p.type`, placeTypes)}
-        GROUP BY ft.feature_id
-        HAVING COUNT(DISTINCT t.id) = ${tagsToCheck.length}
+        ${featureIdsWithAllTags(tagsToCheck, { recordTypes: types, datasetIds, placeTypes })}
         LIMIT 1
       ) sub
     `);

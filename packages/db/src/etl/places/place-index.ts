@@ -1,5 +1,5 @@
 import { PlaceTrie } from "./place-trie";
-import { getPlaceMap, inferByAdamURI, inferByName, inferByWKT } from "./place-inference";
+import { getPlaceMap, inferByAdamURI, inferByName, inferByPoint } from "./place-inference";
 
 /**
  * Different types of methods for extracting places from objects
@@ -20,8 +20,17 @@ export type ExtractionArgs<SourceRecord> = {
 
 export type DateRange = { start: string; end: string };
 
+// A resolver / extract outcome: a linked place, or a skip tagged with WHY (feeds the
+// per-reason ingest tally). When a cascade fails across methods, keep the most
+// actionable reason by this precedence: ambiguous > cap-miss > undated > no-match.
+export type SkipReason = 'ambiguous' | 'cap-miss' | 'undated' | 'no-match';
+export type Resolved = { placeId: string } | { skip: SkipReason };
+
+const SKIP_PRECEDENCE: SkipReason[] = ['ambiguous', 'cap-miss', 'undated', 'no-match'];
+const moreSpecificSkip = (a: SkipReason | undefined, b: SkipReason): SkipReason =>
+    a !== undefined && SKIP_PRECEDENCE.indexOf(a) <= SKIP_PRECEDENCE.indexOf(b) ? a : b;
+
 type InferPlaceArgs = {
-    level: string;
     area: string;
     start: string;
     end: string;
@@ -68,15 +77,14 @@ export class PlaceIndex<SourceRecord extends Record<string, any>> {
      * @param dateRange 
      * @returns place_id of match
      */
-    async extractFromText(text: string, dateRange: DateRange) {
+    async extractFromText(text: string, dateRange: DateRange): Promise<Resolved> {
         if (!this.placeTrie) { this.placeTrie = await this.initPlaceTrie() }
 
         const matches = this.placeTrie.match(text)
 
-        if (matches.length <= 0 || !matches[0].value ) { return undefined }
+        if (matches.length <= 0 || !matches[0].value ) { return { skip: 'no-match' } }
 
         return await inferByName(JSON.stringify({
-            level: matches[0].type,
             area: matches[0].value,
             start: dateRange.start,
             end: dateRange.end,
@@ -89,31 +97,33 @@ export class PlaceIndex<SourceRecord extends Record<string, any>> {
      * @param dateRange 
      * @returns place_id if found
      */
-    async extract(source: SourceRecord, dateRange: DateRange) {
+    async extract(source: SourceRecord, dateRange: DateRange): Promise<Resolved> {
+        let skip: SkipReason | undefined = undefined
+
         for (const method of this.methods) {
             const value = String(source[method.column] ?? '').trim()
             if (!value) { continue }
 
-            let result: string | undefined = undefined
+            let res: Resolved
 
             switch (method.method) {
-                case PlaceExtractionMethod.TEXT:
-                    result = await this.extractFromText(value, dateRange)
-                    break
                 case PlaceExtractionMethod.WKT:
-                    result = await inferByWKT(value)
+                    res = await inferByPoint(JSON.stringify({ wkt: value, start: dateRange.start, end: dateRange.end }))
                     break
                 case PlaceExtractionMethod.URI:
-                    result = await inferByAdamURI(value)
+                    res = await inferByAdamURI(value)
                     break
+                case PlaceExtractionMethod.TEXT:
                 default:
-                    result = await this.extractFromText(value, dateRange)
+                    res = await this.extractFromText(value, dateRange)
                     break
             }
 
-            if (result && result.trim().length > 0) {
-                return result
-            }
+            if ('placeId' in res) { return res }
+            skip = moreSpecificSkip(skip, res.skip)
         }
+
+        // no method produced a value at all → no-match; else the most actionable skip
+        return { skip: skip ?? 'no-match' }
     }
 }

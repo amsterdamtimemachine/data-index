@@ -3,6 +3,8 @@ import { PRECOMP_GRID_CELL_METERS, PRECOMP_TIME_BIN_YEARS } from '@atm/shared';
 import { db } from '../../client';
 import { placeGeometry, features, featureToPlace, placeCells, gridConfig } from '../../schema';
 import { buildCellFeatures } from './build-cell-features';
+import { yearBin, hasLinkedFeatures, cellIndex, cellEnvelope } from '../sql';
+import { datedFeatures } from '../../queries/time-filter';
 
 type BBoxRow = {
   min_x: number;
@@ -31,7 +33,7 @@ export async function rebuildIndex() {
       ST_XMax(ST_Extent(pg.geometry)) as max_x,
       ST_YMax(ST_Extent(pg.geometry)) as max_y
     FROM ${placeGeometry} pg
-    WHERE EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = pg.place_id)
+    WHERE ${hasLinkedFeatures(sql`pg.place_id`)}
   `);
   const { min_x, min_y, max_x, max_y } = bbox.rows[0];
 
@@ -59,12 +61,12 @@ export async function rebuildIndex() {
     INSERT INTO place_cells (place_id, cell_x, cell_y)
     SELECT DISTINCT
       pg.place_id as place_id,
-      FLOOR((ST_X((dp).geom) - ${min_x}) / ${PRECOMP_GRID_CELL_METERS})::smallint as cell_x,
-      FLOOR((ST_Y((dp).geom) - ${min_y}) / ${PRECOMP_GRID_CELL_METERS})::smallint as cell_y
+      ${cellIndex(sql`ST_X((dp).geom)`, min_x)}::smallint as cell_x,
+      ${cellIndex(sql`ST_Y((dp).geom)`, min_y)}::smallint as cell_y
     FROM ${placeGeometry} pg
     CROSS JOIN LATERAL ST_DumpPoints(pg.geometry) dp
     WHERE GeometryType(pg.geometry) IN ('POINT', 'MULTIPOINT')
-      AND EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = pg.place_id)
+      AND ${hasLinkedFeatures(sql`pg.place_id`)}
   `);
 
   // Lines and polygons: rasterise — keep every grid cell whose rectangle intersects
@@ -78,29 +80,20 @@ export async function rebuildIndex() {
       FROM ${placeGeometry} pg
       WHERE pg.geometry IS NOT NULL
         AND GeometryType(pg.geometry) NOT IN ('POINT', 'MULTIPOINT')
-        AND EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = pg.place_id)
+        AND ${hasLinkedFeatures(sql`pg.place_id`)}
     )
     INSERT INTO place_cells (place_id, cell_x, cell_y)
     SELECT f.id, gx::smallint, gy::smallint
     FROM featured f
     CROSS JOIN LATERAL generate_series(
-      FLOOR((ST_XMin(f.geometry) - ${min_x}::float8) / ${PRECOMP_GRID_CELL_METERS}::float8)::int,
-      FLOOR((ST_XMax(f.geometry) - ${min_x}::float8) / ${PRECOMP_GRID_CELL_METERS}::float8)::int
+      ${cellIndex(sql`ST_XMin(f.geometry)`, min_x)}::int,
+      ${cellIndex(sql`ST_XMax(f.geometry)`, min_x)}::int
     ) AS gx
     CROSS JOIN LATERAL generate_series(
-      FLOOR((ST_YMin(f.geometry) - ${min_y}::float8) / ${PRECOMP_GRID_CELL_METERS}::float8)::int,
-      FLOOR((ST_YMax(f.geometry) - ${min_y}::float8) / ${PRECOMP_GRID_CELL_METERS}::float8)::int
+      ${cellIndex(sql`ST_YMin(f.geometry)`, min_y)}::int,
+      ${cellIndex(sql`ST_YMax(f.geometry)`, min_y)}::int
     ) AS gy
-    WHERE ST_Intersects(
-      f.geometry,
-      ST_MakeEnvelope(
-        ${min_x}::float8 + gx * ${PRECOMP_GRID_CELL_METERS}::float8,
-        ${min_y}::float8 + gy * ${PRECOMP_GRID_CELL_METERS}::float8,
-        ${min_x}::float8 + (gx + 1) * ${PRECOMP_GRID_CELL_METERS}::float8,
-        ${min_y}::float8 + (gy + 1) * ${PRECOMP_GRID_CELL_METERS}::float8,
-        28992
-      )
-    )
+    WHERE ST_Intersects(f.geometry, ${cellEnvelope(sql`gx`, sql`gy`, min_x, min_y)})
   `);
 
   const rowCount = (pointResult.rowCount ?? 0) + (fillResult.rowCount ?? 0);
@@ -120,14 +113,16 @@ export async function rebuildIndex() {
   `);
   console.log(`  ✅ ${spatialResult.rowCount} places updated`);
 
-  // Update temporal frequency on features (number of base time bins each feature spans)
+  // Update temporal frequency on features: the number of base time bins the feature's
+  // range occupies — the same yearBin expansion build-cell-features indexes with, so
+  // the frequency counts exactly the bins the feature appears in.
   console.log(`\nUpdating temporal frequency (base bin: ${PRECOMP_TIME_BIN_YEARS} years)...`);
   const temporalResult = await db.execute(sql`
     UPDATE ${features} f
-    SET temporal_frequency = GREATEST(1, CEIL(
-      (EXTRACT(YEAR FROM f.end_date) - EXTRACT(YEAR FROM f.start_date)) / ${PRECOMP_TIME_BIN_YEARS}
-    ))
-    WHERE f.start_date IS NOT NULL AND f.end_date IS NOT NULL
+    SET temporal_frequency = GREATEST(1,
+      (${yearBin(sql`f.end_date`)} - ${yearBin(sql`f.start_date`)}) / ${PRECOMP_TIME_BIN_YEARS}::int + 1
+    )
+    WHERE ${datedFeatures(sql`f.start_date`, sql`f.end_date`)}
   `);
   console.log(`  ✅ ${temporalResult.rowCount} features updated`);
 
@@ -144,7 +139,7 @@ export async function rebuildIndex() {
       SELECT COUNT(*) as total_places,
         COUNT(*) - COUNT(spatial_frequency) as missing_spatial
       FROM ${placeGeometry} pg
-      WHERE EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = pg.place_id)
+      WHERE ${hasLinkedFeatures(sql`pg.place_id`)}
     `)
   ]);
   const { total, missing_temporal } = featureCoverage.rows[0];

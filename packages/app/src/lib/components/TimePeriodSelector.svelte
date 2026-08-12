@@ -69,12 +69,12 @@
 		}
 	}
 
-	function handleDragStart(event: MouseEvent) {
+	function handleDragStart(event: PointerEvent) {
 		isDragging = true;
 		event.preventDefault();
 	}
 
-	function handleMouseMove(event: MouseEvent) {
+	function handlePointerMove(event: PointerEvent) {
 		if (!isDragging || !trackElement) return;
 
 		const rect = trackElement.getBoundingClientRect();
@@ -85,7 +85,7 @@
 		handleIndexChange(newIndex);
 	}
 
-	function handleMouseUp() {
+	function handlePointerUp() {
 		isDragging = false;
 	}
 
@@ -116,8 +116,14 @@
 	}
 </script>
 
-<!-- Global mouse events for drag behavior -->
-<svelte:document onmousemove={handleMouseMove} onmouseup={handleMouseUp} />
+<!-- Global pointer events for drag behavior: mouse drags reach the document directly;
+     touch drags reach it by bubbling from the thumb, which implicitly captures the
+     pointer and blocks scrolling via touch-action -->
+<svelte:document
+	onpointermove={handlePointerMove}
+	onpointerup={handlePointerUp}
+	onpointercancel={handlePointerUp}
+/>
 
 {#if histogram?.bins?.length > 0}
 	<div class={mergeCss('bg-atm-sand border-t border-atm-sand-border w-full px-4 pt-2', className)}>

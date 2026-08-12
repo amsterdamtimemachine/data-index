@@ -12,7 +12,7 @@
 import { readFileSync } from 'fs';
 import type { Feature, FeatureCollection, Geometry, Position } from 'geojson';
 import type { PlaceType, PlaceSource } from '@atm/shared';
-import { insertPlaces, type PlaceInsert } from '../helpers/helpers';
+import { insertPlaces, type PlaceInsert } from '../writers/place-writer';
 
 interface PdokProps {
   id: string;

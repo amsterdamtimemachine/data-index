@@ -6,6 +6,7 @@ import {
 	parseRowColFromCellId,
 	calculateCellBounds,
 	getCellBoundsFromCellId,
+	getCellIdFromLonLat,
 	generateCellIdMap,
 	generateCellGeometries,
 	createEmptyHeatmap
@@ -80,6 +81,26 @@ describe('getCellBoundsFromCellId', () => {
 	test('out-of-range or malformed → null', () => {
 		expect(getCellBoundsFromCellId('5_5', GRID)).toBeNull();
 		expect(getCellBoundsFromCellId('nope', GRID)).toBeNull();
+	});
+});
+
+describe('getCellIdFromLonLat (inverse of calculateCellBounds, clamped)', () => {
+	// GRID: 2×2 over lon [0,10] (cellWidth 5), lat [0,20] (cellHeight 10).
+	test('a point resolves to the cell that contains it', () => {
+		expect(getCellIdFromLonLat(2, 5, GRID)).toBe('0_0');
+		expect(getCellIdFromLonLat(7, 15, GRID)).toBe('1_1');
+		expect(getCellIdFromLonLat(7, 5, GRID)).toBe('0_1');
+	});
+	test('the max edge clamps into range instead of overflowing', () => {
+		expect(getCellIdFromLonLat(10, 20, GRID)).toBe('1_1'); // floor gives 2,2 → clamped to 1,1
+	});
+	test('points outside the grid clamp to the nearest edge cell', () => {
+		expect(getCellIdFromLonLat(-5, -5, GRID)).toBe('0_0');
+		expect(getCellIdFromLonLat(100, 100, GRID)).toBe('1_1');
+	});
+	test('the result always round-trips to valid bounds (never null)', () => {
+		const id = getCellIdFromLonLat(10, 20, GRID);
+		expect(getCellBoundsFromCellId(id, GRID)).not.toBeNull();
 	});
 });
 
