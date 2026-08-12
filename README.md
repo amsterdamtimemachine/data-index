@@ -622,7 +622,7 @@ order you set them up in doesn't matter, and neither does the `-f` overlay order
 | `DB_PASSWORD` | Yes | `atm_dev_password` | PostgreSQL password |
 | `DB_NAME` | Yes | `amsterdam_time_machine` | PostgreSQL database name |
 | `APP_PORT` | No | `3000` | App port on host |
-| `PUBLIC_DEFAULT_CELL` | No | - | Default cell to select on load |
+| `PUBLIC_DEFAULT_CENTER` | No | - | Map centre (WGS84 `lon,lat`) auto-selected on load, resolved to the cell containing it |
 | `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |
 | `PUBLIC_EXACT_CELLS` | No | `false` | Reproject heatmap cells to their exact RD footprint via proj4 (removes the ~0.4° skew); default draws axis-aligned rectangles |
 | `PRECOMP_TIME_BIN_YEARS` | No | `50` | Base time bin size (years). Shapes the `cell_features` buckets, so changing it requires a `db:rebuild-index` — the queries would otherwise fold base bins at the new width against buckets stored at the old one. Also caps time granularity: a requested `binSize` is rounded down to a multiple of this |
