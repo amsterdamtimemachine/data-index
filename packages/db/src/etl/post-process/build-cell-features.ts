@@ -2,6 +2,8 @@ import { sql } from 'drizzle-orm';
 import { PRECOMP_TIME_BIN_YEARS } from '@atm/shared';
 import { db } from '../../client';
 import { cellFeatures, features, featureToPlace, place, placeCells } from '../../schema';
+import { yearBin } from '../sql';
+import { datedFeatures } from '../../queries/time-filter';
 
 type BuildStatsRow = { buckets: string; bytes: string };
 type UncoveredRow = { uncovered: string };
@@ -36,7 +38,7 @@ export async function buildCellFeatures() {
     WITH seq AS (
       SELECT ${features.id} AS id, (row_number() OVER ())::int AS n
       FROM ${features}
-      WHERE ${features.startDate} IS NOT NULL AND ${features.endDate} IS NOT NULL
+      WHERE ${datedFeatures(sql`${features.startDate}`, sql`${features.endDate}`)}
     ),
     expanded AS (
       SELECT
@@ -55,8 +57,8 @@ export async function buildCellFeatures() {
       -- every base bin the feature's date range touches, floored to the bin grid so
       -- it lines up with generateTimeSlices' round boundaries
       CROSS JOIN LATERAL generate_series(
-        (FLOOR(EXTRACT(YEAR FROM f.start_date) / ${PRECOMP_TIME_BIN_YEARS}::int) * ${PRECOMP_TIME_BIN_YEARS}::int)::int,
-        (FLOOR(EXTRACT(YEAR FROM f.end_date) / ${PRECOMP_TIME_BIN_YEARS}::int) * ${PRECOMP_TIME_BIN_YEARS}::int)::int,
+        ${yearBin(sql`f.start_date`)},
+        ${yearBin(sql`f.end_date`)},
         ${PRECOMP_TIME_BIN_YEARS}::int
       ) AS b(bin)
     )
@@ -81,7 +83,7 @@ export async function buildCellFeatures() {
   const uncovered = await db.execute<UncoveredRow>(sql`
     SELECT COUNT(*) as uncovered
     FROM ${features} f
-    WHERE f.start_date IS NOT NULL AND f.end_date IS NOT NULL
+    WHERE ${datedFeatures(sql`f.start_date`, sql`f.end_date`)}
       AND NOT EXISTS (
         SELECT 1 FROM ${featureToPlace} fp
         JOIN ${placeCells} pc ON pc.place_id = fp.place_id

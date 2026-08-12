@@ -12,6 +12,7 @@
 import { db } from '../../client';
 import { sql } from 'drizzle-orm/sql';
 import { ADDRESS_MAX_DISTANCE_M, STREET_MAX_DISTANCE_M, ERA_CUTOFF, CURRENT_ANCHOR } from '@atm/shared';
+import { wktToRd } from '../sql';
 
 export type PlaceType = 'address' | 'street' | 'neighbourhood' | 'district';
 export type PlaceSource = 'adamlink' | 'bag' | 'nwb' | 'cbs';
@@ -47,6 +48,29 @@ export interface NameCandidate {
   via: 'current' | 'historical'; gapDays: number;
 }
 
+// ── temporal terms (the spec §4 vocabulary) — each reads the surrounding row's
+// since/until (and via), so they compose only inside the fetcher queries below ──
+
+// [since, until) overlaps the feature range [start, end]; until is EXCLUSIVE,
+// matching place_geometry (a rename's until = successor's since is a clean handoff).
+const windowOverlaps = (start: string, end: string) =>
+  sql`((since IS NULL OR since <= ${end}::date) AND (until IS NULL OR until > ${start}::date))`;
+
+// Days of overlap between the feature range and [since, until), clamped at 0 —
+// ranks containing areas by how much of the range their vintage covers.
+const overlapDays = (start: string, end: string) =>
+  sql`GREATEST(0, LEAST(${end}::date, COALESCE(until, 'infinity'::date))
+              - GREATEST(${start}::date, COALESCE(since, '-infinity'::date)))::int`;
+
+// Gap from the feature range to a name observation: 0 on overlap, else days to the
+// nearest window end. Current names (no window) anchor at CURRENT_ANCHOR; a both-open
+// historical row gets the defensive sentinel so it never wins unconditionally (req 11).
+const nameGapDays = (start: string, end: string) => sql`CASE
+  WHEN via = 'current' THEN GREATEST(${start}::date - ${CURRENT_ANCHOR}::date, ${CURRENT_ANCHOR}::date - ${end}::date, 0)
+  WHEN since IS NULL AND until IS NULL THEN ${BOTH_OPEN_GAP_DAYS}
+  ELSE GREATEST(since - ${end}::date, ${start}::date - (until - 1), 0)
+END`;
+
 // ══ FETCHERS ══════════════════════════════════════════════════════════════════
 
 // ── POINT signal: nearest address/street per source within cap + containing areas ──
@@ -58,7 +82,7 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
     place_id: string; name: string | null; type: PlaceType; source: PlaceSource;
     dist: number; overlap_days: number | null; era_fit: boolean; dated: boolean;
   }>(sql`
-    WITH q AS (SELECT ST_Transform(ST_GeomFromText(${wkt}, ${srid}::int), 28992) AS g),
+    WITH q AS (SELECT ${wktToRd(wkt, srid)} AS g),
     near AS (
       SELECT DISTINCT ON (p.type, p.source)
              p.id, p.name, p.type, p.source, ST_Distance(pg.geometry, q.g) AS dist
@@ -86,9 +110,8 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
     FROM near
     UNION ALL
     SELECT id, name, type, source, 0::float AS dist,
-           GREATEST(0, LEAST(${end}::date, COALESCE(until, 'infinity'::date))
-                       - GREATEST(${start}::date, COALESCE(since, '-infinity'::date)))::int AS overlap_days,
-           ((since IS NULL OR since <= ${end}::date) AND (until IS NULL OR until > ${start}::date)) AS era_fit,
+           ${overlapDays(start, end)} AS overlap_days,
+           ${windowOverlaps(start, end)} AS era_fit,
            (since IS NOT NULL OR until IS NOT NULL) AS dated
     FROM area
   `);
@@ -118,13 +141,7 @@ export async function getCandidatesByName(name: string, start: string, end: stri
     ),
     scored AS (
       SELECT id, name, type, source, via,
-             CASE
-               WHEN via = 'current'
-                 THEN GREATEST(${start}::date - ${CURRENT_ANCHOR}::date, ${CURRENT_ANCHOR}::date - ${end}::date, 0)
-               WHEN since IS NULL AND until IS NULL
-                 THEN ${BOTH_OPEN_GAP_DAYS}
-               ELSE GREATEST(since - ${end}::date, ${start}::date - (until - 1), 0)
-             END AS gap_days
+             ${nameGapDays(start, end)} AS gap_days
       FROM cand
     )
     SELECT DISTINCT ON (id) id AS place_id, name, type, source, via, gap_days

@@ -12,6 +12,7 @@ import { computeTimeSlices } from './time-slices';
 import { getRecordTypes } from './record-types';
 import { getGridConfig } from './grid-config';
 import { featureYearOverlap } from './time-filter';
+import { featureIdsWithAllTags, featureIdsWithAnyTag } from './filters';
 import { db } from '../client';
 import { featureToPlace, place, placeGeometry, placeCells } from '../schema';
 import type { CountRow } from '../row-types';
@@ -168,25 +169,10 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   // Get feature IDs matching tag filter (if any)
   let tagFilteredIds: string[] | null = null;
   if (tagFilters && tagFilters.length > 0) {
-    if (tagOperator === 'AND') {
-      const tagResult = await db.execute<{ feature_id: string }>(sql`
-        SELECT ft.feature_id
-        FROM feature_tags ft
-        JOIN tags t ON ft.tag_id = t.id
-        WHERE t.label IN ${tagFilters}
-        GROUP BY ft.feature_id
-        HAVING COUNT(DISTINCT t.id) = ${tagFilters.length}
-      `);
-      tagFilteredIds = tagResult.rows.map(r => r.feature_id);
-    } else {
-      const tagResult = await db.execute<{ feature_id: string }>(sql`
-        SELECT DISTINCT ft.feature_id
-        FROM feature_tags ft
-        JOIN tags t ON ft.tag_id = t.id
-        WHERE t.label IN ${tagFilters}
-      `);
-      tagFilteredIds = tagResult.rows.map(r => r.feature_id);
-    }
+    const tagResult = await db.execute<{ feature_id: string }>(
+      tagOperator === 'AND' ? featureIdsWithAllTags(tagFilters) : featureIdsWithAnyTag(tagFilters)
+    );
+    tagFilteredIds = tagResult.rows.map(r => r.feature_id);
 
     // Early return if no features match tag filter
     if (tagFilteredIds.length === 0) {
@@ -216,19 +202,25 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     ? sql`f.id IN ${tagFilteredIds}`
     : sql`TRUE`;
 
-  // Get total count
-  const countResult = await db.execute<CountRow>(sql`
-    SELECT COUNT(DISTINCT f.id) as count
+  // The join spine and filter bundle the count and page queries MUST share —
+  // defined once so they can never filter different populations.
+  const featureSpine = sql`
     FROM ${placeCells} pc
     JOIN ${featureToPlace} fp ON pc.place_id = fp.place_id
     JOIN features f ON fp.feature_id = f.id
-    JOIN ${place} p ON pc.place_id = p.id
-    WHERE ${cellCondition}
+    JOIN ${place} p ON pc.place_id = p.id`;
+  const featureWhere = sql`${cellCondition}
       AND ${typeCondition}
       AND ${datasetCondition}
       AND ${dateCondition}
       AND ${tagCondition}
-      AND ${placeTypeCondition}
+      AND ${placeTypeCondition}`;
+
+  // Get total count
+  const countResult = await db.execute<CountRow>(sql`
+    SELECT COUNT(DISTINCT f.id) as count
+    ${featureSpine}
+    WHERE ${featureWhere}
   `);
 
   const total = parseInt(countResult.rows[0].count);
@@ -239,9 +231,6 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   }
 
   // Build ORDER BY for window function
-  const sortDir = sortDirection === 'asc' ? sql`ASC` : sql`DESC`;
-  const secondarySortDir = sortDirection === 'asc' ? sql`DESC` : sql`ASC`;
-
   // Main query with window function for interleaved record types
   // Note: Using raw SQL string for window function ORDER BY since Drizzle doesn't support it well
   // Get max frequencies for relevance score normalisation
@@ -297,21 +286,13 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
          WHERE a.place_id = fp.place_id
            AND a.since <= f.end_date
          ORDER BY a.since DESC LIMIT 1) as historical_label
-      FROM ${placeCells} pc
-      JOIN ${featureToPlace} fp ON pc.place_id = fp.place_id
-      JOIN features f ON fp.feature_id = f.id
-      JOIN ${place} p ON pc.place_id = p.id
+      ${featureSpine}
       JOIN ${placeGeometry} pg ON pc.place_id = pg.place_id
       LEFT JOIN datasets d ON f.dataset_id = d.id
       LEFT JOIN organisations o ON d.organisation_id = o.id
       LEFT JOIN organisations po ON p.source = po.id
       LEFT JOIN organisations go ON pg.source = go.id
-      WHERE ${cellCondition}
-        AND ${typeCondition}
-        AND ${datasetCondition}
-        AND ${dateCondition}
-        AND ${tagCondition}
-        AND ${placeTypeCondition}
+      WHERE ${featureWhere}
     ),
     with_tags AS (
       SELECT

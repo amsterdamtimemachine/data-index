@@ -6,6 +6,7 @@
 import { sql } from 'drizzle-orm';
 import { PLACE_PROVIDERS, type PlaceSource } from '@atm/shared';
 import { db } from '../../client';
+import { wktToRd } from '../sql';
 import {
   organisations,
   placeHistoricalName,
@@ -83,13 +84,8 @@ export async function insertPlaces(
   const batchSize = opts.batchSize ?? 500;
   await upsertProviders(); // place.source FKs to these org rows
 
-  // Geometry is PostGIS, so the column value is a sql ST_* expression; the rest
-  // of the insert goes through Drizzle's builder. RD (28992) is stored as-is;
-  // any other SRID is transformed to RD.
-  const geom = (wkt: string) => opts.sourceSrid === 28992
-    ? sql`ST_GeomFromText(${wkt}, 28992)`
-    : sql`ST_Transform(ST_GeomFromText(${wkt}, ${opts.sourceSrid}), 28992)`;
-
+  // Geometry is PostGIS, so the column value is a sql ST_* expression (wktToRd);
+  // the rest of the insert goes through Drizzle's builder.
   let inserted = 0;
   for (let i = 0; i < rows.length; i += batchSize) {
     const chunk = rows.slice(i, i + batchSize);
@@ -114,7 +110,7 @@ export async function insertPlaces(
     const geomQuery = db.insert(placeGeometry).values(
       chunk.map(r => ({
         placeId: r.id,
-        geometry: geom(r.wkt),
+        geometry: wktToRd(r.wkt, opts.sourceSrid),
         source: r.geometrySource ?? null,
         url: r.geometryUrl ?? null,
         since: r.since ?? null,
