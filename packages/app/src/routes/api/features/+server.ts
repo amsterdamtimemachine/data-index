@@ -3,45 +3,16 @@ import type { RequestHandler } from './$types';
 import type { FeaturesSortField, SortDirection, TagOperator } from '@atm/shared/types';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_MAX } from '@atm/shared';
 import { getFeatures } from '@atm/db';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList } from '$lib/server/query-params';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList, parseBounds } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
-		// Parse bounds (required)
-		const minLon = url.searchParams.get('minLon');
-		const maxLon = url.searchParams.get('maxLon');
-		const minLat = url.searchParams.get('minLat');
-		const maxLat = url.searchParams.get('maxLat');
-
-		if (!minLon || !maxLon || !minLat || !maxLat) {
+		// Parse bounds (required here, unlike the histogram endpoint)
+		const bounds = parseBounds(url);
+		if (!bounds) {
 			throw error(400, {
 				code: 'MISSING_BOUNDS',
 				message: 'Missing required bounds parameters: minLon, maxLon, minLat, maxLat'
-			});
-		}
-
-		const bounds = {
-			minLon: parseFloat(minLon),
-			maxLon: parseFloat(maxLon),
-			minLat: parseFloat(minLat),
-			maxLat: parseFloat(maxLat)
-		};
-
-		// Validate bounds
-		if (Object.values(bounds).some(isNaN)) {
-			throw error(400, {
-				code: 'INVALID_BOUNDS',
-				message: 'Bounds must be valid numbers'
-			});
-		}
-		// Reject inverted/degenerate boxes up front (min must be below max on both
-		// axes) rather than doing a grid lookup + empty query for a box that can
-		// never contain anything. getFeatures already clamps a valid box to the data
-		// extent, so an oversized-but-ordered box is handled there.
-		if (bounds.minLon >= bounds.maxLon || bounds.minLat >= bounds.maxLat) {
-			throw error(400, {
-				code: 'INVALID_BOUNDS',
-				message: 'Bounds must have minLon < maxLon and minLat < maxLat'
 			});
 		}
 

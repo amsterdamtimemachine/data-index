@@ -62,4 +62,19 @@ export function binWindow(fromYear: number, toYear: number): SQL {
   return sql`${cellFeatures.timeBin} >= ${fromYear} AND ${cellFeatures.timeBin} < ${toYear}`;
 }
 
+/**
+ * Restrict to a base-cell range — the predicate getFeatures applies to place_cells
+ * and a cell-scoped histogram applies to cell_features. One definition so "this
+ * cell" can never mean different base cells to the feature list and the timeline.
+ * Callers pass their own column refs (aliased or schema-qualified).
+ */
+export function cellRangeCondition(
+  xCol: SQL,
+  yCol: SQL,
+  range: { minCellX: number; maxCellX: number; minCellY: number; maxCellY: number }
+): SQL {
+  return sql`${xCol} BETWEEN ${range.minCellX} AND ${range.maxCellX}
+    AND ${yCol} BETWEEN ${range.minCellY} AND ${range.maxCellY}`;
+}
+
 export { PRECOMP_TIME_BIN_YEARS };

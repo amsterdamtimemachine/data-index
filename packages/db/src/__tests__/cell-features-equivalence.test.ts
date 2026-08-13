@@ -173,6 +173,27 @@ describe('cell_features ↔ live query equivalence', () => {
     }
   });
 
+  // The optional bounds parameter (mobile per-cell timeline): a box covering the whole
+  // grid must reproduce the unbounded histogram exactly, and a box entirely outside the
+  // data extent must count nothing — the two ends that need no fixture knowledge.
+  test('bounded histogram: full-extent bounds ≡ unbounded; outside bounds ≡ empty', async () => {
+    const types: RecordType[] = ['image'];
+    const cfg = await getGridConfig();
+
+    const unbounded = await getHistogram(types, undefined, undefined, 50);
+    const fullExtent = await getHistogram(types, undefined, undefined, 50, {
+      minLon: cfg.minLon, maxLon: cfg.maxLon, minLat: cfg.minLat, maxLat: cfg.maxLat
+    });
+    expect(fullExtent.totalFeatures).toBe(unbounded.totalFeatures);
+    expect(fullExtent.bins.map(b => b.count)).toEqual(unbounded.bins.map(b => b.count));
+
+    const outside = await getHistogram(types, undefined, undefined, 50, {
+      minLon: cfg.maxLon + 1, maxLon: cfg.maxLon + 2, minLat: cfg.maxLat + 1, maxLat: cfg.maxLat + 2
+    });
+    expect(outside.totalFeatures).toBe(0);
+    expect(outside.bins.every(b => b.count === 0)).toBe(true);
+  });
+
   // Every feature must land in a cell, or it is invisible to both the heatmap and the
   // histogram now that both read cell_features. buildCellFeatures warns about this;
   // the fixtures must not trip it.

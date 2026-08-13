@@ -3,13 +3,15 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { DISPLAY_TIME_BIN_DEFAULT_YEARS } from '@atm/shared';
 import { getHistogram } from '@atm/db/queries';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes } from '$lib/server/query-params';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseBounds } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
 		const recordTypes = parseRecordTypes(url);
 		const datasetIds = parseDatasets(url);
 		const placeTypes = parsePlaceTypes(url);
+		// Optional: restrict to a WGS84 box (the mobile per-cell timeline); absent → city-wide.
+		const bounds = parseBounds(url);
 
 		// Parse bin size
 		// Forwarded as-is; the query layer clamps and snaps it to a valid bin (normaliseBinSize).
@@ -18,7 +20,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		console.log(`📊 Histogram API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, binSize: ${binSize}`);
 
-		const histogram = await getHistogram(recordTypes, datasetIds, placeTypes, binSize);
+		const histogram = await getHistogram(recordTypes, datasetIds, placeTypes, binSize, bounds);
 
 		console.log(
 			`✅ Histogram: ${histogram.bins.length} bins, ${histogram.totalFeatures} total features`

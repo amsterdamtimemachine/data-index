@@ -7,6 +7,7 @@
 	import { validateCellId } from '$utils/utils';
 	import { loadingState } from '$lib/state/loadingState.svelte';
 	import { fetchJson } from '$utils/fetchJson';
+	import { createMediaQuery } from '$utils/media.svelte';
 	import Heatmap from '$components/Heatmap.svelte';
 	import TimePeriodSelector from '$components/TimePeriodSelector.svelte';
 	import FilterPanel from '$components/FilterPanel.svelte';
@@ -32,7 +33,12 @@
 	let heatmapTimeline = $state<HeatmapTimeline | null>(null);
 	let dimensions = $state<HeatmapDimensions | null>(null);
 	let histogram = $state<Histogram | null>(null);
+	// Selected cell's histogram, mobile only — see the gated effect below.
+	let cellHistogram = $state<Histogram | null>(null);
 	let clientErrors = $state<AppError[]>([]);
+
+	// Matches the panel's fullscreen breakpoint (Tailwind md = 768px).
+	const isMobile = createMediaQuery('(max-width: 767px)');
 
 	let recordTypes = $derived(data?.metadata?.recordTypes || []);
 	let currentRecordTypes = $derived(data?.currentRecordTypes || []);
@@ -164,6 +170,58 @@
 		);
 	});
 
+	// Per-cell histogram for the mobile timeline. Fetched only when it can be shown
+	// (mobile + a cell selected); nulled at the start of every run so a cell switch
+	// never shows the previous cell's bars while the next fetch is in flight. The
+	// returned fetchJson cleanup aborts the stale request on re-run. A failed fetch
+	// stays null → displayedHistogram falls back to the global bars.
+	$effect(() => {
+		const mobile = isMobile.matches;
+		const cellBounds = selectedCellBounds;
+		const filterQs = data.filterQuery;
+
+		cellHistogram = null;
+		if (!mobile || !cellBounds) {
+			return;
+		}
+
+		let qs = '';
+		if (filterQs) {
+			qs = `${filterQs}&`;
+		}
+		const boundsQs = `minLon=${cellBounds.minLon}&maxLon=${cellBounds.maxLon}&minLat=${cellBounds.minLat}&maxLat=${cellBounds.maxLat}`;
+		return fetchJson<Histogram>(
+			`/api/histogram?${qs}${boundsQs}`,
+			(res) => {
+				cellHistogram = res;
+			},
+			() => {
+				// silent by design: the timeline degrades to the city-wide histogram
+			}
+		);
+	});
+
+	// The timeline's bars: the selected cell's distribution when the fullscreen
+	// mobile panel hides the map, the city-wide distribution everywhere else.
+	// The thumb reads currentPeriod in every branch — only pixels swap, never state.
+	const displayedHistogram = $derived.by(() => {
+		// desktop timeline is intentionally global — never swap
+		if (!isMobile.matches) {
+			return histogram;
+		}
+		// panel closed → back to the city-wide bars immediately
+		if (!showCellModal) {
+			return histogram;
+		}
+		// cell fetch in flight, failed, or degenerate → keep showing global
+		// rather than blanking the timeline
+		if (!cellHistogram || cellHistogram.bins.length === 0) {
+			return histogram;
+		}
+		// mobile, panel open, cell data arrived
+		return cellHistogram;
+	});
+
 	// A filter change reloads the page data (new errorData); drop the previous load's
 	// client-side errors so they don't accumulate across navigations.
 	afterNavigate(() => {
@@ -269,7 +327,7 @@
 	{#if histogram}
 		<TimePeriodSelector
 			period={currentPeriod}
-			histogram={histogram}
+			histogram={displayedHistogram ?? histogram}
 			onPeriodChange={handlePeriodChange}
 			class="z-40 bg-atm-sand border-t border-atm-sand-border"
 		/>

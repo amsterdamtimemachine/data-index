@@ -7,7 +7,8 @@ import { cellFeatures } from '../schema';
 import type { CountRow } from '../row-types';
 import { computeTimeSlices, computeTimeRange } from './time-slices';
 import { getRecordTypes } from './record-types';
-import { countExpr, displayBinExpr, categoryFilter, binWindow } from './cell-features';
+import { countExpr, displayBinExpr, categoryFilter, binWindow, cellRangeCondition } from './cell-features';
+import { boundsToBaseCellRange } from './features';
 
 // Query result types
 type BinRow = { bin_start: string; count: string };
@@ -20,12 +21,17 @@ type BinRow = { bin_start: string; count: string };
  * a period holds. (This is why it counts features that are *on the map*: a feature
  * whose place has no geometry has no cells and so appears in neither. buildCellFeatures
  * warns when any exist; ingest should make that impossible.)
+ *
+ * `bounds` (optional) restricts the histogram to the base cells inside a WGS84 box —
+ * the mobile per-cell timeline. Converted with the same boundsToBaseCellRange as
+ * getFeatures, so "this cell's histogram" counts exactly the features the panel lists.
  */
 export async function getHistogram(
   recordTypes?: RecordType[],
   datasetIds?: string[],
   placeTypes?: PlaceType[],
-  binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS
+  binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS,
+  bounds?: { minLon: number; maxLon: number; minLat: number; maxLat: number }
 ): Promise<Histogram> {
   const types = recordTypes || await getRecordTypes();
 
@@ -47,11 +53,18 @@ export async function getHistogram(
   const firstSlice = timeSlices[0];
   const lastSlice = timeSlices[timeSlices.length - 1];
 
+  let cellCondition = sql`TRUE`;
+  if (bounds) {
+    const range = await boundsToBaseCellRange(bounds);
+    cellCondition = cellRangeCondition(sql`${cellFeatures.cellX}`, sql`${cellFeatures.cellY}`, range);
+  }
+
   const result = await db.execute<BinRow>(sql`
     SELECT (${displayBinExpr(binSizeYears)})::text as bin_start, ${countExpr} as count
     FROM ${cellFeatures}
     WHERE ${categoryFilter(types, datasetIds, placeTypes)}
       AND ${binWindow(firstSlice.startYear, lastSlice.endYear)}
+      AND ${cellCondition}
     GROUP BY 1
     ORDER BY 1
   `);
@@ -70,11 +83,14 @@ export async function getHistogram(
   // True distinct total. Summing bin counts would over-count any feature whose
   // date range spans multiple bins (it is counted once per bin it touches). Unioning
   // every bucket's bitmap collapses it back to one set.
+  // COALESCE: aggregating zero buckets (e.g. bounds outside the data extent)
+  // yields NULL, which would otherwise parse to NaN.
   const totalResult = await db.execute<CountRow>(sql`
-    SELECT ${countExpr} as count
+    SELECT COALESCE(${countExpr}, 0) as count
     FROM ${cellFeatures}
     WHERE ${categoryFilter(types, datasetIds, placeTypes)}
       AND ${binWindow(firstSlice.startYear, lastSlice.endYear)}
+      AND ${cellCondition}
   `);
   const totalFeatures = parseInt(totalResult.rows[0].count);
   const maxCount = Math.max(...bins.map(b => b.count), 0);

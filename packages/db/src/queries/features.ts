@@ -13,6 +13,7 @@ import { getRecordTypes } from './record-types';
 import { getGridConfig } from './grid-config';
 import { featureYearOverlap } from './time-filter';
 import { featureIdsWithAllTags, featureIdsWithAnyTag } from './filters';
+import { cellRangeCondition } from './cell-features';
 import { db } from '../client';
 import { featureToPlace, place, placeGeometry, placeCells } from '../schema';
 import type { CountRow } from '../row-types';
@@ -70,7 +71,7 @@ type FeatureRow = {
  * them the clamp is a no-op; a viewport wider than the grid simply collapses to
  * the full base-cell range.
  */
-async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Promise<{
+export async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Promise<{
   minCellX: number;
   maxCellX: number;
   minCellY: number;
@@ -181,8 +182,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   }
 
   // Build WHERE conditions
-  const cellCondition = sql`pc.cell_x BETWEEN ${cellRange.minCellX} AND ${cellRange.maxCellX}
-    AND pc.cell_y BETWEEN ${cellRange.minCellY} AND ${cellRange.maxCellY}`;
+  const cellCondition = cellRangeCondition(sql`pc.cell_x`, sql`pc.cell_y`, cellRange);
 
   const typeCondition = sql`f.record_type IN ${types}`;
 
