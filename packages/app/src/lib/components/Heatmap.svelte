@@ -376,7 +376,12 @@
 			// Event handlers
 			let hoveredFeatureId: string | null = null;
 
-			mapInstance.on('mousemove', 'heatmap-squares', (e) => {
+			// MapLibre synthesises mousemove from taps, and a finger never "leaves" —
+			// on touch devices the tooltip would stick and overlay the features panel.
+			// Only wire the hover machinery where hover actually exists.
+			const hoverCapable = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+			if (hoverCapable) mapInstance.on('mousemove', 'heatmap-squares', (e) => {
 				if (e.features?.[0]) {
 					const feature = e.features[0];
 					const featureId = feature.properties.id;
@@ -423,7 +428,7 @@
 				}
 			});
 
-			mapInstance.on('mouseleave', 'heatmap-squares', () => {
+			if (hoverCapable) mapInstance.on('mouseleave', 'heatmap-squares', () => {
 				mapInstance.getCanvas().style.cursor = '';
 				if (hoveredFeatureId) {
 					mapInstance.setFeatureState(
@@ -439,6 +444,9 @@
 			});
 
 			mapInstance.on('click', 'heatmap-squares', (e) => {
+				// hybrid devices (touchscreen laptops) pass the hover gate — a tap that
+				// selects a cell must not leave the tooltip stranded over the panel
+				hoverTooltip = null;
 				if (e.features?.[0]) {
 					const feature = e.features[0];
 					const featureId = feature.properties.id;

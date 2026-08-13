@@ -34,7 +34,7 @@ super_entity_plan.md
 place_cells_plan.md
 
 # Local scripts
-reingest.sh
+reingest*.sh
 
 # Binaries
 *.bin

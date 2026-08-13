@@ -252,6 +252,8 @@
 				<FeaturesPanel
 					cellId={selectedCellId}
 					period={currentPeriod}
+					timeline={heatmapTimeline ?? undefined}
+					dimensions={dimensions ?? undefined}
 					bounds={selectedCellBounds ?? undefined}
 					recordTypes={currentRecordTypes}
 					placeTypes={currentPlaceTypes}

@@ -293,6 +293,14 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       LEFT JOIN organisations po ON p.source = po.id
       LEFT JOIN organisations go ON pg.source = go.id
       WHERE ${featureWhere}
+      -- DISTINCT ON needs a deterministic survivor: for a multi-linked feature, keep
+      -- the finest place (matching the resolution spec's most-specific rule), then
+      -- place id as a stable tiebreak. Without this the surviving row — and with it
+      -- place_type and relevance_score — varied per execution, shifting page
+      -- boundaries between otherwise identical requests.
+      ORDER BY f.id,
+        CASE p.type WHEN 'address' THEN 0 WHEN 'street' THEN 1 WHEN 'neighbourhood' THEN 2 ELSE 3 END,
+        p.id
     ),
     with_tags AS (
       SELECT

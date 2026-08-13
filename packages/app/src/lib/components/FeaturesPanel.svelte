@@ -7,7 +7,8 @@
 	import Tooltip from '$components/Tooltip.svelte';
 	import X from 'phosphor-svelte/lib/X';
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
-	import type { FeatureResult } from '@atm/shared/types';
+	import MapThumbnail from '$components/MapThumbnail.svelte';
+	import type { FeatureResult, HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
 	import { loadingState } from '$lib/state/loadingState.svelte';
 	import { createError, createPageErrorData } from '$utils/error';
 	import ErrorHandler from '$components/ErrorHandler.svelte';
@@ -24,9 +25,12 @@
 		tags: string[];
 		tagOperator?: 'AND' | 'OR';
 		onClose?: () => void;
+		// For the mobile minimap — flow down from the page's heatmap state.
+		timeline?: HeatmapTimeline;
+		dimensions?: HeatmapDimensions;
 	}
 
-	let { cellId, period, bounds, recordTypes, placeTypes = [], datasets, tags, tagOperator = 'OR', onClose }: Props = $props();
+	let { cellId, period, bounds, recordTypes, placeTypes = [], datasets, tags, tagOperator = 'OR', onClose, timeline, dimensions }: Props = $props();
 
 	// Cell data state
 	let allFeatures = $state<FeatureResult[]>([]);
@@ -133,15 +137,21 @@
 <ErrorHandler {errorData} />
 
 <!-- Data Header -->
+<!-- With pagination on a narrow screen the header wraps to two rows: the count on its
+     own full-width line, then pagination left / close right. From md up (and always
+     without pagination) everything sits on the original single row. -->
 <div
-	class="sticky h-[50px] p-3 top-0 z-10 bg-atm-sand border-b border-atm-sand-border flex items-center justify-between shadow-[0px_5px_20px_5px_rgba(0,0,0,0.07)]"
+	class="sticky min-h-[50px] p-3 top-0 z-10 bg-atm-sand border-b border-atm-sand-border flex flex-wrap items-center justify-between gap-y-2 shadow-[0px_5px_20px_5px_rgba(0,0,0,0.07)]"
 >
-	<div class="flex items-center gap-4">
-		{#if !initialLoading && totalCount > 0}
+	{#if !initialLoading && totalCount > 0}
+		{@const hasPagination = totalCount > pageSize}
+		<div class={hasPagination ? 'basis-full md:basis-auto' : ''}>
 			<FeaturesCount totalFeatures={totalCount} {currentPage} featuresPerPage={pageSize} />
-			{#if totalCount > pageSize}
-				<!-- Re-seed the builder (count/perPage are captured once) when the dataset changes -->
-				{#key `${totalCount}-${pageSize}`}
+		</div>
+		{#if hasPagination}
+			<!-- Re-seed the builder (count/perPage are captured once) when the dataset changes -->
+			{#key `${totalCount}-${pageSize}`}
+				<div class="md:ml-4">
 					<Pagination
 						totalItems={totalCount}
 						{currentPage}
@@ -149,14 +159,20 @@
 						onPageChange={handlePageChange}
 						{loading}
 					/>
-				{/key}
-			{/if}
+				</div>
+			{/key}
 		{/if}
-	</div>
-	<Button icon={X} onclick={closeModal} size={18} aria-label="Close features panel" />
+	{/if}
+	<Button icon={X} onclick={closeModal} size={18} class="ml-auto" aria-label="Close features panel" />
 </div>
 
 <div class="min-h-full bg-atm-sand-dark">
+	<!-- Mobile-only minimap: on desktop the real map is visible beside the panel -->
+	{#if timeline && dimensions}
+		<div class="md:hidden flex justify-center p-3 border-b border-atm-sand-border bg-atm-sand">
+			<MapThumbnail {timeline} {dimensions} {period} {cellId} />
+		</div>
+	{/if}
 	{#if allFeatures.length > 0}
 		<FeaturesGrid features={allFeatures} />
 	{:else if !initialLoading && !loading}
