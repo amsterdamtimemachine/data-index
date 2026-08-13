@@ -8,11 +8,10 @@
 	type Props = {
 		timeline: HeatmapTimeline;
 		dimensions: HeatmapDimensions;
-		period: string;
 		cellId: string;
 		class?: string;
 	};
-	let { timeline, dimensions, period, cellId, class: className }: Props = $props();
+	let { timeline, dimensions, cellId, class: className }: Props = $props();
 
 	const W = 150;
 	const H = 75;
@@ -38,7 +37,6 @@
 		const ctx = canvas?.getContext('2d');
 		if (!ctx) return;
 		const { colsAmount: cols, rowsAmount: rows } = dimensions;
-		const current = timeline[period];
 		const selected = parseRowColFromCellId(cellId);
 		const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
@@ -59,11 +57,6 @@
 		ctx.fillStyle = colors['atm-sand-border'] ?? 'rgba(0,0,0,0.2)';
 		for (const i of unionIndices) ctx.fillRect(cellX(i), cellY(i), px, px);
 
-		if (current) {
-			ctx.fillStyle = colors['atm-gold'] ?? 'rgba(0,0,0,0.45)';
-			for (const i of current.indices) ctx.fillRect(cellX(i), cellY(i), px, px);
-		}
-
 		if (selected) {
 			const idx = selected.row * cols + selected.col;
 			const m = Math.max(s, MIN_MARKER_PX);
@@ -73,9 +66,11 @@
 	});
 </script>
 
-<!-- RTS-style minimap: the data footprint as the city silhouette, this period's cells
-     in a stronger tone, and the selected cell as an oversized red marker. Backing
-     store at devicePixelRatio for crispness; CSS size stays 150×75. -->
+<!-- RTS-style minimap: the all-time data footprint as the city silhouette, plus the
+     selected cell as an oversized red marker. Deliberately period-AGNOSTIC — the
+     mobile timeline below shows the cell's local histogram, so a per-period layer
+     here would shift for city-wide reasons unrelated to those bars. Backing store
+     at devicePixelRatio for crispness; CSS size stays 150×75. -->
 <canvas
 	bind:this={canvas}
 	width={W * Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2)}

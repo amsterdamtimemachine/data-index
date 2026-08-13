@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { HistogramBin } from '@atm/shared/types';
 	import { calculateHistogramBarHeights } from '$lib/utils/histogram';
+	import { createMediaQuery } from '$utils/media.svelte';
 
 	interface Props {
 		bins: HistogramBin[];
@@ -8,6 +9,9 @@
 		timelineHeight: number;
 	}
 	let { bins, maxCount, timelineHeight }: Props = $props();
+
+	// Taps synthesise mouseenter without a matching leave — tooltip is hover-only.
+	const hoverCapable = createMediaQuery('(hover: hover) and (pointer: fine)');
 
 	// Calculate bar heights using logarithmic scaling with global maxCount
 	const barHeights = $derived(bins && bins.length > 0 ? calculateHistogramBarHeights(bins, maxCount, timelineHeight, 1) : []);
@@ -90,7 +94,7 @@
 </svg>
 
 <!-- Hover tooltip -->
-{#if hoveredBin}
+{#if hoverCapable.matches && hoveredBin}
 	<div 
 		class="fixed z-50 bg-black bg-opacity-80 text-white px-2 py-1 rounded text-sm pointer-events-none transform -translate-x-1/2 -translate-y-full"
 		style="left: {mousePosition.x}px; top: {mousePosition.y - 8}px;"

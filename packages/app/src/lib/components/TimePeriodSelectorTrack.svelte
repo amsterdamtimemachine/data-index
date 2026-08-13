@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { HistogramBin } from '@atm/shared/types';
 	import { mergeCss } from '$utils/utils';
+	import { createMediaQuery } from '$utils/media.svelte';
 
 	interface Props {
 		bins: HistogramBin[];
@@ -10,6 +11,9 @@
 		onKeyDown?: (event: KeyboardEvent) => void;
 	}
 	let { bins, currentIndex, onIndexChange, timelineHeight, onKeyDown }: Props = $props();
+
+	// Taps synthesise mouseenter without a matching leave — tooltip is hover-only.
+	const hoverCapable = createMediaQuery('(hover: hover) and (pointer: fine)');
 
 	let trackElement: HTMLDivElement | undefined = $state();
 	
@@ -89,7 +93,7 @@
 </div>
 
 <!-- Hover tooltip -->
-{#if hoveredBin}
+{#if hoverCapable.matches && hoveredBin}
 	<div 
 		class="fixed z-50 bg-black bg-opacity-80 text-white px-2 py-1 rounded text-sm pointer-events-none transform -translate-x-1/2 -translate-y-full"
 		style="left: {mousePosition.x}px; top: {mousePosition.y - 8}px;"

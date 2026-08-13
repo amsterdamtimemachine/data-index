@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { HistogramBin } from '@atm/shared/types';
+	import { createMediaQuery } from '$utils/media.svelte';
 
 	interface Props {
 		currentIndex: number;
@@ -10,6 +11,10 @@
 		bins: HistogramBin[];
 	}
 	let { currentIndex, totalBins, isDragging, onDragStart, timelineHeight, bins }: Props = $props();
+
+	// Taps synthesise mouseenter without a matching leave — only hover-capable
+	// devices get the tooltip (same gate as the heatmap cell tooltip).
+	const hoverCapable = createMediaQuery('(hover: hover) and (pointer: fine)');
 
 	// Hover state for tooltip
 	let isHovering = $state(false);
@@ -69,7 +74,7 @@
 ></div>
 
 <!-- Hover tooltip -->
-{#if isHovering && !isDragging && currentBin()}
+{#if hoverCapable.matches && isHovering && !isDragging && currentBin()}
 	<div 
 		class="fixed z-50 bg-black bg-opacity-80 text-white px-2 py-1 rounded text-sm pointer-events-none transform -translate-x-1/2 -translate-y-full"
 		style="left: {mousePosition.x}px; top: {mousePosition.y - 8}px;"

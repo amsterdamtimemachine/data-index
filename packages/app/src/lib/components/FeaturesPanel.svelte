@@ -170,7 +170,7 @@
 	<!-- Mobile-only minimap: on desktop the real map is visible beside the panel -->
 	{#if timeline && dimensions}
 		<div class="md:hidden flex justify-center p-3 border-b border-atm-sand-border bg-atm-sand">
-			<MapThumbnail {timeline} {dimensions} {period} {cellId} />
+			<MapThumbnail {timeline} {dimensions} {cellId} />
 		</div>
 	{/if}
 	{#if allFeatures.length > 0}
