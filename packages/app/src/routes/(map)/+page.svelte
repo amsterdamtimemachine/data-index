@@ -7,7 +7,11 @@
 	import { validateCellId } from '$utils/utils';
 	import { loadingState } from '$lib/state/loadingState.svelte';
 	import { fetchJson } from '$utils/fetchJson';
-	import { createMediaQuery } from '$utils/media.svelte';
+	import { createMediaQuery, MOBILE_QUERY } from '$utils/media.svelte';
+	import FeaturesPanelResizeHandle, {
+		panelWidthCss,
+		type PanelCols
+	} from '$components/FeaturesPanelResizeHandle.svelte';
 	import Heatmap from '$components/Heatmap.svelte';
 	import TimePeriodSelector from '$components/TimePeriodSelector.svelte';
 	import FilterPanel from '$components/FilterPanel.svelte';
@@ -37,8 +41,24 @@
 	let cellHistogram = $state<Histogram | null>(null);
 	let clientErrors = $state<AppError[]>([]);
 
-	// Matches the panel's fullscreen breakpoint (Tailwind md = 768px).
-	const isMobile = createMediaQuery('(max-width: 767px)');
+	const isMobile = createMediaQuery(MOBILE_QUERY);
+
+	// Page-owned so the chosen size survives the panel's open/close cycles.
+	let panelCols = $state<PanelCols>(3);
+
+	const panelWidth = $derived.by(() => {
+		if (isMobile.matches) {
+			return undefined;
+		}
+		return panelWidthCss(panelCols);
+	});
+
+	const gridColumns = $derived.by(() => {
+		if (isMobile.matches) {
+			return undefined;
+		}
+		return panelCols;
+	});
 
 	let recordTypes = $derived(data?.metadata?.recordTypes || []);
 	let currentRecordTypes = $derived(data?.currentRecordTypes || []);
@@ -170,11 +190,7 @@
 		);
 	});
 
-	// Per-cell histogram for the mobile timeline. Fetched only when it can be shown
-	// (mobile + a cell selected); nulled at the start of every run so a cell switch
-	// never shows the previous cell's bars while the next fetch is in flight. The
-	// returned fetchJson cleanup aborts the stale request on re-run. A failed fetch
-	// stays null → displayedHistogram falls back to the global bars.
+	// Nulled up front: a cell switch must never show the previous cell's bars.
 	$effect(() => {
 		const mobile = isMobile.matches;
 		const cellBounds = selectedCellBounds;
@@ -201,24 +217,18 @@
 		);
 	});
 
-	// The timeline's bars: the selected cell's distribution when the fullscreen
-	// mobile panel hides the map, the city-wide distribution everywhere else.
-	// The thumb reads currentPeriod in every branch — only pixels swap, never state.
+	// The desktop timeline is intentionally global; the thumb reads currentPeriod
+	// in every branch — only the bars swap.
 	const displayedHistogram = $derived.by(() => {
-		// desktop timeline is intentionally global — never swap
 		if (!isMobile.matches) {
 			return histogram;
 		}
-		// panel closed → back to the city-wide bars immediately
 		if (!showCellModal) {
 			return histogram;
 		}
-		// cell fetch in flight, failed, or degenerate → keep showing global
-		// rather than blanking the timeline
 		if (!cellHistogram || cellHistogram.bins.length === 0) {
 			return histogram;
 		}
-		// mobile, panel open, cell data arrived
 		return cellHistogram;
 	});
 
@@ -299,27 +309,32 @@
 			allDatasets={datasetLabels}
 			selectedTags={currentTags}
 			tagOperator={currentTagOperator as 'AND' | 'OR'}
-			class="absolute top-3 left-3"
+			class="absolute top-3 left-3 max-w-[calc(100%-1.5rem)]"
 		/>
 	{/if}
 
 		{#if showCellModal && selectedCellId}
 			<div
-				class="z-30 absolute top-0 right-0 w-full md:w-1/2 h-full bg-atm-sand overflow-y-auto border-l border-solid border-atm-sand-border shadow-[-5px_0px_20px_5px_rgba(0,0,0,0.07)]"
+				class="z-30 absolute top-0 right-0 w-full h-full bg-atm-sand overflow-hidden border-l border-solid border-atm-sand-border shadow-[-5px_0px_20px_5px_rgba(0,0,0,0.07)]"
+				style:width={panelWidth}
 			>
-				<FeaturesPanel
-					cellId={selectedCellId}
-					period={currentPeriod}
-					timeline={heatmapTimeline ?? undefined}
-					dimensions={dimensions ?? undefined}
-					bounds={selectedCellBounds ?? undefined}
-					recordTypes={currentRecordTypes}
-					placeTypes={currentPlaceTypes}
-					datasets={currentDatasets}
-					tags={currentTags}
-					tagOperator={currentTagOperator as 'AND' | 'OR'}
-					onClose={handleFeaturesPanelClose}
-				/>
+				<FeaturesPanelResizeHandle cols={panelCols} onSizeChange={(cols) => (panelCols = cols)} />
+				<div class="h-full overflow-y-auto">
+					<FeaturesPanel
+						cellId={selectedCellId}
+						period={currentPeriod}
+						timeline={heatmapTimeline ?? undefined}
+						dimensions={dimensions ?? undefined}
+						bounds={selectedCellBounds ?? undefined}
+						recordTypes={currentRecordTypes}
+						placeTypes={currentPlaceTypes}
+						datasets={currentDatasets}
+						tags={currentTags}
+						tagOperator={currentTagOperator as 'AND' | 'OR'}
+						{gridColumns}
+						onClose={handleFeaturesPanelClose}
+					/>
+				</div>
 			</div>
 		{/if}
 	</div>

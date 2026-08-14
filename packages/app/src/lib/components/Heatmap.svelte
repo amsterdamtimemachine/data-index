@@ -27,6 +27,7 @@
 	import type { Heatmap, HeatmapDimensions, Coordinates } from '@atm/shared/types';
 	import { generateCellIdMap, generateCellGeometries, calculateDensity } from '$utils/heatmap';
 	import { mergeCss } from '$utils/utils';
+	import { MOBILE_QUERY } from '$utils/media.svelte';
 	import resolveConfig from 'tailwindcss/resolveConfig';
 	import tailwindConfig from '$tailwindConfig';
 
@@ -44,6 +45,7 @@
 		minZoom: number;
 		maxZoom: number;
 		defaultZoom: number;
+		defaultZoomMobile: number; // phones start zoomed out to show the whole city
 		center: Coordinates;
 		cellSelectedOutlineColor: string; // hex
 		cellSelectedOutlineWidth: number; // px
@@ -79,6 +81,7 @@
 		minZoom: 11,
 		maxZoom: 14,
 		defaultZoom: 12,
+		defaultZoomMobile: 11,
 		center: { lat: 4.895645, lon: 52.372219 },
 		cellSelectedOutlineColor: colors['atm-red'],
 		cellHoveredOutlineColor: colors['atm-red-light'],
@@ -240,6 +243,12 @@
 
 		const { minLon: west, maxLon: east, minLat: south, maxLat: north } = dimensions;
 
+		// once at init — a later resize must not change the user's zoom
+		let initialZoom = mapStyle.defaultZoom;
+		if (window.matchMedia(MOBILE_QUERY).matches) {
+			initialZoom = mapStyle.defaultZoomMobile;
+		}
+
 		map = new maplibre.Map({
 			container: mapContainer,
 			style: BASE_STYLE,
@@ -250,7 +259,7 @@
 			center: [mapStyle.center.lat, mapStyle.center.lon],
 			minZoom: mapStyle.minZoom,
 			maxZoom: mapStyle.maxZoom,
-			zoom: mapStyle.defaultZoom,
+			zoom: initialZoom,
 			dragRotate: false,
 			// pinch-zoom is the only zoom path on touch devices; rotation stays locked below
 			touchZoomRotate: true,
@@ -376,9 +385,7 @@
 			// Event handlers
 			let hoveredFeatureId: string | null = null;
 
-			// MapLibre synthesises mousemove from taps, and a finger never "leaves" —
-			// on touch devices the tooltip would stick and overlay the features panel.
-			// Only wire the hover machinery where hover actually exists.
+			// MapLibre synthesises mousemove from taps, and a finger never "leaves"
 			const hoverCapable = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
 			if (hoverCapable) mapInstance.on('mousemove', 'heatmap-squares', (e) => {
@@ -444,8 +451,7 @@
 			});
 
 			mapInstance.on('click', 'heatmap-squares', (e) => {
-				// hybrid devices (touchscreen laptops) pass the hover gate — a tap that
-				// selects a cell must not leave the tooltip stranded over the panel
+				// hybrid devices pass the hover gate; a tap must not strand the tooltip
 				hoverTooltip = null;
 				if (e.features?.[0]) {
 					const feature = e.features[0];

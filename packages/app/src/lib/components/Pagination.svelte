@@ -48,7 +48,7 @@
 </script>
 
 <nav
-	class="flex items-center gap-2 {className || ''}"
+	class="flex flex-wrap items-center gap-2 {className || ''}"
 	class:opacity-50={loading}
 	class:pointer-events-none={loading}
 	aria-label="pagination"

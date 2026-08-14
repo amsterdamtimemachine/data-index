@@ -28,15 +28,25 @@
 		// For the mobile minimap — flow down from the page's heatmap state.
 		timeline?: HeatmapTimeline;
 		dimensions?: HeatmapDimensions;
+		// Desktop snap-resize: explicit column count; undefined keeps the grid responsive.
+		gridColumns?: number;
 	}
 
-	let { cellId, period, bounds, recordTypes, placeTypes = [], datasets, tags, tagOperator = 'OR', onClose, timeline, dimensions }: Props = $props();
+	let { cellId, period, bounds, recordTypes, placeTypes = [], datasets, tags, tagOperator = 'OR', onClose, timeline, dimensions, gridColumns }: Props = $props();
 
 	// Cell data state
 	let allFeatures = $state<FeatureResult[]>([]);
 	let currentPage = $state(1);
 	let totalCount = $state(0);
 	let pageSize = $state(100); // From API response
+
+	const hasPagination = $derived(totalCount > pageSize);
+	const countWrapClass = $derived.by(() => {
+		if (hasPagination) {
+			return 'basis-full md:basis-auto';
+		}
+		return '';
+	});
 	let loading = $state(false);
 	let initialLoading = $state(true);
 	let errors = $state<AppError[]>([]);
@@ -137,21 +147,22 @@
 <ErrorHandler {errorData} />
 
 <!-- Data Header -->
-<!-- With pagination on a narrow screen the header wraps to two rows: the count on its
-     own full-width line, then pagination left / close right. From md up (and always
-     without pagination) everything sits on the original single row. -->
 <div
-	class="sticky min-h-[50px] p-3 top-0 z-10 bg-atm-sand border-b border-atm-sand-border flex flex-wrap items-center justify-between gap-y-2 shadow-[0px_5px_20px_5px_rgba(0,0,0,0.07)]"
+	class="sticky min-h-[50px] p-3 top-0 z-10 bg-atm-sand border-b border-atm-sand-border flex items-center gap-3 shadow-[0px_5px_20px_5px_rgba(0,0,0,0.07)]"
 >
-	{#if !initialLoading && totalCount > 0}
-		{@const hasPagination = totalCount > pageSize}
-		<div class={hasPagination ? 'basis-full md:basis-auto' : ''}>
-			<FeaturesCount totalFeatures={totalCount} {currentPage} featuresPerPage={pageSize} />
+	{#if timeline && dimensions}
+		<div class="md:hidden shrink-0">
+			<MapThumbnail {timeline} {dimensions} {cellId} width={100} height={50} />
 		</div>
-		{#if hasPagination}
-			<!-- Re-seed the builder (count/perPage are captured once) when the dataset changes -->
-			{#key `${totalCount}-${pageSize}`}
-				<div class="md:ml-4">
+	{/if}
+	<div class="flex flex-wrap items-center gap-y-2 gap-x-4 flex-1 min-w-0">
+		{#if !initialLoading && totalCount > 0}
+			<div class={countWrapClass}>
+				<FeaturesCount totalFeatures={totalCount} {currentPage} featuresPerPage={pageSize} />
+			</div>
+			{#if hasPagination}
+				<!-- Re-seed the builder (count/perPage are captured once) when the dataset changes -->
+				{#key `${totalCount}-${pageSize}`}
 					<Pagination
 						totalItems={totalCount}
 						{currentPage}
@@ -159,22 +170,22 @@
 						onPageChange={handlePageChange}
 						{loading}
 					/>
-				</div>
-			{/key}
+				{/key}
+			{/if}
 		{/if}
-	{/if}
-	<Button icon={X} onclick={closeModal} size={18} class="ml-auto" aria-label="Close features panel" />
+	</div>
+	<Button
+		icon={X}
+		onclick={closeModal}
+		size={18}
+		class="self-start md:self-center"
+		aria-label="Close features panel"
+	/>
 </div>
 
 <div class="min-h-full bg-atm-sand-dark">
-	<!-- Mobile-only minimap: on desktop the real map is visible beside the panel -->
-	{#if timeline && dimensions}
-		<div class="md:hidden flex justify-center p-3 border-b border-atm-sand-border bg-atm-sand">
-			<MapThumbnail {timeline} {dimensions} {cellId} />
-		</div>
-	{/if}
 	{#if allFeatures.length > 0}
-		<FeaturesGrid features={allFeatures} />
+		<FeaturesGrid features={allFeatures} columns={gridColumns} />
 	{:else if !initialLoading && !loading}
 		<div class="text-base text-gray-500 p-4">No features found for this cell and period</div>
 	{/if}

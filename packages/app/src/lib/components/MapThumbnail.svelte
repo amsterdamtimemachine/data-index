@@ -1,24 +1,26 @@
+<script lang="ts" module>
+	import resolveConfig from 'tailwindcss/resolveConfig';
+	import tailwindConfig from '$tailwindConfig';
+	const colors = resolveConfig(tailwindConfig).theme.colors as unknown as Record<string, string>;
+</script>
+
 <script lang="ts">
 	import type { HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
 	import { parseRowColFromCellId } from '$utils/heatmap';
 	import { mergeCss } from '$utils/utils';
-	import resolveConfig from 'tailwindcss/resolveConfig';
-	import tailwindConfig from '$tailwindConfig';
 
 	type Props = {
 		timeline: HeatmapTimeline;
 		dimensions: HeatmapDimensions;
 		cellId: string;
+		width?: number;
+		height?: number;
 		class?: string;
 	};
-	let { timeline, dimensions, cellId, class: className }: Props = $props();
+	let { timeline, dimensions, cellId, width = 150, height = 75, class: className }: Props = $props();
 
-	const W = 150;
-	const H = 75;
 	// a real cell is ~1px at this scale — the marker is a locator, draw it visible
 	const MIN_MARKER_PX = 5;
-
-	const colors = resolveConfig(tailwindConfig).theme.colors as unknown as Record<string, string>;
 
 	let canvas = $state<HTMLCanvasElement>();
 
@@ -42,14 +44,14 @@
 
 		ctx.resetTransform();
 		ctx.scale(dpr, dpr);
-		ctx.clearRect(0, 0, W, H);
+		ctx.clearRect(0, 0, width, height);
 
-		// letterbox the grid's true aspect into W×H (cells are square in RD, so
-		// cols:rows is the geographic aspect); row 0 is the RD origin = SOUTH,
+		// letterbox the grid's true aspect into width×height (cells are square in RD,
+		// so cols:rows is the geographic aspect); row 0 is the RD origin = SOUTH,
 		// canvas y grows downward, hence the row flip
-		const s = Math.min(W / cols, H / rows);
-		const ox = (W - cols * s) / 2;
-		const oy = (H - rows * s) / 2;
+		const s = Math.min(width / cols, height / rows);
+		const ox = (width - cols * s) / 2;
+		const oy = (height - rows * s) / 2;
 		const cellX = (idx: number) => ox + (idx % cols) * s;
 		const cellY = (idx: number) => oy + (rows - 1 - Math.floor(idx / cols)) * s;
 		const px = Math.max(s, 1);
@@ -66,16 +68,13 @@
 	});
 </script>
 
-<!-- RTS-style minimap: the all-time data footprint as the city silhouette, plus the
-     selected cell as an oversized red marker. Deliberately period-AGNOSTIC — the
-     mobile timeline below shows the cell's local histogram, so a per-period layer
-     here would shift for city-wide reasons unrelated to those bars. Backing store
-     at devicePixelRatio for crispness; CSS size stays 150×75. -->
+<!-- Deliberately period-agnostic: the panel's timeline shows the cell's own histogram,
+     so a per-period layer here would track a different scope. -->
 <canvas
 	bind:this={canvas}
-	width={W * Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2)}
-	height={H * Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2)}
-	style="width: {W}px; height: {H}px"
+	width={width * Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2)}
+	height={height * Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2)}
+	style="width: {width}px; height: {height}px"
 	class={mergeCss('block', className)}
 	aria-label="Positie van de geselecteerde cel op de kaart"
 ></canvas>

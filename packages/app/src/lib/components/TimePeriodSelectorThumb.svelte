@@ -12,8 +12,7 @@
 	}
 	let { currentIndex, totalBins, isDragging, onDragStart, timelineHeight, bins }: Props = $props();
 
-	// Taps synthesise mouseenter without a matching leave — only hover-capable
-	// devices get the tooltip (same gate as the heatmap cell tooltip).
+	// taps synthesise mouseenter without a matching leave
 	const hoverCapable = createMediaQuery('(hover: hover) and (pointer: fine)');
 
 	// Hover state for tooltip

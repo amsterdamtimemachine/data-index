@@ -10,7 +10,7 @@
 	}
 	let { bins, maxCount, timelineHeight }: Props = $props();
 
-	// Taps synthesise mouseenter without a matching leave — tooltip is hover-only.
+	// taps synthesise mouseenter without a matching leave
 	const hoverCapable = createMediaQuery('(hover: hover) and (pointer: fine)');
 
 	// Calculate bar heights using logarithmic scaling with global maxCount

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, untrack } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 	import FeatureCard from '$components/FeatureCard.svelte';
 	import { createMasonry, type MasonryInstance } from '$utils/masonry';
 	import debounce from 'lodash.debounce';
@@ -12,7 +12,8 @@
 	let { features, columns }: Props = $props();
 
 	// Also the number of column divs rendered below — a columns prop above this is capped.
-	const MAX_COLUMNS = 3;
+	// Sized for the widest desktop the resize handle can request (:empty divs cost nothing).
+	const MAX_COLUMNS = 8;
 
 	const useResponsiveColumns = $derived(columns === undefined);
 
@@ -29,19 +30,19 @@
 		return 3;
 	}
 
-	let currentColumns = $derived(
-		useResponsiveColumns ? calculateColumns(windowWidth) : Math.min(columns || 3, MAX_COLUMNS)
-	);
+	const currentColumns = $derived.by(() => {
+		if (useResponsiveColumns) {
+			return calculateColumns(windowWidth);
+		}
+		return Math.min(columns || 3, MAX_COLUMNS);
+	});
 
 	const debouncedResize = debounce(() => {
 		windowWidth = window.innerWidth;
 	}, 150);
 
-	$effect(() => {
-		if (!useResponsiveColumns) return;
+	onMount(() => {
 		windowWidth = window.innerWidth;
-		window.addEventListener('resize', debouncedResize);
-		return () => window.removeEventListener('resize', debouncedResize);
 	});
 
 	// (Re)create the masonry instance whenever the container element (re)appears.
@@ -73,6 +74,8 @@
 
 	onDestroy(() => debouncedResize.cancel());
 </script>
+
+<svelte:window onresize={debouncedResize} />
 
 <div class="w-full">
 	{#if features.length === 0}

@@ -2,3 +2,22 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* filter nav width + its 32px collapse handle; read by NavContainer and the
+   features-panel width clamp */
+:root {
+	--nav-width: 250px;
+	--nav-reserved: 282px;
+}
+@media (min-width: 1280px) {
+	:root {
+		--nav-width: 290px;
+		--nav-reserved: 322px;
+	}
+}
+@media (min-width: 1536px) {
+	:root {
+		--nav-width: 400px;
+		--nav-reserved: 432px;
+	}
+}

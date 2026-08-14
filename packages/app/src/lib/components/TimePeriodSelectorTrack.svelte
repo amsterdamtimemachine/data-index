@@ -12,7 +12,7 @@
 	}
 	let { bins, currentIndex, onIndexChange, timelineHeight, onKeyDown }: Props = $props();
 
-	// Taps synthesise mouseenter without a matching leave — tooltip is hover-only.
+	// taps synthesise mouseenter without a matching leave
 	const hoverCapable = createMediaQuery('(hover: hover) and (pointer: fine)');
 
 	let trackElement: HTMLDivElement | undefined = $state();
