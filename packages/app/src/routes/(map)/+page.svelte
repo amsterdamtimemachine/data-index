@@ -107,8 +107,24 @@
 		if (hasInitialized || !dimensions || !heatmapTimeline) return;
 		hasInitialized = true;
 
-		// Period: the server-validated URL param, else the most recent loaded slice.
-		controller.initialize(validatedPeriod || getLastAvailablePeriod(heatmapTimeline));
+		// Period: the URL param if it names a loaded slice, else the most recent one.
+		// Slice keys derive from the bin configuration, so bookmarked URLs can go stale.
+		let initialPeriod = getLastAvailablePeriod(heatmapTimeline);
+		if (validatedPeriod) {
+			if (heatmapTimeline[validatedPeriod]) {
+				initialPeriod = validatedPeriod;
+			} else {
+				clientErrors = [
+					...clientErrors,
+					createValidationError(
+						'period',
+						validatedPeriod,
+						`Period "${validatedPeriod}" not found. Showing the most recent period instead.`
+					)
+				];
+			}
+		}
+		controller.initialize(initialPeriod);
 
 		tick().then(() => {
 			// Validate the deep-linked cell against the now-available dimensions (this used

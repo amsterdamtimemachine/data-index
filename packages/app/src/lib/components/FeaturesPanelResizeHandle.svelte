@@ -9,25 +9,17 @@
 		return cols * CARD_PX + (cols - 1) * GRID_GAP_PX + GRID_PADDING_PX;
 	}
 
-	// --nav-reserved (app.pcss) keeps the filter nav reachable beside the panel
-	export function panelWidthCss(cols: PanelCols): string {
-		return `min(${panelWidthPx(cols)}px, calc(100vw - var(--nav-reserved)))`;
-	}
+	// FeaturesGrid renders this many column divs
+	export const MAX_PANEL_COLS = 8;
 
-	function navReservedPx(): number {
-		const raw = getComputedStyle(document.documentElement).getPropertyValue('--nav-reserved');
-		const parsed = parseFloat(raw);
-		if (Number.isNaN(parsed)) {
-			return 282;
-		}
-		return parsed;
+	export function panelWidthCss(cols: PanelCols): string {
+		return `min(${panelWidthPx(cols)}px, 100vw)`;
 	}
 
 	// largest count whose columns all keep their full card width
 	function maxPanelCols(): number {
-		const available = window.innerWidth - navReservedPx();
 		let cols = 1;
-		while (panelWidthPx(cols + 1) <= available) {
+		while (cols < MAX_PANEL_COLS && panelWidthPx(cols + 1) <= window.innerWidth) {
 			cols += 1;
 		}
 		return cols;

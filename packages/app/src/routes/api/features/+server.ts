@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { FeaturesSortField, SortDirection, TagOperator } from '@atm/shared/types';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_MAX } from '@atm/shared';
-import { getFeatures } from '@atm/db';
+import { getFeatures, UnknownTimeSliceError } from '@atm/db';
 import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList, parseBounds } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
@@ -41,7 +41,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		);
 
 		console.log(
-			`📦 Features API request - bounds: [${bounds.minLon.toFixed(4)}, ${bounds.minLat.toFixed(4)}] to [${bounds.maxLon.toFixed(4)}, ${bounds.maxLat.toFixed(4)}], ` +
+			`Features API request - bounds: [${bounds.minLon.toFixed(4)}, ${bounds.minLat.toFixed(4)}] to [${bounds.maxLon.toFixed(4)}, ${bounds.maxLat.toFixed(4)}], ` +
 			`recordTypes: ${recordTypes?.join(', ') || 'all'}, ` +
 			`tags: ${tags?.join(', ') || 'none'} (${tagOperator}), ` +
 			`timeSlice: ${timeSlice || 'all'}, ` +
@@ -64,7 +64,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		});
 
 		console.log(
-			`✅ Features API success - ${result.data.length} features returned (page ${result.page}/${result.totalPages}, total: ${result.total})`
+			`Features API success - ${result.data.length} features returned (page ${result.page}/${result.totalPages}, total: ${result.total})`
 		);
 
 		const headers = {
@@ -77,7 +77,10 @@ export const GET: RequestHandler = async ({ url }) => {
 		if (err && typeof err === 'object' && 'status' in err) {
 			throw err; // Re-throw SvelteKit errors
 		}
-		console.error('❌ Features API unexpected error:', err);
+		if (err instanceof UnknownTimeSliceError) {
+			throw error(400, { code: 'INVALID_TIME_SLICE', message: err.message });
+		}
+		console.error('Features API unexpected error:', err);
 		throw error(500, {
 			code: 'INTERNAL_ERROR',
 			message: 'Failed to load features'

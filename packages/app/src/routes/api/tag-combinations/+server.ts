@@ -17,7 +17,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		const selectedTags = parseList(url, 'selected') ?? [];
 
 		console.log(
-			`🔗 Tag combinations API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, selected: ${selectedTags.join(', ') || 'none'}, validateAll: ${validateAllParam}`
+			`Tag combinations API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, selected: ${selectedTags.join(', ') || 'none'}, validateAll: ${validateAllParam}`
 		);
 
 		const headers = {
@@ -30,7 +30,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			const validationResult = await validateTagCombination(recordTypes, datasetIds, placeTypes, selectedTags);
 
 			console.log(
-				`✅ Tag validation complete - valid: ${validationResult.validTags.join(', ')}, invalid: ${validationResult.invalidTags.join(', ')}`
+				`Tag validation complete - valid: ${validationResult.validTags.join(', ')}, invalid: ${validationResult.invalidTags.join(', ')}`
 			);
 
 			return json(
@@ -51,13 +51,13 @@ export const GET: RequestHandler = async ({ url }) => {
 		const tagCount = result.availableTags.length;
 		const totalFeatures = result.availableTags.reduce((sum, tag) => sum + tag.totalFeatures, 0);
 		console.log(
-			`✅ Tag combinations API success - ${tagCount} available next tags with ${totalFeatures} total features`
+			`Tag combinations API success - ${tagCount} available next tags with ${totalFeatures} total features`
 		);
 
 		return json(result, { headers });
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
-		console.error('❌ Tag combinations API error:', err);
+		console.error('Tag combinations API error:', err);
 		throw error(500, {
 			code: 'INTERNAL_ERROR',
 			message: 'Failed to load tag combinations'

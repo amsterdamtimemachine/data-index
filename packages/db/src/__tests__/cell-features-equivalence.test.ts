@@ -22,6 +22,8 @@ import { rebuildIndex } from '../etl/post-process/rebuild-index';
 import { getHeatmapTimeline } from '../queries/heatmap';
 import { getHistogram } from '../queries/histogram';
 import { getGridConfig } from '../queries/grid-config';
+import { getFeatures } from '../queries/features';
+import { UnknownTimeSliceError } from '../queries/errors';
 import { computeTimeSlices } from '../queries/time-slices';
 import type { PlaceType, RecordType } from '@atm/shared';
 
@@ -192,6 +194,22 @@ describe('cell_features ↔ live query equivalence', () => {
     });
     expect(outside.totalFeatures).toBe(0);
     expect(outside.bins.every(b => b.count === 0)).toBe(true);
+  });
+
+  // Invalid-input policy: malformed selection errors (never silently widens the
+  // result), well-formed-but-matching-nothing returns empty.
+  test('unknown timeSlice throws UnknownTimeSliceError instead of dropping the filter', async () => {
+    const cfg = await getGridConfig();
+    const bounds = { minLon: cfg.minLon, maxLon: cfg.maxLon, minLat: cfg.minLat, maxLat: cfg.maxLat };
+    expect(
+      getFeatures({ bounds, recordTypes: ['image'], timeSlice: 'not_a_slice' })
+    ).rejects.toThrow(UnknownTimeSliceError);
+  });
+
+  test('unknown filter values return empty results, not errors', async () => {
+    const hist = await getHistogram(['bogus-type' as RecordType], undefined, undefined, 50);
+    expect(hist.totalFeatures).toBe(0);
+    expect(hist.bins.every(b => b.count === 0)).toBe(true);
   });
 
   // Every feature must land in a cell, or it is invisible to both the heatmap and the

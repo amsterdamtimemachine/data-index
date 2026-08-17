@@ -28,6 +28,25 @@
 	let currentIndex = $state(getInitialIndex());
 	let isDragging = $state(false);
 	let trackElement: HTMLDivElement | undefined = $state();
+	let scrollWrapper: HTMLDivElement | undefined = $state();
+
+	// One-shot: centre the thumb when the period first resolves (it may arrive after
+	// mount); a touch on the timeline before that forfeits it. After either, the
+	// scroll position is user-owned.
+	let hasAutoScrolled = false;
+
+	$effect(() => {
+		const wrapper = scrollWrapper;
+		const track = trackElement;
+		const index = timePeriods.indexOf(period ?? '');
+		if (hasAutoScrolled || !wrapper || !track || index < 0) {
+			return;
+		}
+		hasAutoScrolled = true;
+		const binWidth = track.scrollWidth / timePeriods.length;
+		const thumbCenter = (index + 0.5) * binWidth;
+		wrapper.scrollTo({ left: thumbCenter - wrapper.clientWidth / 2 });
+	});
 
 	// Update currentIndex when period prop changes
 	$effect(() => {
@@ -127,8 +146,14 @@
 
 {#if histogram?.bins?.length > 0}
 	<div class={mergeCss('bg-atm-sand border-t border-atm-sand-border w-full px-4 pt-2', className)}>
-		<!-- Horizontal scroll wrapper for mobile -->
-		<div class="w-full overflow-x-auto max-[850px]:overflow-x-auto min-[851px]:overflow-x-visible relative max-[850px]:shadow-[inset_10px_0_10px_-10px_rgba(0,0,0,0.3),inset_-10px_0_10px_-10px_rgba(0,0,0,0.3)]">
+		<!-- Horizontal scroll wrapper for mobile; pointerdown only forfeits the one-shot
+		     auto-scroll, it is not an interaction affordance -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			bind:this={scrollWrapper}
+			onpointerdown={() => (hasAutoScrolled = true)}
+			class="w-full overflow-x-auto max-[850px]:overflow-x-auto min-[851px]:overflow-x-visible relative max-[850px]:shadow-[inset_10px_0_10px_-10px_rgba(0,0,0,0.3),inset_-10px_0_10px_-10px_rgba(0,0,0,0.3)]"
+		>
 			<div 
 				class="relative h-[40px]"
 				style="min-width: max(800px, {histogram.bins.length * 60}px); width: 100%;"

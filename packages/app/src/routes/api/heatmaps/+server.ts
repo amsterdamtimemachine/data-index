@@ -31,13 +31,13 @@ export const GET: RequestHandler = async ({ url }) => {
 		const binSize = binSizeParam ? parseInt(binSizeParam, 10) || DISPLAY_TIME_BIN_DEFAULT_YEARS : DISPLAY_TIME_BIN_DEFAULT_YEARS;
 
 		console.log(
-			`🔥 Heatmaps API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, timeSlice: ${timeSliceParam || 'all'}, grid width: ${cols} cols, binSize: ${binSize}`
+			`Heatmaps API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, timeSlice: ${timeSliceParam || 'all'}, grid width: ${cols} cols, binSize: ${binSize}`
 		);
 
 		if (timeSliceParam) {
 			const heatmapResponse = await getHeatmap(timeSliceParam, resolution, recordTypes, datasetIds, placeTypes, binSize);
 			const cellCount = Object.values(heatmapResponse.timeline)[0]?.indices.length ?? 0;
-			console.log(`✅ Heatmap for ${timeSliceParam}: ${cellCount} cells`);
+			console.log(`Heatmap for ${timeSliceParam}: ${cellCount} cells`);
 
 			return json(heatmapResponse, {
 				headers: {
@@ -53,7 +53,7 @@ export const GET: RequestHandler = async ({ url }) => {
 				0
 			);
 
-			console.log(`✅ Heatmap timeline: ${timeSliceCount} slices, ${totalCells} total cells`);
+			console.log(`Heatmap timeline: ${timeSliceCount} slices, ${totalCells} total cells`);
 
 			return json(heatmapResponse, {
 				headers: {
@@ -64,7 +64,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		}
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
-		console.error('❌ Heatmaps API error:', err);
+		console.error('Heatmaps API error:', err);
 		throw error(500, {
 			code: 'INTERNAL_ERROR',
 			message: 'Failed to load heatmap data'

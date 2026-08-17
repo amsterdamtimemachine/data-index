@@ -397,6 +397,8 @@ Ingestion is idempotent and source-driven: corrections are made in the **source 
 
 Heatmaps, histogram, features, and available-tags accept `recordTypes`, `datasets`, and `placeTypes` (`address` / `street` / `neighbourhood` / `district`) query parameters to filter results.
 
+Invalid input policy: malformed parameters (bad bounds, unknown `timeSlice`) return a 400 with a machine-readable `code`; well-formed filters that match nothing return empty results; display resolution (`binSize`, `cols`) is snapped to the nearest valid value. A fallback never widens a result beyond what was requested.
+
 ## Development
 
 ### Prerequisites

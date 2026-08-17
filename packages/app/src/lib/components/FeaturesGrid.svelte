@@ -2,6 +2,7 @@
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import FeatureCard from '$components/FeatureCard.svelte';
 	import { createMasonry, type MasonryInstance } from '$utils/masonry';
+	import { MAX_PANEL_COLS } from '$components/FeaturesPanelResizeHandle.svelte';
 	import debounce from 'lodash.debounce';
 	import type { FeatureResult } from '@atm/shared/types';
 
@@ -12,8 +13,7 @@
 	let { features, columns }: Props = $props();
 
 	// Also the number of column divs rendered below — a columns prop above this is capped.
-	// Sized for the widest desktop the resize handle can request (:empty divs cost nothing).
-	const MAX_COLUMNS = 8;
+	const MAX_COLUMNS = MAX_PANEL_COLS;
 
 	const useResponsiveColumns = $derived(columns === undefined);
 

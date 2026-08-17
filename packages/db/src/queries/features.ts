@@ -13,6 +13,7 @@ import { getRecordTypes } from './record-types';
 import { getGridConfig } from './grid-config';
 import { featureYearOverlap } from './time-filter';
 import { featureIdsWithAllTags, featureIdsWithAnyTag } from './filters';
+import { UnknownTimeSliceError } from './errors';
 import { cellRangeCondition } from './cell-features';
 import { db } from '../client';
 import { featureToPlace, place, placeGeometry, placeCells } from '../schema';
@@ -118,12 +119,15 @@ export async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Pr
 }
 
 /**
- * Get date range from time slice key
+ * Get date range from time slice key; throws UnknownTimeSliceError for a key that
+ * matches no slice.
  */
-async function getTimeSliceDateRange(timeSliceKey: string): Promise<{ startYear: number; endYear: number } | null> {
+async function getTimeSliceDateRange(timeSliceKey: string): Promise<{ startYear: number; endYear: number }> {
   const timeSlices = await computeTimeSlices();
   const timeSlice = timeSlices.find(ts => ts.key === timeSliceKey);
-  if (!timeSlice) return null;
+  if (!timeSlice) {
+    throw new UnknownTimeSliceError(timeSliceKey);
+  }
   return {
     startYear: timeSlice.startYear,
     endYear: timeSlice.endYear
@@ -152,7 +156,10 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   const cellRange = await boundsToBaseCellRange(bounds);
 
   // Get date range from time slice
-  const dateRange = timeSlice ? await getTimeSliceDateRange(timeSlice) : null;
+  let dateRange: { startYear: number; endYear: number } | null = null;
+  if (timeSlice) {
+    dateRange = await getTimeSliceDateRange(timeSlice);
+  }
 
   // Default to every record type in the data — same fallback as the heatmap and
   // histogram, so an unfiltered feature list always matches an unfiltered heatmap.

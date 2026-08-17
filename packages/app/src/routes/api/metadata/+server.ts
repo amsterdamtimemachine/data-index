@@ -5,12 +5,12 @@ import { getMetadata } from '@atm/db';
 
 export const GET: RequestHandler = async () => {
 	try {
-		console.log('📋 Metadata API request');
+		console.log('Metadata API request');
 
 		const metadata = await getMetadata();
 
 		console.log(
-			`✅ Metadata API success - ${metadata.timeSlices.length} time slices, ${metadata.recordTypes.length} record types`
+			`Metadata API success - ${metadata.timeSlices.length} time slices, ${metadata.recordTypes.length} record types`
 		);
 
 		const headers = {
@@ -21,7 +21,7 @@ export const GET: RequestHandler = async () => {
 		return json(metadata, { headers });
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
-		console.error('❌ Metadata API error:', err);
+		console.error('Metadata API error:', err);
 		throw error(500, {
 			code: 'INTERNAL_ERROR',
 			message: 'Failed to load metadata'
