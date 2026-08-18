@@ -8,6 +8,7 @@
 	import X from 'phosphor-svelte/lib/X';
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
 	import MapThumbnail from '$components/MapThumbnail.svelte';
+	import FeaturesSortSelect, { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
 	import type { FeatureResult, HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
 	import { loadingState } from '$lib/state/loadingState.svelte';
 	import { createError, createPageErrorData } from '$utils/error';
@@ -30,9 +31,32 @@
 		dimensions?: HeatmapDimensions;
 		// Desktop snap-resize: explicit column count; undefined keeps the grid responsive.
 		gridColumns?: number;
+		sortMode?: UiSortMode;
+		// Explicit shuffle seed (URL-owned); absent → derived from cellId for a
+		// stable per-cell order.
+		sampleSeed?: string;
+		onSortChange?: (mode: UiSortMode) => void;
+		onShuffle?: () => void;
 	}
 
-	let { cellId, period, bounds, recordTypes, placeTypes = [], datasets, tags, tagOperator = 'OR', onClose, timeline, dimensions, gridColumns }: Props = $props();
+	let { cellId, period, bounds, recordTypes, placeTypes = [], datasets, tags, tagOperator = 'OR', onClose, timeline, dimensions, gridColumns, sortMode = 'sample', sampleSeed, onSortChange, onShuffle }: Props = $props();
+
+	function sortParams(): Record<string, string> {
+		if (sortMode === 'spatial') {
+			return { sort: 'spatialFrequency', sortDirection: 'desc' };
+		}
+		if (sortMode === 'oldest') {
+			return { sort: 'date', sortDirection: 'asc' };
+		}
+		if (sortMode === 'newest') {
+			return { sort: 'date', sortDirection: 'desc' };
+		}
+		let seed = cellId;
+		if (sampleSeed) {
+			seed = sampleSeed;
+		}
+		return { sort: 'sample', seed };
+	}
 
 	// Cell data state
 	let allFeatures = $state<FeatureResult[]>([]);
@@ -72,7 +96,8 @@
 				maxLat: bounds.maxLat.toString(),
 				page: page.toString(),
 				timeSlice,
-				tagOperator
+				tagOperator,
+				...sortParams()
 			});
 
 			if (recordTypes.length > 0) {
@@ -123,7 +148,8 @@
 	}
 
 	$effect(() => {
-		// Reset state when cellId or period changes
+		// Reset state when cellId, period, or sorting changes (sortMode/sampleSeed are
+		// read via sortParams() inside loadCellData, before its first await)
 		allFeatures = [];
 		currentPage = 1;
 		totalCount = 0;
@@ -171,6 +197,9 @@
 						{loading}
 					/>
 				{/key}
+			{/if}
+			{#if onSortChange && onShuffle}
+				<FeaturesSortSelect value={sortMode} onChange={onSortChange} {onShuffle} />
 			{/if}
 		{/if}
 	</div>

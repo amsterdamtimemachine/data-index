@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import type { FeaturesSortField, SortDirection, TagOperator } from '@atm/shared/types';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_MAX } from '@atm/shared';
 import { getFeatures, UnknownTimeSliceError } from '@atm/db';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList, parseBounds } from '$lib/server/query-params';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList, parseBounds, parseSeed } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -26,8 +26,9 @@ export const GET: RequestHandler = async ({ url }) => {
 		const timeSlice = url.searchParams.get('timeSlice') || undefined;
 		const sort = url.searchParams.get('sort') || 'relevance';
 		const sortDirection = url.searchParams.get('sortDirection') || 'desc';
+		const seed = parseSeed(url);
 
-		if (!['relevance', 'spatialFrequency', 'date'].includes(sort)) {
+		if (!['sample', 'relevance', 'spatialFrequency', 'date'].includes(sort)) {
 			throw error(400, { code: 'INVALID_SORT', message: 'Invalid sort field' });
 		}
 		if (!['asc', 'desc'].includes(sortDirection)) {
@@ -59,6 +60,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			timeSlice,
 			sort: sort as FeaturesSortField,
 			sortDirection: sortDirection as SortDirection,
+			seed,
 			page,
 			pageSize
 		});

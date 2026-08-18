@@ -31,6 +31,15 @@ export function parseDatasets(url: URL): string[] | undefined {
 	return parseList(url, 'datasets');
 }
 
+/** Shuffle seed for the sample sort — any string, capped so it can't bloat the query. */
+export function parseSeed(url: URL): string | undefined {
+	const raw = url.searchParams.get('seed');
+	if (!raw) {
+		return undefined;
+	}
+	return raw.slice(0, 64);
+}
+
 export type Bounds = { minLon: number; maxLon: number; minLat: number; maxLat: number };
 
 /**

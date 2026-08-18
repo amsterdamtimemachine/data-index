@@ -1,9 +1,11 @@
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import type {
   RecordType,
   PlaceType,
   PlaceSource,
   FeaturesQuery,
+  FeaturesSortField,
+  SortDirection,
   FeatureResult,
   FeaturesResponse,
   Entity,
@@ -134,6 +136,77 @@ async function getTimeSliceDateRange(timeSliceKey: string): Promise<{ startYear:
   };
 }
 
+// ── sort plans ────────────────────────────────────────────────────────────────
+// The editorial modes interleave record types; sample and spatialFrequency also
+// rotate datasets within each type (double rotation) so no source monopolises a
+// lane. date is flat chronology — an explicit order choice bypasses the rotation.
+
+// each dataset's #1 precedes any dataset's #2 within a type's lane
+function doubleRotationCte(laneKey: SQL): SQL {
+  return sql`ranked AS (
+      SELECT *,
+        ROW_NUMBER() OVER (
+          PARTITION BY record_type
+          ORDER BY dataset_rank, ${laneKey}, id ASC
+        ) as type_rank
+      FROM (
+        SELECT *,
+          ROW_NUMBER() OVER (
+            PARTITION BY record_type, dataset_id
+            ORDER BY ${laneKey}, id ASC
+          ) as dataset_rank
+        FROM with_tags
+      ) dataset_ranked
+    )`;
+}
+
+function singleRotationCte(laneKey: SQL): SQL {
+  return sql`ranked AS (
+      SELECT *,
+        ROW_NUMBER() OVER (
+          PARTITION BY record_type
+          ORDER BY ${laneKey}, id ASC
+        ) as type_rank
+      FROM with_tags
+    )`;
+}
+
+const INTERLEAVED_ORDER = sql`type_rank, record_type, id`;
+
+function sortPlan(
+  sort: FeaturesSortField,
+  sortDirection: SortDirection,
+  seed: string
+): { rankedCte: SQL; orderBy: SQL } {
+  if (sort === 'sample') {
+    return {
+      rankedCte: doubleRotationCte(sql`md5(id::text || ${seed})`),
+      orderBy: INTERLEAVED_ORDER
+    };
+  }
+  if (sort === 'spatialFrequency') {
+    // lower spatial_frequency = fewer cells = more specific to the place
+    let laneKey = sql`spatial_frequency ASC NULLS LAST, start_date ASC NULLS LAST`;
+    if (sortDirection === 'asc') {
+      laneKey = sql`spatial_frequency DESC NULLS LAST, start_date DESC NULLS LAST`;
+    }
+    return { rankedCte: doubleRotationCte(laneKey), orderBy: INTERLEAVED_ORDER };
+  }
+  if (sort === 'date') {
+    let orderBy = sql`start_date DESC NULLS LAST, id`;
+    if (sortDirection === 'asc') {
+      orderBy = sql`start_date ASC NULLS LAST, id`;
+    }
+    return { rankedCte: sql`ranked AS (SELECT * FROM with_tags)`, orderBy };
+  }
+  // relevance: the legacy blended score, single rotation (API-only, no UI entry)
+  let laneKey = sql`relevance_score ASC NULLS LAST, start_date ASC NULLS LAST`;
+  if (sortDirection === 'asc') {
+    laneKey = sql`relevance_score DESC NULLS LAST, start_date DESC NULLS LAST`;
+  }
+  return { rankedCte: singleRotationCte(laneKey), orderBy: INTERLEAVED_ORDER };
+}
+
 /**
  * Get features within bounds with filtering, sorting, and pagination
  */
@@ -148,6 +221,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     timeSlice,
     sort = 'relevance',
     sortDirection = 'desc',
+    seed = '',
     page = 1,
     pageSize = 50
   } = query;
@@ -237,34 +311,17 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     return { data: [], total: 0, page, pageSize, totalPages: 0 };
   }
 
-  // Build ORDER BY for window function
-  // Main query with window function for interleaved record types
-  // Note: Using raw SQL string for window function ORDER BY since Drizzle doesn't support it well
   // Get max frequencies for relevance score normalisation
   const { maxSpatialFrequency: maxSpatial, maxTemporalFrequency: maxTemporal } = await getGridConfig();
 
-  // Lower score = more specific = higher relevance
-  const orderByRelevance = sortDirection === 'desc'
-    ? 'relevance_score ASC NULLS LAST, start_date ASC NULLS LAST'
-    : 'relevance_score DESC NULLS LAST, start_date DESC NULLS LAST';
-
-  const orderBySpatialFrequency = sortDirection === 'desc'
-    ? 'spatial_frequency ASC NULLS LAST, start_date ASC NULLS LAST'
-    : 'spatial_frequency DESC NULLS LAST, start_date DESC NULLS LAST';
-
-  const orderByDate = sortDirection === 'desc'
-    ? 'start_date DESC NULLS LAST, relevance_score ASC NULLS LAST'
-    : 'start_date ASC NULLS LAST, relevance_score DESC NULLS LAST';
-
-  const windowOrderBy = sort === 'relevance' ? orderByRelevance
-    : sort === 'spatialFrequency' ? orderBySpatialFrequency
-    : orderByDate;
+  const { rankedCte, orderBy } = sortPlan(sort, sortDirection, seed);
 
   const result = await db.execute<FeatureRow>(sql`
     WITH filtered AS (
       SELECT DISTINCT ON (f.id)
         f.id,
         f.url,
+        f.dataset_id,
         f.record_type,
         p.type as place_type,
         f.label,
@@ -323,14 +380,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         ) as tags
       FROM filtered f
     ),
-    ranked AS (
-      SELECT *,
-        ROW_NUMBER() OVER (
-          PARTITION BY record_type
-          ORDER BY ${sql.raw(windowOrderBy)}, id ASC
-        ) as type_rank
-      FROM with_tags
-    )
+    ${rankedCte}
     SELECT
       id,
       url,
@@ -360,7 +410,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       geometry_url,
       tags
     FROM ranked
-    ORDER BY type_rank, record_type, id
+    ORDER BY ${orderBy}
     LIMIT ${pageSize}
     OFFSET ${offset}
   `);

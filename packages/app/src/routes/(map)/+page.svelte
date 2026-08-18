@@ -1,6 +1,6 @@
 <!-- (map)/+page.svelte -->
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { createStateController } from '$state/StateController.svelte';
 	import { createPageErrorData, createError, createValidationError } from '$utils/error';
@@ -12,6 +12,7 @@
 		panelWidthCss,
 		type PanelCols
 	} from '$components/FeaturesPanelResizeHandle.svelte';
+	import { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
 	import Heatmap from '$components/Heatmap.svelte';
 	import TimePeriodSelector from '$components/TimePeriodSelector.svelte';
 	import FilterPanel from '$components/FilterPanel.svelte';
@@ -45,6 +46,32 @@
 
 	// Page-owned so the chosen size survives the panel's open/close cycles.
 	let panelCols = $state<PanelCols>(3);
+
+	// Cell-view sorting; the URL seeds the initial value, this state owns it after.
+	let sortMode = $state<UiSortMode>(untrack(() => data?.currentSort) ?? 'sample');
+	let sampleSeed = $state<string | undefined>(untrack(() => data?.currentSampleSeed));
+
+	// The URL carries only what affects the current view: the seed param exists
+	// only while the sample sort is active (the in-memory seed survives, so
+	// returning to sample restores the same shuffle and re-writes the param).
+	function handleSortChange(mode: UiSortMode) {
+		sortMode = mode;
+		if (mode === 'sample') {
+			controller.updateUrlParam('sort', null);
+			if (sampleSeed) {
+				controller.updateUrlParam('sampleSeed', sampleSeed);
+			}
+		} else {
+			controller.updateUrlParam('sort', mode);
+			controller.updateUrlParam('sampleSeed', null);
+		}
+	}
+
+	function handleShuffle() {
+		const seed = Math.random().toString(36).slice(2, 10);
+		sampleSeed = seed;
+		controller.updateUrlParam('sampleSeed', seed);
+	}
 
 	const panelWidth = $derived.by(() => {
 		if (isMobile.matches) {
@@ -348,6 +375,10 @@
 						tags={currentTags}
 						tagOperator={currentTagOperator as 'AND' | 'OR'}
 						{gridColumns}
+						{sortMode}
+						{sampleSeed}
+						onSortChange={handleSortChange}
+						onShuffle={handleShuffle}
 						onClose={handleFeaturesPanelClose}
 					/>
 				</div>
