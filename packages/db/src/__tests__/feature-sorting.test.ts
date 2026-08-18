@@ -166,6 +166,21 @@ describe('feature sorting', () => {
     }
   });
 
+  test('temporalFrequency: rotates fairly and orders each pile tightest-dated first', async () => {
+    const data = await fetchAll('temporalFrequency');
+    assertRoundRobin(data.map((f) => f.recordType));
+    for (const type of TYPES) {
+      const lane = data.filter((f) => f.recordType === type);
+      assertRoundRobin(lane.map((f) => f.datasetLabel ?? ''));
+      for (const dataset of DATASETS.map((d) => `Dataset ${d.slice(-1)}`)) {
+        const pile = lane.filter((f) => f.datasetLabel === dataset);
+        for (let i = 1; i < pile.length; i++) {
+          expect(pile[i].temporalFrequency).toBeGreaterThanOrEqual(pile[i - 1].temporalFrequency);
+        }
+      }
+    }
+  });
+
   test('date: flat chronology, NOT interleaved by record type', async () => {
     const data = await fetchAll('date', { sortDirection: 'asc' });
     for (let i = 1; i < data.length; i++) {

@@ -1,6 +1,6 @@
 <script lang="ts" module>
-	export type UiSortMode = 'sample' | 'spatial' | 'oldest' | 'newest';
-	export const UI_SORT_MODES: UiSortMode[] = ['sample', 'spatial', 'oldest', 'newest'];
+	export type UiSortMode = 'sample' | 'spatial' | 'temporal' | 'oldest' | 'newest';
+	export const UI_SORT_MODES: UiSortMode[] = ['sample', 'spatial', 'temporal', 'oldest', 'newest'];
 </script>
 
 <script lang="ts">
@@ -19,6 +19,7 @@
 	const OPTIONS: SelectOption<UiSortMode>[] = [
 		{ value: 'sample', label: translate('sortSample') },
 		{ value: 'spatial', label: translate('sortSpatial') },
+		{ value: 'temporal', label: translate('sortTemporal') },
 		{ value: 'oldest', label: translate('sortOldest') },
 		{ value: 'newest', label: translate('sortNewest') }
 	];

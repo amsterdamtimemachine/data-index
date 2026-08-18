@@ -60,8 +60,7 @@
 
 	const isMobile = createMediaQuery(MOBILE_QUERY);
 
-	// Desktop mirrors the live map; mobile freezes on the tap-time map (the panel
-	// covers the real map there, and the local timeline must not move the minimap).
+	// desktop: live period; mobile: frozen at cell selection
 	const thumbnailPeriod = $derived.by(() => {
 		if (isMobile.matches) {
 			return selectionPeriod ?? period;
@@ -69,7 +68,6 @@
 		return period;
 	});
 
-	// 32px matches the header buttons; phones get the larger locator
 	const thumbnailWidth = $derived.by(() => {
 		if (isMobile.matches) {
 			return 100;
@@ -84,12 +82,8 @@
 	});
 </script>
 
-<!-- Named grid areas — the close button owns the top-right cell, so no sibling
-     appearing or growing can move it. The template follows the panel's column
-     mode (data-layout), not the viewport. -->
 <div
 	data-layout={headerLayout}
-	data-cols={gridColumns}
 	class="panel-header sticky min-h-[50px] p-3 md:p-4 top-0 z-10 bg-atm-sand border-b border-atm-sand-border shadow-[0px_5px_20px_5px_rgba(0,0,0,0.07)]
 	       grid items-center gap-x-3 gap-y-2"
 >
@@ -110,7 +104,7 @@
 			<FeaturesCount totalFeatures={totalCount} {currentPage} featuresPerPage={pageSize} />
 		</div>
 		{#if hasPagination}
-			<!-- Re-seed the builder (count/perPage are captured once) when the dataset changes -->
+			<!-- pagination builder captures count/perPage once -->
 			{#key `${totalCount}-${pageSize}`}
 				<div class="header-pages min-w-0">
 					<Pagination
@@ -155,18 +149,13 @@
 		grid-area: close;
 	}
 
-	/* Non-stacked layouts space cells with margins, not column-gap: an absent cell
-	   then contributes no spacing, so gaps stay even whatever is rendered. */
-
-	/* 2-col panel: desktop row; pagination gets its own full-width line */
+	/* margins, not column-gap: an absent cell must not leave a gap */
 	.panel-header[data-layout='split'] {
 		grid-template-areas: 'map count sort close' 'pages pages pages pages';
 		grid-template-columns: auto auto auto 1fr;
 		column-gap: 0;
 	}
 
-	/* 3-col and wider: pagination joins the row, shrinkable so it wraps
-	   internally when long */
 	.panel-header[data-layout='inline'] {
 		grid-template-areas: 'map count pages sort close';
 		grid-template-columns: auto auto minmax(0, max-content) auto 1fr;
@@ -175,10 +164,6 @@
 
 	.panel-header[data-layout='split'] :is(.header-map, .header-count, .header-sort),
 	.panel-header[data-layout='inline'] :is(.header-map, .header-count, .header-pages, .header-sort) {
-		margin-right: 2rem;
-	}
-	/* at exactly 3 columns the full row only fits with tighter spacing */
-	.panel-header[data-layout='inline'][data-cols='3'] :is(.header-map, .header-count, .header-pages, .header-sort) {
 		margin-right: 1rem;
 	}
 </style>

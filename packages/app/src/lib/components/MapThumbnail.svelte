@@ -13,8 +13,6 @@
 		timeline: HeatmapTimeline;
 		dimensions: HeatmapDimensions;
 		cellId: string;
-		// which period's footprint to draw — the caller picks the clock (live on
-		// desktop, frozen at cell selection on mobile)
 		period: string;
 		width?: number;
 		height?: number;
@@ -22,7 +20,6 @@
 	};
 	let { timeline, dimensions, cellId, period, width = 150, height = 75, class: className }: Props = $props();
 
-	// a real cell is ~1px at this scale — the marker is a locator, draw it visible
 	const MIN_MARKER_PX = 5;
 
 	let canvas = $state<HTMLCanvasElement>();
@@ -38,9 +35,7 @@
 		ctx.scale(dpr, dpr);
 		ctx.clearRect(0, 0, width, height);
 
-		// letterbox the grid's true aspect into width×height (cells are square in RD,
-		// so cols:rows is the geographic aspect); row 0 is the RD origin = SOUTH,
-		// canvas y grows downward, hence the row flip
+		// row 0 is south, canvas y grows downward, hence the flip
 		const s = Math.min(width / cols, height / rows);
 		const ox = (width - cols * s) / 2;
 		const oy = (height - rows * s) / 2;

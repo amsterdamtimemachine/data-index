@@ -137,9 +137,9 @@ async function getTimeSliceDateRange(timeSliceKey: string): Promise<{ startYear:
 }
 
 // ── sort plans ────────────────────────────────────────────────────────────────
-// The editorial modes interleave record types; sample and spatialFrequency also
-// rotate datasets within each type (double rotation) so no source monopolises a
-// lane. date is flat chronology — an explicit order choice bypasses the rotation.
+// The editorial modes interleave record types; sample and the frequency sorts
+// also rotate datasets within each type (double rotation) so no source
+// monopolises a lane. date is flat chronology, bypassing the rotation.
 
 // each dataset's #1 precedes any dataset's #2 within a type's lane
 function doubleRotationCte(laneKey: SQL): SQL {
@@ -189,6 +189,14 @@ function sortPlan(
     let laneKey = sql`spatial_frequency ASC NULLS LAST, start_date ASC NULLS LAST`;
     if (sortDirection === 'asc') {
       laneKey = sql`spatial_frequency DESC NULLS LAST, start_date DESC NULLS LAST`;
+    }
+    return { rankedCte: doubleRotationCte(laneKey), orderBy: INTERLEAVED_ORDER };
+  }
+  if (sort === 'temporalFrequency') {
+    // lower temporal_frequency = fewer time bins = more precisely dated
+    let laneKey = sql`temporal_frequency ASC NULLS LAST, start_date ASC NULLS LAST`;
+    if (sortDirection === 'asc') {
+      laneKey = sql`temporal_frequency DESC NULLS LAST, start_date DESC NULLS LAST`;
     }
     return { rankedCte: doubleRotationCte(laneKey), orderBy: INTERLEAVED_ORDER };
   }

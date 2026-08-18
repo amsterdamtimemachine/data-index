@@ -22,6 +22,7 @@ Rather than curating or contextualising the data, the index presents sources as 
     - [Place names at query time](#place-names-at-query-time)
   - [Temporal indexing](#temporal-indexing)
   - [Unique features rank higher](#unique-features-rank-higher)
+  - [Feature sorting](#feature-sorting)
 - [Dating](#dating)
   - [Feature dates](#feature-dates)
   - [Place dates](#place-dates)
@@ -252,6 +253,18 @@ relevance_score = spatial_frequency / max_spatial + temporal_frequency / max_tem
 ```
 
 Lower scores mean features more unique to the time and place.
+
+### Feature sorting
+
+The cell view sorts features in one of five modes. All modes are deterministic.
+
+- **Sample** (default). A fair cross-section of the cell. Record types take turns in the list. Within each type, datasets take turns. Order inside a dataset comes from a seeded shuffle (`md5(id || seed)`). The seed defaults to the cell id. The shuffle button sets a `sampleSeed` URL parameter, so a shared link reproduces the exact order. One seed produces one global order, which keeps pagination consistent across pages.
+- **Spatial** ("Precies gelokaliseerd" in the UI). The same type and dataset rotation, but each dataset's items are ordered by `spatial_frequency`. Items tied to the smallest place come first.
+- **Temporal** ("Precies gedateerd" in the UI). The same rotation, ordered by `temporal_frequency`. Items with the tightest date range come first.
+- **Oldest / newest**. Plain chronological order on `start_date`. No rotation. An explicit date sort returns true chronology, even when that puts several items of one type in a row.
+- **Relevance**. The blended `relevance_score` above, with the record type rotation. Available in the API only.
+
+`/api/features` accepts `sort` (`sample` / `relevance` / `spatialFrequency` / `temporalFrequency` / `date`), `sortDirection`, and `seed`.
 
 ## Dating
 

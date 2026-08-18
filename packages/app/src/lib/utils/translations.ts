@@ -27,7 +27,8 @@ const TRANSLATIONS: Record<string, string> = {
 	// Sorting
 	sortLabel: 'Sortering',
 	sortSample: 'Van alles wat',
-	sortSpatial: 'Adres eerst',
+	sortSpatial: 'Precies gelokaliseerd',
+	sortTemporal: 'Precies gedateerd',
 	sortOldest: 'Oudste eerst',
 	sortNewest: 'Nieuwste eerst',
 	reshuffle: 'Schud opnieuw',

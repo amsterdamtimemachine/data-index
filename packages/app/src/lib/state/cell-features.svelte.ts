@@ -1,7 +1,4 @@
-/**
- * Reactive fetcher for one cell's feature list. Call during component init; the
- * query getter's reads are the reload triggers — any change resets to page 1.
- */
+/** Reactive fetcher for one cell's feature list. */
 import { loadingState } from '$lib/state/loadingState.svelte';
 import { createError, createPageErrorData } from '$utils/error';
 import { untrack } from 'svelte';
@@ -25,6 +22,9 @@ export type CellFeaturesQuery = {
 function sortParams(query: CellFeaturesQuery): Record<string, string> {
 	if (query.sortMode === 'spatial') {
 		return { sort: 'spatialFrequency', sortDirection: 'desc' };
+	}
+	if (query.sortMode === 'temporal') {
+		return { sort: 'temporalFrequency', sortDirection: 'desc' };
 	}
 	if (query.sortMode === 'oldest') {
 		return { sort: 'date', sortDirection: 'asc' };

@@ -52,11 +52,10 @@
 	{/if}
 </button>
 
-<!-- m-0 inset-auto: the UA stylesheet centres native popovers, which would defeat
-     melt's floating positioning (same reset as Tooltip) -->
+<!-- m-0 p-0 inset-auto: reset UA popover styles -->
 <div
 	{...select.content}
-	class="z-50 m-0 inset-auto bg-atm-sand border border-atm-sand-border rounded-sm shadow-md py-1"
+	class="z-50 m-0 p-0 inset-auto bg-atm-sand border border-atm-sand-border rounded-sm shadow-md overflow-hidden divide-y divide-atm-gold"
 >
 	{#each options as option (option.value)}
 		<div

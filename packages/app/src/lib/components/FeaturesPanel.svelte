@@ -16,16 +16,11 @@
 		tags: string[];
 		tagOperator?: 'AND' | 'OR';
 		onClose?: () => void;
-		// For the minimap — flow down from the page's heatmap state.
 		timeline?: HeatmapTimeline;
 		dimensions?: HeatmapDimensions;
-		// The period active when the cell was selected (mobile minimap freezes on it).
 		selectionPeriod?: string;
-		// Desktop snap-resize: explicit column count; undefined keeps the grid responsive.
 		gridColumns?: number;
 		sortMode?: UiSortMode;
-		// Explicit shuffle seed (URL-owned); absent → derived from cellId for a
-		// stable per-cell order.
 		sampleSeed?: string;
 		onSortChange?: (mode: UiSortMode) => void;
 		onShuffle?: () => void;
