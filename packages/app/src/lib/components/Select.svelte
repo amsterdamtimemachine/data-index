@@ -5,6 +5,7 @@
 <script lang="ts" generics="T extends string">
 	import { Select as MeltSelect } from 'melt/builders';
 	import CaretDown from 'phosphor-svelte/lib/CaretDown';
+	import CaretUp from 'phosphor-svelte/lib/CaretUp';
 	import { mergeCss } from '$utils/utils';
 
 	type Props = {
@@ -44,7 +45,11 @@
 	aria-label={ariaLabel}
 >
 	{currentLabel}
-	<CaretDown size={12} weight="bold" />
+	{#if select.open}
+		<CaretUp size={12} weight="bold" />
+	{:else}
+		<CaretDown size={12} weight="bold" />
+	{/if}
 </button>
 
 <!-- m-0 inset-auto: the UA stylesheet centres native popovers, which would defeat

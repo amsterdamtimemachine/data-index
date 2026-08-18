@@ -13,27 +13,19 @@
 		timeline: HeatmapTimeline;
 		dimensions: HeatmapDimensions;
 		cellId: string;
+		// which period's footprint to draw — the caller picks the clock (live on
+		// desktop, frozen at cell selection on mobile)
+		period: string;
 		width?: number;
 		height?: number;
 		class?: string;
 	};
-	let { timeline, dimensions, cellId, width = 150, height = 75, class: className }: Props = $props();
+	let { timeline, dimensions, cellId, period, width = 150, height = 75, class: className }: Props = $props();
 
 	// a real cell is ~1px at this scale — the marker is a locator, draw it visible
 	const MIN_MARKER_PX = 5;
 
 	let canvas = $state<HTMLCanvasElement>();
-
-	// Stable city silhouette: the union of populated cells across ALL periods, so the
-	// orientation anchor keeps its shape while the user drags the timeline. Recomputed
-	// only when the timeline itself is replaced (a filter change), not per period.
-	const unionIndices = $derived.by(() => {
-		const union = new Set<number>();
-		for (const hm of Object.values(timeline)) {
-			for (const i of hm.indices) union.add(i);
-		}
-		return union;
-	});
 
 	$effect(() => {
 		const ctx = canvas?.getContext('2d');
@@ -56,25 +48,26 @@
 		const cellY = (idx: number) => oy + (rows - 1 - Math.floor(idx / cols)) * s;
 		const px = Math.max(s, 1);
 
-		ctx.fillStyle = colors['atm-sand-border'] ?? 'rgba(0,0,0,0.2)';
-		for (const i of unionIndices) ctx.fillRect(cellX(i), cellY(i), px, px);
+		const heatmap = timeline[period];
+		if (heatmap) {
+			ctx.fillStyle = colors['atm-blue'];
+			for (const i of heatmap.indices) ctx.fillRect(cellX(i), cellY(i), px, px);
+		}
 
 		if (selected) {
 			const idx = selected.row * cols + selected.col;
 			const m = Math.max(s, MIN_MARKER_PX);
-			ctx.fillStyle = colors['atm-red'] ?? '#ee5e00';
+			ctx.fillStyle = colors['atm-red'];
 			ctx.fillRect(cellX(idx) - (m - s) / 2, cellY(idx) - (m - s) / 2, m, m);
 		}
 	});
 </script>
 
-<!-- Deliberately period-agnostic: the panel's timeline shows the cell's own histogram,
-     so a per-period layer here would track a different scope. -->
 <canvas
 	bind:this={canvas}
 	width={width * Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2)}
 	height={height * Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2)}
 	style="width: {width}px; height: {height}px"
-	class={mergeCss('block', className)}
+	class={mergeCss('block rounded border border-[1px] border-atm-gold', className)}
 	aria-label="Positie van de geselecteerde cel op de kaart"
 ></canvas>

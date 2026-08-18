@@ -305,6 +305,19 @@
 		controller.clearErrors();
 		controller.selectCell(null);
 	}
+
+	// The period active when the cell was selected — the mobile minimap shows the
+	// map as it was at tap time, so it must not track later timeline drags.
+	let cellSelectionPeriod = $state('');
+	$effect(() => {
+		const cell = selectedCellId;
+		if (!cell) {
+			return;
+		}
+		untrack(() => {
+			cellSelectionPeriod = controller.currentPeriod;
+		});
+	});
 </script>
 
 <ErrorHandler errorData={allErrors} />
@@ -368,6 +381,7 @@
 						period={currentPeriod}
 						timeline={heatmapTimeline ?? undefined}
 						dimensions={dimensions ?? undefined}
+						selectionPeriod={cellSelectionPeriod}
 						bounds={selectedCellBounds ?? undefined}
 						recordTypes={currentRecordTypes}
 						placeTypes={currentPlaceTypes}

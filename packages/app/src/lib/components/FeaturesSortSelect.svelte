@@ -7,6 +7,7 @@
 	import Select, { type SelectOption } from '$components/Select.svelte';
 	import Button from '$components/Button.svelte';
 	import ArrowsClockwise from 'phosphor-svelte/lib/ArrowsClockwise';
+	import { translate } from '$utils/translations';
 
 	type Props = {
 		value: UiSortMode;
@@ -16,16 +17,17 @@
 	let { value, onChange, onShuffle }: Props = $props();
 
 	const OPTIONS: SelectOption<UiSortMode>[] = [
-		{ value: 'sample', label: 'Van alles wat' },
-		{ value: 'spatial', label: 'Over deze plek' },
-		{ value: 'oldest', label: 'Oudste eerst' },
-		{ value: 'newest', label: 'Nieuwste eerst' }
+		{ value: 'sample', label: translate('sortSample') },
+		{ value: 'spatial', label: translate('sortSpatial') },
+		{ value: 'oldest', label: translate('sortOldest') },
+		{ value: 'newest', label: translate('sortNewest') }
 	];
 </script>
 
 <div class="flex items-center gap-2">
-	<Select options={OPTIONS} {value} {onChange} aria-label="Sortering" />
+	<span class="text-base text-gray-700">{translate('sortLabel')}</span>
+	<Select options={OPTIONS} {value} {onChange} aria-label={translate('sortLabel')} />
 	{#if value === 'sample'}
-		<Button icon={ArrowsClockwise} onclick={onShuffle} size={16} aria-label="Schud opnieuw" />
+		<Button icon={ArrowsClockwise} onclick={onShuffle} size={16} aria-label={translate('reshuffle')} />
 	{/if}
 </div>
