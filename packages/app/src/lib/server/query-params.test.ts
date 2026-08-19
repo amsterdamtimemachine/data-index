@@ -3,7 +3,7 @@
  * malformed bounds are a 400, and list params are capped so a crafted URL can't
  * force an oversized IN (...) query.
  */
-import { describe, test, expect } from 'bun:test';
+import { describe, test, expect } from 'vitest';
 import { MAX_FILTER_ITEMS } from '@atm/shared';
 import { parseBounds, parseList } from './query-params';
 

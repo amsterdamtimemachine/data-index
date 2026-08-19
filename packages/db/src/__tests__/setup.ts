@@ -27,7 +27,15 @@ export const FIXTURES = {
  */
 const TEST_DB_NAME = 'dataindex_test';
 async function assertTestDb() {
-  const { rows } = await db.execute<{ db: string }>(sql`SELECT current_database() AS db`);
+  let rows: { db: string }[];
+  try {
+    ({ rows } = await db.execute<{ db: string }>(sql`SELECT current_database() AS db`));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Test DB unreachable — is the container running? (docker start dataindex-test-db). Original error: ${message}`
+    );
+  }
   if (rows[0]?.db !== TEST_DB_NAME) {
     throw new Error(
       `Refusing to run a destructive test operation against database "${rows[0]?.db}" — expected "${TEST_DB_NAME}". ` +
