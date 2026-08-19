@@ -2,3 +2,18 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* filter nav width; read by NavContainer */
+:root {
+	--nav-width: 250px;
+}
+@media (min-width: 1280px) {
+	:root {
+		--nav-width: 290px;
+	}
+}
+@media (min-width: 1536px) {
+	:root {
+		--nav-width: 400px;
+	}
+}

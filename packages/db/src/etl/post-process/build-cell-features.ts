@@ -74,7 +74,7 @@ export async function buildCellFeatures() {
     FROM ${cellFeatures}
   `);
   const { buckets, bytes } = stats.rows[0];
-  console.log(`  ✅ ${buckets} buckets, ${(parseInt(bytes) / 1024 / 1024).toFixed(0)} MB`);
+  console.log(`  ${buckets} buckets, ${(parseInt(bytes) / 1024 / 1024).toFixed(0)} MB`);
 
   // A feature with no cell coverage is invisible to both the heatmap and the
   // histogram, since both now read this table. That should be impossible — ingest
@@ -92,6 +92,6 @@ export async function buildCellFeatures() {
   `);
   const n = parseInt(uncovered.rows[0].uncovered);
   if (n > 0) {
-    console.log(`  ⚠ ${n} features have no cell coverage — they will not appear in the heatmap or histogram (their place has no geometry)`);
+    console.log(`  ${n} features have no cell coverage — they will not appear in the heatmap or histogram (their place has no geometry)`);
   }
 }

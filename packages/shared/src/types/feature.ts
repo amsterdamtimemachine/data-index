@@ -2,7 +2,10 @@ import type { HeatmapCellBounds } from './heatmap';
 
 export type RecordType = 'image' | 'text' | 'person' | 'unknown';
 
-export type FeaturesSortField = 'relevance' | 'spatialFrequency' | 'date';
+// 'sample' and 'spatialFrequency' interleave record types and datasets (double
+// rotation); 'date' is flat chronology; 'relevance' is the legacy blended score
+// (API-only, no UI entry).
+export type FeaturesSortField = 'sample' | 'relevance' | 'spatialFrequency' | 'datePrecision' | 'date';
 export type SortDirection = 'asc' | 'desc';
 export type TagOperator = 'AND' | 'OR';
 
@@ -69,6 +72,8 @@ export interface FeaturesQuery {
   timeSlice?: string;
   sort?: FeaturesSortField;
   sortDirection?: SortDirection;
+  // Shuffle seed for sort='sample'; same seed = same order (stable pagination).
+  seed?: string;
   page?: number;
   pageSize?: number;
 }

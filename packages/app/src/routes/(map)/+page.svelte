@@ -1,12 +1,18 @@
 <!-- (map)/+page.svelte -->
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { createStateController } from '$state/StateController.svelte';
 	import { createPageErrorData, createError, createValidationError } from '$utils/error';
 	import { validateCellId } from '$utils/utils';
 	import { loadingState } from '$lib/state/loadingState.svelte';
 	import { fetchJson } from '$utils/fetchJson';
+	import { createMediaQuery, MOBILE_QUERY } from '$utils/media.svelte';
+	import FeaturesPanelResizeHandle, {
+		panelWidthCss,
+		type PanelCols
+	} from '$components/FeaturesPanelResizeHandle.svelte';
+	import { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
 	import Heatmap from '$components/Heatmap.svelte';
 	import TimePeriodSelector from '$components/TimePeriodSelector.svelte';
 	import FilterPanel from '$components/FilterPanel.svelte';
@@ -32,7 +38,54 @@
 	let heatmapTimeline = $state<HeatmapTimeline | null>(null);
 	let dimensions = $state<HeatmapDimensions | null>(null);
 	let histogram = $state<Histogram | null>(null);
+	// Selected cell's histogram, mobile only — see the gated effect below.
+	let cellHistogram = $state<Histogram | null>(null);
 	let clientErrors = $state<AppError[]>([]);
+
+	const isMobile = createMediaQuery(MOBILE_QUERY);
+
+	// Page-owned so the chosen size survives the panel's open/close cycles.
+	let panelCols = $state<PanelCols>(3);
+
+	// Cell-view sorting; the URL seeds the initial value, this state owns it after.
+	let sortMode = $state<UiSortMode>(untrack(() => data?.currentSort) ?? 'sample');
+	let sampleSeed = $state<string | undefined>(untrack(() => data?.currentSampleSeed));
+
+	// The URL carries only what affects the current view: the seed param exists
+	// only while the sample sort is active (the in-memory seed survives, so
+	// returning to sample restores the same shuffle and re-writes the param).
+	function handleSortChange(mode: UiSortMode) {
+		sortMode = mode;
+		if (mode === 'sample') {
+			controller.updateUrlParam('sort', null);
+			if (sampleSeed) {
+				controller.updateUrlParam('sampleSeed', sampleSeed);
+			}
+		} else {
+			controller.updateUrlParam('sort', mode);
+			controller.updateUrlParam('sampleSeed', null);
+		}
+	}
+
+	function handleShuffle() {
+		const seed = Math.random().toString(36).slice(2, 10);
+		sampleSeed = seed;
+		controller.updateUrlParam('sampleSeed', seed);
+	}
+
+	const panelWidth = $derived.by(() => {
+		if (isMobile.matches) {
+			return undefined;
+		}
+		return panelWidthCss(panelCols);
+	});
+
+	const gridColumns = $derived.by(() => {
+		if (isMobile.matches) {
+			return undefined;
+		}
+		return panelCols;
+	});
 
 	let recordTypes = $derived(data?.metadata?.recordTypes || []);
 	let currentRecordTypes = $derived(data?.currentRecordTypes || []);
@@ -81,8 +134,24 @@
 		if (hasInitialized || !dimensions || !heatmapTimeline) return;
 		hasInitialized = true;
 
-		// Period: the server-validated URL param, else the most recent loaded slice.
-		controller.initialize(validatedPeriod || getLastAvailablePeriod(heatmapTimeline));
+		// Period: the URL param if it names a loaded slice, else the most recent one.
+		// Slice keys derive from the bin configuration, so bookmarked URLs can go stale.
+		let initialPeriod = getLastAvailablePeriod(heatmapTimeline);
+		if (validatedPeriod) {
+			if (heatmapTimeline[validatedPeriod]) {
+				initialPeriod = validatedPeriod;
+			} else {
+				clientErrors = [
+					...clientErrors,
+					createValidationError(
+						'period',
+						validatedPeriod,
+						`Period "${validatedPeriod}" not found. Showing the most recent period instead.`
+					)
+				];
+			}
+		}
+		controller.initialize(initialPeriod);
 
 		tick().then(() => {
 			// Validate the deep-linked cell against the now-available dimensions (this used
@@ -164,6 +233,48 @@
 		);
 	});
 
+	// Nulled up front: a cell switch must never show the previous cell's bars.
+	$effect(() => {
+		const mobile = isMobile.matches;
+		const cellBounds = selectedCellBounds;
+		const filterQs = data.filterQuery;
+
+		cellHistogram = null;
+		if (!mobile || !cellBounds) {
+			return;
+		}
+
+		let qs = '';
+		if (filterQs) {
+			qs = `${filterQs}&`;
+		}
+		const boundsQs = `minLon=${cellBounds.minLon}&maxLon=${cellBounds.maxLon}&minLat=${cellBounds.minLat}&maxLat=${cellBounds.maxLat}`;
+		return fetchJson<Histogram>(
+			`/api/histogram?${qs}${boundsQs}`,
+			(res) => {
+				cellHistogram = res;
+			},
+			() => {
+				// silent by design: the timeline degrades to the city-wide histogram
+			}
+		);
+	});
+
+	// The desktop timeline is intentionally global; the thumb reads currentPeriod
+	// in every branch — only the bars swap.
+	const displayedHistogram = $derived.by(() => {
+		if (!isMobile.matches) {
+			return histogram;
+		}
+		if (!showCellModal) {
+			return histogram;
+		}
+		if (!cellHistogram || cellHistogram.bins.length === 0) {
+			return histogram;
+		}
+		return cellHistogram;
+	});
+
 	// A filter change reloads the page data (new errorData); drop the previous load's
 	// client-side errors so they don't accumulate across navigations.
 	afterNavigate(() => {
@@ -194,6 +305,19 @@
 		controller.clearErrors();
 		controller.selectCell(null);
 	}
+
+	// The period active when the cell was selected — the mobile minimap shows the
+	// map as it was at tap time, so it must not track later timeline drags.
+	let cellSelectionPeriod = $state('');
+	$effect(() => {
+		const cell = selectedCellId;
+		if (!cell) {
+			return;
+		}
+		untrack(() => {
+			cellSelectionPeriod = controller.currentPeriod;
+		});
+	});
 </script>
 
 <ErrorHandler errorData={allErrors} />
@@ -241,25 +365,37 @@
 			allDatasets={datasetLabels}
 			selectedTags={currentTags}
 			tagOperator={currentTagOperator as 'AND' | 'OR'}
-			class="absolute top-3 left-3"
+			class="absolute top-3 left-3 max-w-[calc(100%-1.5rem)]"
 		/>
 	{/if}
 
 		{#if showCellModal && selectedCellId}
 			<div
-				class="z-30 absolute top-0 right-0 w-full md:w-1/2 h-full bg-atm-sand overflow-y-auto border-l border-solid border-atm-sand-border shadow-[-5px_0px_20px_5px_rgba(0,0,0,0.07)]"
+				class="z-30 absolute top-0 right-0 w-full h-full bg-atm-sand overflow-hidden border-l border-solid border-atm-sand-border shadow-[-5px_0px_20px_5px_rgba(0,0,0,0.07)]"
+				style:width={panelWidth}
 			>
-				<FeaturesPanel
-					cellId={selectedCellId}
-					period={currentPeriod}
-					bounds={selectedCellBounds ?? undefined}
-					recordTypes={currentRecordTypes}
-					placeTypes={currentPlaceTypes}
-					datasets={currentDatasets}
-					tags={currentTags}
-					tagOperator={currentTagOperator as 'AND' | 'OR'}
-					onClose={handleFeaturesPanelClose}
-				/>
+				<FeaturesPanelResizeHandle cols={panelCols} onSizeChange={(cols) => (panelCols = cols)} />
+				<div class="h-full overflow-y-auto">
+					<FeaturesPanel
+						cellId={selectedCellId}
+						period={currentPeriod}
+						timeline={heatmapTimeline ?? undefined}
+						dimensions={dimensions ?? undefined}
+						selectionPeriod={cellSelectionPeriod}
+						bounds={selectedCellBounds ?? undefined}
+						recordTypes={currentRecordTypes}
+						placeTypes={currentPlaceTypes}
+						datasets={currentDatasets}
+						tags={currentTags}
+						tagOperator={currentTagOperator as 'AND' | 'OR'}
+						{gridColumns}
+						{sortMode}
+						{sampleSeed}
+						onSortChange={handleSortChange}
+						onShuffle={handleShuffle}
+						onClose={handleFeaturesPanelClose}
+					/>
+				</div>
 			</div>
 		{/if}
 	</div>
@@ -267,7 +403,7 @@
 	{#if histogram}
 		<TimePeriodSelector
 			period={currentPeriod}
-			histogram={histogram}
+			histogram={displayedHistogram ?? histogram}
 			onPeriodChange={handlePeriodChange}
 			class="z-40 bg-atm-sand border-t border-atm-sand-border"
 		/>

@@ -8,6 +8,7 @@ import type { RecordType, PlaceType } from '@atm/shared/types';
 import type { AppError } from '$types/error';
 import { createPageErrorData, createError, createValidationError, createPeriodNotFoundError } from '$utils/error';
 import { translateAll } from '$utils/translations';
+import { UI_SORT_MODES, type UiSortMode } from '$components/FeaturesSortSelect.svelte';
 
 // Helper functions for period validation
 function isValidPeriodFormat(period: string): boolean {
@@ -151,6 +152,18 @@ export const load: PageLoad = async ({ url, parent }) => {
 		}
 	}
 
+	// Sort mode + shuffle seed for the cell view; unknown modes fall back to default.
+	const sortParam = url.searchParams.get('sort');
+	let currentSort: UiSortMode = 'sample';
+	if (sortParam && (UI_SORT_MODES as string[]).includes(sortParam)) {
+		currentSort = sortParam as UiSortMode;
+	}
+	let currentSampleSeed: string | undefined = undefined;
+	const sampleSeedParam = url.searchParams.get('sampleSeed');
+	if (sampleSeedParam) {
+		currentSampleSeed = sampleSeedParam.slice(0, 64);
+	}
+
 	return {
 		filterQuery,
 		cellParam,
@@ -159,6 +172,8 @@ export const load: PageLoad = async ({ url, parent }) => {
 		currentDatasets,
 		currentTags,
 		currentTagOperator,
+		currentSort,
+		currentSampleSeed,
 		validatedPeriod,
 		errorData: createPageErrorData(errors)
 	};

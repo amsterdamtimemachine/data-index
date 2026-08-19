@@ -97,7 +97,7 @@ export async function rebuildIndex() {
   `);
 
   const rowCount = (pointResult.rowCount ?? 0) + (fillResult.rowCount ?? 0);
-  console.log(`✅ Inserted ${rowCount} rows in ${Date.now() - t}ms`);
+  console.log(`Inserted ${rowCount} rows in ${Date.now() - t}ms`);
 
   // Update spatial frequency on place_geometry (number of cells each geometry spans)
   console.log('Updating spatial frequency...');
@@ -111,7 +111,7 @@ export async function rebuildIndex() {
     ) sub
     WHERE pg.place_id = sub.place_id
   `);
-  console.log(`  ✅ ${spatialResult.rowCount} places updated`);
+  console.log(`  ${spatialResult.rowCount} places updated`);
 
   // Update temporal frequency on features: the number of base time bins the feature's
   // range occupies — the same yearBin expansion build-cell-features indexes with, so
@@ -124,7 +124,7 @@ export async function rebuildIndex() {
     )
     WHERE ${datedFeatures(sql`f.start_date`, sql`f.end_date`)}
   `);
-  console.log(`  ✅ ${temporalResult.rowCount} features updated`);
+  console.log(`  ${temporalResult.rowCount} features updated`);
 
   // Check coverage gaps
   type CountRow = { total: string; missing_temporal: string };
@@ -146,10 +146,10 @@ export async function rebuildIndex() {
   const { total_places, missing_spatial } = placeCoverage.rows[0];
 
   if (parseInt(missing_spatial) > 0) {
-    console.log(`  ⚠ ${missing_spatial}/${total_places} featured places have no spatial frequency`);
+    console.log(`  ${missing_spatial}/${total_places} featured places have no spatial frequency`);
   }
   if (parseInt(missing_temporal) > 0) {
-    console.log(`  ⚠ ${missing_temporal}/${total} features have no temporal frequency (missing start_date or end_date)`);
+    console.log(`  ${missing_temporal}/${total} features have no temporal frequency (missing start_date or end_date)`);
   }
 
   // Summary
@@ -239,7 +239,7 @@ export async function rebuildIndex() {
         maxTemporalFrequency: parseInt(freq.max_temporal),
       }
     });
-  console.log('  ✅ Grid config updated');
+  console.log('  Grid config updated');
 
   // Depends on place_cells, so it has to come after the rasterisation above.
   await buildCellFeatures();

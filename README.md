@@ -22,6 +22,7 @@ Rather than curating or contextualising the data, the index presents sources as 
     - [Place names at query time](#place-names-at-query-time)
   - [Temporal indexing](#temporal-indexing)
   - [Unique features rank higher](#unique-features-rank-higher)
+  - [Feature sorting](#feature-sorting)
 - [Dating](#dating)
   - [Feature dates](#feature-dates)
   - [Place dates](#place-dates)
@@ -253,6 +254,18 @@ relevance_score = spatial_frequency / max_spatial + temporal_frequency / max_tem
 
 Lower scores mean features more unique to the time and place.
 
+### Feature sorting
+
+The cell view sorts features in one of five modes. All modes are deterministic.
+
+- **Sample** (default, in the UI and the API). A fair cross-section of the cell. Record types take turns in the list. Within each type, datasets take turns. Order inside a dataset comes from a seeded shuffle (`md5(id || seed)`). In the UI the seed defaults to the cell id. The shuffle button sets a `sampleSeed` URL parameter, so a shared link reproduces the exact order. One seed produces one global order, which keeps pagination consistent across pages.
+- **Spatial** ("Precies gelokaliseerd" in the UI). The same type and dataset rotation, but each dataset's items are ordered by `spatial_frequency`. Items tied to the smallest place come first.
+- **Temporal** ("Precies gedateerd" in the UI). The same rotation, ordered by date range length (`end_date - start_date`). Items with the tightest dating come first: a single day before a month, a month before a year.
+- **Oldest / newest**. Plain chronological order on `start_date`. No rotation. An explicit date sort returns true chronology, even when that puts several items of one type in a row.
+- **Relevance**. The blended `relevance_score` above, with the record type rotation. Available in the API only.
+
+`/api/features` accepts `sort` (`sample` / `relevance` / `spatialFrequency` / `datePrecision` / `date`), `sortDirection`, and `seed`. `sort` defaults to `sample`. `seed` is optional: without one the sample order is fixed and reproducible, and every request without a seed gets the same order.
+
 ## Dating
 
 ### Feature dates
@@ -313,7 +326,7 @@ The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Ada
 
 Adamlink place data must be ingested before any dataset. See the [Development](#development) or [Production](#production) sections for the full ingestion order.
 
-Adamlink is the backbone, but it doesn't cover everything — its addresses stop at 1943, it doesn't include the recently-annexed municipality of Weesp, and it misses some Amsterdam streets. Three national base registries fill those gaps (see [Place datasets](#place-datasets)), and every `place` row records its `source` (`adamlink` / `cbs` / `nwb` / `bag`) and a `url` to the origin record. A feature is skipped at ingest if it can't be resolved to an existing place, or if it lacks the stable source identifier its `id` is derived from — no feature row is created and nothing unlinked lands in the database.
+Adamlink is the backbone, but it doesn't cover everything — its addresses stop at 1943, it lacks Weesp's addresses and areas (its street layer does reach Weesp), and it misses some Amsterdam streets. Three national base registries fill those gaps (see [Place datasets](#place-datasets)), and every `place` row records its `source` (`adamlink` / `cbs` / `nwb` / `bag`) and a `url` to the origin record. A feature is skipped at ingest if it can't be resolved to an existing place, or if it lacks the stable source identifier its `id` is derived from — no feature row is created and nothing unlinked lands in the database.
 
 If you are deploying this for **another Dutch city**, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. A `WKT`-method source like `delpher.ts` shows how a dataset matches incoming coordinates to existing places; for creating new places, adapt the pattern from `lps.ts`. The core requirement is that each feature links to a `place` row that has a geometry.
 
@@ -396,6 +409,8 @@ Ingestion is idempotent and source-driven: corrections are made in the **source 
 | `GET /api/tag-combinations` | Valid next tags for a tag selection — progressive tag filtering (WIP, not yet exposed in the UI) |
 
 Heatmaps, histogram, features, and available-tags accept `recordTypes`, `datasets`, and `placeTypes` (`address` / `street` / `neighbourhood` / `district`) query parameters to filter results.
+
+Invalid input policy: malformed parameters (bad bounds, unknown `timeSlice`) return a 400 with a machine-readable `code`; well-formed filters that match nothing return empty results; display resolution (`binSize`, `cols`) is snapped to the nearest valid value. A fallback never widens a result beyond what was requested.
 
 ## Development
 

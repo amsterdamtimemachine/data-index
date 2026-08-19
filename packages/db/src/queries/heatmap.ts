@@ -8,6 +8,7 @@ import { computeTimeSlices } from './time-slices';
 import { getRecordTypes } from './record-types';
 import { getGridConfig } from './grid-config';
 import { countExpr, displayBinExpr, gridColExpr, gridRowExpr, categoryFilter, binWindow } from './cell-features';
+import { UnknownTimeSliceError } from './errors';
 
 // Query result types
 type GridCellCount = { grid_col: number; grid_row: number; count: string };
@@ -113,7 +114,7 @@ export async function getHeatmap(
   const timeSlice = timeSlices.find(ts => ts.key === timeSliceKey);
 
   if (!timeSlice) {
-    throw new Error(`Unknown time slice: ${timeSliceKey}`);
+    throw new UnknownTimeSliceError(timeSliceKey);
   }
 
   const config = await getGridConfig();

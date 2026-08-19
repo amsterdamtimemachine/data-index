@@ -50,9 +50,12 @@
 		translateAll(hasAllTypes ? allRecordTypes : selectedRecordTypes)
 	);
 
-	const displayedPlaceTypes = $derived(
-		translateAll(hasAllPlaceTypes ? [] : selectedPlaceTypes)
-	);
+	const displayedPlaceTypes = $derived.by(() => {
+		if (hasAllPlaceTypes) {
+			return translateAll(allPlaceTypes);
+		}
+		return translateAll(selectedPlaceTypes);
+	});
 
 	const displayedDatasets = $derived(
 		hasAllDatasets ? allDatasets : selectedDatasets

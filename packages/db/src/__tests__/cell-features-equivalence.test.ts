@@ -22,6 +22,8 @@ import { rebuildIndex } from '../etl/post-process/rebuild-index';
 import { getHeatmapTimeline } from '../queries/heatmap';
 import { getHistogram } from '../queries/histogram';
 import { getGridConfig } from '../queries/grid-config';
+import { getFeatures } from '../queries/features';
+import { UnknownTimeSliceError } from '../queries/errors';
 import { computeTimeSlices } from '../queries/time-slices';
 import type { PlaceType, RecordType } from '@atm/shared';
 
@@ -171,6 +173,43 @@ describe('cell_features ↔ live query equivalence', () => {
     for (const bin of hist.bins) {
       expect(bin.count).toBe(expected.get(bin.timeSlice.startYear) ?? 0);
     }
+  });
+
+  // The optional bounds parameter (mobile per-cell timeline): a box covering the whole
+  // grid must reproduce the unbounded histogram exactly, and a box entirely outside the
+  // data extent must count nothing — the two ends that need no fixture knowledge.
+  test('bounded histogram: full-extent bounds ≡ unbounded; outside bounds ≡ empty', async () => {
+    const types: RecordType[] = ['image'];
+    const cfg = await getGridConfig();
+
+    const unbounded = await getHistogram(types, undefined, undefined, 50);
+    const fullExtent = await getHistogram(types, undefined, undefined, 50, {
+      minLon: cfg.minLon, maxLon: cfg.maxLon, minLat: cfg.minLat, maxLat: cfg.maxLat
+    });
+    expect(fullExtent.totalFeatures).toBe(unbounded.totalFeatures);
+    expect(fullExtent.bins.map(b => b.count)).toEqual(unbounded.bins.map(b => b.count));
+
+    const outside = await getHistogram(types, undefined, undefined, 50, {
+      minLon: cfg.maxLon + 1, maxLon: cfg.maxLon + 2, minLat: cfg.maxLat + 1, maxLat: cfg.maxLat + 2
+    });
+    expect(outside.totalFeatures).toBe(0);
+    expect(outside.bins.every(b => b.count === 0)).toBe(true);
+  });
+
+  // Invalid-input policy: malformed selection errors (never silently widens the
+  // result), well-formed-but-matching-nothing returns empty.
+  test('unknown timeSlice throws UnknownTimeSliceError instead of dropping the filter', async () => {
+    const cfg = await getGridConfig();
+    const bounds = { minLon: cfg.minLon, maxLon: cfg.maxLon, minLat: cfg.minLat, maxLat: cfg.maxLat };
+    expect(
+      getFeatures({ bounds, recordTypes: ['image'], timeSlice: 'not_a_slice' })
+    ).rejects.toThrow(UnknownTimeSliceError);
+  });
+
+  test('unknown filter values return empty results, not errors', async () => {
+    const hist = await getHistogram(['bogus-type' as RecordType], undefined, undefined, 50);
+    expect(hist.totalFeatures).toBe(0);
+    expect(hist.bins.every(b => b.count === 0)).toBe(true);
   });
 
   // Every feature must land in a cell, or it is invisible to both the heatmap and the

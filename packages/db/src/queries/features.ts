@@ -1,9 +1,11 @@
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import type {
   RecordType,
   PlaceType,
   PlaceSource,
   FeaturesQuery,
+  FeaturesSortField,
+  SortDirection,
   FeatureResult,
   FeaturesResponse,
   Entity,
@@ -13,6 +15,8 @@ import { getRecordTypes } from './record-types';
 import { getGridConfig } from './grid-config';
 import { featureYearOverlap } from './time-filter';
 import { featureIdsWithAllTags, featureIdsWithAnyTag } from './filters';
+import { UnknownTimeSliceError } from './errors';
+import { cellRangeCondition } from './cell-features';
 import { db } from '../client';
 import { featureToPlace, place, placeGeometry, placeCells } from '../schema';
 import type { CountRow } from '../row-types';
@@ -70,7 +74,7 @@ type FeatureRow = {
  * them the clamp is a no-op; a viewport wider than the grid simply collapses to
  * the full base-cell range.
  */
-async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Promise<{
+export async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Promise<{
   minCellX: number;
   maxCellX: number;
   minCellY: number;
@@ -117,16 +121,98 @@ async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Promise<{
 }
 
 /**
- * Get date range from time slice key
+ * Get date range from time slice key; throws UnknownTimeSliceError for a key that
+ * matches no slice.
  */
-async function getTimeSliceDateRange(timeSliceKey: string): Promise<{ startYear: number; endYear: number } | null> {
+async function getTimeSliceDateRange(timeSliceKey: string): Promise<{ startYear: number; endYear: number }> {
   const timeSlices = await computeTimeSlices();
   const timeSlice = timeSlices.find(ts => ts.key === timeSliceKey);
-  if (!timeSlice) return null;
+  if (!timeSlice) {
+    throw new UnknownTimeSliceError(timeSliceKey);
+  }
   return {
     startYear: timeSlice.startYear,
     endYear: timeSlice.endYear
   };
+}
+
+// ── sort plans ────────────────────────────────────────────────────────────────
+// The editorial modes interleave record types; sample, spatialFrequency and
+// datePrecision also rotate datasets within each type (double rotation) so no
+// source monopolises a lane. date is flat chronology, bypassing the rotation.
+
+// each dataset's #1 precedes any dataset's #2 within a type's lane
+function doubleRotationCte(laneKey: SQL): SQL {
+  return sql`ranked AS (
+      SELECT *,
+        ROW_NUMBER() OVER (
+          PARTITION BY record_type
+          ORDER BY dataset_rank, ${laneKey}, id ASC
+        ) as type_rank
+      FROM (
+        SELECT *,
+          ROW_NUMBER() OVER (
+            PARTITION BY record_type, dataset_id
+            ORDER BY ${laneKey}, id ASC
+          ) as dataset_rank
+        FROM filtered
+      ) dataset_ranked
+    )`;
+}
+
+function singleRotationCte(laneKey: SQL): SQL {
+  return sql`ranked AS (
+      SELECT *,
+        ROW_NUMBER() OVER (
+          PARTITION BY record_type
+          ORDER BY ${laneKey}, id ASC
+        ) as type_rank
+      FROM filtered
+    )`;
+}
+
+const INTERLEAVED_ORDER = sql`type_rank, record_type, id`;
+
+function sortPlan(
+  sort: FeaturesSortField,
+  sortDirection: SortDirection,
+  seed: string
+): { rankedCte: SQL; orderBy: SQL } {
+  if (sort === 'sample') {
+    return {
+      rankedCte: doubleRotationCte(sql`md5(id::text || ${seed})`),
+      orderBy: INTERLEAVED_ORDER
+    };
+  }
+  if (sort === 'spatialFrequency') {
+    // lower spatial_frequency = fewer cells = more specific to the place
+    let laneKey = sql`spatial_frequency ASC NULLS LAST, start_date ASC NULLS LAST`;
+    if (sortDirection === 'asc') {
+      laneKey = sql`spatial_frequency DESC NULLS LAST, start_date DESC NULLS LAST`;
+    }
+    return { rankedCte: doubleRotationCte(laneKey), orderBy: INTERLEAVED_ORDER };
+  }
+  if (sort === 'datePrecision') {
+    // shortest date range = most precisely dated
+    let laneKey = sql`(end_date - start_date) ASC NULLS LAST, start_date ASC NULLS LAST`;
+    if (sortDirection === 'asc') {
+      laneKey = sql`(end_date - start_date) DESC NULLS LAST, start_date DESC NULLS LAST`;
+    }
+    return { rankedCte: doubleRotationCte(laneKey), orderBy: INTERLEAVED_ORDER };
+  }
+  if (sort === 'date') {
+    let orderBy = sql`start_date DESC NULLS LAST, id`;
+    if (sortDirection === 'asc') {
+      orderBy = sql`start_date ASC NULLS LAST, id`;
+    }
+    return { rankedCte: sql`ranked AS (SELECT * FROM filtered)`, orderBy };
+  }
+  // relevance: the legacy blended score, single rotation (API-only, no UI entry)
+  let laneKey = sql`relevance_score ASC NULLS LAST, start_date ASC NULLS LAST`;
+  if (sortDirection === 'asc') {
+    laneKey = sql`relevance_score DESC NULLS LAST, start_date DESC NULLS LAST`;
+  }
+  return { rankedCte: singleRotationCte(laneKey), orderBy: INTERLEAVED_ORDER };
 }
 
 /**
@@ -141,8 +227,9 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     tags: tagFilters,
     tagOperator = 'OR',
     timeSlice,
-    sort = 'relevance',
+    sort = 'sample',
     sortDirection = 'desc',
+    seed = '',
     page = 1,
     pageSize = 50
   } = query;
@@ -151,7 +238,10 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   const cellRange = await boundsToBaseCellRange(bounds);
 
   // Get date range from time slice
-  const dateRange = timeSlice ? await getTimeSliceDateRange(timeSlice) : null;
+  let dateRange: { startYear: number; endYear: number } | null = null;
+  if (timeSlice) {
+    dateRange = await getTimeSliceDateRange(timeSlice);
+  }
 
   // Default to every record type in the data — same fallback as the heatmap and
   // histogram, so an unfiltered feature list always matches an unfiltered heatmap.
@@ -181,8 +271,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   }
 
   // Build WHERE conditions
-  const cellCondition = sql`pc.cell_x BETWEEN ${cellRange.minCellX} AND ${cellRange.maxCellX}
-    AND pc.cell_y BETWEEN ${cellRange.minCellY} AND ${cellRange.maxCellY}`;
+  const cellCondition = cellRangeCondition(sql`pc.cell_x`, sql`pc.cell_y`, cellRange);
 
   const typeCondition = sql`f.record_type IN ${types}`;
 
@@ -230,124 +319,96 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     return { data: [], total: 0, page, pageSize, totalPages: 0 };
   }
 
-  // Build ORDER BY for window function
-  // Main query with window function for interleaved record types
-  // Note: Using raw SQL string for window function ORDER BY since Drizzle doesn't support it well
   // Get max frequencies for relevance score normalisation
   const { maxSpatialFrequency: maxSpatial, maxTemporalFrequency: maxTemporal } = await getGridConfig();
 
-  // Lower score = more specific = higher relevance
-  const orderByRelevance = sortDirection === 'desc'
-    ? 'relevance_score ASC NULLS LAST, start_date ASC NULLS LAST'
-    : 'relevance_score DESC NULLS LAST, start_date DESC NULLS LAST';
+  const { rankedCte, orderBy } = sortPlan(sort, sortDirection, seed);
 
-  const orderBySpatialFrequency = sortDirection === 'desc'
-    ? 'spatial_frequency ASC NULLS LAST, start_date ASC NULLS LAST'
-    : 'spatial_frequency DESC NULLS LAST, start_date DESC NULLS LAST';
-
-  const orderByDate = sortDirection === 'desc'
-    ? 'start_date DESC NULLS LAST, relevance_score ASC NULLS LAST'
-    : 'start_date ASC NULLS LAST, relevance_score DESC NULLS LAST';
-
-  const windowOrderBy = sort === 'relevance' ? orderByRelevance
-    : sort === 'spatialFrequency' ? orderBySpatialFrequency
-    : orderByDate;
-
+  // filtered/ranked/page decide membership and order on narrow rows; the final
+  // SELECT joins the presentation columns for just the page's rows.
   const result = await db.execute<FeatureRow>(sql`
     WITH filtered AS (
       SELECT DISTINCT ON (f.id)
         f.id,
-        f.url,
         f.record_type,
-        p.type as place_type,
-        f.label,
-        f.description,
-        f.content_url,
+        f.dataset_id,
         f.start_date,
         f.end_date,
         pg.spatial_frequency,
         f.temporal_frequency,
         (COALESCE(pg.spatial_frequency::float, 0) / ${maxSpatial}
          + COALESCE(f.temporal_frequency::float, 0) / ${maxTemporal}) as relevance_score,
-        d.label as dataset_label,
-        d.url as dataset_url,
-        o.label as organisation_label,
-        o.url as organisation_url,
-        f.entity,
-        fp.relation_id,
-        p.name,
-        p.source as place_source,
-        p.url as place_url,
-        po.label as place_provider_label,
-        po.url as place_provider_url,
-        go.label as geometry_provider_label,
-        pg.url as geometry_url,
-        (SELECT a.name FROM place_historical_name a
-         WHERE a.place_id = fp.place_id
-           AND a.since <= f.end_date
-         ORDER BY a.since DESC LIMIT 1) as historical_label
+        p.type as place_type,
+        p.id as place_id,
+        fp.relation_id
       ${featureSpine}
       JOIN ${placeGeometry} pg ON pc.place_id = pg.place_id
-      LEFT JOIN datasets d ON f.dataset_id = d.id
-      LEFT JOIN organisations o ON d.organisation_id = o.id
-      LEFT JOIN organisations po ON p.source = po.id
-      LEFT JOIN organisations go ON pg.source = go.id
       WHERE ${featureWhere}
+      -- DISTINCT ON needs a deterministic survivor: for a multi-linked feature, keep
+      -- the finest place (matching the resolution spec's most-specific rule), then
+      -- place id as a stable tiebreak. Without this the surviving row — and with it
+      -- place_type and relevance_score — varied per execution, shifting page
+      -- boundaries between otherwise identical requests.
+      ORDER BY f.id,
+        CASE p.type WHEN 'address' THEN 0 WHEN 'street' THEN 1 WHEN 'neighbourhood' THEN 2 ELSE 3 END,
+        p.id
     ),
-    with_tags AS (
-      SELECT
-        f.*,
-        COALESCE(
-          ARRAY(
-            SELECT t.label
-            FROM feature_tags ft
-            JOIN tags t ON ft.tag_id = t.id
-            WHERE ft.feature_id = f.id
-          ),
-          ARRAY[]::text[]
-        ) as tags
-      FROM filtered f
-    ),
-    ranked AS (
-      SELECT *,
-        ROW_NUMBER() OVER (
-          PARTITION BY record_type
-          ORDER BY ${sql.raw(windowOrderBy)}, id ASC
-        ) as type_rank
-      FROM with_tags
+    ${rankedCte},
+    page AS (
+      SELECT *, ROW_NUMBER() OVER (ORDER BY ${orderBy}) as page_order
+      FROM ranked
+      ORDER BY ${orderBy}
+      LIMIT ${pageSize}
+      OFFSET ${offset}
     )
     SELECT
-      id,
-      url,
-      record_type,
-      place_type,
-      label,
-      description,
-      content_url,
-      start_date,
-      end_date,
-      spatial_frequency,
-      temporal_frequency,
-      relevance_score,
-      dataset_label,
-      dataset_url,
-      organisation_label,
-      organisation_url,
-      entity,
-      relation_id,
-      name,
-      historical_label,
-      place_source,
-      place_url,
-      place_provider_label,
-      place_provider_url,
-      geometry_provider_label,
-      geometry_url,
-      tags
-    FROM ranked
-    ORDER BY type_rank, record_type, id
-    LIMIT ${pageSize}
-    OFFSET ${offset}
+      page.id,
+      f.url,
+      page.record_type,
+      page.place_type,
+      f.label,
+      f.description,
+      f.content_url,
+      page.start_date,
+      page.end_date,
+      page.spatial_frequency,
+      page.temporal_frequency,
+      page.relevance_score,
+      d.label as dataset_label,
+      d.url as dataset_url,
+      o.label as organisation_label,
+      o.url as organisation_url,
+      f.entity,
+      page.relation_id,
+      p.name,
+      (SELECT a.name FROM place_historical_name a
+       WHERE a.place_id = page.place_id
+         AND a.since <= page.end_date
+       ORDER BY a.since DESC LIMIT 1) as historical_label,
+      p.source as place_source,
+      p.url as place_url,
+      po.label as place_provider_label,
+      po.url as place_provider_url,
+      go.label as geometry_provider_label,
+      pg.url as geometry_url,
+      COALESCE(
+        ARRAY(
+          SELECT t.label
+          FROM feature_tags ft
+          JOIN tags t ON ft.tag_id = t.id
+          WHERE ft.feature_id = page.id
+        ),
+        ARRAY[]::text[]
+      ) as tags
+    FROM page
+    JOIN features f ON f.id = page.id
+    JOIN ${place} p ON p.id = page.place_id
+    JOIN ${placeGeometry} pg ON pg.place_id = page.place_id
+    LEFT JOIN datasets d ON page.dataset_id = d.id
+    LEFT JOIN organisations o ON d.organisation_id = o.id
+    LEFT JOIN organisations po ON p.source = po.id
+    LEFT JOIN organisations go ON pg.source = go.id
+    ORDER BY page.page_order
   `);
 
   // Transform results

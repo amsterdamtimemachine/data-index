@@ -24,6 +24,15 @@ const TRANSLATIONS: Record<string, string> = {
 	date: 'Datum',
 	author: 'Auteur',
 
+	// Sorting
+	sortLabel: 'Sortering',
+	sortSample: 'Van alles wat',
+	sortSpatial: 'Precies gelokaliseerd',
+	sortTemporal: 'Precies gedateerd',
+	sortOldest: 'Oudste eerst',
+	sortNewest: 'Nieuwste eerst',
+	reshuffle: 'Schud opnieuw',
+
 	// UI labels
 	filters: 'Filters',
 	dataset: 'Dataset',

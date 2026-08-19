@@ -28,7 +28,7 @@
 	// keys this component on totalItems/itemsPerPage to re-seed it when the dataset changes.
 	const {
 		elements: { root, pageTrigger, prevButton, nextButton },
-		states: { pages, range }
+		states: { pages }
 	} = createPagination({
 		// svelte-ignore state_referenced_locally
 		count: totalItems,
@@ -48,7 +48,7 @@
 </script>
 
 <nav
-	class="flex items-center gap-2 {className || ''}"
+	class="flex flex-wrap items-center gap-2 {className || ''}"
 	class:opacity-50={loading}
 	class:pointer-events-none={loading}
 	aria-label="pagination"

@@ -2,46 +2,17 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { FeaturesSortField, SortDirection, TagOperator } from '@atm/shared/types';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_MAX } from '@atm/shared';
-import { getFeatures } from '@atm/db';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList } from '$lib/server/query-params';
+import { getFeatures, UnknownTimeSliceError } from '@atm/db';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList, parseBounds, parseSeed } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
-		// Parse bounds (required)
-		const minLon = url.searchParams.get('minLon');
-		const maxLon = url.searchParams.get('maxLon');
-		const minLat = url.searchParams.get('minLat');
-		const maxLat = url.searchParams.get('maxLat');
-
-		if (!minLon || !maxLon || !minLat || !maxLat) {
+		// Parse bounds (required here, unlike the histogram endpoint)
+		const bounds = parseBounds(url);
+		if (!bounds) {
 			throw error(400, {
 				code: 'MISSING_BOUNDS',
 				message: 'Missing required bounds parameters: minLon, maxLon, minLat, maxLat'
-			});
-		}
-
-		const bounds = {
-			minLon: parseFloat(minLon),
-			maxLon: parseFloat(maxLon),
-			minLat: parseFloat(minLat),
-			maxLat: parseFloat(maxLat)
-		};
-
-		// Validate bounds
-		if (Object.values(bounds).some(isNaN)) {
-			throw error(400, {
-				code: 'INVALID_BOUNDS',
-				message: 'Bounds must be valid numbers'
-			});
-		}
-		// Reject inverted/degenerate boxes up front (min must be below max on both
-		// axes) rather than doing a grid lookup + empty query for a box that can
-		// never contain anything. getFeatures already clamps a valid box to the data
-		// extent, so an oversized-but-ordered box is handled there.
-		if (bounds.minLon >= bounds.maxLon || bounds.minLat >= bounds.maxLat) {
-			throw error(400, {
-				code: 'INVALID_BOUNDS',
-				message: 'Bounds must have minLon < maxLon and minLat < maxLat'
 			});
 		}
 
@@ -53,10 +24,11 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		const tagOperator = (url.searchParams.get('tagOperator') || 'OR').toUpperCase() as TagOperator;
 		const timeSlice = url.searchParams.get('timeSlice') || undefined;
-		const sort = url.searchParams.get('sort') || 'relevance';
+		const sort = url.searchParams.get('sort') || 'sample';
 		const sortDirection = url.searchParams.get('sortDirection') || 'desc';
+		const seed = parseSeed(url);
 
-		if (!['relevance', 'spatialFrequency', 'date'].includes(sort)) {
+		if (!['sample', 'relevance', 'spatialFrequency', 'datePrecision', 'date'].includes(sort)) {
 			throw error(400, { code: 'INVALID_SORT', message: 'Invalid sort field' });
 		}
 		if (!['asc', 'desc'].includes(sortDirection)) {
@@ -70,7 +42,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		);
 
 		console.log(
-			`📦 Features API request - bounds: [${bounds.minLon.toFixed(4)}, ${bounds.minLat.toFixed(4)}] to [${bounds.maxLon.toFixed(4)}, ${bounds.maxLat.toFixed(4)}], ` +
+			`Features API request - bounds: [${bounds.minLon.toFixed(4)}, ${bounds.minLat.toFixed(4)}] to [${bounds.maxLon.toFixed(4)}, ${bounds.maxLat.toFixed(4)}], ` +
 			`recordTypes: ${recordTypes?.join(', ') || 'all'}, ` +
 			`tags: ${tags?.join(', ') || 'none'} (${tagOperator}), ` +
 			`timeSlice: ${timeSlice || 'all'}, ` +
@@ -88,12 +60,13 @@ export const GET: RequestHandler = async ({ url }) => {
 			timeSlice,
 			sort: sort as FeaturesSortField,
 			sortDirection: sortDirection as SortDirection,
+			seed,
 			page,
 			pageSize
 		});
 
 		console.log(
-			`✅ Features API success - ${result.data.length} features returned (page ${result.page}/${result.totalPages}, total: ${result.total})`
+			`Features API success - ${result.data.length} features returned (page ${result.page}/${result.totalPages}, total: ${result.total})`
 		);
 
 		const headers = {
@@ -106,7 +79,10 @@ export const GET: RequestHandler = async ({ url }) => {
 		if (err && typeof err === 'object' && 'status' in err) {
 			throw err; // Re-throw SvelteKit errors
 		}
-		console.error('❌ Features API unexpected error:', err);
+		if (err instanceof UnknownTimeSliceError) {
+			throw error(400, { code: 'INVALID_TIME_SLICE', message: err.message });
+		}
+		console.error('Features API unexpected error:', err);
 		throw error(500, {
 			code: 'INTERNAL_ERROR',
 			message: 'Failed to load features'

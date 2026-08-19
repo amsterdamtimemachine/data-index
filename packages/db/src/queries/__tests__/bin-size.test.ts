@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { PRECOMP_TIME_BIN_YEARS, DISPLAY_TIME_BIN_MIN_YEARS, DISPLAY_TIME_BIN_MAX_YEARS } from '@atm/shared';
-import { normaliseBinSize } from './bin-size';
+import { normaliseBinSize } from '../bin-size';
 
 // These assume the defaults (PRECOMP_TIME_BIN_YEARS=10, DISPLAY_TIME_BIN_MIN_YEARS=10, DISPLAY_TIME_BIN_MAX_YEARS=100). The
 // snap-to-multiple is what keeps the cell_features rollup exact: a display bin must be a
