@@ -24,7 +24,7 @@ function sortParams(query: CellFeaturesQuery): Record<string, string> {
 		return { sort: 'spatialFrequency', sortDirection: 'desc' };
 	}
 	if (query.sortMode === 'temporal') {
-		return { sort: 'temporalFrequency', sortDirection: 'desc' };
+		return { sort: 'datePrecision', sortDirection: 'desc' };
 	}
 	if (query.sortMode === 'oldest') {
 		return { sort: 'date', sortDirection: 'asc' };

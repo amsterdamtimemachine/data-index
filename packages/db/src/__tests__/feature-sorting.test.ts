@@ -6,7 +6,8 @@
  *
  * Fixture: 2 record types × 2 datasets × 4 features each, with engineered
  * spatial_frequency (point place = 1 cell, line place = ~6 cells) and dates
- * (images 1900s, texts 1950s; the later half of each pile spans two time slices).
+ * (images 1900s, texts 1950s; i=1 is single-dated, i=0 spans a year, the later
+ * half of each pile spans two time slices).
  */
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
@@ -89,13 +90,19 @@ describe('feature sorting', () => {
       }
       for (const dataset of DATASETS) {
         for (let i = 0; i < 4; i++) {
-          const start = `${baseYear + i * 5}-01-01`;
+          let start = `${baseYear + i * 5}-01-01`;
           // the later half of each pile spans two display slices
           let endYear = baseYear + i * 5;
           if (i >= 2) {
             endYear += 60;
           }
-          const end = `${endYear}-12-31`;
+          let end = `${endYear}-12-31`;
+          // single-dated but starting later than i=0's year span:
+          // precision must beat start_date
+          if (i === 1) {
+            start = `${baseYear + 5}-06-15`;
+            end = start;
+          }
           let placeId = 'p-fine';
           if (i % 2 === 1) {
             placeId = 'p-coarse';
@@ -151,6 +158,18 @@ describe('feature sorting', () => {
     expect(pages).toEqual(ids(whole));
   });
 
+  test('default sort is sample with the empty seed', async () => {
+    const cfg = await getGridConfig();
+    const bare = await getFeatures({
+      bounds: { minLon: cfg.minLon, maxLon: cfg.maxLon, minLat: cfg.minLat, maxLat: cfg.maxLat },
+      recordTypes: TYPES,
+      page: 1,
+      pageSize: 100
+    });
+    const explicit = await fetchAll('sample', { seed: '' });
+    expect(ids(bare.data)).toEqual(ids(explicit));
+  });
+
   test('spatialFrequency: rotates fairly and orders each pile most-specific first', async () => {
     const data = await fetchAll('spatialFrequency');
     assertRoundRobin(data.map((f) => f.recordType));
@@ -166,17 +185,55 @@ describe('feature sorting', () => {
     }
   });
 
-  test('temporalFrequency: rotates fairly and orders each pile tightest-dated first', async () => {
-    const data = await fetchAll('temporalFrequency');
+  test('datePrecision: rotates fairly and orders each pile tightest-dated first', async () => {
+    const data = await fetchAll('datePrecision');
     assertRoundRobin(data.map((f) => f.recordType));
     for (const type of TYPES) {
       const lane = data.filter((f) => f.recordType === type);
       assertRoundRobin(lane.map((f) => f.datasetLabel ?? ''));
-      for (const dataset of DATASETS.map((d) => `Dataset ${d.slice(-1)}`)) {
-        const pile = lane.filter((f) => f.datasetLabel === dataset);
-        for (let i = 1; i < pile.length; i++) {
-          expect(pile[i].temporalFrequency).toBeGreaterThanOrEqual(pile[i - 1].temporalFrequency);
+      for (const dataset of DATASETS) {
+        const pile = lane.filter((f) => f.label.startsWith(`${type}-${dataset}-`));
+        const spans = pile.map((f) => f.dateRange[1] - f.dateRange[0]);
+        for (let i = 1; i < spans.length; i++) {
+          expect(spans[i]).toBeGreaterThanOrEqual(spans[i - 1]);
         }
+        // the single-dated i=1 beats the year-spanning i=0 despite its later start
+        const labels = pile.map((f) => f.label);
+        expect(labels.indexOf(`${type}-${dataset}-1`)).toBeLessThan(
+          labels.indexOf(`${type}-${dataset}-0`)
+        );
+      }
+    }
+  });
+
+  function relevanceScore(f: FeatureResult, maxSpatial: number, maxTemporal: number): number {
+    return f.spatialFrequency / maxSpatial + f.temporalFrequency / maxTemporal;
+  }
+
+  test('relevance: rotates record types and orders each lane most-unique first', async () => {
+    const cfg = await getGridConfig();
+    const data = await fetchAll('relevance');
+    expect(data.length).toBe(16);
+    assertRoundRobin(data.map((f) => f.recordType));
+    for (const type of TYPES) {
+      const lane = data.filter((f) => f.recordType === type);
+      for (let i = 1; i < lane.length; i++) {
+        const prev = relevanceScore(lane[i - 1], cfg.maxSpatialFrequency, cfg.maxTemporalFrequency);
+        const curr = relevanceScore(lane[i], cfg.maxSpatialFrequency, cfg.maxTemporalFrequency);
+        expect(curr).toBeGreaterThanOrEqual(prev - 1e-9);
+      }
+    }
+  });
+
+  test('relevance: asc direction flips each lane to least-unique first', async () => {
+    const cfg = await getGridConfig();
+    const data = await fetchAll('relevance', { sortDirection: 'asc' });
+    for (const type of TYPES) {
+      const lane = data.filter((f) => f.recordType === type);
+      for (let i = 1; i < lane.length; i++) {
+        const prev = relevanceScore(lane[i - 1], cfg.maxSpatialFrequency, cfg.maxTemporalFrequency);
+        const curr = relevanceScore(lane[i], cfg.maxSpatialFrequency, cfg.maxTemporalFrequency);
+        expect(curr).toBeLessThanOrEqual(prev + 1e-9);
       }
     }
   });
