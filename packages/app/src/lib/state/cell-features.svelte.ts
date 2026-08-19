@@ -26,6 +26,9 @@ function sortParams(query: CellFeaturesQuery): Record<string, string> {
 	if (query.sortMode === 'temporal') {
 		return { sort: 'datePrecision', sortDirection: 'desc' };
 	}
+	if (query.sortMode === 'relevance') {
+		return { sort: 'relevance', sortDirection: 'desc' };
+	}
 	if (query.sortMode === 'oldest') {
 		return { sort: 'date', sortDirection: 'asc' };
 	}
