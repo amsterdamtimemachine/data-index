@@ -7,7 +7,7 @@ import { cellFeatures } from '../schema';
 import { computeTimeSlices } from './time-slices';
 import { getRecordTypes } from './record-types';
 import { getGridConfig } from './grid-config';
-import { countExpr, displayBinExpr, gridColExpr, gridRowExpr, categoryFilter, binWindow } from './cell-features';
+import { countExpr, displayBinExpr, gridColExpr, gridRowExpr, categoryFilter, binWindow, deriveGrid } from './cell-features';
 import { UnknownTimeSliceError } from './errors';
 
 // Query result types
@@ -70,21 +70,6 @@ function buildRd(minX: number, minY: number, maxCellX: number, maxCellY: number,
 }
 
 /**
- * Derive the display grid from a width (cols) only. Rows follow the data's
- * aspect ratio — (maxCellY+1)/(maxCellX+1) — so each display cell is square in RD
- * metres (and, since Web Mercator is conformal, square on screen). Both axes are
- * capped at the base-cell resolution.
- */
-function deriveGrid(cols: number, maxCellX: number, maxCellY: number): { gridCols: number; gridRows: number } {
-  const gridCols = Math.min(cols, maxCellX + 1);
-  const gridRows = Math.min(
-    Math.max(1, Math.round((gridCols * (maxCellY + 1)) / (maxCellX + 1))),
-    maxCellY + 1
-  );
-  return { gridCols, gridRows };
-}
-
-/**
  * Get heatmap for a single time slice with combined record types
  */
 export async function getHeatmap(
@@ -131,8 +116,8 @@ export async function getHeatmap(
 
   const result = await db.execute<GridCellCount>(sql`
     SELECT
-      ${gridColExpr(gridCols, maxX)} as grid_col,
-      ${gridRowExpr(gridRows, maxY)} as grid_row,
+      ${gridColExpr(sql`${cellFeatures.cellX}`, gridCols, maxX)} as grid_col,
+      ${gridRowExpr(sql`${cellFeatures.cellY}`, gridRows, maxY)} as grid_row,
       ${countExpr} as count
     FROM ${cellFeatures}
     WHERE ${categoryFilter(types, datasetIds, placeTypes)}
@@ -189,8 +174,8 @@ export async function getHeatmapTimeline(
   // display bin is integer division and the whole timeline is one grouped scan.
   const result = await db.execute<GridCellCountWithTime>(sql`
     SELECT
-      ${gridColExpr(gridCols, maxX)} as grid_col,
-      ${gridRowExpr(gridRows, maxY)} as grid_row,
+      ${gridColExpr(sql`${cellFeatures.cellX}`, gridCols, maxX)} as grid_col,
+      ${gridRowExpr(sql`${cellFeatures.cellY}`, gridRows, maxY)} as grid_row,
       ${displayBinExpr(binSizeYears)} as display_bin,
       ${countExpr} as count
     FROM ${cellFeatures}

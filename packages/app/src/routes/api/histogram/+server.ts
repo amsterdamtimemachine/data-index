@@ -12,6 +12,8 @@ export const GET: RequestHandler = async ({ url }) => {
 		const placeTypes = parsePlaceTypes(url);
 		// Optional: restrict to a WGS84 box (the mobile per-cell timeline); absent → city-wide.
 		const bounds = parseBounds(url);
+		// Optional: restrict to the cells of one place (the search timeline series).
+		const placeId = url.searchParams.get('placeId')?.slice(0, 512) || undefined;
 
 		// Parse bin size
 		// Forwarded as-is; the query layer clamps and snaps it to a valid bin (normaliseBinSize).
@@ -20,7 +22,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		console.log(`Histogram API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, binSize: ${binSize}`);
 
-		const histogram = await getHistogram(recordTypes, datasetIds, placeTypes, binSize, bounds);
+		const histogram = await getHistogram(recordTypes, datasetIds, placeTypes, binSize, bounds, placeId);
 
 		console.log(
 			`Histogram: ${histogram.bins.length} bins, ${histogram.totalFeatures} total features`

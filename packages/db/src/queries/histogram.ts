@@ -7,7 +7,7 @@ import { cellFeatures } from '../schema';
 import type { CountRow } from '../row-types';
 import { computeTimeSlices, computeTimeRange } from './time-slices';
 import { getRecordTypes } from './record-types';
-import { countExpr, displayBinExpr, categoryFilter, binWindow, cellRangeCondition } from './cell-features';
+import { countExpr, displayBinExpr, categoryFilter, binWindow, cellRangeCondition, placeCellsCondition } from './cell-features';
 import { boundsToBaseCellRange } from './features';
 
 // Query result types
@@ -31,7 +31,8 @@ export async function getHistogram(
   datasetIds?: string[],
   placeTypes?: PlaceType[],
   binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS,
-  bounds?: { minLon: number; maxLon: number; minLat: number; maxLat: number }
+  bounds?: { minLon: number; maxLon: number; minLat: number; maxLat: number },
+  placeId?: string
 ): Promise<Histogram> {
   const types = recordTypes || await getRecordTypes();
 
@@ -58,6 +59,10 @@ export async function getHistogram(
     const range = await boundsToBaseCellRange(bounds);
     cellCondition = cellRangeCondition(sql`${cellFeatures.cellX}`, sql`${cellFeatures.cellY}`, range);
   }
+  if (placeId) {
+    cellCondition = sql`${cellCondition} AND ${placeCellsCondition(placeId)}`;
+  }
+
 
   const result = await db.execute<BinRow>(sql`
     SELECT (${displayBinExpr(binSizeYears)})::text as bin_start, ${countExpr} as count
