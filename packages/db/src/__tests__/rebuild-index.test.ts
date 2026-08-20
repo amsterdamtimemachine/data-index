@@ -14,6 +14,7 @@ import { rebuildIndex } from '../etl/post-process/rebuild-index';
 
 const POLY_ID = 'poly-fill';
 const LINE_ID = 'line-cover';
+const LONE_ID = 'lone-unlinked';
 const FID = '11111111-1111-1111-1111-1111111111aa';
 const FID2 = '11111111-1111-1111-1111-1111111111bb';
 
@@ -53,6 +54,15 @@ describe('rebuild-index line + polygon rasterisation', () => {
     `);
     await db.execute(sql`INSERT INTO feature_to_place (feature_id, place_id, relation_id) VALUES (${FID2}, ${LINE_ID}, 'isAbout')`);
 
+    // An unlinked place: no feature links to it. It must still be rasterised and
+    // must widen the grid frame (the frame follows the gazetteer, not the data),
+    // while contributing nothing to cell_features.
+    await db.execute(sql`INSERT INTO place (id, type) VALUES (${LONE_ID}, 'address')`);
+    await db.execute(sql`
+      INSERT INTO place_geometry (place_id, geometry) VALUES (${LONE_ID},
+        ST_GeomFromText('POINT(122550.5 487550.5)', 28992))
+    `);
+
     await rebuildIndex();
   });
 
@@ -87,5 +97,25 @@ describe('rebuild-index line + polygon rasterisation', () => {
     const set = new Set(cells.rows.map(r => `${r.cell_x},${r.cell_y}`));
     expect(cells.rows.length).toBe(3);
     for (const c of ['10,10', '11,10', '12,10']) expect(set.has(c)).toBe(true);
+  });
+
+  test('unlinked place is rasterised and widens the grid frame', async () => {
+    const cells = await db.execute<{ cell_x: number; cell_y: number }>(
+      sql`SELECT cell_x, cell_y FROM place_cells WHERE place_id = ${LONE_ID}`
+    );
+    expect(cells.rows).toEqual([{ cell_x: 25, cell_y: 25 }]);
+
+    const cfg = await db.execute<{ max_cell_x: number; max_cell_y: number }>(
+      sql`SELECT max_cell_x, max_cell_y FROM grid_config WHERE id = 'current'`
+    );
+    expect(cfg.rows[0].max_cell_x).toBe(25);
+    expect(cfg.rows[0].max_cell_y).toBe(25);
+  });
+
+  test('unlinked place stays heatmap-inert: no cell_features rows in its cell', async () => {
+    const r = await db.execute<{ n: string }>(
+      sql`SELECT COUNT(*) AS n FROM cell_features WHERE cell_x = 25 AND cell_y = 25`
+    );
+    expect(parseInt(r.rows[0].n)).toBe(0);
   });
 });

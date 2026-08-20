@@ -27,11 +27,6 @@ export function yearBin(dateCol: SQL): SQL {
   return sql`(FLOOR(EXTRACT(YEAR FROM ${dateCol}) / ${PRECOMP_TIME_BIN_YEARS}::int) * ${PRECOMP_TIME_BIN_YEARS}::int)::int`;
 }
 
-/** A place with at least one feature linked — the "worth indexing" predicate. */
-export function hasLinkedFeatures(placeIdCol: SQL): SQL {
-  return sql`EXISTS (SELECT 1 FROM feature_to_place _fp WHERE _fp.place_id = ${placeIdCol})`;
-}
-
 /**
  * Grid-cell index of an RD coordinate on the base grid anchored at `origin`
  * (metres). Uncast — call sites append ::int / ::smallint as their column needs.

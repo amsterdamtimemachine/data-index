@@ -32,8 +32,8 @@ export class BagAddressesFetcher extends PdokFetcher<BagProps> {
   protected layers = ['bag:verblijfsobject'];
   protected ndjson = true;
 
-  // Task scope: Amsterdam (current addresses) + Weesp (identificatie 0457*, still
-  // present post-annexation; not in Adamlink). Peripheral parked — add them here to re-expand.
+  // Full ACTIVE_SCOPE: Amsterdam + Weesp (identificatie 0457*, still present
+  // post-annexation; not in Adamlink). Peripheral parked — add here to re-expand.
   protected gemeenten() { return [AMSTERDAM, WEESP]; }
   protected service() { return SERVICE; }
   protected gemeenteFilter(g: Gemeente) { return wrap(likeIdent(g.code.slice(2))); }

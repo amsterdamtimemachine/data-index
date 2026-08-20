@@ -36,8 +36,8 @@ export class NwbStreetsFetcher extends PdokFetcher<NwbProps> {
   protected source = 'nwb' as const;
   protected layers = ['nwbwegen:wegvakken'];
 
-  // Task scope: Amsterdam only (gmeId 363, incl. annexed Weesp — its roads moved to
-  // 363 post-annexation). Peripheral municipalities parked — add them here to re-expand.
+  // ACTIVE_SCOPE refinement: Amsterdam only (gmeId 363, incl. annexed Weesp — its
+  // roads moved to 363 post-annexation). Peripheral parked — add here to re-expand.
   protected gemeenten() { return [AMSTERDAM]; }
   protected service() { return SERVICE; }
   protected gemeenteFilter(g: Gemeente) { return fesEq('gmeId', String(parseInt(g.code.slice(2), 10))); }
