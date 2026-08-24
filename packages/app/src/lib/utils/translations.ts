@@ -35,6 +35,7 @@ const TRANSLATIONS: Record<string, string> = {
 	reshuffle: 'Schud opnieuw',
 
 	// UI labels
+	searchPlaceholder: 'Zoek een plek op de kaart',
 	filters: 'Filters',
 	dataset: 'Dataset',
 	dataProvider: 'Databron',

@@ -30,6 +30,8 @@ type SearchRow = {
   matched_since: string | null;
   matched_until: string | null;
   matched_historical: boolean;
+  geometry_since: string | null;
+  geometry_until: string | null;
   feature_count: string;
   cells: number[] | null;
 };
@@ -62,6 +64,10 @@ function toMatch(row: SearchRow): PlaceSearchMatch {
   if (matchedName === null) {
     matchedName = '';
   }
+  let geometryWindow: [string | null, string | null] | null = null;
+  if (row.geometry_since || row.geometry_until) {
+    geometryWindow = [row.geometry_since, row.geometry_until];
+  }
   return {
     placeId: row.id,
     name: row.name,
@@ -69,6 +75,7 @@ function toMatch(row: SearchRow): PlaceSearchMatch {
     source: row.source,
     matchedName,
     matchedWindow,
+    geometryWindow,
     featureCount: parseInt(row.feature_count),
     cells
   };
@@ -86,6 +93,10 @@ export async function searchPlaces(query: string, options: PlaceSearchOptions = 
   const lowered = q.toLowerCase();
   const prefix = lowered.replace(/([\\%_])/g, '\\$1') + '%';
 
+  // house numbers only once the query contains a digit (the Locatieserver
+  // convention): a bare name means the street or area, not its 400 addresses
+  const withAddresses = /\d/.test(q);
+
   const result = await db.execute<SearchRow>(sql`
     WITH matches AS (
       SELECT p.id, p.name, p.type, p.source,
@@ -94,12 +105,14 @@ export async function searchPlaces(query: string, options: PlaceSearchOptions = 
              FALSE AS matched_historical
       FROM place p
       WHERE lower(p.name) LIKE ${prefix}
+        AND (p.type <> 'address' OR ${withAddresses})
       UNION ALL
       SELECT p.id, p.name, p.type, p.source,
              h.name AS matched_name, h.since, h.until, TRUE
       FROM place_historical_name h
       JOIN place p ON p.id = h.place_id
       WHERE lower(h.name) LIKE ${prefix}
+        AND (p.type <> 'address' OR ${withAddresses})
     ),
     -- one row per place: a current-name match outranks a historical one, and
     -- among historical names the most recent window wins
@@ -119,9 +132,11 @@ export async function searchPlaces(query: string, options: PlaceSearchOptions = 
     SELECT page.id, page.name, page.type, page.source,
       page.matched_name, page.matched_since::text, page.matched_until::text,
       page.matched_historical, page.has_features, page.exact_match,
+      pg.since::text AS geometry_since, pg.until::text AS geometry_until,
       (SELECT COUNT(*) FROM feature_to_place fp WHERE fp.place_id = page.id) AS feature_count,
       ${cells} AS cells
     FROM page
+    LEFT JOIN place_geometry pg ON pg.place_id = page.id
     ORDER BY ${SEARCH_ORDER}
   `);
 
@@ -137,9 +152,11 @@ export async function getPlaceById(placeId: string, options: PlaceSearchOptions 
       page.name AS matched_name,
       NULL::text AS matched_since, NULL::text AS matched_until,
       FALSE AS matched_historical,
+      pg.since::text AS geometry_since, pg.until::text AS geometry_until,
       (SELECT COUNT(*) FROM feature_to_place fp WHERE fp.place_id = page.id) AS feature_count,
       ${cells} AS cells
     FROM place page
+    LEFT JOIN place_geometry pg ON pg.place_id = page.id
     WHERE page.id = ${placeId}
   `);
 

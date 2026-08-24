@@ -18,6 +18,7 @@ const STREET_BARE = 'ps-street-bare';
 const ADDR = 'ps-addr';
 const RENAMED = 'ps-renamed';
 const BOTH = 'ps-both';
+const HOOD = 'ps-hood';
 const FID = '22222222-2222-2222-2222-2222222222aa';
 
 describe('place search', () => {
@@ -35,14 +36,18 @@ describe('place search', () => {
       (${STREET_DATA}, 'street', 'Kerkstraat'),
       (${STREET_BARE}, 'street', 'Kerkstraat'),
       (${ADDR}, 'address', 'Kerkstraat 1'),
-      (${RENAMED}, 'address', 'Modernstraat 5'),
-      (${BOTH}, 'address', 'Kerkstraat 9')`);
+      (${RENAMED}, 'street', 'Modernstraat'),
+      (${BOTH}, 'address', 'Kerkstraat 9'),
+      (${HOOD}, 'neighbourhood', 'Kerkbuurt')`);
     await db.execute(sql`INSERT INTO place_geometry (place_id, geometry) VALUES
       (${STREET_DATA}, ST_GeomFromText('LINESTRING(120000 485000, 120300 485000)', 28992)),
       (${STREET_BARE}, ST_GeomFromText('LINESTRING(121000 486000, 121300 486000)', 28992)),
       (${ADDR}, ST_GeomFromText('POINT(120050 485050)', 28992)),
       (${RENAMED}, ST_GeomFromText('POINT(120150 485150)', 28992)),
       (${BOTH}, ST_GeomFromText('POINT(120250 485250)', 28992))`);
+    // a historical area division: geometry valid for a closed era
+    await db.execute(sql`INSERT INTO place_geometry (place_id, geometry, since, until) VALUES
+      (${HOOD}, ST_GeomFromText('POLYGON((120400 485400, 120700 485400, 120700 485700, 120400 485700, 120400 485400))', 28992), '1850-01-01', '1909-12-31')`);
 
     // Modernstraat 5 was named Kerkhofpad until the 1943 renumbering
     await db.execute(sql`INSERT INTO place_historical_name (id, place_id, name, since, until) VALUES
@@ -63,12 +68,19 @@ describe('place search', () => {
     await teardownTestDb();
   });
 
-  test('data first, then exact match, then prefix', async () => {
+  test('data first, then exact match; no digit hides addresses', async () => {
     const matches = await searchPlaces('Kerkstraat');
     const ids = matches.map((m) => m.placeId);
     expect(ids.indexOf(STREET_DATA)).toBe(0);
-    expect(ids.indexOf(STREET_BARE)).toBeLessThan(ids.indexOf(ADDR));
     expect(matches[0].featureCount).toBe(1);
+    expect(ids).toContain(STREET_BARE);
+    expect(ids).not.toContain(ADDR);
+  });
+
+  test('a digit in the query surfaces addresses', async () => {
+    const matches = await searchPlaces('Kerkstraat 1');
+    const ids = matches.map((m) => m.placeId);
+    expect(ids).toContain(ADDR);
   });
 
   test('unlinked place is findable and carries its cells', async () => {
@@ -83,7 +95,7 @@ describe('place search', () => {
     const matches = await searchPlaces('Kerkhof');
     expect(matches.length).toBe(1);
     expect(matches[0].placeId).toBe(RENAMED);
-    expect(matches[0].name).toBe('Modernstraat 5');
+    expect(matches[0].name).toBe('Modernstraat');
     expect(matches[0].matchedName).toBe('Kerkhofpad');
     expect(matches[0].matchedWindow).toEqual(['1850-01-01', '1943-01-01']);
   });
@@ -119,6 +131,15 @@ describe('place search', () => {
       }
     }
     expect(new Set(first.cells)).toEqual(heatCells);
+  });
+
+  test('a dated area division carries its geometry window', async () => {
+    const matches = await searchPlaces('Kerkbuurt');
+    expect(matches.length).toBe(1);
+    expect(matches[0].placeId).toBe(HOOD);
+    expect(matches[0].geometryWindow).toEqual(['1850-01-01', '1909-12-31']);
+    const street = await getPlaceById(STREET_DATA);
+    expect(street!.geometryWindow).toBeNull();
   });
 
   test('getPlaceById restores a match by id', async () => {

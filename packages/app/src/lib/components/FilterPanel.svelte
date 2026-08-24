@@ -13,6 +13,7 @@
 	import ToggleGroup from './ToggleGroup.svelte';
 	import Tag from './Tag.svelte';
 	import FilterSection from './FilterSection.svelte';
+import PlaceSearchInput from './PlaceSearchInput.svelte';
 	import TagsANDSelector from './TagsANDSelector.svelte';
 	import TagOperatorSwitch from './TagOperatorSwitch.svelte';
 	import DummyTagsSection from './DummyTagsSection.svelte';
@@ -113,6 +114,10 @@
 </script>
 
 <div class="p-3">
+	<div class="mb-4">
+		<PlaceSearchInput />
+	</div>
+
 	<div class="mb-4">
 		<Heading level={2} class="font-bold text-lg mb-2"> Filters </Heading>
 

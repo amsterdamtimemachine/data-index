@@ -11,6 +11,8 @@ export type PlaceSearchMatch = {
   matchedName: string;
   /** [since, until] when a historical name matched; null for a current-name match. */
   matchedWindow: [string | null, string | null] | null;
+  /** [since, until] of the place's geometry when dated (historical area divisions); null otherwise. */
+  geometryWindow: [string | null, string | null] | null;
   featureCount: number;
   /**
    * Display-grid cell indices (row * cols + col) the place covers, in the same
