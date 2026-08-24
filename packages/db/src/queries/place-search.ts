@@ -36,6 +36,14 @@ type SearchRow = {
   cells: number[] | null;
 };
 
+// The name in force today: an open-ended name row wins over place.name, which
+// for some sources stores the oldest name (adamlink street name lists).
+const CURRENT_NAME = sql`COALESCE(
+  (SELECT n.name FROM place_historical_name n
+   WHERE n.place_id = page.id AND n.until IS NULL
+   ORDER BY n.since DESC NULLS LAST LIMIT 1),
+  page.name)`;
+
 // The place's cells folded onto the display grid — the same partition the heatmap
 // uses, so these indices land exactly on heatmap cells.
 async function displayCellsExpr(cols: number): Promise<SQL> {
@@ -129,7 +137,7 @@ export async function searchPlaces(query: string, options: PlaceSearchOptions = 
     page AS (
       SELECT * FROM ranked ORDER BY ${SEARCH_ORDER} LIMIT ${limit}
     )
-    SELECT page.id, page.name, page.type, page.source,
+    SELECT page.id, ${CURRENT_NAME} AS name, page.type, page.source,
       page.matched_name, page.matched_since::text, page.matched_until::text,
       page.matched_historical, page.has_features, page.exact_match,
       pg.since::text AS geometry_since, pg.until::text AS geometry_until,
@@ -148,8 +156,8 @@ export async function getPlaceById(placeId: string, options: PlaceSearchOptions 
   const cells = await displayCellsExpr(options.cols ?? DISPLAY_GRID_DEFAULT_COLS);
 
   const result = await db.execute<SearchRow>(sql`
-    SELECT page.id, page.name, page.type, page.source,
-      page.name AS matched_name,
+    SELECT page.id, ${CURRENT_NAME} AS name, page.type, page.source,
+      ${CURRENT_NAME} AS matched_name,
       NULL::text AS matched_since, NULL::text AS matched_until,
       FALSE AS matched_historical,
       pg.since::text AS geometry_since, pg.until::text AS geometry_until,

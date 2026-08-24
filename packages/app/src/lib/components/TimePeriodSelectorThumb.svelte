@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { HistogramBin } from '@atm/shared/types';
-	import { createMediaQuery } from '$utils/media.svelte';
+	import { createMediaQuery, HOVER_QUERY } from '$utils/media.svelte';
+	import TimePeriodTooltip from '$components/TimePeriodTooltip.svelte';
 
 	interface Props {
 		currentIndex: number;
@@ -9,19 +10,18 @@
 		onDragStart: (event: PointerEvent) => void;
 		timelineHeight: number;
 		bins: HistogramBin[];
+		localBins?: HistogramBin[];
 	}
-	let { currentIndex, totalBins, isDragging, onDragStart, timelineHeight, bins }: Props = $props();
+	let { currentIndex, totalBins, isDragging, onDragStart, timelineHeight, bins, localBins = [] }: Props = $props();
 
-	// taps synthesise mouseenter without a matching leave
-	const hoverCapable = createMediaQuery('(hover: hover) and (pointer: fine)');
+	const hoverCapable = createMediaQuery(HOVER_QUERY);
 
-	// Hover state for tooltip
 	let isHovering = $state(false);
 	let mousePosition = $state({ x: 0, y: 0 });
 
 	function handleMouseEnter(event: MouseEvent) {
 		isHovering = true;
-		updateMousePosition(event);
+		mousePosition = { x: event.clientX, y: event.clientY };
 	}
 
 	function handleMouseLeave() {
@@ -30,39 +30,43 @@
 
 	function handleMouseMove(event: MouseEvent) {
 		if (isHovering) {
-			updateMousePosition(event);
+			mousePosition = { x: event.clientX, y: event.clientY };
 		}
 	}
 
-	function updateMousePosition(event: MouseEvent) {
-		mousePosition = { x: event.clientX, y: event.clientY };
-	}
-
-	// Thumb position and width calculations
-	const thumbPosition = $derived(() => {
-		if (totalBins <= 1) return 0;
+	const thumbPosition = $derived.by(() => {
+		if (totalBins <= 1) {
+			return 0;
+		}
 		return (currentIndex / totalBins) * 100;
 	});
 
-	const thumbWidth = $derived(() => {
-		if (totalBins <= 1) return 100;
+	const thumbWidth = $derived.by(() => {
+		if (totalBins <= 1) {
+			return 100;
+		}
 		return 100 / totalBins;
 	});
 
-	const currentBin = $derived(() => bins[currentIndex]);
-	
-	// Features text with Dutch pluralization
-	const featuresText = $derived(() => {
-		const count = currentBin()?.count || 0;
-		return count === 1 ? 'feature' : 'features';
+	const currentBin = $derived(bins[currentIndex]);
+
+	const currentLocalCount = $derived.by(() => {
+		if (localBins.length === 0) {
+			return null;
+		}
+		const local = localBins[currentIndex];
+		if (!local) {
+			return null;
+		}
+		return local.count;
 	});
 </script>
 
 <!-- Thumb element -->
 <div
-	class="absolute z-10 cursor-grab touch-none bg-transparent border-[3px] border-atm-red hover:border-atm-red-light"
+	class="absolute z-10 cursor-grab touch-none bg-transparent border-[3px] border-atm-gold-darkest hover:border-atm-gold-darkest-hover"
 	class:cursor-grabbing={isDragging}
-	style="left: {thumbPosition()}%; width: {thumbWidth()}%; height: {timelineHeight}px; top: 0;"
+	style="left: {thumbPosition}%; width: {thumbWidth}%; height: {timelineHeight}px; top: 0;"
 	onpointerdown={onDragStart}
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
@@ -72,13 +76,11 @@
 	aria-label="Drag to change time period"
 ></div>
 
-<!-- Hover tooltip -->
-{#if hoverCapable.matches && isHovering && !isDragging && currentBin()}
-	<div 
-		class="fixed z-50 bg-black bg-opacity-80 text-white px-2 py-1 rounded text-sm pointer-events-none transform -translate-x-1/2 -translate-y-full"
-		style="left: {mousePosition.x}px; top: {mousePosition.y - 8}px;"
-	>
-		<div class="font-medium">{currentBin().count} {featuresText()}</div>
-		<div class="text-xs opacity-75">Periode: {currentBin().timeSlice.label}</div>
-	</div>
+{#if hoverCapable.matches && isHovering && !isDragging && currentBin}
+	<TimePeriodTooltip
+		bin={currentBin}
+		localCount={currentLocalCount}
+		x={mousePosition.x}
+		y={mousePosition.y}
+	/>
 {/if}

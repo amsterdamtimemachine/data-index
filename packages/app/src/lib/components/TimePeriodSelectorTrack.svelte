@@ -1,29 +1,28 @@
 <script lang="ts">
 	import type { HistogramBin } from '@atm/shared/types';
-	import { mergeCss } from '$utils/utils';
-	import { createMediaQuery } from '$utils/media.svelte';
+	import { createMediaQuery, HOVER_QUERY } from '$utils/media.svelte';
+	import TimePeriodTooltip from '$components/TimePeriodTooltip.svelte';
 
 	interface Props {
 		bins: HistogramBin[];
+		// the selected cell's series, for the hover tooltip's second line
+		localBins?: HistogramBin[];
 		currentIndex: number;
 		onIndexChange: (newIndex: number) => void;
 		timelineHeight: number;
 		onKeyDown?: (event: KeyboardEvent) => void;
 	}
-	let { bins, currentIndex, onIndexChange, timelineHeight, onKeyDown }: Props = $props();
+	let { bins, localBins = [], currentIndex, onIndexChange, timelineHeight, onKeyDown }: Props = $props();
 
-	// taps synthesise mouseenter without a matching leave
-	const hoverCapable = createMediaQuery('(hover: hover) and (pointer: fine)');
+	const hoverCapable = createMediaQuery(HOVER_QUERY);
 
 	let trackElement: HTMLDivElement | undefined = $state();
-	
-	// Hover state for tooltip
 	let hoveredBin = $state<{ bin: HistogramBin; index: number } | null>(null);
 	let mousePosition = $state({ x: 0, y: 0 });
 
 	function handleMouseEnter(event: MouseEvent, bin: HistogramBin, index: number) {
 		hoveredBin = { bin, index };
-		updateMousePosition(event);
+		mousePosition = { x: event.clientX, y: event.clientY };
 	}
 
 	function handleMouseLeave() {
@@ -32,19 +31,19 @@
 
 	function handleMouseMove(event: MouseEvent) {
 		if (hoveredBin) {
-			updateMousePosition(event);
+			mousePosition = { x: event.clientX, y: event.clientY };
 		}
 	}
 
-	function updateMousePosition(event: MouseEvent) {
-		mousePosition = { x: event.clientX, y: event.clientY };
-	}
-	
-	// Features text with English pluralization
-	const featuresText = $derived(() => {
-		if (!hoveredBin) return '';
-		const count = hoveredBin.bin.count;
-		return count === 1 ? 'feature' : 'features';
+	const hoveredLocalCount = $derived.by(() => {
+		if (!hoveredBin || localBins.length === 0) {
+			return null;
+		}
+		const local = localBins[hoveredBin.index];
+		if (!local) {
+			return null;
+		}
+		return local.count;
 	});
 
 	function handleTrackClick(event: MouseEvent) {
@@ -78,7 +77,7 @@
 		{@const barWidth = 100 / bins.length}
 		{@const x = (i / bins.length) * 100}
 		<button
-			class="absolute h-full bg-transparent hover:border-atm-red-light hover:border-[4px] cursor-pointer"
+			class="absolute h-full bg-transparent hover:border-atm-gold-darkest-hover hover:border-[4px] cursor-pointer"
 			style="left: {x}%; width: {barWidth}%;"
 			onclick={(e) => {
 				e.stopPropagation();
@@ -92,13 +91,11 @@
 	{/each}
 </div>
 
-<!-- Hover tooltip -->
 {#if hoverCapable.matches && hoveredBin}
-	<div 
-		class="fixed z-50 bg-black bg-opacity-80 text-white px-2 py-1 rounded text-sm pointer-events-none transform -translate-x-1/2 -translate-y-full"
-		style="left: {mousePosition.x}px; top: {mousePosition.y - 8}px;"
-	>
-		<div class="font-medium">{hoveredBin.bin.count} {featuresText()}</div>
-		<div class="text-xs opacity-75">Periode: {hoveredBin.bin.timeSlice.label}</div>
-	</div>
+	<TimePeriodTooltip
+		bin={hoveredBin.bin}
+		localCount={hoveredLocalCount}
+		x={mousePosition.x}
+		y={mousePosition.y}
+	/>
 {/if}

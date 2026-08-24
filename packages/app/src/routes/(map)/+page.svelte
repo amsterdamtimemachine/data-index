@@ -235,12 +235,11 @@
 
 	// Nulled up front: a cell switch must never show the previous cell's bars.
 	$effect(() => {
-		const mobile = isMobile.matches;
 		const cellBounds = selectedCellBounds;
 		const filterQs = data.filterQuery;
 
 		cellHistogram = null;
-		if (!mobile || !cellBounds) {
+		if (!cellBounds) {
 			return;
 		}
 
@@ -260,17 +259,14 @@
 		);
 	});
 
-	// The desktop timeline is intentionally global; the thumb reads currentPeriod
-	// in every branch — only the bars swap.
-	const displayedHistogram = $derived.by(() => {
-		if (!isMobile.matches) {
-			return histogram;
-		}
-		if (!showCellModal) {
-			return histogram;
-		}
+	// The selected cell's series, overlaid on the timeline; on mobile it only
+	// accompanies the open cell view.
+	const localHistogram = $derived.by(() => {
 		if (!cellHistogram || cellHistogram.bins.length === 0) {
-			return histogram;
+			return null;
+		}
+		if (isMobile.matches && !showCellModal) {
+			return null;
 		}
 		return cellHistogram;
 	});
@@ -405,7 +401,8 @@
 	{#if histogram}
 		<TimePeriodSelector
 			period={currentPeriod}
-			histogram={displayedHistogram ?? histogram}
+			{histogram}
+			{localHistogram}
 			onPeriodChange={handlePeriodChange}
 			class="z-40 bg-atm-sand border-t border-atm-sand-border"
 		/>

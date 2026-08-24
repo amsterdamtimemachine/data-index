@@ -19,6 +19,7 @@ const ADDR = 'ps-addr';
 const RENAMED = 'ps-renamed';
 const BOTH = 'ps-both';
 const HOOD = 'ps-hood';
+const RENUMBERED = 'ps-renumbered';
 const FID = '22222222-2222-2222-2222-2222222222aa';
 
 describe('place search', () => {
@@ -38,13 +39,15 @@ describe('place search', () => {
       (${ADDR}, 'address', 'Kerkstraat 1'),
       (${RENAMED}, 'street', 'Modernstraat'),
       (${BOTH}, 'address', 'Kerkstraat 9'),
-      (${HOOD}, 'neighbourhood', 'Kerkbuurt')`);
+      (${HOOD}, 'neighbourhood', 'Kerkbuurt'),
+      (${RENUMBERED}, 'street', 'Oudekerkspad')`);
     await db.execute(sql`INSERT INTO place_geometry (place_id, geometry) VALUES
       (${STREET_DATA}, ST_GeomFromText('LINESTRING(120000 485000, 120300 485000)', 28992)),
       (${STREET_BARE}, ST_GeomFromText('LINESTRING(121000 486000, 121300 486000)', 28992)),
       (${ADDR}, ST_GeomFromText('POINT(120050 485050)', 28992)),
       (${RENAMED}, ST_GeomFromText('POINT(120150 485150)', 28992)),
-      (${BOTH}, ST_GeomFromText('POINT(120250 485250)', 28992))`);
+      (${BOTH}, ST_GeomFromText('POINT(120250 485250)', 28992)),
+      (${RENUMBERED}, ST_GeomFromText('POINT(120350 485350)', 28992))`);
     // a historical area division: geometry valid for a closed era
     await db.execute(sql`INSERT INTO place_geometry (place_id, geometry, since, until) VALUES
       (${HOOD}, ST_GeomFromText('POLYGON((120400 485400, 120700 485400, 120700 485700, 120400 485700, 120400 485400))', 28992), '1850-01-01', '1909-12-31')`);
@@ -52,7 +55,8 @@ describe('place search', () => {
     // Modernstraat 5 was named Kerkhofpad until the 1943 renumbering
     await db.execute(sql`INSERT INTO place_historical_name (id, place_id, name, since, until) VALUES
       ('ps-hist-1', ${RENAMED}, 'Kerkhofpad', '1850-01-01', '1943-01-01'),
-      ('ps-hist-2', ${BOTH}, 'Kerkstraat 9', '1900-01-01', '1943-01-01')`);
+      ('ps-hist-2', ${BOTH}, 'Kerkstraat 9', '1900-01-01', '1943-01-01'),
+      ('ps-hist-3', ${RENUMBERED}, 'Kerkelaan', '1957-01-01', NULL)`);
 
     await db.execute(sql`
       INSERT INTO features (id, record_type, label, start_date, end_date, dataset_id)
@@ -140,6 +144,19 @@ describe('place search', () => {
     expect(matches[0].geometryWindow).toEqual(['1850-01-01', '1909-12-31']);
     const street = await getPlaceById(STREET_DATA);
     expect(street!.geometryWindow).toBeNull();
+  });
+
+  // The Dam / de Plaetse pattern: place.name holds the oldest name, the name in
+  // force today is the open-ended history row. Display must use the open row.
+  test('an open-ended name row wins as the current name', async () => {
+    const matches = await searchPlaces('Kerkelaan');
+    expect(matches.length).toBe(1);
+    expect(matches[0].placeId).toBe(RENUMBERED);
+    expect(matches[0].name).toBe('Kerkelaan');
+    expect(matches[0].matchedWindow).toEqual(['1957-01-01', null]);
+    const byId = await getPlaceById(RENUMBERED);
+    expect(byId!.matchedName).toBe('Kerkelaan');
+    expect(byId!.name).toBe('Kerkelaan');
   });
 
   test('getPlaceById restores a match by id', async () => {

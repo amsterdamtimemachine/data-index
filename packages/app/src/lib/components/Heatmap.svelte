@@ -27,7 +27,7 @@
 	import type { Heatmap, HeatmapDimensions, Coordinates } from '@atm/shared/types';
 	import { generateCellIdMap, generateCellGeometries, calculateDensity, placeOutlineGeometry, type CellGeometry } from '$utils/heatmap';
 	import { mergeCss } from '$utils/utils';
-	import { MOBILE_QUERY } from '$utils/media.svelte';
+	import { MOBILE_QUERY, HOVER_QUERY } from '$utils/media.svelte';
 	import resolveConfig from 'tailwindcss/resolveConfig';
 	import tailwindConfig from '$tailwindConfig';
 
@@ -90,7 +90,7 @@
 		defaultZoomMobile: 11,
 		center: { lat: 4.895645, lon: 52.372219 },
 		cellSelectedOutlineColor: colors['atm-red'],
-		cellHoveredOutlineColor: colors['atm-red-light'],
+		cellHoveredOutlineColor: colors['map-selected-outline-casing'],
 		cellSelectedOutlineWidth: 3,
 		cellValueColor: colors['map-cell-value'],
 		outlineLayerColor: colors['map-place-outline'],
@@ -391,6 +391,9 @@
 				id: 'place-outline-casing',
 				type: 'line',
 				source: 'place-outline',
+				// square caps: the perimeter is independent edge segments, and butt caps
+				// leave unpainted notches where two meet at a corner
+				layout: { 'line-cap': 'square' },
 				paint: {
 					'line-color': mapStyle.placeOutlineCasingColor,
 					'line-width': mapStyle.placeOutlineWidth + mapStyle.outlineCasingExtra
@@ -400,6 +403,7 @@
 				id: 'place-outline',
 				type: 'line',
 				source: 'place-outline',
+				layout: { 'line-cap': 'square' },
 				paint: {
 					'line-color': mapStyle.outlineLayerColor,
 					'line-width': mapStyle.placeOutlineWidth
@@ -444,7 +448,7 @@
 			let hoveredFeatureId: string | null = null;
 
 			// MapLibre synthesises mousemove from taps, and a finger never "leaves"
-			const hoverCapable = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+			const hoverCapable = window.matchMedia(HOVER_QUERY).matches;
 
 			if (hoverCapable) mapInstance.on('mousemove', 'heatmap-squares', (e) => {
 				if (e.features?.[0]) {

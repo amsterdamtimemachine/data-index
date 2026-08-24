@@ -2,6 +2,9 @@
 export const MOBILE_MAX_WIDTH = 767;
 export const MOBILE_QUERY = `(max-width: ${MOBILE_MAX_WIDTH}px)`;
 
+// hover-capable pointer — taps synthesise mouseenter without a matching leave
+export const HOVER_QUERY = '(hover: hover) and (pointer: fine)';
+
 /**
  * Reactive media query. Call during component initialisation; `.matches` tracks
  * the environment (resize, rotation) and the listener is cleaned up with the

@@ -26,10 +26,10 @@
 
 <div class="flex items-center gap-2">
 	<Button icon={X} onclick={onClear} size={14} aria-label={translate('clearPlaceFilter')} />
-	<!-- same color and square corners as the place outline on the map -->
+	<!-- same color as the place outline on the map -->
 	<Tag
 		variant="outline"
-		class="border-2 border-map-place-outline rounded-none bg-atm-sand inline-flex items-center gap-1.5 px-2"
+		class="border-2 border-map-place-outline bg-atm-sand inline-flex items-center gap-1.5 px-2"
 	>
 		<span>{translate('cellsOf')} {displayName}</span>
 		{#if period}
