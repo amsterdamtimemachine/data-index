@@ -55,9 +55,10 @@ export function deriveGrid(cols: number, maxCellX: number, maxCellY: number): { 
   return { gridCols, gridRows };
 }
 
-/** Restrict cell_features buckets to the cells a place covers. */
-export function placeCellsCondition(placeId: string): SQL {
-  return sql`(${cellFeatures.cellX}, ${cellFeatures.cellY}) IN (
+/** Restrict rows to the cells a place covers. Takes the cell columns as SQL so
+ * cell_features (histogram) and place_cells (features spine) share the fragment. */
+export function placeCellsCondition(cellX: SQL, cellY: SQL, placeId: string): SQL {
+  return sql`(${cellX}, ${cellY}) IN (
     SELECT cell_x, cell_y FROM place_cells WHERE place_id = ${placeId})`;
 }
 

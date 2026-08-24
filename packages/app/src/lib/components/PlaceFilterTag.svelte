@@ -9,8 +9,10 @@
 	type Props = {
 		place: PlaceSearchMatch;
 		onClear: () => void;
+		// clicking the label opens the features panel for the place's cells
+		onOpen?: () => void;
 	};
-	let { place, onClear }: Props = $props();
+	let { place, onClear, onOpen }: Props = $props();
 
 	const displayName = $derived.by(() => {
 		if (place.matchedName) {
@@ -26,6 +28,9 @@
 
 <div class="flex items-center gap-2">
 	<Button icon={X} onclick={onClear} size={14} aria-label={translate('clearPlaceFilter')} />
+	{#if onOpen}
+		<Button onclick={onOpen} class="w-auto px-2">{translate('viewPlace')}</Button>
+	{/if}
 	<!-- same color as the place outline on the map -->
 	<Tag
 		variant="outline"

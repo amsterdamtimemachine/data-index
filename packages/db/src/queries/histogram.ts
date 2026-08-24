@@ -60,7 +60,7 @@ export async function getHistogram(
     cellCondition = cellRangeCondition(sql`${cellFeatures.cellX}`, sql`${cellFeatures.cellY}`, range);
   }
   if (placeId) {
-    cellCondition = sql`${cellCondition} AND ${placeCellsCondition(placeId)}`;
+    cellCondition = sql`${cellCondition} AND ${placeCellsCondition(sql`${cellFeatures.cellX}`, sql`${cellFeatures.cellY}`, placeId)}`;
   }
 
 

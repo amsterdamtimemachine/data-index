@@ -72,6 +72,8 @@
 		selectedCellId: string | null;
 		// display-cell indices of the selected place (the search filter outline)
 		placeCells?: number[];
+		// the place is the panel's active subject: add the red selection outline
+		placeSelected?: boolean;
 		mapStyle?: MapStyle;
 		class?: string;
 		handleCellClick?: (cellId: string | null) => void;
@@ -113,6 +115,7 @@
 		dimensions,
 		selectedCellId = null,
 		placeCells = undefined,
+		placeSelected = false,
 		class: className,
 		mapStyle = defaultMapStyle,
 		handleCellClick,
@@ -158,6 +161,18 @@
 		if (!isMapLoaded || !map || !dimensions) return;
 		resetAllCells();
 		setActiveCells();
+	});
+
+	// The red selection outline follows whether the place is the active subject
+	$effect(() => {
+		if (!isMapLoaded || !map) return;
+		let visibility: 'visible' | 'none' = 'none';
+		if (placeSelected) {
+			visibility = 'visible';
+		}
+		if (map.getLayer('place-selected')) {
+			map.setLayoutProperty('place-selected', 'visibility', visibility);
+		}
 	});
 
 	// Sync the place-filter outline with the selected place's cells
@@ -407,6 +422,19 @@
 				paint: {
 					'line-color': mapStyle.outlineLayerColor,
 					'line-width': mapStyle.placeOutlineWidth
+				}
+			});
+
+			// Red selection core inside the gold band while the place is the panel's
+			// subject; the gold outline itself is the contrast ring, so no casing.
+			mapInstance.addLayer({
+				id: 'place-selected',
+				type: 'line',
+				source: 'place-outline',
+				layout: { 'line-cap': 'square', visibility: 'none' },
+				paint: {
+					'line-color': mapStyle.cellSelectedOutlineColor,
+					'line-width': mapStyle.cellSelectedOutlineWidth
 				}
 			});
 

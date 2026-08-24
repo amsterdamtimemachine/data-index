@@ -25,6 +25,7 @@
 	import NavItem from '$components/NavItem.svelte';
 	import type { PageData } from './$types';
 	import type { Histogram, HeatmapTimeline, HeatmapDimensions, HeatmapResponse } from '@atm/shared/types';
+	import type { PanelSubject } from '$lib/state/panel-features.svelte';
 	import type { AppError } from '$types/error';
 	import { env } from '$env/dynamic/public';
 	import { createEmptyHeatmap, getCellBoundsFromCellId, getCellIdFromLonLat } from '$utils/heatmap';
@@ -259,9 +260,41 @@
 		);
 	});
 
-	// The selected cell's series, overlaid on the timeline; on mobile it only
-	// accompanies the open cell view.
+	// The open place panel's series: features in the place's cells per bin.
+	let placeHistogram = $state<Histogram | null>(null);
+	$effect(() => {
+		const open = placePanelOpen;
+		const place = data.selectedPlace;
+		const filterQs = data.filterQuery;
+
+		placeHistogram = null;
+		if (!open || !place) {
+			return;
+		}
+		let qs = '';
+		if (filterQs) {
+			qs = `${filterQs}&`;
+		}
+		return fetchJson<Histogram>(
+			`/api/histogram?${qs}placeId=${encodeURIComponent(place.placeId)}`,
+			(res) => {
+				placeHistogram = res;
+			},
+			() => {
+				// silent by design: the timeline degrades to the city-wide histogram
+			}
+		);
+	});
+
+	// The panel subject's series, overlaid on the timeline in red; on mobile it
+	// only accompanies the open panel.
 	const localHistogram = $derived.by(() => {
+		if (placePanelOpen) {
+			if (!placeHistogram || placeHistogram.bins.length === 0) {
+				return null;
+			}
+			return placeHistogram;
+		}
 		if (!cellHistogram || cellHistogram.bins.length === 0) {
 			return null;
 		}
@@ -282,8 +315,12 @@
 		mapSelection.updateUrlParam('period', period);
 	}
 
-	// Handle cell selection from map
+	// Handle cell selection from map; selecting a cell takes over the panel from
+	// the place view, but never clears the place filter itself.
 	function handleCellClick(cellId: string | null) {
+		if (cellId) {
+			handleClosePlacePanel();
+		}
 		if (cellId && dimensions) {
 			// Calculate bounds on-demand from dimensions
 			const bounds = getCellBoundsFromCellId(cellId, dimensions);
@@ -298,20 +335,69 @@
 	}
 
 	function handleFeaturesPanelClose() {
+		if (placePanelOpen) {
+			handleClosePlacePanel();
+			return;
+		}
 		mapSelection.clearErrors();
 		mapSelection.selectCell(null);
 	}
 
-	// The period active when the cell was selected — the mobile minimap shows the
-	// map as it was at tap time, so it must not track later timeline drags.
-	let cellSelectionPeriod = $state('');
+	// Place panel: the features panel showing a searched place's cell set. Open
+	// state is client-owned and mirrored to the URL like the cell selection.
+	let placePanelOpen = $state(untrack(() => data.placePanelOpen ?? false));
+
+	function handleOpenPlacePanel() {
+		mapSelection.selectCell(null);
+		placePanelOpen = true;
+		mapSelection.updateUrlParam('placePanel', '1');
+	}
+
+	function handleClosePlacePanel() {
+		placePanelOpen = false;
+		mapSelection.updateUrlParam('placePanel', null);
+	}
+
+	// clearing the place filter also closes its panel
 	$effect(() => {
-		const cell = selectedCellId;
-		if (!cell) {
+		if (!data.selectedPlace && placePanelOpen) {
+			placePanelOpen = false;
+		}
+	});
+
+	const panelSubject = $derived.by(() => {
+		if (placePanelOpen && data.selectedPlace) {
+			return { kind: 'place', place: data.selectedPlace } as PanelSubject;
+		}
+		if (selectedCellId) {
+			return {
+				kind: 'cell',
+				cellId: selectedCellId,
+				bounds: selectedCellBounds ?? undefined
+			} as PanelSubject;
+		}
+		return null;
+	});
+	const showPanel = $derived.by(() => {
+		if (!panelSubject) {
+			return false;
+		}
+		if (panelSubject.kind === 'place') {
+			return true;
+		}
+		return showCellModal;
+	});
+
+	// The period active when the panel's subject was picked — the mobile minimap
+	// shows the map as it was at that moment, so it must not track later drags.
+	let panelSelectionPeriod = $state('');
+	$effect(() => {
+		const subject = panelSubject;
+		if (!subject) {
 			return;
 		}
 		untrack(() => {
-			cellSelectionPeriod = mapSelection.currentPeriod;
+			panelSelectionPeriod = mapSelection.currentPeriod;
 		});
 	});
 </script>
@@ -328,6 +414,7 @@
 				{dimensions}
 				{selectedCellId}
 				placeCells={data.selectedPlace?.cells}
+				placeSelected={placePanelOpen}
 				{handleCellClick}
 			/>
 		{/if}
@@ -349,6 +436,7 @@
 				{currentTags}
 				currentTagOperator={currentTagOperator as 'AND' | 'OR'}
 				selectedPlace={data.selectedPlace}
+				onOpenPlacePanel={handleOpenPlacePanel}
 			/>
 		</NavContainer>
 
@@ -367,7 +455,7 @@
 		/>
 	{/if}
 
-		{#if showCellModal && selectedCellId}
+		{#if showPanel && panelSubject}
 			<div
 				class="z-30 absolute top-0 right-0 w-full h-full bg-atm-sand overflow-hidden border-l border-solid border-atm-sand-border shadow-[-5px_0px_20px_5px_rgba(0,0,0,0.07)]"
 				style:width={panelWidth}
@@ -375,12 +463,12 @@
 				<FeaturesPanelResizeHandle cols={panelCols} onSizeChange={(cols) => (panelCols = cols)} />
 				<div class="h-full overflow-y-auto">
 					<FeaturesPanel
-						cellId={selectedCellId}
+						subject={panelSubject}
+						placeCells={data.selectedPlace?.cells}
 						period={currentPeriod}
 						timeline={heatmapTimeline ?? undefined}
 						dimensions={dimensions ?? undefined}
-						selectionPeriod={cellSelectionPeriod}
-						bounds={selectedCellBounds ?? undefined}
+						selectionPeriod={panelSelectionPeriod}
 						recordTypes={currentRecordTypes}
 						placeTypes={currentPlaceTypes}
 						datasets={currentDatasets}

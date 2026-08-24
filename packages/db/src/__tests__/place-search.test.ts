@@ -12,6 +12,7 @@ import { rebuildIndex } from '../etl/post-process/rebuild-index';
 import { searchPlaces, getPlaceById } from '../queries/place-search';
 import { getHeatmapTimeline } from '../queries/heatmap';
 import { getHistogram } from '../queries/histogram';
+import { getFeatures } from '../queries/features';
 
 const STREET_DATA = 'ps-street-data';
 const STREET_BARE = 'ps-street-bare';
@@ -167,6 +168,25 @@ describe('place search', () => {
     expect(byId!.cells.length).toBeGreaterThan(0);
     expect(byId!.matchedWindow).toBeNull();
     expect(await getPlaceById('nope')).toBeNull();
+  });
+
+  // Same cell semantics as the histogram: the address has no linked features,
+  // but its cell holds the street's feature, so its population counts 1.
+  test('getFeatures by place counts features in the place cells', async () => {
+    const street = await getFeatures({ area: { kind: 'place', placeId: STREET_DATA } });
+    expect(street.total).toBe(1);
+    expect(street.data.length).toBe(1);
+    const addr = await getFeatures({ area: { kind: 'place', placeId: ADDR } });
+    expect(addr.total).toBe(1);
+    const bare = await getFeatures({ area: { kind: 'place', placeId: STREET_BARE } });
+    expect(bare.total).toBe(0);
+    expect(bare.data).toEqual([]);
+  });
+
+  test('sample sort by place is stable per seed', async () => {
+    const a = await getFeatures({ area: { kind: 'place', placeId: STREET_DATA }, sort: 'sample', seed: 'x' });
+    const b = await getFeatures({ area: { kind: 'place', placeId: STREET_DATA }, sort: 'sample', seed: 'x' });
+    expect(b.data.map((f) => f.id)).toEqual(a.data.map((f) => f.id));
   });
 
   // Cell semantics: the series counts features in the place's cells, not features

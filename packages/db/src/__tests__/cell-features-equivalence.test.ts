@@ -202,7 +202,7 @@ describe('cell_features ↔ live query equivalence', () => {
     const cfg = await getGridConfig();
     const bounds = { minLon: cfg.minLon, maxLon: cfg.maxLon, minLat: cfg.minLat, maxLat: cfg.maxLat };
     expect(
-      getFeatures({ bounds, recordTypes: ['image'], timeSlice: 'not_a_slice' })
+      getFeatures({ area: { kind: 'bounds', bounds }, recordTypes: ['image'], timeSlice: 'not_a_slice' })
     ).rejects.toThrow(UnknownTimeSliceError);
   });
 

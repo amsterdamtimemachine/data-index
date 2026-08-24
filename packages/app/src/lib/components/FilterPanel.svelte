@@ -30,6 +30,7 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 		currentTags?: string[];
 		currentTagOperator?: 'AND' | 'OR';
 		selectedPlace?: PlaceSearchMatch | null;
+		onOpenPlacePanel?: () => void;
 	}
 
 	let {
@@ -42,7 +43,8 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 		availableTags = [],
 		currentTags = [],
 		currentTagOperator = 'OR',
-		selectedPlace = null
+		selectedPlace = null,
+		onOpenPlacePanel = undefined
 	}: Props = $props();
 
 	// keep false until real tags are added to the app
@@ -126,16 +128,24 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 
 <div class="p-3">
 	<div class="mb-4">
-		<PlaceSearchInput onSelect={handlePlaceSelect} />
-		{#if selectedPlace}
-			<div class="mt-2">
-				<PlaceFilterTag place={selectedPlace} onClear={handlePlaceClear} />
-			</div>
-		{/if}
-	</div>
-
-	<div class="mb-4">
 		<Heading level={2} class="font-bold text-lg mb-2"> Filters </Heading>
+
+		<div class="mb-4">
+			<div class="flex mb-2">
+				<Heading level={3} class="pr-2">Plek</Heading>
+				<Tooltip
+					icon={QuestionMark}
+					text="Zoek op huidige of historische plaatsnamen. De kaart markeert de cellen van de gevonden plek."
+					placement="bottom"
+				/>
+			</div>
+			<PlaceSearchInput onSelect={handlePlaceSelect} />
+			{#if selectedPlace}
+				<div class="mt-2">
+					<PlaceFilterTag place={selectedPlace} onClear={handlePlaceClear} onOpen={onOpenPlacePanel} />
+				</div>
+			{/if}
+		</div>
 
 		<FilterSection
 			heading="Inhoudstype"

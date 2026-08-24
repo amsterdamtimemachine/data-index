@@ -7,9 +7,12 @@
 	import FeaturesSortSelect, { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
 	import { createMediaQuery, MOBILE_QUERY } from '$utils/media.svelte';
 	import type { HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
+	import type { PanelSubject } from '$lib/state/panel-features.svelte';
 
 	interface Props {
-		cellId: string;
+		subject: PanelSubject;
+		// cells of the active place filter (shown in gold whatever the subject)
+		placeCells?: number[];
 		period: string;
 		selectionPeriod?: string;
 		timeline?: HeatmapTimeline;
@@ -28,7 +31,8 @@
 	}
 
 	let {
-		cellId,
+		subject,
+		placeCells = undefined,
 		period,
 		selectionPeriod,
 		timeline,
@@ -59,6 +63,15 @@
 	});
 
 	const isMobile = createMediaQuery(MOBILE_QUERY);
+
+	// minimap: a cell subject gets the red marker, a place subject its gold cells
+	const thumbnailCellId = $derived.by(() => {
+		if (subject.kind === 'cell') {
+			return subject.cellId;
+		}
+		return undefined;
+	});
+	const highlightSelected = $derived(subject.kind === 'place');
 
 	// desktop: live period; mobile: frozen at cell selection
 	const thumbnailPeriod = $derived.by(() => {
@@ -92,7 +105,9 @@
 			<MapThumbnail
 				{timeline}
 				{dimensions}
-				{cellId}
+				cellId={thumbnailCellId}
+				highlightCells={placeCells}
+				{highlightSelected}
 				period={thumbnailPeriod}
 				width={thumbnailWidth}
 				height={thumbnailHeight}

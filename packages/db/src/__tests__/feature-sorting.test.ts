@@ -56,7 +56,7 @@ function ids(features: FeatureResult[]): string[] {
 async function fetchAll(sort: FeaturesSortField, opts: { seed?: string; sortDirection?: SortDirection; timeSlice?: string; pageSize?: number; page?: number } = {}) {
   const cfg = await getGridConfig();
   const result = await getFeatures({
-    bounds: { minLon: cfg.minLon, maxLon: cfg.maxLon, minLat: cfg.minLat, maxLat: cfg.maxLat },
+    area: { kind: 'bounds', bounds: { minLon: cfg.minLon, maxLon: cfg.maxLon, minLat: cfg.minLat, maxLat: cfg.maxLat } },
     recordTypes: TYPES,
     sort,
     sortDirection: opts.sortDirection,
@@ -161,7 +161,7 @@ describe('feature sorting', () => {
   test('default sort is sample with the empty seed', async () => {
     const cfg = await getGridConfig();
     const bare = await getFeatures({
-      bounds: { minLon: cfg.minLon, maxLon: cfg.maxLon, minLat: cfg.minLat, maxLat: cfg.maxLat },
+      area: { kind: 'bounds', bounds: { minLon: cfg.minLon, maxLon: cfg.maxLon, minLat: cfg.minLat, maxLat: cfg.maxLat } },
       recordTypes: TYPES,
       page: 1,
       pageSize: 100

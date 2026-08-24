@@ -4,6 +4,7 @@ import type {
   PlaceType,
   PlaceSource,
   FeaturesQuery,
+  HeatmapCellBounds,
   FeaturesSortField,
   SortDirection,
   FeatureResult,
@@ -16,7 +17,7 @@ import { getGridConfig } from './grid-config';
 import { featureYearOverlap } from './time-filter';
 import { featureIdsWithAllTags, featureIdsWithAnyTag } from './filters';
 import { UnknownTimeSliceError } from './errors';
-import { cellRangeCondition } from './cell-features';
+import { cellRangeCondition, placeCellsCondition } from './cell-features';
 import { db } from '../client';
 import { featureToPlace, place, placeGeometry, placeCells } from '../schema';
 import type { CountRow } from '../row-types';
@@ -74,7 +75,7 @@ type FeatureRow = {
  * them the clamp is a no-op; a viewport wider than the grid simply collapses to
  * the full base-cell range.
  */
-export async function boundsToBaseCellRange(bounds: FeaturesQuery['bounds']): Promise<{
+export async function boundsToBaseCellRange(bounds: HeatmapCellBounds): Promise<{
   minCellX: number;
   maxCellX: number;
   minCellY: number;
@@ -220,7 +221,7 @@ function sortPlan(
  */
 export async function getFeatures(query: FeaturesQuery): Promise<FeaturesResponse> {
   const {
-    bounds,
+    area,
     recordTypes,
     datasetIds,
     placeTypes,
@@ -234,8 +235,6 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     pageSize = 50
   } = query;
 
-  // Convert bounds to base cell range
-  const cellRange = await boundsToBaseCellRange(bounds);
 
   // Get date range from time slice
   let dateRange: { startYear: number; endYear: number } | null = null;
@@ -270,8 +269,15 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     }
   }
 
-  // Build WHERE conditions
-  const cellCondition = cellRangeCondition(sql`pc.cell_x`, sql`pc.cell_y`, cellRange);
+  // Resolve the area to one population predicate; everything below is agnostic
+  // of which kind it was.
+  let areaCondition: SQL;
+  if (area.kind === 'bounds') {
+    const cellRange = await boundsToBaseCellRange(area.bounds);
+    areaCondition = cellRangeCondition(sql`pc.cell_x`, sql`pc.cell_y`, cellRange);
+  } else {
+    areaCondition = placeCellsCondition(sql`pc.cell_x`, sql`pc.cell_y`, area.placeId);
+  }
 
   const typeCondition = sql`f.record_type IN ${types}`;
 
@@ -298,7 +304,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     JOIN ${featureToPlace} fp ON pc.place_id = fp.place_id
     JOIN features f ON fp.feature_id = f.id
     JOIN ${place} p ON pc.place_id = p.id`;
-  const featureWhere = sql`${cellCondition}
+  const featureWhere = sql`${areaCondition}
       AND ${typeCondition}
       AND ${datasetCondition}
       AND ${dateCondition}

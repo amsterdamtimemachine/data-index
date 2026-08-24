@@ -1,15 +1,26 @@
-/** Reactive fetcher for one cell's feature list. */
+/** Reactive fetcher for the features panel's population. */
 import { loadingState } from '$lib/state/loadingState.svelte';
 import { createError, createPageErrorData } from '$utils/error';
 import { untrack } from 'svelte';
-import type { FeatureResult, RecordType } from '@atm/shared/types';
+import type { FeatureResult, RecordType, PlaceSearchMatch } from '@atm/shared/types';
 import type { UiSortMode } from '$components/FeaturesSortSelect.svelte';
 import type { AppError } from '$types/error';
 
-export type CellFeaturesQuery = {
-	cellId: string;
+/**
+ * What the panel is showing: one display cell (picked on the map) or a place's
+ * cell set (picked via search).
+ */
+export type PanelSubject =
+	| {
+			kind: 'cell';
+			cellId: string;
+			bounds?: { minLat: number; maxLat: number; minLon: number; maxLon: number };
+	  }
+	| { kind: 'place'; place: PlaceSearchMatch };
+
+export type PanelFeaturesQuery = {
+	subject: PanelSubject;
 	period: string;
-	bounds?: { minLat: number; maxLat: number; minLon: number; maxLon: number };
 	recordTypes: RecordType[];
 	placeTypes: string[];
 	datasets: string[];
@@ -19,7 +30,7 @@ export type CellFeaturesQuery = {
 	sampleSeed?: string;
 };
 
-function sortParams(query: CellFeaturesQuery): Record<string, string> {
+function sortParams(query: PanelFeaturesQuery): Record<string, string> {
 	if (query.sortMode === 'spatial') {
 		return { sort: 'spatialFrequency', sortDirection: 'desc' };
 	}
@@ -35,14 +46,42 @@ function sortParams(query: CellFeaturesQuery): Record<string, string> {
 	if (query.sortMode === 'newest') {
 		return { sort: 'date', sortDirection: 'desc' };
 	}
-	let seed = query.cellId;
+	// sample: the subject's id keeps the shuffle stable per cell / per place
+	let seed: string;
+	if (query.subject.kind === 'cell') {
+		seed = query.subject.cellId;
+	} else {
+		seed = query.subject.place.placeId;
+	}
 	if (query.sampleSeed) {
 		seed = query.sampleSeed;
 	}
 	return { sort: 'sample', seed };
 }
 
-export function createCellFeatures(getQuery: () => CellFeaturesQuery) {
+function subjectParams(subject: PanelSubject): Record<string, string> {
+	if (subject.kind === 'place') {
+		return { placeId: subject.place.placeId };
+	}
+	if (!subject.bounds) {
+		throw new Error('No bounds available for this cell');
+	}
+	return {
+		minLon: subject.bounds.minLon.toString(),
+		maxLon: subject.bounds.maxLon.toString(),
+		minLat: subject.bounds.minLat.toString(),
+		maxLat: subject.bounds.maxLat.toString()
+	};
+}
+
+function subjectContext(subject: PanelSubject): Record<string, string> {
+	if (subject.kind === 'cell') {
+		return { cellId: subject.cellId };
+	}
+	return { placeId: subject.place.placeId };
+}
+
+export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 	let features = $state<FeatureResult[]>([]);
 	let currentPage = $state(1);
 	let totalCount = $state(0);
@@ -58,15 +97,8 @@ export function createCellFeatures(getQuery: () => CellFeaturesQuery) {
 		loadingState.startLoading();
 
 		try {
-			if (!query.bounds) {
-				throw new Error('No bounds available for this cell');
-			}
-
 			const params = new URLSearchParams({
-				minLon: query.bounds.minLon.toString(),
-				maxLon: query.bounds.maxLon.toString(),
-				minLat: query.bounds.minLat.toString(),
-				maxLat: query.bounds.maxLat.toString(),
+				...subjectParams(query.subject),
 				page: page.toString(),
 				timeSlice: query.period,
 				tagOperator: query.tagOperator,
@@ -100,13 +132,13 @@ export function createCellFeatures(getQuery: () => CellFeaturesQuery) {
 
 			errors = [];
 		} catch (err) {
-			console.error('Error loading cell data:', err);
+			console.error('Error loading panel data:', err);
 			errors = [
 				createError(
 					'error',
-					'Cell Data Load Failed',
-					err instanceof Error ? err.message : 'Failed to load cell data',
-					{ cellId: query.cellId, period: query.period, page, recordTypes: query.recordTypes, tags: query.tags }
+					'Panel Data Load Failed',
+					err instanceof Error ? err.message : 'Failed to load panel data',
+					{ ...subjectContext(getQuery().subject), period: getQuery().period, page }
 				)
 			];
 		} finally {

@@ -168,6 +168,12 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 		}
 	}
 
+	// Place panel open flag; only meaningful with a resolved place.
+	let placePanelOpen = false;
+	if (url.searchParams.get('placePanel') === '1' && selectedPlace) {
+		placePanelOpen = true;
+	}
+
 	// Sort mode + shuffle seed for the cell view; unknown modes fall back to default.
 	const sortParam = url.searchParams.get('sort');
 	let currentSort: UiSortMode = 'sample';
@@ -191,6 +197,7 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 		currentSort,
 		currentSampleSeed,
 		selectedPlace,
+		placePanelOpen,
 		validatedPeriod,
 		errorData: createPageErrorData(errors)
 	};
