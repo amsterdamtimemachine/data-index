@@ -9,7 +9,8 @@ import {
 	getCellIdFromLonLat,
 	generateCellIdMap,
 	generateCellGeometries,
-	createEmptyHeatmap
+	createEmptyHeatmap,
+	placeOutlineGeometry
 } from './heatmap';
 
 // A simple 2×2 grid over a 10°(lon) × 20°(lat) box — easy exact maths.
@@ -181,5 +182,46 @@ describe('generateCellGeometries — reprojected (proj4, RD→WGS84)', () => {
 		const cell01 = cells.find((c) => c.cellId === '0_1')!;
 		// cell(0,0) SE corner === cell(0,1) SW corner
 		expect(cell00.coordinates[0][1]).toEqual(cell01.coordinates[0][0]);
+	});
+});
+
+describe('placeOutlineGeometry', () => {
+	// 4×3 grid, unit degrees — index = row * 4 + col
+	const DIMS: HeatmapDimensions = {
+		colsAmount: 4,
+		rowsAmount: 3,
+		minLon: 0,
+		maxLon: 4,
+		minLat: 0,
+		maxLat: 3
+	};
+	const geoms = generateCellGeometries(DIMS);
+
+	test('a single cell yields its four edges', () => {
+		const outline = placeOutlineGeometry([5], geoms, DIMS.colsAmount);
+		expect(outline.geometry.coordinates.length).toBe(4);
+	});
+
+	test('shared edges vanish: a horizontal pair yields six edges', () => {
+		const outline = placeOutlineGeometry([5, 6], geoms, DIMS.colsAmount);
+		expect(outline.geometry.coordinates.length).toBe(6);
+	});
+
+	test('a solid 2x2 block yields its eight border edges, none interior', () => {
+		const outline = placeOutlineGeometry([0, 1, 4, 5], geoms, DIMS.colsAmount);
+		expect(outline.geometry.coordinates.length).toBe(8);
+		// no edge may lie strictly inside the block: every segment touches the border box
+		for (const [a, b] of outline.geometry.coordinates) {
+			const onBorder =
+				a[0] === 0 || a[0] === 2 || a[1] === 0 || a[1] === 2 ||
+				b[0] === 0 || b[0] === 2 || b[1] === 0 || b[1] === 2;
+			expect(onBorder).toBe(true);
+		}
+	});
+
+	test('row wrap is not adjacency: end of one row and start of the next stay separate', () => {
+		// index 3 = (row 0, col 3), index 4 = (row 1, col 0) — consecutive indices, not neighbours
+		const outline = placeOutlineGeometry([3, 4], geoms, DIMS.colsAmount);
+		expect(outline.geometry.coordinates.length).toBe(8);
 	});
 });

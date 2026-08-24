@@ -25,6 +25,9 @@ export default {
 				'status-success': '#fff',
 				'status-info': '#5e92f3',
 				'map-cell-value': '#0053fb',
+				'map-place-outline': '#dcb27d',
+				'map-place-outline-casing': '#a5824e',
+				'map-selected-outline-casing': '#a84200',
 				'map-background': '#f7ece4', //#f9efe9', //'dark sand #efd9ca', //' sand #fbf5f2', // '#bfd9c3' green // light sand ece7e4
 				'map-water-fill': '#c5e0fd',
 				'map-water-outline': '#c5e0fd',

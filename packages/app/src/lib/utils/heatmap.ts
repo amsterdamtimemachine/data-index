@@ -198,6 +198,47 @@ export function generateCellGeometries(
 }
 
 /**
+ * GeoJSON outline of a display-cell set: every cell edge not shared with another
+ * cell in the set. Consumes the CellGeometry rings the map renders, so the
+ * outline lands exactly on drawn cell borders (also in exact-reproject mode).
+ */
+export interface PlaceOutline {
+	type: 'Feature';
+	geometry: { type: 'MultiLineString'; coordinates: [number, number][][] };
+	properties: Record<string, never>;
+}
+
+export function placeOutlineGeometry(
+	cells: number[],
+	geometries: CellGeometry[],
+	colsAmount: number
+): PlaceOutline {
+	const inSet = new Set(cells);
+	const lines: [number, number][][] = [];
+	for (const idx of cells) {
+		const cell = geometries[idx];
+		if (!cell) {
+			continue;
+		}
+		// ring is SW→SE→NE→NW→SW; an edge is kept when its neighbour is not in the set
+		const ring = cell.coordinates[0];
+		if (!inSet.has(idx - colsAmount)) {
+			lines.push([ring[0], ring[1]]); // south
+		}
+		if (cell.col === colsAmount - 1 || !inSet.has(idx + 1)) {
+			lines.push([ring[1], ring[2]]); // east
+		}
+		if (!inSet.has(idx + colsAmount)) {
+			lines.push([ring[2], ring[3]]); // north
+		}
+		if (cell.col === 0 || !inSet.has(idx - 1)) {
+			lines.push([ring[3], ring[0]]); // west
+		}
+	}
+	return { type: 'Feature', geometry: { type: 'MultiLineString', coordinates: lines }, properties: {} };
+}
+
+/**
  * Create an empty sparse heatmap
  */
 export function createEmptyHeatmap(): Heatmap {

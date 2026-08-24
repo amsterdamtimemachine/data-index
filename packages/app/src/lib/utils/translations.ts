@@ -36,6 +36,8 @@ const TRANSLATIONS: Record<string, string> = {
 
 	// UI labels
 	searchPlaceholder: 'Zoek een plek op de kaart',
+	cellsOf: 'Cellen van',
+	clearPlaceFilter: 'Verwijder plekfilter',
 	filters: 'Filters',
 	dataset: 'Dataset',
 	dataProvider: 'Databron',

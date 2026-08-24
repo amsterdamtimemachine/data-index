@@ -1,4 +1,3 @@
-// state/StateController.svelte.ts
 
 import { browser } from '$app/environment';
 import { page } from '$app/state';
@@ -6,11 +5,10 @@ import { replaceState } from '$app/navigation';
 import type { AppError } from '$types/error';
 
 /**
- * Creates a centralized state controller for managing application state and URL synchronization.
- * The component is responsible for navigation decisions - this controller provides utilities.
+ * The map view's selection — period and selected cell — mirrored into the URL
+ * (replaceState, no navigation). The component is responsible for navigation decisions.
  */
-export function createStateController() {
-	// Core reactive state
+export function createMapSelection() {
 	let currentPeriod = $state<string>('');
 	let selectedCellId = $state<string | null>(null);
 	let selectedCellBounds = $state<{
@@ -32,7 +30,6 @@ export function createStateController() {
 
 	/**
 	 * Initializes the controller with server data.
-	 * Should be called once in onMount with data from the load function.
 	 */
 	function initialize(serverPeriod: string) {
 		currentPeriod = serverPeriod;

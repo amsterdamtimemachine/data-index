@@ -14,11 +14,22 @@
 		options: ComboboxOption<T>[];
 		onInput: (text: string) => void;
 		onSelect?: (value: T) => void;
+		// Search-action mode: reset input and value after a pick, so the same
+		// option can be picked again later.
+		clearOnSelect?: boolean;
 		placeholder?: string;
 		'aria-label'?: string;
 		class?: string;
 	};
-	let { options, onInput, onSelect, placeholder, 'aria-label': ariaLabel, class: className }: Props = $props();
+	let {
+		options,
+		onInput,
+		onSelect,
+		clearOnSelect = false,
+		placeholder,
+		'aria-label': ariaLabel,
+		class: className
+	}: Props = $props();
 
 	const combobox = new MeltCombobox<T>({
 		onValueChange: (value) => {
@@ -27,6 +38,10 @@
 			}
 			if (onSelect) {
 				onSelect(value);
+			}
+			if (clearOnSelect) {
+				combobox.inputValue = '';
+				combobox.value = undefined;
 			}
 		}
 	});

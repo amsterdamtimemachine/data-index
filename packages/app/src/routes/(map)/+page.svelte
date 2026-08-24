@@ -2,12 +2,12 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
-	import { createStateController } from '$state/StateController.svelte';
+	import { createMapSelection } from '$state/map-selection.svelte';
 	import { createPageErrorData, createError, createValidationError } from '$utils/error';
 	import { validateCellId } from '$utils/utils';
 	import { loadingState } from '$lib/state/loadingState.svelte';
 	import { fetchJson } from '$utils/fetchJson';
-	import { createMediaQuery, MOBILE_QUERY } from '$utils/media.svelte';
+	import { createMediaQuery, MOBILE_QUERY, MOBILE_MAX_WIDTH } from '$utils/media.svelte';
 	import FeaturesPanelResizeHandle, {
 		panelWidthCss,
 		type PanelCols
@@ -28,7 +28,7 @@
 	import type { AppError } from '$types/error';
 	import { env } from '$env/dynamic/public';
 	import { createEmptyHeatmap, getCellBoundsFromCellId, getCellIdFromLonLat } from '$utils/heatmap';
-	import { MOBILE_MAX_WIDTH } from '$lib/constants';
+
 
 	let { data }: { data: PageData } = $props();
 
@@ -57,20 +57,20 @@
 	function handleSortChange(mode: UiSortMode) {
 		sortMode = mode;
 		if (mode === 'sample') {
-			controller.updateUrlParam('sort', null);
+			mapSelection.updateUrlParam('sort', null);
 			if (sampleSeed) {
-				controller.updateUrlParam('sampleSeed', sampleSeed);
+				mapSelection.updateUrlParam('sampleSeed', sampleSeed);
 			}
 		} else {
-			controller.updateUrlParam('sort', mode);
-			controller.updateUrlParam('sampleSeed', null);
+			mapSelection.updateUrlParam('sort', mode);
+			mapSelection.updateUrlParam('sampleSeed', null);
 		}
 	}
 
 	function handleShuffle() {
 		const seed = Math.random().toString(36).slice(2, 10);
 		sampleSeed = seed;
-		controller.updateUrlParam('sampleSeed', seed);
+		mapSelection.updateUrlParam('sampleSeed', seed);
 	}
 
 	const panelWidth = $derived.by(() => {
@@ -101,18 +101,18 @@
 	let datasetLabels = $derived(data?.metadata?.datasets?.map((s: { label: string }) => s.label) || []);
 	let currentDatasetLabels = $derived(currentDatasets.map((id: string) => datasetLookup.get(id) || id));
 
-	const controller = createStateController();
-	let currentPeriod = $derived(controller.currentPeriod);
-	let selectedCellId = $derived(controller.selectedCellId);
-	let selectedCellBounds = $derived(controller.selectedCellBounds);
-	let showCellModal = $derived(controller.showCellModal);
+	const mapSelection = createMapSelection();
+	let currentPeriod = $derived(mapSelection.currentPeriod);
+	let selectedCellId = $derived(mapSelection.selectedCellId);
+	let selectedCellBounds = $derived(mapSelection.selectedCellBounds);
+	let showCellModal = $derived(mapSelection.showCellModal);
 
 	// Navigation state
 	let navExpanded = $state(true);
 
 	let allErrors = $derived.by(() => {
 		const serverErrors = data.errorData?.errors || [];
-		const controllerErrors = controller.errors || [];
+		const controllerErrors = mapSelection.errors || [];
 		return createPageErrorData([...serverErrors, ...clientErrors, ...controllerErrors]);
 	});
 
@@ -151,7 +151,7 @@
 				];
 			}
 		}
-		controller.initialize(initialPeriod);
+		mapSelection.initialize(initialPeriod);
 
 		tick().then(() => {
 			// Validate the deep-linked cell against the now-available dimensions (this used
@@ -160,7 +160,7 @@
 				const validation = validateCellId(data.cellParam, dimensions);
 				if (validation.isValid) {
 					const bounds = getCellBoundsFromCellId(data.cellParam, dimensions);
-					if (bounds) controller.selectCell(data.cellParam, bounds);
+					if (bounds) mapSelection.selectCell(data.cellParam, bounds);
 				} else {
 					clientErrors = [
 						...clientErrors,
@@ -176,7 +176,7 @@
 				const defaultRecordTypes = currentRecordTypes.length > 0 ? currentRecordTypes : recordTypes;
 
 				if (lastPeriod && defaultRecordTypes.length > 0) {
-					controller.syncUrlParameters(lastPeriod, currentTagOperator, defaultRecordTypes);
+					mapSelection.syncUrlParameters(lastPeriod, currentTagOperator, defaultRecordTypes);
 
 					// Skip the default cell on mobile — the map opens unfiltered there.
 					if (window.innerWidth > MOBILE_MAX_WIDTH && env.PUBLIC_DEFAULT_CENTER && dimensions) {
@@ -184,7 +184,7 @@
 						if (Number.isFinite(lon) && Number.isFinite(lat)) {
 							const cellId = getCellIdFromLonLat(lon, lat, dimensions);
 							const bounds = getCellBoundsFromCellId(cellId, dimensions);
-							if (bounds) controller.selectCell(cellId, bounds);
+							if (bounds) mapSelection.selectCell(cellId, bounds);
 						}
 					}
 				}
@@ -282,8 +282,8 @@
 	});
 
 	function handlePeriodChange(period: string) {
-		controller.updatePeriod(period);
-		controller.updateUrlParam('period', period);
+		mapSelection.updatePeriod(period);
+		mapSelection.updateUrlParam('period', period);
 	}
 
 	// Handle cell selection from map
@@ -292,18 +292,18 @@
 			// Calculate bounds on-demand from dimensions
 			const bounds = getCellBoundsFromCellId(cellId, dimensions);
 			if (bounds) {
-				controller.selectCell(cellId, bounds);
+				mapSelection.selectCell(cellId, bounds);
 			} else {
-				controller.selectCell(cellId);
+				mapSelection.selectCell(cellId);
 			}
 		} else {
-			controller.selectCell(null);
+			mapSelection.selectCell(null);
 		}
 	}
 
 	function handleFeaturesPanelClose() {
-		controller.clearErrors();
-		controller.selectCell(null);
+		mapSelection.clearErrors();
+		mapSelection.selectCell(null);
 	}
 
 	// The period active when the cell was selected — the mobile minimap shows the
@@ -315,7 +315,7 @@
 			return;
 		}
 		untrack(() => {
-			cellSelectionPeriod = controller.currentPeriod;
+			cellSelectionPeriod = mapSelection.currentPeriod;
 		});
 	});
 </script>
@@ -331,6 +331,7 @@
 				heatmap={currentHeatmap}
 				{dimensions}
 				{selectedCellId}
+				placeCells={data.selectedPlace?.cells}
 				{handleCellClick}
 			/>
 		{/if}
@@ -351,6 +352,7 @@
 				availableTags={data?.metadata?.tags || []}
 				{currentTags}
 				currentTagOperator={currentTagOperator as 'AND' | 'OR'}
+				selectedPlace={data.selectedPlace}
 			/>
 		</NavContainer>
 

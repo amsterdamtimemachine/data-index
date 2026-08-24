@@ -4,7 +4,7 @@
 // so the shell renders immediately — see +layout.ts and +page.svelte.
 
 import type { PageLoad } from './$types';
-import type { RecordType, PlaceType } from '@atm/shared/types';
+import type { RecordType, PlaceType, PlaceSearchMatch } from '@atm/shared/types';
 import type { AppError } from '$types/error';
 import { createPageErrorData, createError, createValidationError, createPeriodNotFoundError } from '$utils/error';
 import { translateAll } from '$utils/translations';
@@ -20,7 +20,7 @@ function isChronologicallyValid(period: string): boolean {
 	return start < end;
 }
 
-export const load: PageLoad = async ({ url, parent }) => {
+export const load: PageLoad = async ({ url, parent, fetch }) => {
 	const { metadata, metadataErrors } = await parent();
 	const errors: AppError[] = [...metadataErrors];
 
@@ -152,6 +152,22 @@ export const load: PageLoad = async ({ url, parent }) => {
 		}
 	}
 
+	// Selected place (the search filter): hydrate the id into a full match — this is
+	// also how a shared URL restores its selection. Unknown id → no selection.
+	let selectedPlace: PlaceSearchMatch | null = null;
+	const placeParam = url.searchParams.get('place');
+	if (placeParam) {
+		try {
+			const res = await fetch(`/api/places?id=${encodeURIComponent(placeParam.slice(0, 512))}`);
+			if (res.ok) {
+				const placeData = await res.json();
+				selectedPlace = placeData.matches[0] || null;
+			}
+		} catch (err) {
+			console.error('Failed to load selected place:', err);
+		}
+	}
+
 	// Sort mode + shuffle seed for the cell view; unknown modes fall back to default.
 	const sortParam = url.searchParams.get('sort');
 	let currentSort: UiSortMode = 'sample';
@@ -174,6 +190,7 @@ export const load: PageLoad = async ({ url, parent }) => {
 		currentTagOperator,
 		currentSort,
 		currentSampleSeed,
+		selectedPlace,
 		validatedPeriod,
 		errorData: createPageErrorData(errors)
 	};
