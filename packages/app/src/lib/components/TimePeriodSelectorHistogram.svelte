@@ -25,8 +25,9 @@
 		hideGlobal
 	}: Props = $props();
 
-	// the local band's floor: mid-track when stacked, the track line otherwise
-	const localBase = $derived.by(() => {
+	// the global band's floor: mid-track when stacked, the track line otherwise;
+	// the local band always sits on the track line
+	const globalBase = $derived.by(() => {
 		if (stacked) {
 			return bandHeight;
 		}
@@ -69,7 +70,7 @@
 			{@const x = (i / bins.length) * 100}
 			<rect
 				x="{x}%"
-				y={timelineHeight - barHeight}
+				y={globalBase - barHeight}
 				width="{barWidth}%"
 				height={barHeight}
 				class="fill-atm-blue"
@@ -77,23 +78,23 @@
 		{/each}
 	{/if}
 
-	<!-- Selected cell's bars: own band above the global one on desktop -->
+	<!-- Selected cell's bars: own band below the global one on desktop -->
 	{#each localBins as bin, i (bin.timeSlice.key)}
 		{@const barWidth = 100 / localBins.length}
 		{@const barHeight = localBarHeights[i]}
 		{@const x = (i / localBins.length) * 100}
 		<rect
 			x="{x}%"
-			y={localBase - barHeight}
+			y={timelineHeight - barHeight}
 			width="{barWidth}%"
 			height={barHeight}
 			class="fill-atm-red"
 		></rect>
 	{/each}
 
-	<!-- floor of the selection band -->
+	<!-- floor of the global band -->
 	{#if stacked}
-		<line x1="0%" y1={localBase} x2="100%" y2={localBase} stroke="black" stroke-width="0.5" />
+		<line x1="0%" y1={globalBase} x2="100%" y2={globalBase} stroke="black" stroke-width="0.5" />
 	{/if}
 
 	<!-- Ticks at period boundaries -->
