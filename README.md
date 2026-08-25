@@ -23,6 +23,7 @@ Rather than curating or contextualising the data, the index presents sources as 
   - [Temporal indexing](#temporal-indexing)
   - [Unique features rank higher](#unique-features-rank-higher)
   - [Feature sorting](#feature-sorting)
+  - [Place search](#place-search)
 - [Dating](#dating)
   - [Feature dates](#feature-dates)
   - [Place dates](#place-dates)
@@ -215,7 +216,7 @@ Heatmap density is rendered with log-normalised counts (`log(count+1) / log(maxC
 
 ### Place data naming 
 
-Every `place` has a geometry and a `name`, and may have dated historical names in `place_historical_name`. How geometry and naming interact with the temporal index depends on geometry type and related data available in Adamlink. At the moment, a feature can link to only a single place. 
+Every `place` has a geometry and a `name`, and may have dated historical names in `place_historical_name`. The `name` always holds the name in force today. For Adamlink places `rebuild-index` enforces this: where the stored name differs from an open-ended historical name row, the stored name is replaced by it. Old names are never lost, they stay findable as their own dated rows. Other sources are left alone, since an open end date may mean the end is simply unknown. How geometry and naming interact with the temporal index depends on geometry type and related data available in Adamlink. At the moment, a feature can link to only a single place. 
 
 #### Address place
 Address place is a single numbered city address such as Prins Henrikkade 15. It is represented by single `POINT` geometry. Each address is labelled by multiple historical names taken from `addressen.ttl`'s `rdfs:label`, each dated by its `sem:hasEarliestBeginTimeStamp` and `sem:hasLatestEndTimeStamp` fields. The `name` is derived from the most recent historical name. In the heatmap its point occupies a single grid cell.
@@ -265,6 +266,14 @@ The cell view sorts features in one of six modes. All modes are deterministic.
 - **Oldest / newest**. Plain chronological order on `start_date`. No rotation. An explicit date sort returns true chronology, even when that puts several items of one type in a row.
 
 `/api/features` accepts `sort` (`sample` / `relevance` / `spatialFrequency` / `datePrecision` / `date`), `sortDirection`, and `seed`. `sort` defaults to `sample`. `seed` is optional: without one the sample order is fixed and reproducible, and every request without a seed gets the same order.
+
+### Place search
+
+`/api/places` finds places by name prefix, across all place types and all sources. It searches current names and dated historical names together, so an old street name finds today's street. Address places only match when the query contains a digit, which keeps a street search from flooding with its house numbers. Places with linked features rank first, then exact name matches, then the finest place type.
+
+Each match carries the matched name, the id of the matched historical name row when one applies, its validity window, the place's own geometry window for dated area divisions, the feature count, and the place's cells as display-grid indices in the same space as heatmap indices. The UI stores a selection in the URL as the place id plus the matched name row id, so a shared link restores the exact clicked alias.
+
+`/api/places` accepts `q` (search) or `id` with optional `nameId` (restore), plus `cols` and `limit`. `/api/features` and `/api/histogram` accept `placeId` to scope their results to the cells of one place.
 
 ## Dating
 
@@ -404,8 +413,9 @@ Ingestion is idempotent and source-driven: corrections are made in the **source 
 | `GET /api/metadata` | Time slices, record types, datasets, stats |
 | `GET /api/heatmaps` | Sparse heatmap data with grid dimensions |
 | `GET /api/histogram` | Feature count distribution by time period |
-| `GET /api/features` | Paginated features within geographic bounds |
+| `GET /api/features` | Paginated features within geographic bounds or a place's cells |
 | `GET /api/available-tags` | Tags with feature counts |
+| `GET /api/places` | Place name search and place lookup for the search filter |
 | `GET /api/tag-combinations` | Valid next tags for a tag selection — progressive tag filtering (WIP, not yet exposed in the UI) |
 
 Heatmaps, histogram, features, and available-tags accept `recordTypes`, `datasets`, and `placeTypes` (`address` / `street` / `neighbourhood` / `district`) query parameters to filter results.

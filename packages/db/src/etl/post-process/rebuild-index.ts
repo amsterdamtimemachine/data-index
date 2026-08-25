@@ -131,8 +131,10 @@ export async function rebuildIndex() {
   `);
   console.log(`  ${temporalResult.rowCount} features updated`);
 
-  // Canonicalise stored names: some sources record an old name on the place row
-  // while the name in force lives as an open-ended history row. The old name is
+  // Canonicalise stored names, adamlink only: its name lists record an old name
+  // on the place row while the name in force lives as an open-ended history row
+  // (verified: every dead adamlink name carries an until). Other sources may use
+  // an open until to mean "end unknown", so they are left alone. The old name is
   // never lost — it exists as its own (dated) history row.
   console.log('\nCanonicalising place names...');
   const nameResult = await db.execute(sql`
@@ -145,8 +147,24 @@ export async function rebuildIndex() {
       ORDER BY place_id, since DESC NULLS LAST
     ) n
     WHERE p.id = n.place_id AND p.name IS DISTINCT FROM n.name
+      AND p.source = 'adamlink'
   `);
   console.log(`  ${nameResult.rowCount} places renamed to their current name`);
+
+  // Audit: two open-ended names for one place is contradictory data; the latest
+  // since wins above, but it should be seen, not silent.
+  type ContradictionRow = { n: string };
+  const contradictions = await db.execute<ContradictionRow>(sql`
+    SELECT COUNT(*) AS n FROM (
+      SELECT place_id FROM place_historical_name
+      WHERE until IS NULL AND name IS NOT NULL
+      GROUP BY place_id HAVING COUNT(DISTINCT name) > 1
+    ) multi
+  `);
+  const contradictionCount = parseInt(contradictions.rows[0].n);
+  if (contradictionCount > 0) {
+    console.log(`  ${contradictionCount} places have multiple open-ended names (latest since won)`);
+  }
 
   // Check coverage gaps
   type CountRow = { total: string; missing_temporal: string };

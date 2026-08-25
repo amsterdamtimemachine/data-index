@@ -32,6 +32,7 @@ describe('place search', () => {
       dataset: { id: 'ps-ds', label: 'PS DS' },
       relation: { id: 'isAbout', label: 'Is About' },
     });
+    await db.execute(sql`INSERT INTO organisations (id, label) VALUES ('adamlink', 'Adamlink') ON CONFLICT (id) DO NOTHING`);
 
     // homonym streets: one carries a feature, the other is a bare gazetteer entry
     await db.execute(sql`INSERT INTO place (id, type, name) VALUES
@@ -42,6 +43,11 @@ describe('place search', () => {
       (${BOTH}, 'address', 'Kerkstraat 9'),
       (${HOOD}, 'neighbourhood', 'Kerkbuurt'),
       (${RENUMBERED}, 'street', 'Oudekerkspad')`);
+    await db.execute(sql`UPDATE place SET source = 'adamlink' WHERE id = ${RENUMBERED}`);
+    // non-adamlink open-ended name: canonicalisation must leave it alone
+    await db.execute(sql`INSERT INTO place (id, type, name, source) VALUES ('ps-foreign', 'street', 'Vreemdstraat', 'ps-org')`);
+    await db.execute(sql`INSERT INTO place_historical_name (id, place_id, name, since, until) VALUES
+      ('ps-hist-5', 'ps-foreign', 'Nieuwstraat', '1960-01-01', NULL)`);
     await db.execute(sql`INSERT INTO place_geometry (place_id, geometry) VALUES
       (${STREET_DATA}, ST_GeomFromText('LINESTRING(120000 485000, 120300 485000)', 28992)),
       (${STREET_BARE}, ST_GeomFromText('LINESTRING(121000 486000, 121300 486000)', 28992)),
@@ -178,6 +184,12 @@ describe('place search', () => {
     expect(old[0].matchedNameId).toBe('ps-hist-4');
     expect(old[0].matchedWindow).toEqual([null, '1957-01-01']);
     expect(old[0].name).toBe('Kerkelaan');
+  });
+
+  test('canonicalisation is adamlink-only: other sources keep their stored name', async () => {
+    const foreign = await getPlaceById('ps-foreign');
+    expect(foreign!.name).toBe('Vreemdstraat');
+    expect(foreign!.matchedName).toBe('Vreemdstraat');
   });
 
   test('getPlaceById restores a match by id', async () => {
