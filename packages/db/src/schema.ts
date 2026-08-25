@@ -51,7 +51,9 @@ export const place = pgTable('place', {
   url: text('url')                               // canonical record at the source (adamlink.nl / bag.basisregistraties.overheid.nl / …)
 }, (table) => [
   // exact case-insensitive name lookup (getCandidatesByName / inferByName)
-  index('idx_place_name_lower').on(sql`lower(${table.name})`).where(sql`${table.name} is not null`)
+  index('idx_place_name_lower').on(sql`lower(${table.name})`).where(sql`${table.name} is not null`),
+  // prefix search (searchPlaces): LIKE 'q%' needs text_pattern_ops
+  index('idx_place_name_prefix').on(sql`lower(${table.name}) text_pattern_ops`).where(sql`${table.name} is not null`)
 ]);
 
 // ============================================================================
@@ -86,7 +88,8 @@ export const placeHistoricalName = pgTable('place_historical_name', {
 }, (table) => [
   index('idx_place_historical_name_place').on(table.placeId),
   index('idx_place_historical_name_place_since').on(table.placeId, table.since),
-  index('idx_place_historical_name_lower').on(sql`lower(${table.name})`).where(sql`${table.name} is not null`)
+  index('idx_place_historical_name_lower').on(sql`lower(${table.name})`).where(sql`${table.name} is not null`),
+  index('idx_place_historical_name_prefix').on(sql`lower(${table.name}) text_pattern_ops`).where(sql`${table.name} is not null`)
 ]);
 
 // ============================================================================

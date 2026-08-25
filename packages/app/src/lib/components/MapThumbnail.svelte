@@ -12,13 +12,17 @@
 	type Props = {
 		timeline: HeatmapTimeline;
 		dimensions: HeatmapDimensions;
-		cellId: string;
+		cellId?: string;
+		// display-cell indices of the active place filter, in gold
+		highlightCells?: number[];
+		// the place is the panel's subject: red core inside the gold
+		highlightSelected?: boolean;
 		period: string;
 		width?: number;
 		height?: number;
 		class?: string;
 	};
-	let { timeline, dimensions, cellId, period, width = 150, height = 75, class: className }: Props = $props();
+	let { timeline, dimensions, cellId = undefined, highlightCells = undefined, highlightSelected = false, period, width = 150, height = 75, class: className }: Props = $props();
 
 	const MIN_MARKER_PX = 5;
 
@@ -28,7 +32,10 @@
 		const ctx = canvas?.getContext('2d');
 		if (!ctx) return;
 		const { colsAmount: cols, rowsAmount: rows } = dimensions;
-		const selected = parseRowColFromCellId(cellId);
+		let selected: { row: number; col: number } | null = null;
+		if (cellId) {
+			selected = parseRowColFromCellId(cellId);
+		}
 		const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
 		ctx.resetTransform();
@@ -47,6 +54,29 @@
 		if (heatmap) {
 			ctx.fillStyle = colors['atm-blue'];
 			for (const i of heatmap.indices) ctx.fillRect(cellX(i), cellY(i), px, px);
+		}
+
+		// place cells in gold; when the place is the subject, a red pass overpaints
+		// interior gold, leaving a gold rim around a red shape (the map's grammar)
+		if (highlightCells && highlightCells.length > 0) {
+			let m = px;
+			if (highlightCells.length === 1) {
+				m = Math.max(s, MIN_MARKER_PX);
+			}
+			let rim = 0;
+			if (highlightSelected) {
+				rim = 2;
+			}
+			ctx.fillStyle = colors['map-place-outline'];
+			for (const i of highlightCells) {
+				ctx.fillRect(cellX(i) - (m - s) / 2 - rim, cellY(i) - (m - s) / 2 - rim, m + rim * 2, m + rim * 2);
+			}
+			if (highlightSelected) {
+				ctx.fillStyle = colors['atm-red'];
+				for (const i of highlightCells) {
+					ctx.fillRect(cellX(i) - (m - s) / 2, cellY(i) - (m - s) / 2, m, m);
+				}
+			}
 		}
 
 		if (selected) {

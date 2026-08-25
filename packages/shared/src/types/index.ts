@@ -1,5 +1,6 @@
 export * from './feature';
 export * from './heatmap';
+export * from './place-search';
 export * from './histogram';
 export * from './serialization';
 export * from './spatial';

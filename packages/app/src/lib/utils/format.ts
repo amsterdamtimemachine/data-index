@@ -1,3 +1,5 @@
+import type { PlaceSearchMatch } from '@atm/shared/types';
+
 export function formatTimePeriod(per: [number, number]): string {
 	const [start, end] = per;
 	if (start === end) return start.toString();
@@ -31,4 +33,30 @@ export function formatDatasetTitle(title: string): string {
 		.split(' ')
 		.map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
 		.join(' ');
+}
+
+/**
+ * Era label for a place search match: "1850–1909", "tot 1850", "vanaf 1921", or
+ * '' when the sources record no window. The matched name's window wins over the
+ * geometry's.
+ */
+export function formatPlaceWindow(match: PlaceSearchMatch): string {
+	let window = match.matchedWindow;
+	if (!window) {
+		window = match.geometryWindow;
+	}
+	if (!window) {
+		return '';
+	}
+	const [since, until] = window;
+	if (since && until) {
+		return `${since.slice(0, 4)}–${until.slice(0, 4)}`;
+	}
+	if (until) {
+		return `tot ${until.slice(0, 4)}`;
+	}
+	if (since) {
+		return `vanaf ${since.slice(0, 4)}`;
+	}
+	return '';
 }

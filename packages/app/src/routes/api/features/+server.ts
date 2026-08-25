@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { FeaturesSortField, SortDirection, TagOperator } from '@atm/shared/types';
+import type { FeaturesSortField, SortDirection, TagOperator, FeaturesArea } from '@atm/shared/types';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_MAX } from '@atm/shared';
 import { getFeatures, UnknownTimeSliceError } from '@atm/db';
 import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList, parseBounds, parseSeed } from '$lib/server/query-params';
@@ -9,10 +9,17 @@ export const GET: RequestHandler = async ({ url }) => {
 	try {
 		// Parse bounds (required here, unlike the histogram endpoint)
 		const bounds = parseBounds(url);
-		if (!bounds) {
+		// The spatial population: a place's cell set, or a display cell's bounds.
+		const placeIdParam = url.searchParams.get('placeId');
+		let area: FeaturesArea;
+		if (placeIdParam) {
+			area = { kind: 'place', placeId: placeIdParam.slice(0, 512) };
+		} else if (bounds) {
+			area = { kind: 'bounds', bounds };
+		} else {
 			throw error(400, {
 				code: 'MISSING_BOUNDS',
-				message: 'Missing required bounds parameters: minLon, maxLon, minLat, maxLat'
+				message: 'Missing required bounds parameters (minLon, maxLon, minLat, maxLat) or placeId'
 			});
 		}
 
@@ -42,7 +49,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		);
 
 		console.log(
-			`Features API request - bounds: [${bounds.minLon.toFixed(4)}, ${bounds.minLat.toFixed(4)}] to [${bounds.maxLon.toFixed(4)}, ${bounds.maxLat.toFixed(4)}], ` +
+			`Features API request - area: ${JSON.stringify(area)}, ` +
 			`recordTypes: ${recordTypes?.join(', ') || 'all'}, ` +
 			`tags: ${tags?.join(', ') || 'none'} (${tagOperator}), ` +
 			`timeSlice: ${timeSlice || 'all'}, ` +
@@ -51,7 +58,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		);
 
 		const result = await getFeatures({
-			bounds,
+			area,
 			recordTypes,
 			datasetIds,
 			placeTypes,

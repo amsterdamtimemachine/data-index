@@ -25,9 +25,9 @@
 	};
 	import type { FeatureCollection, Feature, Polygon, GeoJsonProperties } from 'geojson';
 	import type { Heatmap, HeatmapDimensions, Coordinates } from '@atm/shared/types';
-	import { generateCellIdMap, generateCellGeometries, calculateDensity } from '$utils/heatmap';
+	import { generateCellIdMap, generateCellGeometries, calculateDensity, placeOutlineGeometry, type CellGeometry } from '$utils/heatmap';
 	import { mergeCss } from '$utils/utils';
-	import { MOBILE_QUERY } from '$utils/media.svelte';
+	import { MOBILE_QUERY, HOVER_QUERY } from '$utils/media.svelte';
 	import resolveConfig from 'tailwindcss/resolveConfig';
 	import tailwindConfig from '$tailwindConfig';
 
@@ -52,6 +52,10 @@
 		cellHoveredOutlineColor: string; //hex
 		cellValueColor: string; // hex
 		outlineLayerColor: string; // hex
+		placeOutlineWidth: number; // px, thicker than the cell selection so both read when they overlap
+		placeOutlineCasingColor: string; // hex, darker band under the place outline
+		cellSelectedCasingColor: string; // hex, darker band under the cell selection
+		outlineCasingExtra: number; // px added around a cased line
 		backgroundColor: string; // hex
 		waterFillColor: string; // hex
 		waterOutlineColor: string; // hex
@@ -66,6 +70,10 @@
 		heatmap: Heatmap;
 		dimensions: HeatmapDimensions;
 		selectedCellId: string | null;
+		// display-cell indices of the selected place (the search filter outline)
+		placeCells?: number[];
+		// the place is the panel's active subject: add the red selection outline
+		placeSelected?: boolean;
 		mapStyle?: MapStyle;
 		class?: string;
 		handleCellClick?: (cellId: string | null) => void;
@@ -84,10 +92,14 @@
 		defaultZoomMobile: 11,
 		center: { lat: 4.895645, lon: 52.372219 },
 		cellSelectedOutlineColor: colors['atm-red'],
-		cellHoveredOutlineColor: colors['atm-red-light'],
+		cellHoveredOutlineColor: colors['map-selected-outline-casing'],
 		cellSelectedOutlineWidth: 3,
 		cellValueColor: colors['map-cell-value'],
-		outlineLayerColor: colors['atm-gold'],
+		outlineLayerColor: colors['map-place-outline'],
+		placeOutlineWidth: 5,
+		placeOutlineCasingColor: colors['map-place-outline-casing'],
+		cellSelectedCasingColor: colors['map-selected-outline-casing'],
+		outlineCasingExtra: 4,
 		backgroundColor: colors['map-background'],
 		waterFillColor: colors['map-water-fill'],
 		waterOutlineColor: colors['map-water-outline'],
@@ -102,6 +114,8 @@
 		heatmap,
 		dimensions,
 		selectedCellId = null,
+		placeCells = undefined,
+		placeSelected = false,
 		class: className,
 		mapStyle = defaultMapStyle,
 		handleCellClick,
@@ -109,6 +123,7 @@
 	}: MapProps = $props();
 
 	let map: MapLibreMap | undefined = $state();
+	let cellGeometries: CellGeometry[] = [];
 	let mapContainer: HTMLElement;
 	let isMapLoaded = $state(false);
 	let hoverTooltip = $state<{ x: number; y: number; count: number; cellId: string } | null>(null);
@@ -146,6 +161,30 @@
 		if (!isMapLoaded || !map || !dimensions) return;
 		resetAllCells();
 		setActiveCells();
+	});
+
+	// The red selection outline follows whether the place is the active subject
+	$effect(() => {
+		if (!isMapLoaded || !map) return;
+		let visibility: 'visible' | 'none' = 'none';
+		if (placeSelected) {
+			visibility = 'visible';
+		}
+		if (map.getLayer('place-selected')) {
+			map.setLayoutProperty('place-selected', 'visibility', visibility);
+		}
+	});
+
+	// Sync the place-filter outline with the selected place's cells
+	$effect(() => {
+		if (!isMapLoaded || !map || !dimensions) return;
+		const source = map.getSource('place-outline') as maplibre.GeoJSONSource | undefined;
+		if (!source) return;
+		let cells: number[] = [];
+		if (placeCells) {
+			cells = placeCells;
+		}
+		source.setData(placeOutlineGeometry(cells, cellGeometries, dimensions.colsAmount));
 	});
 
 	// Handle selected cell changes - THIS FIXES THE HIGHLIGHTING ISSUE
@@ -196,7 +235,7 @@
 		// Generate geometries on-the-fly using client-side calculation.
 		// PUBLIC_EXACT_CELLS=true reprojects cells to their true RD footprint (proj4),
 		// removing the ~0.4° rotation skew; default draws axis-aligned lon/lat rects.
-		const cellGeometries = generateCellGeometries(dims, env.PUBLIC_EXACT_CELLS === 'true');
+		cellGeometries = generateCellGeometries(dims, env.PUBLIC_EXACT_CELLS === 'true');
 
 		const features = cellGeometries.map(
 			(cell): Feature<Polygon, CellProperties> => ({
@@ -358,7 +397,58 @@
 				}
 			});
 
+			// Place-filter outline: gold perimeter, under the red cell selection
+			mapInstance.addSource('place-outline', {
+				type: 'geojson',
+				data: placeOutlineGeometry([], cellGeometries, dimensions.colsAmount)
+			});
+			mapInstance.addLayer({
+				id: 'place-outline-casing',
+				type: 'line',
+				source: 'place-outline',
+				// square caps: the perimeter is independent edge segments, and butt caps
+				// leave unpainted notches where two meet at a corner
+				layout: { 'line-cap': 'square' },
+				paint: {
+					'line-color': mapStyle.placeOutlineCasingColor,
+					'line-width': mapStyle.placeOutlineWidth + mapStyle.outlineCasingExtra
+				}
+			});
+			mapInstance.addLayer({
+				id: 'place-outline',
+				type: 'line',
+				source: 'place-outline',
+				layout: { 'line-cap': 'square' },
+				paint: {
+					'line-color': mapStyle.outlineLayerColor,
+					'line-width': mapStyle.placeOutlineWidth
+				}
+			});
+
+			// Red selection core inside the gold band while the place is the panel's
+			// subject; the gold outline itself is the contrast ring, so no casing.
+			mapInstance.addLayer({
+				id: 'place-selected',
+				type: 'line',
+				source: 'place-outline',
+				layout: { 'line-cap': 'square', visibility: 'none' },
+				paint: {
+					'line-color': mapStyle.cellSelectedOutlineColor,
+					'line-width': mapStyle.cellSelectedOutlineWidth
+				}
+			});
+
 			// Active cell
+			mapInstance.addLayer({
+				id: 'selected-cell-casing',
+				type: 'line',
+				source: 'heatmap',
+				paint: {
+					'line-color': mapStyle.cellSelectedCasingColor,
+					'line-width': mapStyle.cellSelectedOutlineWidth + mapStyle.outlineCasingExtra,
+					'line-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 1, 0]
+				}
+			});
 			mapInstance.addLayer({
 				id: 'selected-cell',
 				type: 'line',
@@ -386,7 +476,7 @@
 			let hoveredFeatureId: string | null = null;
 
 			// MapLibre synthesises mousemove from taps, and a finger never "leaves"
-			const hoverCapable = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+			const hoverCapable = window.matchMedia(HOVER_QUERY).matches;
 
 			if (hoverCapable) mapInstance.on('mousemove', 'heatmap-squares', (e) => {
 				if (e.features?.[0]) {

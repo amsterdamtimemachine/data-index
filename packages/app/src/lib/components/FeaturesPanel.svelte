@@ -3,13 +3,13 @@
 	import FeaturesPanelHeader from '$components/FeaturesPanelHeader.svelte';
 	import ErrorHandler from '$components/ErrorHandler.svelte';
 	import { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
-	import { createCellFeatures } from '$lib/state/cell-features.svelte';
+	import { createPanelFeatures, type PanelSubject } from '$lib/state/panel-features.svelte';
 	import type { HeatmapTimeline, HeatmapDimensions, RecordType } from '@atm/shared/types';
 
 	interface Props {
-		cellId: string;
+		subject: PanelSubject;
+		placeCells?: number[];
 		period: string;
-		bounds?: { minLat: number; maxLat: number; minLon: number; maxLon: number };
 		recordTypes: RecordType[];
 		placeTypes?: string[];
 		datasets: string[];
@@ -27,9 +27,9 @@
 	}
 
 	let {
-		cellId,
+		subject,
+		placeCells = undefined,
 		period,
-		bounds,
 		recordTypes,
 		placeTypes = [],
 		datasets,
@@ -46,10 +46,9 @@
 		onShuffle
 	}: Props = $props();
 
-	const cellFeatures = createCellFeatures(() => ({
-		cellId,
+	const panelFeatures = createPanelFeatures(() => ({
+		subject,
 		period,
-		bounds,
 		recordTypes,
 		placeTypes,
 		datasets,
@@ -66,10 +65,11 @@
 	}
 </script>
 
-<ErrorHandler errorData={cellFeatures.errorData} />
+<ErrorHandler errorData={panelFeatures.errorData} />
 
 <FeaturesPanelHeader
-	{cellId}
+	{subject}
+	{placeCells}
 	{period}
 	{selectionPeriod}
 	{timeline}
@@ -78,19 +78,19 @@
 	{sortMode}
 	{onSortChange}
 	{onShuffle}
-	totalCount={cellFeatures.totalCount}
-	currentPage={cellFeatures.currentPage}
-	pageSize={cellFeatures.pageSize}
-	loading={cellFeatures.loading}
-	initialLoading={cellFeatures.initialLoading}
-	onPageChange={cellFeatures.changePage}
+	totalCount={panelFeatures.totalCount}
+	currentPage={panelFeatures.currentPage}
+	pageSize={panelFeatures.pageSize}
+	loading={panelFeatures.loading}
+	initialLoading={panelFeatures.initialLoading}
+	onPageChange={panelFeatures.changePage}
 	onClose={handleClose}
 />
 
 <div class="min-h-full bg-atm-sand-dark">
-	{#if cellFeatures.features.length > 0}
-		<FeaturesGrid features={cellFeatures.features} columns={gridColumns} />
-	{:else if !cellFeatures.initialLoading && !cellFeatures.loading}
+	{#if panelFeatures.features.length > 0}
+		<FeaturesGrid features={panelFeatures.features} columns={gridColumns} />
+	{:else if !panelFeatures.initialLoading && !panelFeatures.loading}
 		<div class="text-base text-gray-500 p-4">No features found for this cell and period</div>
 	{/if}
 </div>

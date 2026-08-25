@@ -5,7 +5,7 @@
 -->
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { RecordType, PlaceType } from '@atm/shared/types';
+	import type { RecordType, PlaceType, PlaceSearchMatch } from '@atm/shared/types';
 	import { translateAll, reverseTranslateAll } from '$utils/translations';
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
 	import Heading from './Heading.svelte';
@@ -13,6 +13,8 @@
 	import ToggleGroup from './ToggleGroup.svelte';
 	import Tag from './Tag.svelte';
 	import FilterSection from './FilterSection.svelte';
+import PlaceSearchInput from './PlaceSearchInput.svelte';
+import PlaceFilterTag from './PlaceFilterTag.svelte';
 	import TagsANDSelector from './TagsANDSelector.svelte';
 	import TagOperatorSwitch from './TagOperatorSwitch.svelte';
 	import DummyTagsSection from './DummyTagsSection.svelte';
@@ -27,6 +29,9 @@
 		availableTags?: string[];
 		currentTags?: string[];
 		currentTagOperator?: 'AND' | 'OR';
+		selectedPlace?: PlaceSearchMatch | null;
+		onTogglePlacePanel?: () => void;
+		placePanelOpen?: boolean;
 	}
 
 	let {
@@ -38,7 +43,10 @@
 		currentDatasets = [],
 		availableTags = [],
 		currentTags = [],
-		currentTagOperator = 'OR'
+		currentTagOperator = 'OR',
+		selectedPlace = null,
+		onTogglePlacePanel = undefined,
+		placePanelOpen = false
 	}: Props = $props();
 
 	// keep false until real tags are added to the app
@@ -102,6 +110,24 @@
 		});
 	}
 
+	function handlePlaceSelect(match: PlaceSearchMatch) {
+		navigate((p) => {
+			p.set('place', match.placeId);
+			if (match.matchedNameId) {
+				p.set('name', match.matchedNameId);
+			} else {
+				p.delete('name');
+			}
+		});
+	}
+
+	function handlePlaceClear() {
+		navigate((p) => {
+			p.delete('place');
+			p.delete('name');
+		});
+	}
+
 	function handleTagOperatorChange(operator: 'AND' | 'OR') {
 		tagOperator = operator;
 		selectedTags = [];
@@ -115,6 +141,23 @@
 <div class="p-3">
 	<div class="mb-4">
 		<Heading level={2} class="font-bold text-lg mb-2"> Filters </Heading>
+
+		<div class="mb-4">
+			<div class="flex mb-2">
+				<Heading level={3} class="pr-2">Plek</Heading>
+				<Tooltip
+					icon={QuestionMark}
+					text="Zoek op huidige of historische plaatsnamen. De kaart markeert de cellen van de gevonden plek."
+					placement="bottom"
+				/>
+			</div>
+			<PlaceSearchInput onSelect={handlePlaceSelect} />
+			{#if selectedPlace}
+				<div class="mt-2">
+					<PlaceFilterTag place={selectedPlace} onClear={handlePlaceClear} onToggle={onTogglePlacePanel} active={placePanelOpen} />
+				</div>
+			{/if}
+		</div>
 
 		<FilterSection
 			heading="Inhoudstype"

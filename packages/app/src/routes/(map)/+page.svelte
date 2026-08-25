@@ -2,12 +2,12 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
-	import { createStateController } from '$state/StateController.svelte';
+	import { createMapSelection } from '$state/map-selection.svelte';
 	import { createPageErrorData, createError, createValidationError } from '$utils/error';
 	import { validateCellId } from '$utils/utils';
 	import { loadingState } from '$lib/state/loadingState.svelte';
 	import { fetchJson } from '$utils/fetchJson';
-	import { createMediaQuery, MOBILE_QUERY } from '$utils/media.svelte';
+	import { createMediaQuery, MOBILE_QUERY, MOBILE_MAX_WIDTH } from '$utils/media.svelte';
 	import FeaturesPanelResizeHandle, {
 		panelWidthCss,
 		type PanelCols
@@ -25,10 +25,11 @@
 	import NavItem from '$components/NavItem.svelte';
 	import type { PageData } from './$types';
 	import type { Histogram, HeatmapTimeline, HeatmapDimensions, HeatmapResponse } from '@atm/shared/types';
+	import type { PanelSubject } from '$lib/state/panel-features.svelte';
 	import type { AppError } from '$types/error';
 	import { env } from '$env/dynamic/public';
 	import { createEmptyHeatmap, getCellBoundsFromCellId, getCellIdFromLonLat } from '$utils/heatmap';
-	import { MOBILE_MAX_WIDTH } from '$lib/constants';
+
 
 	let { data }: { data: PageData } = $props();
 
@@ -57,20 +58,20 @@
 	function handleSortChange(mode: UiSortMode) {
 		sortMode = mode;
 		if (mode === 'sample') {
-			controller.updateUrlParam('sort', null);
+			mapSelection.updateUrlParam('sort', null);
 			if (sampleSeed) {
-				controller.updateUrlParam('sampleSeed', sampleSeed);
+				mapSelection.updateUrlParam('sampleSeed', sampleSeed);
 			}
 		} else {
-			controller.updateUrlParam('sort', mode);
-			controller.updateUrlParam('sampleSeed', null);
+			mapSelection.updateUrlParam('sort', mode);
+			mapSelection.updateUrlParam('sampleSeed', null);
 		}
 	}
 
 	function handleShuffle() {
 		const seed = Math.random().toString(36).slice(2, 10);
 		sampleSeed = seed;
-		controller.updateUrlParam('sampleSeed', seed);
+		mapSelection.updateUrlParam('sampleSeed', seed);
 	}
 
 	const panelWidth = $derived.by(() => {
@@ -101,18 +102,18 @@
 	let datasetLabels = $derived(data?.metadata?.datasets?.map((s: { label: string }) => s.label) || []);
 	let currentDatasetLabels = $derived(currentDatasets.map((id: string) => datasetLookup.get(id) || id));
 
-	const controller = createStateController();
-	let currentPeriod = $derived(controller.currentPeriod);
-	let selectedCellId = $derived(controller.selectedCellId);
-	let selectedCellBounds = $derived(controller.selectedCellBounds);
-	let showCellModal = $derived(controller.showCellModal);
+	const mapSelection = createMapSelection();
+	let currentPeriod = $derived(mapSelection.currentPeriod);
+	let selectedCellId = $derived(mapSelection.selectedCellId);
+	let selectedCellBounds = $derived(mapSelection.selectedCellBounds);
+	let showCellModal = $derived(mapSelection.showCellModal);
 
 	// Navigation state
 	let navExpanded = $state(true);
 
 	let allErrors = $derived.by(() => {
 		const serverErrors = data.errorData?.errors || [];
-		const controllerErrors = controller.errors || [];
+		const controllerErrors = mapSelection.errors || [];
 		return createPageErrorData([...serverErrors, ...clientErrors, ...controllerErrors]);
 	});
 
@@ -151,7 +152,7 @@
 				];
 			}
 		}
-		controller.initialize(initialPeriod);
+		mapSelection.initialize(initialPeriod);
 
 		tick().then(() => {
 			// Validate the deep-linked cell against the now-available dimensions (this used
@@ -160,7 +161,7 @@
 				const validation = validateCellId(data.cellParam, dimensions);
 				if (validation.isValid) {
 					const bounds = getCellBoundsFromCellId(data.cellParam, dimensions);
-					if (bounds) controller.selectCell(data.cellParam, bounds);
+					if (bounds) mapSelection.selectCell(data.cellParam, bounds);
 				} else {
 					clientErrors = [
 						...clientErrors,
@@ -176,7 +177,7 @@
 				const defaultRecordTypes = currentRecordTypes.length > 0 ? currentRecordTypes : recordTypes;
 
 				if (lastPeriod && defaultRecordTypes.length > 0) {
-					controller.syncUrlParameters(lastPeriod, currentTagOperator, defaultRecordTypes);
+					mapSelection.syncUrlParameters(lastPeriod, currentTagOperator, defaultRecordTypes);
 
 					// Skip the default cell on mobile — the map opens unfiltered there.
 					if (window.innerWidth > MOBILE_MAX_WIDTH && env.PUBLIC_DEFAULT_CENTER && dimensions) {
@@ -184,7 +185,7 @@
 						if (Number.isFinite(lon) && Number.isFinite(lat)) {
 							const cellId = getCellIdFromLonLat(lon, lat, dimensions);
 							const bounds = getCellBoundsFromCellId(cellId, dimensions);
-							if (bounds) controller.selectCell(cellId, bounds);
+							if (bounds) mapSelection.selectCell(cellId, bounds);
 						}
 					}
 				}
@@ -235,12 +236,11 @@
 
 	// Nulled up front: a cell switch must never show the previous cell's bars.
 	$effect(() => {
-		const mobile = isMobile.matches;
 		const cellBounds = selectedCellBounds;
 		const filterQs = data.filterQuery;
 
 		cellHistogram = null;
-		if (!mobile || !cellBounds) {
+		if (!cellBounds) {
 			return;
 		}
 
@@ -260,17 +260,46 @@
 		);
 	});
 
-	// The desktop timeline is intentionally global; the thumb reads currentPeriod
-	// in every branch — only the bars swap.
-	const displayedHistogram = $derived.by(() => {
-		if (!isMobile.matches) {
-			return histogram;
+	// The open place panel's series: features in the place's cells per bin.
+	let placeHistogram = $state<Histogram | null>(null);
+	$effect(() => {
+		const open = placePanelOpen;
+		const place = data.selectedPlace;
+		const filterQs = data.filterQuery;
+
+		placeHistogram = null;
+		if (!open || !place) {
+			return;
 		}
-		if (!showCellModal) {
-			return histogram;
+		let qs = '';
+		if (filterQs) {
+			qs = `${filterQs}&`;
+		}
+		return fetchJson<Histogram>(
+			`/api/histogram?${qs}placeId=${encodeURIComponent(place.placeId)}`,
+			(res) => {
+				placeHistogram = res;
+			},
+			() => {
+				// silent by design: the timeline degrades to the city-wide histogram
+			}
+		);
+	});
+
+	// The panel subject's series, overlaid on the timeline in red; on mobile it
+	// only accompanies the open panel.
+	const localHistogram = $derived.by(() => {
+		if (placePanelOpen) {
+			if (!placeHistogram || placeHistogram.bins.length === 0) {
+				return null;
+			}
+			return placeHistogram;
 		}
 		if (!cellHistogram || cellHistogram.bins.length === 0) {
-			return histogram;
+			return null;
+		}
+		if (isMobile.matches && !showCellModal) {
+			return null;
 		}
 		return cellHistogram;
 	});
@@ -282,40 +311,101 @@
 	});
 
 	function handlePeriodChange(period: string) {
-		controller.updatePeriod(period);
-		controller.updateUrlParam('period', period);
+		mapSelection.updatePeriod(period);
+		mapSelection.updateUrlParam('period', period);
 	}
 
-	// Handle cell selection from map
+	// Handle cell selection from map; selecting a cell takes over the panel from
+	// the place view, but never clears the place filter itself.
 	function handleCellClick(cellId: string | null) {
+		if (cellId) {
+			handleClosePlacePanel();
+		}
 		if (cellId && dimensions) {
 			// Calculate bounds on-demand from dimensions
 			const bounds = getCellBoundsFromCellId(cellId, dimensions);
 			if (bounds) {
-				controller.selectCell(cellId, bounds);
+				mapSelection.selectCell(cellId, bounds);
 			} else {
-				controller.selectCell(cellId);
+				mapSelection.selectCell(cellId);
 			}
 		} else {
-			controller.selectCell(null);
+			mapSelection.selectCell(null);
 		}
 	}
 
 	function handleFeaturesPanelClose() {
-		controller.clearErrors();
-		controller.selectCell(null);
+		if (placePanelOpen) {
+			handleClosePlacePanel();
+			return;
+		}
+		mapSelection.clearErrors();
+		mapSelection.selectCell(null);
 	}
 
-	// The period active when the cell was selected — the mobile minimap shows the
-	// map as it was at tap time, so it must not track later timeline drags.
-	let cellSelectionPeriod = $state('');
+	// Place panel: the features panel showing a searched place's cell set. Open
+	// state is client-owned and mirrored to the URL like the cell selection.
+	let placePanelOpen = $state(untrack(() => data.placePanelOpen ?? false));
+
+	function handleOpenPlacePanel() {
+		mapSelection.selectCell(null);
+		placePanelOpen = true;
+		mapSelection.updateUrlParam('placePanel', '1');
+	}
+
+	function handleClosePlacePanel() {
+		placePanelOpen = false;
+		mapSelection.updateUrlParam('placePanel', null);
+	}
+
+	function handleTogglePlacePanel() {
+		if (placePanelOpen) {
+			handleClosePlacePanel();
+			return;
+		}
+		handleOpenPlacePanel();
+	}
+
+	// clearing the place filter also closes its panel
 	$effect(() => {
-		const cell = selectedCellId;
-		if (!cell) {
+		if (!data.selectedPlace && placePanelOpen) {
+			placePanelOpen = false;
+		}
+	});
+
+	const panelSubject = $derived.by(() => {
+		if (placePanelOpen && data.selectedPlace) {
+			return { kind: 'place', place: data.selectedPlace } as PanelSubject;
+		}
+		if (selectedCellId) {
+			return {
+				kind: 'cell',
+				cellId: selectedCellId,
+				bounds: selectedCellBounds ?? undefined
+			} as PanelSubject;
+		}
+		return null;
+	});
+	const showPanel = $derived.by(() => {
+		if (!panelSubject) {
+			return false;
+		}
+		if (panelSubject.kind === 'place') {
+			return true;
+		}
+		return showCellModal;
+	});
+
+	// The period active when the panel's subject was picked — the mobile minimap
+	// shows the map as it was at that moment, so it must not track later drags.
+	let panelSelectionPeriod = $state('');
+	$effect(() => {
+		const subject = panelSubject;
+		if (!subject) {
 			return;
 		}
 		untrack(() => {
-			cellSelectionPeriod = controller.currentPeriod;
+			panelSelectionPeriod = mapSelection.currentPeriod;
 		});
 	});
 </script>
@@ -331,6 +421,8 @@
 				heatmap={currentHeatmap}
 				{dimensions}
 				{selectedCellId}
+				placeCells={data.selectedPlace?.cells}
+				placeSelected={placePanelOpen}
 				{handleCellClick}
 			/>
 		{/if}
@@ -351,6 +443,9 @@
 				availableTags={data?.metadata?.tags || []}
 				{currentTags}
 				currentTagOperator={currentTagOperator as 'AND' | 'OR'}
+				selectedPlace={data.selectedPlace}
+				onTogglePlacePanel={handleTogglePlacePanel}
+				{placePanelOpen}
 			/>
 		</NavContainer>
 
@@ -369,7 +464,7 @@
 		/>
 	{/if}
 
-		{#if showCellModal && selectedCellId}
+		{#if showPanel && panelSubject}
 			<div
 				class="z-30 absolute top-0 right-0 w-full h-full bg-atm-sand overflow-hidden border-l border-solid border-atm-sand-border shadow-[-5px_0px_20px_5px_rgba(0,0,0,0.07)]"
 				style:width={panelWidth}
@@ -377,12 +472,12 @@
 				<FeaturesPanelResizeHandle cols={panelCols} onSizeChange={(cols) => (panelCols = cols)} />
 				<div class="h-full overflow-y-auto">
 					<FeaturesPanel
-						cellId={selectedCellId}
+						subject={panelSubject}
+						placeCells={data.selectedPlace?.cells}
 						period={currentPeriod}
 						timeline={heatmapTimeline ?? undefined}
 						dimensions={dimensions ?? undefined}
-						selectionPeriod={cellSelectionPeriod}
-						bounds={selectedCellBounds ?? undefined}
+						selectionPeriod={panelSelectionPeriod}
 						recordTypes={currentRecordTypes}
 						placeTypes={currentPlaceTypes}
 						datasets={currentDatasets}
@@ -403,7 +498,8 @@
 	{#if histogram}
 		<TimePeriodSelector
 			period={currentPeriod}
-			histogram={displayedHistogram ?? histogram}
+			{histogram}
+			{localHistogram}
 			onPeriodChange={handlePeriodChange}
 			class="z-40 bg-atm-sand border-t border-atm-sand-border"
 		/>

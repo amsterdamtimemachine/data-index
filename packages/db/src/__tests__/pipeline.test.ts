@@ -187,7 +187,7 @@ describe('getMetadata', () => {
 
 describe('getFeatures', () => {
   test('returns features within bounds', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, pageSize: 50 });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, pageSize: 50 });
     // BOUNDS cover the whole dataset, so the query must return EVERY feature —
     // cross-checked against a direct COUNT rather than a hardcoded total.
     expect(r.total).toBe(await dbq.featureCount());
@@ -195,7 +195,7 @@ describe('getFeatures', () => {
   });
 
   test('filters by recordType', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, recordTypes: ['person'], pageSize: 50 });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, recordTypes: ['person'], pageSize: 50 });
     for (const f of r.data) {
       expect(f.recordType).toBe('person');
     }
@@ -204,7 +204,7 @@ describe('getFeatures', () => {
   });
 
   test('filters by datasetIds', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, datasetIds: ['joods-monument'], pageSize: 50 });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, datasetIds: ['joods-monument'], pageSize: 50 });
     const expectedLabel = await dbq.datasetLabel('joods-monument');
     for (const f of r.data) {
       expect(f.datasetLabel).toBe(expectedLabel);
@@ -213,7 +213,7 @@ describe('getFeatures', () => {
   });
 
   test('returns displayName and historicalLabel', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, pageSize: 50 });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, pageSize: 50 });
     const withLabel = r.data.find(f => f.displayName);
     expect(withLabel).toBeDefined();
     // historicalLabel should also be populated for features within the registry date range
@@ -223,7 +223,7 @@ describe('getFeatures', () => {
 
   test('resolves the place provider from place.source via the organisations join', async () => {
     // Seeded places are all Adamlink LPs, so every feature carries the Adamlink provider.
-    const r = await getFeatures({ bounds: BOUNDS, pageSize: 50 });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, pageSize: 50 });
     const withProvider = r.data.find(f => f.placeProviderLabel);
     expect(withProvider).toBeDefined();
     expect(withProvider!.placeSource).toBe('adamlink');
@@ -233,7 +233,7 @@ describe('getFeatures', () => {
   });
 
   test('returns datasetLabel and organisationLabel matching the source tables', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, datasetIds: ['joods-monument'], pageSize: 50 });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, datasetIds: ['joods-monument'], pageSize: 50 });
     const dsLabel = await dbq.datasetLabel('joods-monument');
     const orgLabel = await dbq.organisationLabelForDataset('joods-monument');
     expect(r.data.length).toBeGreaterThan(0);
@@ -245,7 +245,7 @@ describe('getFeatures', () => {
   });
 
   test('truncates description to 128 characters', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, pageSize: 50 });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, pageSize: 50 });
     for (const f of r.data) {
       if (f.description) {
         expect(f.description.length).toBeLessThanOrEqual(128);
@@ -254,8 +254,8 @@ describe('getFeatures', () => {
   });
 
   test('pagination works correctly', async () => {
-    const p1 = await getFeatures({ bounds: BOUNDS, page: 1, pageSize: 2 });
-    const p2 = await getFeatures({ bounds: BOUNDS, page: 2, pageSize: 2 });
+    const p1 = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, page: 1, pageSize: 2 });
+    const p2 = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, page: 2, pageSize: 2 });
     expect(p1.data.length).toBeLessThanOrEqual(2);
     expect(p1.total).toBe(p2.total);
     expect(p1.totalPages).toBe(Math.ceil(p1.total / 2));
@@ -268,7 +268,7 @@ describe('getFeatures', () => {
   });
 
   test('results are interleaved by record type when multiple types present', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, pageSize: 50 });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, pageSize: 50 });
     const types = new Set(r.data.map(f => f.recordType));
     if (types.size >= 2) {
       // First few results should rotate through types, not cluster by type
@@ -279,7 +279,7 @@ describe('getFeatures', () => {
   });
 
   test('sort by date desc returns newer features first within each type', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, sort: 'date', sortDirection: 'desc', pageSize: 50 });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, sort: 'date', sortDirection: 'desc', pageSize: 50 });
     const byType = new Map<string, typeof r.data>();
     for (const f of r.data) {
       if (!byType.has(f.recordType)) byType.set(f.recordType, []);
@@ -299,7 +299,7 @@ describe('getFeatures', () => {
     // Pick a slice that contains some JM features (1900-1950 should)
     const slice1900 = slices.find(s => s.key === '1900_1950');
     if (slice1900) {
-      const r = await getFeatures({ bounds: BOUNDS, timeSlice: slice1900.key, pageSize: 50 });
+      const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, timeSlice: slice1900.key, pageSize: 50 });
       // JM features (1900-1945) should be included
       const jmCount = r.data.filter(f => f.datasetLabel === 'Joods Monument').length;
       expect(jmCount).toBeGreaterThan(0);

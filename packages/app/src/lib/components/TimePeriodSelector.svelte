@@ -1,19 +1,22 @@
 <script lang="ts">
-	import type { Histogram } from '@atm/shared/types';
+	import type { Histogram, HistogramBin } from '@atm/shared/types';
 	import { mergeCss } from '$utils/utils';
 	import TimePeriodSelectorHistogram from '$components/TimePeriodSelectorHistogram.svelte';
 	import TimePeriodSelectorLabels from '$components/TimePeriodSelectorLabels.svelte';
 	import TimePeriodSelectorThumb from '$components/TimePeriodSelectorThumb.svelte';
 	import TimePeriodSelectorTrack from '$components/TimePeriodSelectorTrack.svelte';
+	import { createMediaQuery, MOBILE_QUERY } from '$utils/media.svelte';
 
 	interface Props {
 		histogram: Histogram;
+		localHistogram?: Histogram | null;
 		period?: string;
 		onPeriodChange?: (newPeriod: string) => void;
 		class?: string;
 	}
 	let {
 		histogram,
+		localHistogram = null,
 		period = undefined,
 		onPeriodChange = undefined,
 		class: className
@@ -22,7 +25,26 @@
 	// Extract time period data
 	const timePeriods = $derived(histogram?.bins?.map((bin) => bin.timeSlice.key) || []);
 	const displayPeriods = $derived(createDisplayPeriods(histogram?.bins || []));
-	const timelineHeight = 15;
+
+	// Desktop grows to two stacked bands (selection over global) when a cell is
+	// selected; mobile keeps one band (the selection's own series).
+	const BAND_HEIGHT = 15;
+	const BAND_GAP = 2;
+	const isMobile = createMediaQuery(MOBILE_QUERY);
+	const hasLocal = $derived.by(() => {
+		if (!localHistogram) {
+			return false;
+		}
+		return localHistogram.bins.length > 0;
+	});
+	const stacked = $derived(hasLocal && !isMobile.matches);
+	const hideGlobal = $derived(hasLocal && isMobile.matches);
+	const timelineHeight = $derived.by(() => {
+		if (stacked) {
+			return BAND_HEIGHT * 2 + BAND_GAP;
+		}
+		return BAND_HEIGHT;
+	});
 
 	// Slider state
 	let currentIndex = $state(getInitialIndex());
@@ -58,7 +80,7 @@
 		}
 	});
 
-	function createDisplayPeriods(bins: any[]): string[] {
+	function createDisplayPeriods(bins: HistogramBin[]): string[] {
 		if (!bins.length) return [];
 
 		const result = bins.map((bin) => {
@@ -77,7 +99,10 @@
 	function getInitialIndex(): number {
 		if (!period || !timePeriods.length) return 0;
 		const index = timePeriods.indexOf(period);
-		return index >= 0 ? index : 0;
+		if (index >= 0) {
+			return index;
+		}
+		return 0;
 	}
 
 	function handleIndexChange(newIndex: number) {
@@ -154,16 +179,21 @@
 			onpointerdown={() => (hasAutoScrolled = true)}
 			class="w-full overflow-x-auto max-[850px]:overflow-x-auto min-[851px]:overflow-x-visible relative max-[850px]:shadow-[inset_10px_0_10px_-10px_rgba(0,0,0,0.3),inset_-10px_0_10px_-10px_rgba(0,0,0,0.3)]"
 		>
-			<div 
-				class="relative h-[40px]"
-				style="min-width: max(800px, {histogram.bins.length * 60}px); width: 100%;"
+			<div
+				class="relative"
+				style="min-width: max(800px, {histogram.bins.length * 60}px); width: 100%; height: {timelineHeight + 25}px;"
 				bind:this={trackElement}
 			>
 			<!-- Histogram Layer: Histogram bars and grid -->
 			<TimePeriodSelectorHistogram
 				bins={histogram?.bins || []}
 				maxCount={histogram?.maxCount || 0}
+				localBins={localHistogram?.bins || []}
+				localMaxCount={localHistogram?.maxCount || 0}
 				{timelineHeight}
+				bandHeight={BAND_HEIGHT}
+				{stacked}
+				{hideGlobal}
 			/>
 
 			<!-- Labels Layer: Year labels -->
@@ -172,6 +202,7 @@
 			<!-- Interactive Layer: Clickable track -->
 			<TimePeriodSelectorTrack
 				bins={histogram.bins}
+				localBins={localHistogram?.bins || []}
 				{currentIndex}
 				onIndexChange={handleIndexChange}
 				{timelineHeight}
@@ -182,6 +213,7 @@
 			<TimePeriodSelectorThumb
 				{currentIndex}
 				totalBins={histogram.bins.length}
+				localBins={localHistogram?.bins || []}
 				{isDragging}
 				onDragStart={handleDragStart}
 				{timelineHeight}

@@ -4,11 +4,12 @@
 // so the shell renders immediately — see +layout.ts and +page.svelte.
 
 import type { PageLoad } from './$types';
-import type { RecordType, PlaceType } from '@atm/shared/types';
+import type { RecordType, PlaceType, PlaceSearchMatch } from '@atm/shared/types';
 import type { AppError } from '$types/error';
 import { createPageErrorData, createError, createValidationError, createPeriodNotFoundError } from '$utils/error';
 import { translateAll } from '$utils/translations';
-import { UI_SORT_MODES, type UiSortMode } from '$components/FeaturesSortSelect.svelte';
+import type { UiSortMode } from '$components/FeaturesSortSelect.svelte';
+import { parsePlaceSelection, parsePlacePanelFlag, parseSortSelection } from '$utils/page-params';
 
 // Helper functions for period validation
 function isValidPeriodFormat(period: string): boolean {
@@ -20,7 +21,7 @@ function isChronologicallyValid(period: string): boolean {
 	return start < end;
 }
 
-export const load: PageLoad = async ({ url, parent }) => {
+export const load: PageLoad = async ({ url, parent, fetch }) => {
 	const { metadata, metadataErrors } = await parent();
 	const errors: AppError[] = [...metadataErrors];
 
@@ -152,17 +153,35 @@ export const load: PageLoad = async ({ url, parent }) => {
 		}
 	}
 
-	// Sort mode + shuffle seed for the cell view; unknown modes fall back to default.
-	const sortParam = url.searchParams.get('sort');
-	let currentSort: UiSortMode = 'sample';
-	if (sortParam && (UI_SORT_MODES as string[]).includes(sortParam)) {
-		currentSort = sortParam as UiSortMode;
+	// Selected place (the search filter): hydrate the id into a full match — this is
+	// also how a shared URL restores its selection. Unknown id → no selection.
+	const placeSelection = parsePlaceSelection(url);
+	let selectedPlace: PlaceSearchMatch | null = null;
+	if (placeSelection.placeId) {
+		try {
+			let nameQs = '';
+			if (placeSelection.nameId) {
+				nameQs = `&nameId=${encodeURIComponent(placeSelection.nameId)}`;
+			}
+			const res = await fetch(`/api/places?id=${encodeURIComponent(placeSelection.placeId)}${nameQs}`);
+			if (res.ok) {
+				const placeData = await res.json();
+				selectedPlace = placeData.matches[0] || null;
+			}
+		} catch (err) {
+			console.error('Failed to load selected place:', err);
+		}
 	}
-	let currentSampleSeed: string | undefined = undefined;
-	const sampleSeedParam = url.searchParams.get('sampleSeed');
-	if (sampleSeedParam) {
-		currentSampleSeed = sampleSeedParam.slice(0, 64);
+
+	// Place panel open flag; only meaningful with a resolved place.
+	let placePanelOpen = false;
+	if (parsePlacePanelFlag(url) && selectedPlace) {
+		placePanelOpen = true;
 	}
+
+	const sortSelection = parseSortSelection(url);
+	const currentSort: UiSortMode = sortSelection.sort;
+	const currentSampleSeed = sortSelection.sampleSeed;
 
 	return {
 		filterQuery,
@@ -174,6 +193,8 @@ export const load: PageLoad = async ({ url, parent }) => {
 		currentTagOperator,
 		currentSort,
 		currentSampleSeed,
+		selectedPlace,
+		placePanelOpen,
 		validatedPeriod,
 		errorData: createPageErrorData(errors)
 	};

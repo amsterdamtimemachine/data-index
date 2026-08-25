@@ -11,7 +11,7 @@ type CbsProps = {
   wijknaam?: string;
 };
 
-// Task scope: Weesp only — its areas aren't in Adamlink (Amsterdam's are, incl. the current
+// ACTIVE_SCOPE refinement: Weesp only — its areas aren't in Adamlink (Amsterdam's are, incl. the current
 // indeling as the until=NULL layer). Weesp was annexed by Amsterdam in 2022, so its standalone
 // areas live in the last vintage that still has GM0457. Peripheral parked: add the peripheral
 // municipalities @ '2023' to expand.

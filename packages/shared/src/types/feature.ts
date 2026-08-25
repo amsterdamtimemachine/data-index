@@ -62,8 +62,16 @@ export const PLACE_PROVIDERS: Record<PlaceSource, { label: string; url: string }
   bag: { label: 'BAG', url: 'https://www.kadaster.nl' },
 };
 
+/**
+ * Spatial population of a features query: a display cell's bounds (inverted to a
+ * base-cell range server-side) or a place's cell set.
+ */
+export type FeaturesArea =
+  | { kind: 'bounds'; bounds: HeatmapCellBounds }
+  | { kind: 'place'; placeId: string };
+
 export interface FeaturesQuery {
-  bounds: HeatmapCellBounds;
+  area: FeaturesArea;
   recordTypes?: RecordType[];
   datasetIds?: string[];
   placeTypes?: PlaceType[];

@@ -35,6 +35,15 @@ const TRANSLATIONS: Record<string, string> = {
 	reshuffle: 'Schud opnieuw',
 
 	// UI labels
+	searchPlaceholder: 'Zoek een plek op de kaart',
+	cellsOf: 'Cellen van',
+	cellOf: 'Cel van',
+	clearPlaceFilter: 'Verwijder plekfilter',
+	viewPlace: 'bekijk',
+	ofThisCell: 'van deze cel',
+	ofCellsOf: 'van de cellen van',
+	ofCellOf: 'van de cel van',
+	nowKnownAs: 'nu',
 	filters: 'Filters',
 	dataset: 'Dataset',
 	dataProvider: 'Databron',

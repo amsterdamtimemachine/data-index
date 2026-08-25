@@ -6,10 +6,14 @@
 	import MapThumbnail from '$components/MapThumbnail.svelte';
 	import FeaturesSortSelect, { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
 	import { createMediaQuery, MOBILE_QUERY } from '$utils/media.svelte';
+	import { translate } from '$utils/translations';
 	import type { HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
+	import type { PanelSubject } from '$lib/state/panel-features.svelte';
 
 	interface Props {
-		cellId: string;
+		subject: PanelSubject;
+		// cells of the active place filter (shown in gold whatever the subject)
+		placeCells?: number[];
 		period: string;
 		selectionPeriod?: string;
 		timeline?: HeatmapTimeline;
@@ -28,7 +32,8 @@
 	}
 
 	let {
-		cellId,
+		subject,
+		placeCells = undefined,
 		period,
 		selectionPeriod,
 		timeline,
@@ -59,6 +64,40 @@
 	});
 
 	const isMobile = createMediaQuery(MOBILE_QUERY);
+
+	// minimap: a cell subject gets the red marker, a place subject its gold cells
+	const thumbnailCellId = $derived.by(() => {
+		if (subject.kind === 'cell') {
+			return subject.cellId;
+		}
+		return undefined;
+	});
+	const highlightSelected = $derived(subject.kind === 'place');
+
+	// the count names its population: this cell, or the place's cells — with the
+	// clicked alias and, when it differs, the current name (the card convention)
+	const populationLabel = $derived.by(() => {
+		if (subject.kind === 'cell') {
+			return translate('ofThisCell');
+		}
+		const place = subject.place;
+		let shown = place.matchedName;
+		if (!shown && place.name) {
+			shown = place.name;
+		}
+		if (!shown) {
+			shown = place.placeId;
+		}
+		let phrase = translate('ofCellsOf');
+		if (place.cells.length === 1) {
+			phrase = translate('ofCellOf');
+		}
+		let label = `${phrase} ${shown}`;
+		if (place.name && place.name !== shown) {
+			label = `${label} (${translate('nowKnownAs')} ${place.name})`;
+		}
+		return label;
+	});
 
 	// desktop: live period; mobile: frozen at cell selection
 	const thumbnailPeriod = $derived.by(() => {
@@ -92,7 +131,9 @@
 			<MapThumbnail
 				{timeline}
 				{dimensions}
-				{cellId}
+				cellId={thumbnailCellId}
+				highlightCells={placeCells}
+				{highlightSelected}
 				period={thumbnailPeriod}
 				width={thumbnailWidth}
 				height={thumbnailHeight}
@@ -101,7 +142,7 @@
 	{/if}
 	{#if !initialLoading && totalCount > 0}
 		<div class="header-count">
-			<FeaturesCount totalFeatures={totalCount} {currentPage} featuresPerPage={pageSize} />
+			<FeaturesCount totalFeatures={totalCount} {currentPage} featuresPerPage={pageSize} {populationLabel} />
 		</div>
 		{#if hasPagination}
 			<!-- pagination builder captures count/perPage once -->
@@ -150,15 +191,16 @@
 	}
 
 	/* margins, not column-gap: an absent cell must not leave a gap */
+	/* the count text is the squeezable track (it wraps); pagination stays rigid */
 	.panel-header[data-layout='split'] {
 		grid-template-areas: 'map count sort close' 'pages pages pages pages';
-		grid-template-columns: auto auto auto 1fr;
+		grid-template-columns: auto minmax(0, max-content) auto 1fr;
 		column-gap: 0;
 	}
 
 	.panel-header[data-layout='inline'] {
 		grid-template-areas: 'map count pages sort close';
-		grid-template-columns: auto auto minmax(0, max-content) auto 1fr;
+		grid-template-columns: auto minmax(0, max-content) max-content auto 1fr;
 		column-gap: 0;
 	}
 
