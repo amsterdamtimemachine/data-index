@@ -19,6 +19,8 @@ export default {
 				'atm-gold-gray-dark': '#5e5954',
 				'atm-red': '#ee5e00',
 				'atm-red-light': '#f17562',
+				'atm-red-darkest': '#7a3100',
+				'atm-red-darkest-hover': '#522100',
 				'atm-blue':'#5e92f3',
 				'atm-blue-light':'#c2d0fb',
 				'status-error': 'ee3f00',

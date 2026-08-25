@@ -9,6 +9,8 @@ export type PlaceSearchMatch = {
   source: PlaceSource | null;
   /** The name that matched the query: the current one or a historical one. */
   matchedName: string;
+  /** Id of the matched place_historical_name row; null for a current-name match. */
+  matchedNameId: string | null;
   /** [since, until] when a historical name matched; null for a current-name match. */
   matchedWindow: [string | null, string | null] | null;
   /** [since, until] of the place's geometry when dated (historical area divisions); null otherwise. */

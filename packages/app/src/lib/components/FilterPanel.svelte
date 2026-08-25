@@ -30,7 +30,8 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 		currentTags?: string[];
 		currentTagOperator?: 'AND' | 'OR';
 		selectedPlace?: PlaceSearchMatch | null;
-		onOpenPlacePanel?: () => void;
+		onTogglePlacePanel?: () => void;
+		placePanelOpen?: boolean;
 	}
 
 	let {
@@ -44,7 +45,8 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 		currentTags = [],
 		currentTagOperator = 'OR',
 		selectedPlace = null,
-		onOpenPlacePanel = undefined
+		onTogglePlacePanel = undefined,
+		placePanelOpen = false
 	}: Props = $props();
 
 	// keep false until real tags are added to the app
@@ -109,11 +111,21 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 	}
 
 	function handlePlaceSelect(match: PlaceSearchMatch) {
-		navigate((p) => p.set('place', match.placeId));
+		navigate((p) => {
+			p.set('place', match.placeId);
+			if (match.matchedNameId) {
+				p.set('name', match.matchedNameId);
+			} else {
+				p.delete('name');
+			}
+		});
 	}
 
 	function handlePlaceClear() {
-		navigate((p) => p.delete('place'));
+		navigate((p) => {
+			p.delete('place');
+			p.delete('name');
+		});
 	}
 
 	function handleTagOperatorChange(operator: 'AND' | 'OR') {
@@ -142,7 +154,7 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 			<PlaceSearchInput onSelect={handlePlaceSelect} />
 			{#if selectedPlace}
 				<div class="mt-2">
-					<PlaceFilterTag place={selectedPlace} onClear={handlePlaceClear} onOpen={onOpenPlacePanel} />
+					<PlaceFilterTag place={selectedPlace} onClear={handlePlaceClear} onToggle={onTogglePlacePanel} active={placePanelOpen} />
 				</div>
 			{/if}
 		</div>

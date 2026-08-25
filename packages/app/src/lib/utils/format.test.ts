@@ -9,6 +9,7 @@ function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 		type: 'street',
 		source: 'adamlink',
 		matchedName: 'Test',
+		matchedNameId: null,
 		matchedWindow: null,
 		geometryWindow: null,
 		featureCount: 0,

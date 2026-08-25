@@ -3,9 +3,11 @@
 		totalFeatures: number;
 		currentPage: number;
 		featuresPerPage: number;
+		// names the count's population, e.g. "van deze cel"
+		populationLabel?: string;
 	}
 
-	let { totalFeatures, currentPage, featuresPerPage }: Props = $props();
+	let { totalFeatures, currentPage, featuresPerPage, populationLabel = '' }: Props = $props();
 
 	const totalPages = $derived(Math.ceil(totalFeatures / featuresPerPage));
 	const showingStart = $derived((currentPage - 1) * featuresPerPage + 1);
@@ -18,8 +20,8 @@
 
 <p class="text-base text-gray-700">
 		{#if isPaginated}
-        Toont {showingStart}-{showingEnd} / {totalFeatures} {featuresText}
+        Toont {showingStart}-{showingEnd} / {totalFeatures} {featuresText} {populationLabel}
     {:else}
-        Toont {totalFeatures} {featuresText}
+        Toont {totalFeatures} {featuresText} {populationLabel}
 	{/if}
 </p>

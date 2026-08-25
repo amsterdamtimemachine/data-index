@@ -1,6 +1,5 @@
 <script lang="ts" module>
-	export type UiSortMode = 'sample' | 'spatial' | 'temporal' | 'relevance' | 'oldest' | 'newest';
-	export const UI_SORT_MODES: UiSortMode[] = ['sample', 'spatial', 'temporal', 'relevance', 'oldest', 'newest'];
+	export { UI_SORT_MODES, type UiSortMode } from '$utils/sort-modes';
 </script>
 
 <script lang="ts">
@@ -8,6 +7,7 @@
 	import Button from '$components/Button.svelte';
 	import ArrowsClockwise from 'phosphor-svelte/lib/ArrowsClockwise';
 	import { translate } from '$utils/translations';
+	import type { UiSortMode } from '$utils/sort-modes';
 
 	type Props = {
 		value: UiSortMode;

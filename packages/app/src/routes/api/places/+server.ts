@@ -21,7 +21,12 @@ export const GET: RequestHandler = async ({ url }) => {
 		const limit = parseInt(url.searchParams.get('limit') || '10', 10) || 10;
 
 		if (id) {
-			const match = await getPlaceById(id.slice(0, 512), { cols });
+			const nameIdParam = url.searchParams.get('nameId');
+			let nameId: string | undefined = undefined;
+			if (nameIdParam) {
+				nameId = nameIdParam.slice(0, 512);
+			}
+			const match = await getPlaceById(id.slice(0, 512), { cols, nameId });
 			let matches: typeof match[] = [];
 			if (match) {
 				matches = [match];

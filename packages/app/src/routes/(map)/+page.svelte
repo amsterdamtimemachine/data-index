@@ -358,6 +358,14 @@
 		mapSelection.updateUrlParam('placePanel', null);
 	}
 
+	function handleTogglePlacePanel() {
+		if (placePanelOpen) {
+			handleClosePlacePanel();
+			return;
+		}
+		handleOpenPlacePanel();
+	}
+
 	// clearing the place filter also closes its panel
 	$effect(() => {
 		if (!data.selectedPlace && placePanelOpen) {
@@ -436,7 +444,8 @@
 				{currentTags}
 				currentTagOperator={currentTagOperator as 'AND' | 'OR'}
 				selectedPlace={data.selectedPlace}
-				onOpenPlacePanel={handleOpenPlacePanel}
+				onTogglePlacePanel={handleTogglePlacePanel}
+				{placePanelOpen}
 			/>
 		</NavContainer>
 

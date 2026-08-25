@@ -8,7 +8,8 @@ import type { RecordType, PlaceType, PlaceSearchMatch } from '@atm/shared/types'
 import type { AppError } from '$types/error';
 import { createPageErrorData, createError, createValidationError, createPeriodNotFoundError } from '$utils/error';
 import { translateAll } from '$utils/translations';
-import { UI_SORT_MODES, type UiSortMode } from '$components/FeaturesSortSelect.svelte';
+import type { UiSortMode } from '$components/FeaturesSortSelect.svelte';
+import { parsePlaceSelection, parsePlacePanelFlag, parseSortSelection } from '$utils/page-params';
 
 // Helper functions for period validation
 function isValidPeriodFormat(period: string): boolean {
@@ -154,11 +155,15 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 
 	// Selected place (the search filter): hydrate the id into a full match — this is
 	// also how a shared URL restores its selection. Unknown id → no selection.
+	const placeSelection = parsePlaceSelection(url);
 	let selectedPlace: PlaceSearchMatch | null = null;
-	const placeParam = url.searchParams.get('place');
-	if (placeParam) {
+	if (placeSelection.placeId) {
 		try {
-			const res = await fetch(`/api/places?id=${encodeURIComponent(placeParam.slice(0, 512))}`);
+			let nameQs = '';
+			if (placeSelection.nameId) {
+				nameQs = `&nameId=${encodeURIComponent(placeSelection.nameId)}`;
+			}
+			const res = await fetch(`/api/places?id=${encodeURIComponent(placeSelection.placeId)}${nameQs}`);
 			if (res.ok) {
 				const placeData = await res.json();
 				selectedPlace = placeData.matches[0] || null;
@@ -170,21 +175,13 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 
 	// Place panel open flag; only meaningful with a resolved place.
 	let placePanelOpen = false;
-	if (url.searchParams.get('placePanel') === '1' && selectedPlace) {
+	if (parsePlacePanelFlag(url) && selectedPlace) {
 		placePanelOpen = true;
 	}
 
-	// Sort mode + shuffle seed for the cell view; unknown modes fall back to default.
-	const sortParam = url.searchParams.get('sort');
-	let currentSort: UiSortMode = 'sample';
-	if (sortParam && (UI_SORT_MODES as string[]).includes(sortParam)) {
-		currentSort = sortParam as UiSortMode;
-	}
-	let currentSampleSeed: string | undefined = undefined;
-	const sampleSeedParam = url.searchParams.get('sampleSeed');
-	if (sampleSeedParam) {
-		currentSampleSeed = sampleSeedParam.slice(0, 64);
-	}
+	const sortSelection = parseSortSelection(url);
+	const currentSort: UiSortMode = sortSelection.sort;
+	const currentSampleSeed = sortSelection.sampleSeed;
 
 	return {
 		filterQuery,

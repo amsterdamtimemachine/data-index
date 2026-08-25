@@ -21,6 +21,12 @@ export type PlaceSearchOptions = {
   cols?: number;
 };
 
+export type PlaceByIdOptions = PlaceSearchOptions & {
+  /** place_historical_name row the selection was made through; restores the
+   * clicked alias and its window. Ignored unless the row belongs to the place. */
+  nameId?: string;
+};
+
 type SearchRow = {
   id: string;
   name: string | null;
@@ -30,6 +36,7 @@ type SearchRow = {
   matched_since: string | null;
   matched_until: string | null;
   matched_historical: boolean;
+  matched_name_id: string | null;
   geometry_since: string | null;
   geometry_until: string | null;
   feature_count: string;
@@ -82,6 +89,7 @@ function toMatch(row: SearchRow): PlaceSearchMatch {
     type: row.type,
     source: row.source,
     matchedName,
+    matchedNameId: row.matched_name_id,
     matchedWindow,
     geometryWindow,
     featureCount: parseInt(row.feature_count),
@@ -110,13 +118,14 @@ export async function searchPlaces(query: string, options: PlaceSearchOptions = 
       SELECT p.id, p.name, p.type, p.source,
              p.name AS matched_name,
              NULL::date AS matched_since, NULL::date AS matched_until,
-             FALSE AS matched_historical
+             FALSE AS matched_historical,
+             NULL::text AS matched_name_id
       FROM place p
       WHERE lower(p.name) LIKE ${prefix}
         AND (p.type <> 'address' OR ${withAddresses})
       UNION ALL
       SELECT p.id, p.name, p.type, p.source,
-             h.name AS matched_name, h.since, h.until, TRUE
+             h.name AS matched_name, h.since, h.until, TRUE, h.id
       FROM place_historical_name h
       JOIN place p ON p.id = h.place_id
       WHERE lower(h.name) LIKE ${prefix}
@@ -139,7 +148,7 @@ export async function searchPlaces(query: string, options: PlaceSearchOptions = 
     )
     SELECT page.id, ${CURRENT_NAME} AS name, page.type, page.source,
       page.matched_name, page.matched_since::text, page.matched_until::text,
-      page.matched_historical, page.has_features, page.exact_match,
+      page.matched_historical, page.matched_name_id, page.has_features, page.exact_match,
       pg.since::text AS geometry_since, pg.until::text AS geometry_until,
       (SELECT COUNT(*) FROM feature_to_place fp WHERE fp.place_id = page.id) AS feature_count,
       ${cells} AS cells
@@ -151,19 +160,26 @@ export async function searchPlaces(query: string, options: PlaceSearchOptions = 
   return result.rows.map(toMatch);
 }
 
-/** Fetch one place by id (URL restore). Same shape as a search match. */
-export async function getPlaceById(placeId: string, options: PlaceSearchOptions = {}): Promise<PlaceSearchMatch | null> {
+/** Fetch one place by id (URL restore). Same shape as a search match; a nameId
+ * restores the clicked alias and its window. */
+export async function getPlaceById(placeId: string, options: PlaceByIdOptions = {}): Promise<PlaceSearchMatch | null> {
   const cells = await displayCellsExpr(options.cols ?? DISPLAY_GRID_DEFAULT_COLS);
+  let nameId: string | null = null;
+  if (options.nameId) {
+    nameId = options.nameId;
+  }
 
   const result = await db.execute<SearchRow>(sql`
     SELECT page.id, ${CURRENT_NAME} AS name, page.type, page.source,
-      ${CURRENT_NAME} AS matched_name,
-      NULL::text AS matched_since, NULL::text AS matched_until,
-      FALSE AS matched_historical,
+      COALESCE(h.name, ${CURRENT_NAME}) AS matched_name,
+      h.since::text AS matched_since, h.until::text AS matched_until,
+      (h.id IS NOT NULL) AS matched_historical,
+      h.id AS matched_name_id,
       pg.since::text AS geometry_since, pg.until::text AS geometry_until,
       (SELECT COUNT(*) FROM feature_to_place fp WHERE fp.place_id = page.id) AS feature_count,
       ${cells} AS cells
     FROM place page
+    LEFT JOIN place_historical_name h ON h.id = ${nameId} AND h.place_id = page.id
     LEFT JOIN place_geometry pg ON pg.place_id = page.id
     WHERE page.id = ${placeId}
   `);

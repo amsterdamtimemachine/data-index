@@ -64,7 +64,7 @@
 
 <!-- Thumb element -->
 <div
-	class="absolute z-10 cursor-grab touch-none bg-transparent border-[3px] border-atm-gold-darkest hover:border-atm-gold-darkest-hover"
+	class="absolute z-10 cursor-grab touch-none bg-transparent border-[3px] border-atm-red-darkest hover:border-atm-red-darkest-hover"
 	class:cursor-grabbing={isDragging}
 	style="left: {thumbPosition}%; width: {thumbWidth}%; height: {timelineHeight}px; top: 0;"
 	onpointerdown={onDragStart}

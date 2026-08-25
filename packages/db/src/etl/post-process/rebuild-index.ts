@@ -131,6 +131,23 @@ export async function rebuildIndex() {
   `);
   console.log(`  ${temporalResult.rowCount} features updated`);
 
+  // Canonicalise stored names: some sources record an old name on the place row
+  // while the name in force lives as an open-ended history row. The old name is
+  // never lost — it exists as its own (dated) history row.
+  console.log('\nCanonicalising place names...');
+  const nameResult = await db.execute(sql`
+    UPDATE place p
+    SET name = n.name
+    FROM (
+      SELECT DISTINCT ON (place_id) place_id, name
+      FROM place_historical_name
+      WHERE until IS NULL AND name IS NOT NULL
+      ORDER BY place_id, since DESC NULLS LAST
+    ) n
+    WHERE p.id = n.place_id AND p.name IS DISTINCT FROM n.name
+  `);
+  console.log(`  ${nameResult.rowCount} places renamed to their current name`);
+
   // Check coverage gaps
   type CountRow = { total: string; missing_temporal: string };
   type PlaceCountRow = { total_places: string; missing_spatial: string };

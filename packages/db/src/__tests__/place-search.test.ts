@@ -57,7 +57,8 @@ describe('place search', () => {
     await db.execute(sql`INSERT INTO place_historical_name (id, place_id, name, since, until) VALUES
       ('ps-hist-1', ${RENAMED}, 'Kerkhofpad', '1850-01-01', '1943-01-01'),
       ('ps-hist-2', ${BOTH}, 'Kerkstraat 9', '1900-01-01', '1943-01-01'),
-      ('ps-hist-3', ${RENUMBERED}, 'Kerkelaan', '1957-01-01', NULL)`);
+      ('ps-hist-3', ${RENUMBERED}, 'Kerkelaan', '1957-01-01', NULL),
+      ('ps-hist-4', ${RENUMBERED}, 'Oudekerkspad', NULL, '1957-01-01')`);
 
     await db.execute(sql`
       INSERT INTO features (id, record_type, label, start_date, end_date, dataset_id)
@@ -96,13 +97,28 @@ describe('place search', () => {
     expect(bare!.cells.length).toBeGreaterThan(0);
   });
 
-  test('historical name matches with its validity window', async () => {
+  test('historical name matches with its validity window and row id', async () => {
     const matches = await searchPlaces('Kerkhof');
     expect(matches.length).toBe(1);
     expect(matches[0].placeId).toBe(RENAMED);
     expect(matches[0].name).toBe('Modernstraat');
     expect(matches[0].matchedName).toBe('Kerkhofpad');
+    expect(matches[0].matchedNameId).toBe('ps-hist-1');
     expect(matches[0].matchedWindow).toEqual(['1850-01-01', '1943-01-01']);
+  });
+
+  test('a nameId restores the clicked alias; a foreign nameId is ignored', async () => {
+    const byName = await getPlaceById(RENAMED, { nameId: 'ps-hist-1' });
+    expect(byName!.matchedName).toBe('Kerkhofpad');
+    expect(byName!.matchedNameId).toBe('ps-hist-1');
+    expect(byName!.matchedWindow).toEqual(['1850-01-01', '1943-01-01']);
+    expect(byName!.name).toBe('Modernstraat');
+
+    // ps-hist-1 belongs to RENAMED, not STREET_DATA: fall back to the current name
+    const foreign = await getPlaceById(STREET_DATA, { nameId: 'ps-hist-1' });
+    expect(foreign!.matchedName).toBe('Kerkstraat');
+    expect(foreign!.matchedNameId).toBeNull();
+    expect(foreign!.matchedWindow).toBeNull();
   });
 
   test('a place matching on current and historical name appears once, as current', async () => {
@@ -147,17 +163,21 @@ describe('place search', () => {
     expect(street!.geometryWindow).toBeNull();
   });
 
-  // The Dam / de Plaetse pattern: place.name holds the oldest name, the name in
-  // force today is the open-ended history row. Display must use the open row.
-  test('an open-ended name row wins as the current name', async () => {
-    const matches = await searchPlaces('Kerkelaan');
-    expect(matches.length).toBe(1);
-    expect(matches[0].placeId).toBe(RENUMBERED);
-    expect(matches[0].name).toBe('Kerkelaan');
-    expect(matches[0].matchedWindow).toEqual(['1957-01-01', null]);
+  // The Dam / de Plaetse pattern: the place row arrived bearing its oldest name;
+  // rebuild canonicalises it to the open-ended history row, and the old name
+  // stays findable through its own dated row, id and all.
+  test('stored names are canonicalised; the old name stays findable with its window', async () => {
     const byId = await getPlaceById(RENUMBERED);
-    expect(byId!.matchedName).toBe('Kerkelaan');
     expect(byId!.name).toBe('Kerkelaan');
+    expect(byId!.matchedName).toBe('Kerkelaan');
+
+    const old = await searchPlaces('Oudekerkspad');
+    expect(old.length).toBe(1);
+    expect(old[0].placeId).toBe(RENUMBERED);
+    expect(old[0].matchedName).toBe('Oudekerkspad');
+    expect(old[0].matchedNameId).toBe('ps-hist-4');
+    expect(old[0].matchedWindow).toEqual([null, '1957-01-01']);
+    expect(old[0].name).toBe('Kerkelaan');
   });
 
   test('getPlaceById restores a match by id', async () => {
