@@ -37,7 +37,7 @@
     "docker:restart:app": "docker compose --env-file .env -f docker/docker-compose.yml -f docker/docker-compose.self-hosted.yml restart app"
   },
   "devDependencies": {
-    "turbo": "^2.9.18"
+    "turbo": "^2.10.12"
   },
   "overrides": {
     "protocol-buffers-schema": "3.6.1"
