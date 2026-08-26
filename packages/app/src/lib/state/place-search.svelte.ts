@@ -6,9 +6,7 @@ const DEBOUNCE_MS = 300;
 const RESULT_LIMIT = 10;
 
 export function createPlaceSearch() {
-	let query = $state('');
 	let matches = $state<PlaceSearchMatch[]>([]);
-	let loading = $state(false);
 	// last-wins: a stale response must not overwrite a newer one
 	let requestId = 0;
 
@@ -29,35 +27,22 @@ export function createPlaceSearch() {
 			if (id === requestId) {
 				matches = [];
 			}
-		} finally {
-			if (id === requestId) {
-				loading = false;
-			}
 		}
 	}, DEBOUNCE_MS);
 
 	function setQuery(q: string) {
-		query = q;
 		if (q.trim().length < 2) {
 			run.cancel();
 			requestId++;
 			matches = [];
-			loading = false;
 			return;
 		}
-		loading = true;
 		run(q);
 	}
 
 	return {
-		get query() {
-			return query;
-		},
 		get matches() {
 			return matches;
-		},
-		get loading() {
-			return loading;
 		},
 		setQuery
 	};
