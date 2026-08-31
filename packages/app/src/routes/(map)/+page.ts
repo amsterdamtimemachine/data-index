@@ -154,10 +154,12 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 	}
 
 	// Selected place (the search filter): hydrate the id into a full match — this is
-	// also how a shared URL restores its selection. Unknown id → no selection.
+	// also how a shared URL restores its selection. Unknown id → warning toast; failed
+	// fetch → error toast. Either way the selection is dropped.
 	const placeSelection = parsePlaceSelection(url);
 	let selectedPlace: PlaceSearchMatch | null = null;
 	if (placeSelection.placeId) {
+		let restoreFailed = false;
 		try {
 			let nameQs = '';
 			if (placeSelection.nameId) {
@@ -167,9 +169,25 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 			if (res.ok) {
 				const placeData = await res.json();
 				selectedPlace = placeData.matches[0] || null;
+			} else {
+				restoreFailed = true;
 			}
 		} catch (err) {
 			console.error('Failed to load selected place:', err);
+			restoreFailed = true;
+		}
+		if (restoreFailed) {
+			errors.push(
+				createError('error', 'Place Filter Load Failed', 'Could not restore the place filter. Please try again later.', {
+					placeId: placeSelection.placeId
+				})
+			);
+		} else if (!selectedPlace) {
+			errors.push(
+				createError('warning', 'Place Not Found', 'The place in this URL does not exist anymore. The place filter was removed.', {
+					placeId: placeSelection.placeId
+				})
+			);
 		}
 	}
 

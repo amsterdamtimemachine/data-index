@@ -109,6 +109,7 @@ export async function setupTestDb() {
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS features (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      feature_int_id INTEGER GENERATED ALWAYS AS IDENTITY,
       url TEXT, record_type TEXT NOT NULL, label TEXT NOT NULL,
       description TEXT, content_url TEXT, start_date DATE, end_date DATE,
       dataset_id TEXT REFERENCES datasets(id),
@@ -117,6 +118,8 @@ export async function setupTestDb() {
   `);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_features_dates ON features(start_date, end_date)`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_features_record_type ON features(record_type)`);
+  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_features_int_id ON features(feature_int_id)`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_features_label_fts ON features USING gin (to_tsvector('dutch', label))`);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS feature_to_place (
       feature_id UUID NOT NULL REFERENCES features(id),

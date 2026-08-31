@@ -177,11 +177,12 @@
 		<div
 			bind:this={scrollWrapper}
 			onpointerdown={() => (hasAutoScrolled = true)}
-			class="w-full overflow-x-auto max-[850px]:overflow-x-auto min-[851px]:overflow-x-visible relative max-[850px]:shadow-[inset_10px_0_10px_-10px_rgba(0,0,0,0.3),inset_-10px_0_10px_-10px_rgba(0,0,0,0.3)]"
+			class="w-full overflow-x-auto md:overflow-x-visible relative max-md:shadow-[inset_10px_0_10px_-10px_rgba(0,0,0,0.3),inset_-10px_0_10px_-10px_rgba(0,0,0,0.3)]"
 		>
+			<!-- 736 = md breakpoint (768) minus the px-4 gutters: the track must fit the wrapper once overflow goes visible -->
 			<div
 				class="relative"
-				style="min-width: max(800px, {histogram.bins.length * 60}px); width: 100%; height: {timelineHeight + 25}px;"
+				style="min-width: max(736px, {histogram.bins.length * 60}px); width: 100%; height: {timelineHeight + 25}px;"
 				bind:this={trackElement}
 			>
 			<!-- Histogram Layer: Histogram bars and grid -->

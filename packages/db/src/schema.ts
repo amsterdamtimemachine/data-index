@@ -1,4 +1,4 @@
-import { pgTable, text, date, smallint, integer, uuid, jsonb, real, doublePrecision, customType, primaryKey, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, date, smallint, integer, uuid, jsonb, real, doublePrecision, customType, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { PlaceSource } from '@atm/shared';
 
@@ -113,6 +113,9 @@ export const tags = pgTable('tags', {
 // ============================================================================
 export const features = pgTable('features', {
   id: uuid('id').primaryKey(),
+  // roaring-bitmap surrogate: bitmaps hold int4 and id is a uuid. DB-assigned on
+  // insert; only build-cell-features and the search-bitmap helper may read it.
+  featureIntId: integer('feature_int_id').generatedAlwaysAsIdentity(),
   url: text('url').notNull(),
   recordType: text('record_type').notNull(),
   label: text('label').notNull(),
@@ -125,7 +128,9 @@ export const features = pgTable('features', {
   entity: jsonb('entity'),
 }, (table) => [
   index('idx_features_dates').on(table.startDate, table.endDate),
-  index('idx_features_record_type').on(table.recordType)
+  index('idx_features_record_type').on(table.recordType),
+  uniqueIndex('idx_features_int_id').on(table.featureIntId),
+  index('idx_features_label_fts').using('gin', sql`to_tsvector('dutch', ${table.label})`)
 ]);
 
 // ============================================================================
@@ -172,9 +177,9 @@ export const placeCells = pgTable('place_cells', {
 // -> place -> place_cells hop plus the time bin, so heatmap/histogram read one
 // table instead of re-joining 2.7M rows per request. Rebuilt by rebuild-index.
 //
-// feature_ids holds a dense int surrogate, not features.id: roaringbitmap stores
-// int4 and features.id is a 128-bit uuid. The surrogate is assigned during the
-// rebuild and never persisted — only cardinality is ever read back, never identity.
+// feature_ids holds features.feature_int_id, not features.id: roaringbitmap stores
+// int4 and features.id is a 128-bit uuid. The surrogate is persisted on features, so
+// external id sets (e.g. text-search matches) can be intersected with these bitmaps.
 //
 // time_bin is the PRECOMP_TIME_BIN_YEARS bin the feature's date range touches (one row per
 // bin). Display bins are unions of whole base bins, which is why binSize must be a

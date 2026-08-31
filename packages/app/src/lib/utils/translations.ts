@@ -58,6 +58,9 @@ const TRANSLATIONS: Record<string, string> = {
 	'Invalid Input': 'Ongeldige invoer',
 	'Period Not Found': 'Periode niet gevonden',
 	'Invalid Cell': 'Ongeldige cel',
+	'Place Not Found': 'Plek niet gevonden',
+	'Place Filter Load Failed': 'Plekfilter laden mislukt',
+	'Place Search Failed': 'Zoeken naar plekken mislukt',
 
 	// Error messages
 	'is not a valid content type and was removed from your selection': 'is geen geldig inhoudstype en is verwijderd uit uw selectie',
@@ -68,7 +71,13 @@ const TRANSLATIONS: Record<string, string> = {
 	spans: 'beslaat',
 	'years. Maximum 50 years supported': 'jaar. Maximaal 50 jaar ondersteund',
 	"doesn't exist in the dataset. Defaulting to most recent period": 'bestaat niet in de dataset. Standaard ingesteld op meest recente periode',
-	'not found. Please select a valid cell from the map': 'niet gevonden. Selecteer een geldige cel op de kaart'
+	'not found. Please select a valid cell from the map': 'niet gevonden. Selecteer een geldige cel op de kaart',
+	'The place in this URL does not exist anymore. The place filter was removed.':
+		'De plek in deze URL bestaat niet meer. Het plekfilter is verwijderd.',
+	'Could not restore the place filter. Please try again later.':
+		'Kon het plekfilter niet herstellen. Probeer het later opnieuw.',
+	'Could not search places. Please try again later.':
+		'Kon geen plekken zoeken. Probeer het later opnieuw.'
 };
 
 // Reverse map (built once)
