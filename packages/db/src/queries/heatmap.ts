@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import type { Heatmap, HeatmapTimeline, HeatmapResponse, HeatmapDimensions, HeatmapResolutionConfig, RecordType, PlaceType } from '@atm/shared';
 import { DISPLAY_TIME_BIN_DEFAULT_YEARS, PRECOMP_GRID_CELL_METERS } from '@atm/shared';
 import { normaliseBinSize } from './bin-size';
@@ -7,7 +7,8 @@ import { cellFeatures } from '../schema';
 import { computeTimeSlices } from './time-slices';
 import { getRecordTypes } from './record-types';
 import { getGridConfig } from './grid-config';
-import { countExpr, displayBinExpr, gridColExpr, gridRowExpr, categoryFilter, binWindow, deriveGrid } from './cell-features';
+import { countMatchesExpr, displayBinExpr, gridColExpr, gridRowExpr, categoryFilter, binWindow, deriveGrid } from './cell-features';
+import { searchBitmap } from './feature-search';
 import { UnknownTimeSliceError } from './errors';
 
 // Query result types
@@ -78,7 +79,8 @@ export async function getHeatmap(
   recordTypes?: RecordType[],
   datasetIds?: string[],
   placeTypes?: PlaceType[],
-  binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS
+  binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS,
+  searchQuery?: string
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
 
@@ -114,11 +116,16 @@ export async function getHeatmap(
   const startYear = timeSlice.startYear;
   const endYear = timeSlice.endYear;
 
+  let searchBm: SQL | null = null;
+  if (searchQuery) {
+    searchBm = searchBitmap(searchQuery);
+  }
+
   const result = await db.execute<GridCellCount>(sql`
     SELECT
       ${gridColExpr(sql`${cellFeatures.cellX}`, gridCols, maxX)} as grid_col,
       ${gridRowExpr(sql`${cellFeatures.cellY}`, gridRows, maxY)} as grid_row,
-      ${countExpr} as count
+      ${countMatchesExpr(searchBm)} as count
     FROM ${cellFeatures}
     WHERE ${categoryFilter(types, datasetIds, placeTypes)}
       AND ${binWindow(startYear, endYear)}
@@ -127,8 +134,13 @@ export async function getHeatmap(
 
   const countsMap = new Map<number, number>();
   for (const row of result.rows) {
+    // a search can zero out a group; keep the heatmap sparse
+    const count = parseInt(row.count);
+    if (count === 0) {
+      continue;
+    }
     const gridIndex = Number(row.grid_row) * gridCols + Number(row.grid_col);
-    countsMap.set(gridIndex, parseInt(row.count));
+    countsMap.set(gridIndex, count);
   }
 
   const rd = buildRd(config.minX, config.minY, maxX, maxY, gridCols, gridRows);
@@ -147,7 +159,8 @@ export async function getHeatmapTimeline(
   recordTypes?: RecordType[],
   datasetIds?: string[],
   placeTypes?: PlaceType[],
-  binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS
+  binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS,
+  searchQuery?: string
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
   binSizeYears = normaliseBinSize(binSizeYears);
@@ -170,6 +183,11 @@ export async function getHeatmapTimeline(
   const firstSlice = timeSlices[0];
   const lastSlice = timeSlices[timeSlices.length - 1];
 
+  let searchBm: SQL | null = null;
+  if (searchQuery) {
+    searchBm = searchBitmap(searchQuery);
+  }
+
   // No slices CTE and no range join: each bucket already knows its base bin, so the
   // display bin is integer division and the whole timeline is one grouped scan.
   const result = await db.execute<GridCellCountWithTime>(sql`
@@ -177,7 +195,7 @@ export async function getHeatmapTimeline(
       ${gridColExpr(sql`${cellFeatures.cellX}`, gridCols, maxX)} as grid_col,
       ${gridRowExpr(sql`${cellFeatures.cellY}`, gridRows, maxY)} as grid_row,
       ${displayBinExpr(binSizeYears)} as display_bin,
-      ${countExpr} as count
+      ${countMatchesExpr(searchBm)} as count
     FROM ${cellFeatures}
     WHERE ${categoryFilter(types, datasetIds, placeTypes)}
       AND ${binWindow(firstSlice.startYear, lastSlice.endYear)}
@@ -186,13 +204,18 @@ export async function getHeatmapTimeline(
 
   const countsBySlice = new Map<number, Map<number, number>>();
   for (const row of result.rows) {
+    // a search can zero out a group; keep the heatmap sparse
+    const count = parseInt(row.count);
+    if (count === 0) {
+      continue;
+    }
     const timeBin = parseInt(row.display_bin);
     if (!countsBySlice.has(timeBin)) {
       countsBySlice.set(timeBin, new Map());
     }
     const countsMap = countsBySlice.get(timeBin)!;
     const gridIndex = Number(row.grid_row) * gridCols + Number(row.grid_col);
-    countsMap.set(gridIndex, parseInt(row.count));
+    countsMap.set(gridIndex, count);
   }
 
   const timeline: HeatmapTimeline = {};

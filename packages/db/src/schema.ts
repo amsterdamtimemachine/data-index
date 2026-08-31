@@ -10,6 +10,12 @@ const geometry = customType<{ data: string; driverData: string }>({
   }
 });
 
+const tsvector = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return 'tsvector';
+  }
+});
+
 // Compressed set of int4s (pg_roaringbitmap). Unions dedupe, so buckets can be
 // merged into any display grid without double-counting a feature that spans them.
 const roaringbitmap = customType<{ data: string; driverData: string }>({
@@ -119,6 +125,9 @@ export const features = pgTable('features', {
   url: text('url').notNull(),
   recordType: text('record_type').notNull(),
   label: text('label').notNull(),
+  // stemmed label, kept in sync by the DB; the text-search predicate and ts_rank
+  // both read this column (see queries/feature-search.ts)
+  labelTsv: tsvector('label_tsv').generatedAlwaysAs(sql`to_tsvector('dutch', label)`),
   description: text('description'),
   contentUrl: text('content_url'),
   startDate: date('start_date').notNull(),
@@ -130,7 +139,7 @@ export const features = pgTable('features', {
   index('idx_features_dates').on(table.startDate, table.endDate),
   index('idx_features_record_type').on(table.recordType),
   uniqueIndex('idx_features_int_id').on(table.featureIntId),
-  index('idx_features_label_fts').using('gin', sql`to_tsvector('dutch', ${table.label})`)
+  index('idx_features_label_fts').using('gin', table.labelTsv)
 ]);
 
 // ============================================================================
@@ -194,7 +203,9 @@ export const cellFeatures = pgTable('cell_features', {
   placeType: text('place_type').notNull(),
   featureIds: roaringbitmap('feature_ids').notNull()
 }, (table) => [
-  primaryKey({ columns: [table.cellX, table.cellY, table.timeBin, table.recordType, table.datasetId, table.placeType] }),
+  // explicit short name: the auto-generated one exceeds Postgres' 63-byte identifier
+  // cap, and the silent truncation made every drizzle push re-create the constraint
+  primaryKey({ name: 'cell_features_pk', columns: [table.cellX, table.cellY, table.timeBin, table.recordType, table.datasetId, table.placeType] }),
   index('idx_cell_features_filters').on(table.recordType, table.datasetId, table.placeType)
 ]);
 

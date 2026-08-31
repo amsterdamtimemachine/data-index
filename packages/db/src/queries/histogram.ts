@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import type { Histogram, HistogramBin, RecordType, PlaceType } from '@atm/shared';
 import { DISPLAY_TIME_BIN_DEFAULT_YEARS } from '@atm/shared';
 import { normaliseBinSize } from './bin-size';
@@ -7,7 +7,8 @@ import { cellFeatures } from '../schema';
 import type { CountRow } from '../row-types';
 import { computeTimeSlices, computeTimeRange } from './time-slices';
 import { getRecordTypes } from './record-types';
-import { countExpr, displayBinExpr, categoryFilter, binWindow, cellRangeCondition, placeCellsCondition } from './cell-features';
+import { countMatchesExpr, displayBinExpr, categoryFilter, binWindow, cellRangeCondition, placeCellsCondition } from './cell-features';
+import { searchBitmap } from './feature-search';
 import { boundsToBaseCellRange } from './features';
 
 // Query result types
@@ -32,7 +33,8 @@ export async function getHistogram(
   placeTypes?: PlaceType[],
   binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS,
   bounds?: { minLon: number; maxLon: number; minLat: number; maxLat: number },
-  placeId?: string
+  placeId?: string,
+  searchQuery?: string
 ): Promise<Histogram> {
   const types = recordTypes || await getRecordTypes();
 
@@ -63,9 +65,13 @@ export async function getHistogram(
     cellCondition = sql`${cellCondition} AND ${placeCellsCondition(sql`${cellFeatures.cellX}`, sql`${cellFeatures.cellY}`, placeId)}`;
   }
 
+  let searchBm: SQL | null = null;
+  if (searchQuery) {
+    searchBm = searchBitmap(searchQuery);
+  }
 
   const result = await db.execute<BinRow>(sql`
-    SELECT (${displayBinExpr(binSizeYears)})::text as bin_start, ${countExpr} as count
+    SELECT (${displayBinExpr(binSizeYears)})::text as bin_start, ${countMatchesExpr(searchBm)} as count
     FROM ${cellFeatures}
     WHERE ${categoryFilter(types, datasetIds, placeTypes)}
       AND ${binWindow(firstSlice.startYear, lastSlice.endYear)}
@@ -91,7 +97,7 @@ export async function getHistogram(
   // COALESCE: aggregating zero buckets (e.g. bounds outside the data extent)
   // yields NULL, which would otherwise parse to NaN.
   const totalResult = await db.execute<CountRow>(sql`
-    SELECT COALESCE(${countExpr}, 0) as count
+    SELECT COALESCE(${countMatchesExpr(searchBm)}, 0) as count
     FROM ${cellFeatures}
     WHERE ${categoryFilter(types, datasetIds, placeTypes)}
       AND ${binWindow(firstSlice.startYear, lastSlice.endYear)}
