@@ -24,6 +24,7 @@ Rather than curating or contextualising the data, the index presents sources as 
   - [Unique features rank higher](#unique-features-rank-higher)
   - [Feature sorting](#feature-sorting)
   - [Place search](#place-search)
+  - [Text search](#text-search)
 - [Dating](#dating)
   - [Feature dates](#feature-dates)
   - [Place dates](#place-dates)
@@ -265,7 +266,7 @@ The cell view sorts features in one of six modes. All modes are deterministic.
 - **Relevance** ("Relevantie" in the UI). The blended `relevance_score` above, with the record type rotation. Features most unique to the time and place come first.
 - **Oldest / newest**. Plain chronological order on `start_date`. No rotation. An explicit date sort returns true chronology, even when that puts several items of one type in a row.
 
-`/api/features` accepts `sort` (`sample` / `relevance` / `spatialFrequency` / `datePrecision` / `date`), `sortDirection`, and `seed`. `sort` defaults to `sample`. `seed` is optional: without one the sample order is fixed and reproducible, and every request without a seed gets the same order.
+`/api/features` accepts `sort` (`sample` / `relevance` / `spatialFrequency` / `datePrecision` / `date` / `bestMatch`), `sortDirection`, and `seed`. `sort` defaults to `sample`. `seed` is optional: without one the sample order is fixed and reproducible, and every request without a seed gets the same order. `bestMatch` orders by match quality against the `q` text search and is only meaningful together with one.
 
 ### Place search
 
@@ -274,6 +275,14 @@ The cell view sorts features in one of six modes. All modes are deterministic.
 Each match carries the matched name, the id of the matched historical name row when one applies, its validity window, the place's own geometry window for dated area divisions, the feature count, and the place's cells as display-grid indices in the same space as heatmap indices. The UI stores a selection in the URL as the place id plus the matched name row id, so a shared link restores the exact clicked alias.
 
 `/api/places` accepts `q` (search) or `id` with optional `nameId` (restore), plus `cols` and `limit`. `/api/features` and `/api/histogram` accept `placeId` to scope their results to the cells of one place.
+
+### Text search
+
+`/api/heatmaps`, `/api/histogram` and `/api/features` accept `q`: a free-text search over feature labels. All three share one definition of what matches, so the heatmap, the timeline and the feature list always describe the same population.
+
+Matching uses Dutch full-text search with web search syntax: plain words must all appear, `"quoted phrases"` must appear side by side, `OR` offers alternatives, and `-word` excludes. Words are stemmed, so `verkooping` also finds `Verkoopingen`, and the stemmer folds doubled vowels, which lets old spellings find their modern forms. The search reads labels only, not article text or descriptions. A query that matches nothing, including one consisting only of stopwords, returns zero counts everywhere.
+
+Heatmap and histogram counts under a search are computed by intersecting each cell's precomputed feature set with the set of matching features, so a search request costs about the same as an unfiltered one regardless of how many features match.
 
 ## Dating
 

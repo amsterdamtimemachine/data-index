@@ -483,6 +483,7 @@
 						datasets={currentDatasets}
 						tags={currentTags}
 						tagOperator={currentTagOperator as 'AND' | 'OR'}
+						searchQuery={data.currentSearchQuery ?? undefined}
 						{gridColumns}
 						{sortMode}
 						{sampleSeed}

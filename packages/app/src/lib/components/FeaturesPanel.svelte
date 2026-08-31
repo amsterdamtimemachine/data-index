@@ -15,6 +15,7 @@
 		datasets: string[];
 		tags: string[];
 		tagOperator?: 'AND' | 'OR';
+		searchQuery?: string;
 		onClose?: () => void;
 		timeline?: HeatmapTimeline;
 		dimensions?: HeatmapDimensions;
@@ -35,6 +36,7 @@
 		datasets,
 		tags,
 		tagOperator = 'OR',
+		searchQuery = undefined,
 		onClose,
 		timeline,
 		dimensions,
@@ -54,6 +56,7 @@
 		datasets,
 		tags,
 		tagOperator,
+		searchQuery,
 		sortMode,
 		sampleSeed
 	}));

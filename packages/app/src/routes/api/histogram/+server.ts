@@ -3,7 +3,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { DISPLAY_TIME_BIN_DEFAULT_YEARS } from '@atm/shared';
 import { getHistogram } from '@atm/db/queries';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseBounds } from '$lib/server/query-params';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseBounds, parseSearchQuery } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -20,9 +20,12 @@ export const GET: RequestHandler = async ({ url }) => {
 		const binSizeParam = url.searchParams.get('binSize');
 		const binSize = binSizeParam ? parseInt(binSizeParam, 10) || DISPLAY_TIME_BIN_DEFAULT_YEARS : DISPLAY_TIME_BIN_DEFAULT_YEARS;
 
-		console.log(`Histogram API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, binSize: ${binSize}`);
+		// Optional: restrict counts to features matching a text search (dutch FTS).
+		const searchQuery = parseSearchQuery(url);
 
-		const histogram = await getHistogram(recordTypes, datasetIds, placeTypes, binSize, bounds, placeId);
+		console.log(`Histogram API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, binSize: ${binSize}, q: ${searchQuery || 'none'}`);
+
+		const histogram = await getHistogram(recordTypes, datasetIds, placeTypes, binSize, bounds, placeId, searchQuery);
 
 		console.log(
 			`Histogram: ${histogram.bins.length} bins, ${histogram.totalFeatures} total features`

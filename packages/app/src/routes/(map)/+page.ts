@@ -9,7 +9,7 @@ import type { AppError } from '$types/error';
 import { createPageErrorData, createError, createValidationError, createPeriodNotFoundError } from '$utils/error';
 import { translateAll } from '$utils/translations';
 import type { UiSortMode } from '$components/FeaturesSortSelect.svelte';
-import { parsePlaceSelection, parsePlacePanelFlag, parseSortSelection } from '$utils/page-params';
+import { parsePlaceSelection, parsePlacePanelFlag, parseSortSelection, parseSearchQuery } from '$utils/page-params';
 
 // Helper functions for period validation
 function isValidPeriodFormat(period: string): boolean {
@@ -34,10 +34,15 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 	const cellParam = url.searchParams.get('cell');
 	const periodParam = url.searchParams.get('period');
 
+	// Text search rides inside filterQuery, so every fetch keyed on it (heatmap,
+	// histograms) inherits the filter with no extra wiring.
+	const currentSearchQuery = parseSearchQuery(url);
+
 	const filterParams = new URLSearchParams();
 	if (recordTypesParam) filterParams.set('recordTypes', recordTypesParam);
 	if (datasetsParam) filterParams.set('datasets', datasetsParam);
 	if (placeTypesParam) filterParams.set('placeTypes', placeTypesParam);
+	if (currentSearchQuery) filterParams.set('q', currentSearchQuery);
 	const filterQuery = filterParams.toString();
 
 	// Determine recordTypes to use for UI state
@@ -211,6 +216,7 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 		currentTagOperator,
 		currentSort,
 		currentSampleSeed,
+		currentSearchQuery,
 		selectedPlace,
 		placePanelOpen,
 		validatedPeriod,

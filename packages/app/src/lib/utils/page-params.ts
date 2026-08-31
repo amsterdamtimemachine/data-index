@@ -27,6 +27,22 @@ export function parsePlacePanelFlag(url: URL): boolean {
 	return url.searchParams.get('placePanel') === '1';
 }
 
+/**
+ * Free-text feature search (`q`), mirroring the server-side parseSearchQuery:
+ * trimmed, clamped, blank collapses to null (no filter).
+ */
+export function parseSearchQuery(url: URL): string | null {
+	const raw = url.searchParams.get('q');
+	if (!raw) {
+		return null;
+	}
+	const trimmed = raw.trim().slice(0, ID_MAX_LENGTH);
+	if (trimmed.length === 0) {
+		return null;
+	}
+	return trimmed;
+}
+
 /** Sort mode (unknown modes fall back to the default) and shuffle seed. */
 export function parseSortSelection(url: URL): { sort: UiSortMode; sampleSeed: string | undefined } {
 	let sort: UiSortMode = 'sample';
