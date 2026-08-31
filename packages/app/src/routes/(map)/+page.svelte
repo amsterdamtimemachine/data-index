@@ -446,6 +446,8 @@
 				selectedPlace={data.selectedPlace}
 				onTogglePlacePanel={handleTogglePlacePanel}
 				{placePanelOpen}
+				currentSearchQuery={data.currentSearchQuery}
+				filterQuery={data.filterQuery}
 			/>
 		</NavContainer>
 

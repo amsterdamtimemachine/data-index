@@ -81,6 +81,7 @@
 	{sortMode}
 	{onSortChange}
 	{onShuffle}
+	searchActive={!!searchQuery}
 	totalCount={panelFeatures.totalCount}
 	currentPage={panelFeatures.currentPage}
 	pageSize={panelFeatures.pageSize}

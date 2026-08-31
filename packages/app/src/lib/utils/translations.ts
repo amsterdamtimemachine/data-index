@@ -32,10 +32,16 @@ const TRANSLATIONS: Record<string, string> = {
 	sortRelevance: 'Relevantie',
 	sortOldest: 'Oudste eerst',
 	sortNewest: 'Nieuwste eerst',
+	sortBestMatch: 'Beste match',
 	reshuffle: 'Schud opnieuw',
 
 	// UI labels
 	searchPlaceholder: 'Zoek een plek op de kaart',
+	featureSearchPlaceholder: 'Zoek in de collectie',
+	applySearch: 'Zoek',
+	clearSearchFilter: 'Verwijder zoekfilter',
+	searchResult: 'resultaat',
+	searchResults: 'resultaten',
 	cellsOf: 'Cellen van',
 	cellOf: 'Cel van',
 	clearPlaceFilter: 'Verwijder plekfilter',

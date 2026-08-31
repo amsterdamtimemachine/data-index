@@ -15,6 +15,8 @@
 	import FilterSection from './FilterSection.svelte';
 import PlaceSearchInput from './PlaceSearchInput.svelte';
 import PlaceFilterTag from './PlaceFilterTag.svelte';
+import FeatureSearchInput from './FeatureSearchInput.svelte';
+import SearchFilterTag from './SearchFilterTag.svelte';
 	import TagsANDSelector from './TagsANDSelector.svelte';
 	import TagOperatorSwitch from './TagOperatorSwitch.svelte';
 	import DummyTagsSection from './DummyTagsSection.svelte';
@@ -32,6 +34,9 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 		selectedPlace?: PlaceSearchMatch | null;
 		onTogglePlacePanel?: () => void;
 		placePanelOpen?: boolean;
+		currentSearchQuery?: string | null;
+		// current filter params, forwarded so the search preview count matches them
+		filterQuery?: string;
 	}
 
 	let {
@@ -46,7 +51,9 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 		currentTagOperator = 'OR',
 		selectedPlace = null,
 		onTogglePlacePanel = undefined,
-		placePanelOpen = false
+		placePanelOpen = false,
+		currentSearchQuery = null,
+		filterQuery = ''
 	}: Props = $props();
 
 	// keep false until real tags are added to the app
@@ -128,6 +135,22 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 		});
 	}
 
+	function handleSearchApply(q: string) {
+		navigate((p) => {
+			p.set('q', q);
+		});
+	}
+
+	function handleSearchClear() {
+		navigate((p) => {
+			p.delete('q');
+			// bestMatch order is meaningless without a query
+			if (p.get('sort') === 'bestMatch') {
+				p.delete('sort');
+			}
+		});
+	}
+
 	function handleTagOperatorChange(operator: 'AND' | 'OR') {
 		tagOperator = operator;
 		selectedTags = [];
@@ -155,6 +178,23 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 			{#if selectedPlace}
 				<div class="mt-2">
 					<PlaceFilterTag place={selectedPlace} onClear={handlePlaceClear} onToggle={onTogglePlacePanel} active={placePanelOpen} />
+				</div>
+			{/if}
+		</div>
+
+		<div class="mb-4">
+			<div class="flex mb-2">
+				<Heading level={3} class="pr-2">Zoekterm</Heading>
+				<Tooltip
+					icon={QuestionMark}
+					text={'Doorzoek de titels van de hele collectie; de kaart en tijdlijn tonen alleen de gevonden features. Gebruik "aanhalingstekens" voor een exacte frase, OR voor alternatieven en -woord om uit te sluiten.'}
+					placement="bottom"
+				/>
+			</div>
+			<FeatureSearchInput onApply={handleSearchApply} {filterQuery} />
+			{#if currentSearchQuery}
+				<div class="mt-2">
+					<SearchFilterTag query={currentSearchQuery} onClear={handleSearchClear} />
 				</div>
 			{/if}
 		</div>
