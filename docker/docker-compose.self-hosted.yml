@@ -14,6 +14,9 @@ services:
     # self-hosting deploy pulls it instead of compiling roaringbitmap locally. To build
     # it by hand: docker build -f docker/Dockerfile.db -t ghcr.io/amsterdamtimemachine/data-index/db:16 .
     image: ghcr.io/amsterdamtimemachine/data-index/db:16
+    # Survive host reboots (e.g. unattended-upgrade kernel reboots) so the DB comes
+    # back with the app, which already sets this in docker-compose.yml.
+    restart: unless-stopped
     # No container_name — a fixed name overrides compose's <project>-<service>-<n>
     # scheme, so two stacks built on this overlay would collide on it regardless of
     # --project-name. The app still reaches the DB at `dataindex-db`: that's the
