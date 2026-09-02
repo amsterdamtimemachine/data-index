@@ -410,7 +410,7 @@ Ingestion is idempotent and source-driven: corrections are made in the **source 
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /api/metadata` | Time slices, record types, datasets, stats |
+| `GET /api/metadata` | Time slices, record types, place types, datasets, tags |
 | `GET /api/heatmaps` | Sparse heatmap data with grid dimensions |
 | `GET /api/histogram` | Feature count distribution by time period |
 | `GET /api/features` | Paginated features within geographic bounds or a place's cells |
@@ -662,4 +662,4 @@ order you set them up in doesn't matter, and neither does the `-f` overlay order
 | `STREET_MAX_DISTANCE_M` | No | `50` | Same, for streets (areas link by containment, no radius) |
 | `ERA_CUTOFF` | No | `1943-01-01` | Historical↔present address boundary: a feature dated before this resolves to an Adamlink address, on/after to a BAG one |
 | `CURRENT_ANCHOR` | No | `2020-01-01` | Present-day reference date for scoring current place names |
-| `CACHE_TTL_MINUTES` | No | `10` | TTL for cached DB queries |
+| `CACHE_TTL_MINUTES` | No | `10` | TTL for cached DB queries (metadata, record types, time slices). Raise it on a deployed box; the data only changes at rebuild |
