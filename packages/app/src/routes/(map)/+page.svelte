@@ -194,11 +194,21 @@
 	}
 
 	// Fetch heatmap + histogram on the client, re-fetching when the filters change.
+	// One URL definition feeds both the <head> preloads and the fetches, so the
+	// browser's preload always matches (a differing URL would fetch twice).
+	const filterQs = $derived.by(() => {
+		if (data.filterQuery) {
+			return `?${data.filterQuery}`;
+		}
+		return '';
+	});
+	const heatmapUrl = $derived(`/api/heatmaps${filterQs}`);
+	const histogramUrl = $derived(`/api/histogram${filterQs}`);
+
 	$effect(() => {
-		const qs = data.filterQuery ? `?${data.filterQuery}` : '';
 		loadingState.startLoading();
 		return fetchJson<HeatmapResponse>(
-			`/api/heatmaps${qs}`,
+			heatmapUrl,
 			(res) => {
 				heatmapTimeline = res.timeline;
 				dimensions = res.dimensions;
@@ -217,9 +227,8 @@
 	});
 
 	$effect(() => {
-		const qs = data.filterQuery ? `?${data.filterQuery}` : '';
 		return fetchJson<Histogram>(
-			`/api/histogram${qs}`,
+			histogramUrl,
 			(res) => {
 				histogram = res;
 			},
@@ -409,6 +418,13 @@
 		});
 	});
 </script>
+
+<!-- Preloaded from the SSR head: the map data downloads alongside the app bundle
+     instead of after hydration. crossorigin matches fetch()'s cors/same-origin mode. -->
+<svelte:head>
+	<link rel="preload" as="fetch" href={heatmapUrl} crossorigin="anonymous" />
+	<link rel="preload" as="fetch" href={histogramUrl} crossorigin="anonymous" />
+</svelte:head>
 
 <ErrorHandler errorData={allErrors} />
 
