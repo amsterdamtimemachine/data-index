@@ -14,6 +14,10 @@ services:
     # self-hosting deploy pulls it instead of compiling roaringbitmap locally. To build
     # it by hand: docker build -f docker/Dockerfile.db -t ghcr.io/amsterdamtimemachine/data-index/db:16 .
     image: ghcr.io/amsterdamtimemachine/data-index/db:16
+    # Stock Postgres memory defaults undersize this data: 4MB work_mem sorts the
+    # heatmap timeline and large place panels on disk, and 128MB shared_buffers holds a
+    # fraction of the features table. Set DB_SHARED_BUFFERS to ~1/4 of the box's RAM.
+    command: ["postgres", "-c", "work_mem=${DB_WORK_MEM:-32MB}", "-c", "shared_buffers=${DB_SHARED_BUFFERS:-512MB}"]
     # Survive host reboots (e.g. unattended-upgrade kernel reboots) so the DB comes
     # back with the app, which already sets this in docker-compose.yml.
     restart: unless-stopped
