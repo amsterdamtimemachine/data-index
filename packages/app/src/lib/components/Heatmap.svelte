@@ -25,7 +25,7 @@
 	};
 	import type { FeatureCollection, Feature, Polygon, GeoJsonProperties } from 'geojson';
 	import type { Heatmap, HeatmapDimensions, Coordinates } from '@atm/shared/types';
-	import { generateCellIdMap, generateCellGeometries, calculateDensity, placeOutlineGeometry, type CellGeometry } from '$utils/heatmap';
+	import { generateCellIdMap, generateCellGeometries, calculateDensity, placeOutlineGeometry, cellIdAtLonLat, staleCells, type CellGeometry } from '$utils/heatmap';
 	import { mergeCss } from '$utils/utils';
 	import { MOBILE_QUERY, HOVER_QUERY } from '$utils/media.svelte';
 	import resolveConfig from 'tailwindcss/resolveConfig';
@@ -50,6 +50,7 @@
 		cellSelectedOutlineColor: string; // hex
 		cellSelectedOutlineWidth: number; // px
 		cellHoveredOutlineColor: string; //hex
+		cellHoveredOutlineOpacity: number; // 0.0 - 1.0
 		cellValueColor: string; // hex
 		outlineLayerColor: string; // hex
 		placeOutlineWidth: number; // px, thicker than the cell selection so both read when they overlap
@@ -81,6 +82,7 @@
 	}
 
 	const twConfig = resolveConfig(tailwindConfig);
+	const TOOLTIP_OFFSET_PX = 8; // gap between the cursor and the tooltip
 	const colors = twConfig.theme.colors as unknown as Record<string, string>;
 
 	const defaultMapStyle: MapStyle = {
@@ -90,9 +92,10 @@
 		maxZoom: 14,
 		defaultZoom: 12,
 		defaultZoomMobile: 11,
-		center: { lat: 4.895645, lon: 52.372219 },
+		center: { lon: 4.895645, lat: 52.372219 },
 		cellSelectedOutlineColor: colors['atm-red'],
 		cellHoveredOutlineColor: colors['map-selected-outline-casing'],
+		cellHoveredOutlineOpacity: 0.8,
 		cellSelectedOutlineWidth: 3,
 		cellValueColor: colors['map-cell-value'],
 		outlineLayerColor: colors['map-place-outline'],
@@ -124,6 +127,9 @@
 
 	let map: MapLibreMap | undefined = $state();
 	let cellGeometries: CellGeometry[] = [];
+	let cellById = new Map<string, CellGeometry>();
+	// active cells of the previous heatmap, so a change only writes the cells that moved
+	let previousActive = new Set<string>();
 	let mapContainer: HTMLElement;
 	let isMapLoaded = $state(false);
 	let hoverTooltip = $state<{ x: number; y: number; count: number; cellId: string } | null>(null);
@@ -159,8 +165,7 @@
 	// Update heatmap cells when active cells change
 	$effect(() => {
 		if (!isMapLoaded || !map || !dimensions) return;
-		resetAllCells();
-		setActiveCells();
+		applyActiveCells();
 	});
 
 	// The red selection outline follows whether the place is the active subject
@@ -205,28 +210,27 @@
 		}
 	});
 
-	function resetAllCells(): void {
-		if (!map || !cellIdMap.size) return;
-		const mapInstance = map; // Store reference for TypeScript
-		cellIdMap.forEach((cellId) => {
-			if (cellId) {
-				mapInstance.setFeatureState(
-					{ source: 'heatmap', id: cellId },
-					{
-						value: 0,
-						count: 0
-					}
-				);
-			}
-		});
-	}
-
-	function setActiveCells(): void {
+	function applyActiveCells(): void {
 		if (!map) return;
 		const mapInstance = map;
+		for (const id of staleCells(previousActive, activeCells)) {
+			mapInstance.setFeatureState({ source: 'heatmap', id }, { value: 0, count: 0 });
+		}
 		activeCells.forEach((stateValues, cellId) => {
 			mapInstance.setFeatureState({ source: 'heatmap', id: cellId }, stateValues);
 		});
+		previousActive = new Set(activeCells.keys());
+	}
+
+	// One cell as a source's whole data set (selection, hover), or empty
+	function cellCollection(cell: CellGeometry | undefined): FeatureCollection<Polygon> {
+		if (!cell) {
+			return { type: 'FeatureCollection', features: [] };
+		}
+		return {
+			type: 'FeatureCollection',
+			features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: cell.coordinates } }]
+		};
 	}
 
 	function generateHeatmapCells(
@@ -236,6 +240,8 @@
 		// PUBLIC_EXACT_CELLS=true reprojects cells to their true RD footprint (proj4),
 		// removing the ~0.4° rotation skew; default draws axis-aligned lon/lat rects.
 		cellGeometries = generateCellGeometries(dims, env.PUBLIC_EXACT_CELLS === 'true');
+		cellById = new Map(cellGeometries.map((cell) => [cell.cellId, cell]));
+		previousActive = new Set();
 
 		const features = cellGeometries.map(
 			(cell): Feature<Polygon, CellProperties> => ({
@@ -261,20 +267,14 @@
 	}
 
 	function updateSelectedCell(cellId: string | null): void {
-		if (!isMapLoaded || !map || !cellIdMap.size) return;
-		const mapInstance = map;
-
-		// Clear all previous highlights
-		cellIdMap.forEach((id) => {
-			if (id) {
-				mapInstance.setFeatureState({ source: 'heatmap', id }, { selected: false });
-			}
-		});
-
-		// Set new highlight
+		if (!isMapLoaded || !map) return;
+		const source = map.getSource('selection') as maplibre.GeoJSONSource | undefined;
+		if (!source) return;
+		let cell: CellGeometry | undefined = undefined;
 		if (cellId) {
-			mapInstance.setFeatureState({ source: 'heatmap', id: cellId }, { selected: true });
+			cell = cellById.get(cellId);
 		}
+		source.setData(cellCollection(cell));
 	}
 
 	function initializeMap(): void {
@@ -295,7 +295,7 @@
 				[west - mapStyle.boundsPanningOffsetLon, south - mapStyle.boundsPanningOffsetLat],
 				[east + mapStyle.boundsPanningOffsetLon, north + mapStyle.boundsPanningOffsetLat]
 			],
-			center: [mapStyle.center.lat, mapStyle.center.lon],
+			center: [mapStyle.center.lon, mapStyle.center.lat],
 			minZoom: mapStyle.minZoom,
 			maxZoom: mapStyle.maxZoom,
 			zoom: initialZoom,
@@ -325,10 +325,13 @@
 				}
 			});
 
+			// maxzoom on every GeoJSON source: the map is capped at maxZoom, so tiles
+			// beyond it would only cost worker time on each setData
 			mapInstance.addSource('heatmap', {
 				type: 'geojson',
 				data: geojsonData,
-				promoteId: 'id'
+				promoteId: 'id',
+				maxzoom: mapStyle.maxZoom
 			});
 
 			// Add water fill layer
@@ -338,8 +341,7 @@
 				source: 'openmaptiles',
 				'source-layer': 'water',
 				paint: {
-					'fill-color': mapStyle.waterFillColor,
-					'fill-opacity': 1.0
+					'fill-color': mapStyle.waterFillColor
 				}
 			});
 
@@ -373,12 +375,7 @@
 				type: 'line',
 				source: 'openmaptiles',
 				'source-layer': 'transportation',
-				minzoom: 4,
-				maxzoom: 22,
-				layout: {
-					visibility: 'visible',
-					'line-cap': 'round'
-				},
+				layout: { visibility: 'visible' },
 				filter: [
 					'all',
 					['==', ['geometry-type'], 'LineString'],
@@ -400,7 +397,8 @@
 			// Place-filter outline: gold perimeter, under the red cell selection
 			mapInstance.addSource('place-outline', {
 				type: 'geojson',
-				data: placeOutlineGeometry([], cellGeometries, dimensions.colsAmount)
+				data: placeOutlineGeometry([], cellGeometries, dimensions.colsAmount),
+				maxzoom: mapStyle.maxZoom
 			});
 			mapInstance.addLayer({
 				id: 'place-outline-casing',
@@ -438,25 +436,36 @@
 				}
 			});
 
+			// Selection and hover each get a one-cell source: a line layer over the whole
+			// grid would tessellate every cell's outline each frame, invisible or not
+			mapInstance.addSource('selection', {
+				type: 'geojson',
+				data: cellCollection(undefined),
+				maxzoom: mapStyle.maxZoom
+			});
+			mapInstance.addSource('hover', {
+				type: 'geojson',
+				data: cellCollection(undefined),
+				maxzoom: mapStyle.maxZoom
+			});
+
 			// Active cell
 			mapInstance.addLayer({
 				id: 'selected-cell-casing',
 				type: 'line',
-				source: 'heatmap',
+				source: 'selection',
 				paint: {
 					'line-color': mapStyle.cellSelectedCasingColor,
-					'line-width': mapStyle.cellSelectedOutlineWidth + mapStyle.outlineCasingExtra,
-					'line-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 1, 0]
+					'line-width': mapStyle.cellSelectedOutlineWidth + mapStyle.outlineCasingExtra
 				}
 			});
 			mapInstance.addLayer({
 				id: 'selected-cell',
 				type: 'line',
-				source: 'heatmap',
+				source: 'selection',
 				paint: {
 					'line-color': mapStyle.cellSelectedOutlineColor,
-					'line-width': mapStyle.cellSelectedOutlineWidth,
-					'line-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 1, 0]
+					'line-width': mapStyle.cellSelectedOutlineWidth
 				}
 			});
 
@@ -464,81 +473,68 @@
 			mapInstance.addLayer({
 				id: 'hovered-cell',
 				type: 'line',
-				source: 'heatmap',
+				source: 'hover',
 				paint: {
 					'line-color': mapStyle.cellHoveredOutlineColor,
 					'line-width': mapStyle.cellSelectedOutlineWidth,
-					'line-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.8, 0]
+					'line-opacity': mapStyle.cellHoveredOutlineOpacity
 				}
 			});
 
 			// Event handlers
 			let hoveredFeatureId: string | null = null;
+			const exactCells = env.PUBLIC_EXACT_CELLS === 'true';
+
+			function clearHover(): void {
+				if (hoveredFeatureId) {
+					hoveredFeatureId = null;
+					const source = mapInstance.getSource('hover') as maplibre.GeoJSONSource;
+					source.setData(cellCollection(undefined));
+				}
+				mapInstance.getCanvas().style.cursor = '';
+				hoverTooltip = null;
+			}
 
 			// MapLibre synthesises mousemove from taps, and a finger never "leaves"
 			const hoverCapable = window.matchMedia(HOVER_QUERY).matches;
 
-			if (hoverCapable) mapInstance.on('mousemove', 'heatmap-squares', (e) => {
-				if (e.features?.[0]) {
-					const feature = e.features[0];
-					const featureId = feature.properties.id;
-					const featureState = mapInstance.getFeatureState({
-						source: 'heatmap',
-						id: featureId
-					});
-
-					// Clear previous hover state
-					if (hoveredFeatureId && hoveredFeatureId !== featureId) {
-						mapInstance.setFeatureState(
-							{
-								source: 'heatmap',
-								id: hoveredFeatureId
-							},
-							{ hover: false }
-						);
+			// A plain map listener, not a layer-scoped one: the layer variant hit-tests
+			// every rendered cell on each event; the cell is arithmetic from the cursor
+			if (hoverCapable) mapInstance.on('mousemove', (e) => {
+				if (mapInstance.isMoving()) return;
+				const cellId = cellIdAtLonLat(e.lngLat.lng, e.lngLat.lat, dimensions, exactCells);
+				if (cellId === hoveredFeatureId) {
+					// same cell: only the tooltip follows the cursor
+					if (hoverTooltip) {
+						hoverTooltip = { ...hoverTooltip, x: e.point.x, y: e.point.y };
 					}
-
-					// Set new hover state
-					if (featureState.count > 0) {
-						mapInstance.getCanvas().style.cursor = 'pointer';
-						mapInstance.setFeatureState(
-							{
-								source: 'heatmap',
-								id: featureId
-							},
-							{ hover: true }
-						);
-						hoveredFeatureId = featureId;
-
-						// Show tooltip with count
-						hoverTooltip = {
-							x: e.point.x,
-							y: e.point.y,
-							count: featureState.count as number,
-							cellId: featureId
-						};
-					} else {
-						mapInstance.getCanvas().style.cursor = '';
-						hoveredFeatureId = null;
-						hoverTooltip = null;
+					return;
+				}
+				let count = 0;
+				if (cellId) {
+					const state = mapInstance.getFeatureState({ source: 'heatmap', id: cellId });
+					if (typeof state.count === 'number') {
+						count = state.count;
 					}
 				}
+				if (!cellId || count === 0) {
+					if (hoveredFeatureId) {
+						clearHover();
+					}
+					return;
+				}
+				hoveredFeatureId = cellId;
+				const source = mapInstance.getSource('hover') as maplibre.GeoJSONSource;
+				source.setData(cellCollection(cellById.get(cellId)));
+				mapInstance.getCanvas().style.cursor = 'pointer';
+				hoverTooltip = { x: e.point.x, y: e.point.y, count, cellId };
 			});
 
-			if (hoverCapable) mapInstance.on('mouseleave', 'heatmap-squares', () => {
-				mapInstance.getCanvas().style.cursor = '';
-				if (hoveredFeatureId) {
-					mapInstance.setFeatureState(
-						{
-							source: 'heatmap',
-							id: hoveredFeatureId
-						},
-						{ hover: false }
-					);
-					hoveredFeatureId = null;
-				}
-				hoverTooltip = null;
-			});
+			if (hoverCapable) {
+				mapInstance.on('mouseout', clearHover);
+				// nothing stale rides along a pan or zoom
+				mapInstance.on('movestart', clearHover);
+			}
 
 			mapInstance.on('click', 'heatmap-squares', (e) => {
 				// hybrid devices pass the hover gate; a tap must not strand the tooltip
@@ -582,7 +578,7 @@
 		{@const featuresText = hoverTooltip.count === 1 ? 'feature' : 'features'}
 		<div
 			class="absolute z-50 bg-black bg-opacity-80 text-white px-2 py-1 rounded text-sm pointer-events-none transform -translate-x-1/2 -translate-y-full"
-			style="left: {hoverTooltip.x}px; top: {hoverTooltip.y - 8}px;"
+			style="left: {hoverTooltip.x}px; top: {hoverTooltip.y - TOOLTIP_OFFSET_PX}px;"
 		>
 			<div class="font-medium">{hoverTooltip.count} {featuresText}</div>
 			<div class="text-xs opacity-75">Cel: {hoverTooltip.cellId}</div>
