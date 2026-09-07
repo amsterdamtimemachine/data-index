@@ -4,6 +4,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["BASE_PATH"],
       "outputs": ["dist/**", ".svelte-kit/**", "build/**"]
     },
     "dev": {
