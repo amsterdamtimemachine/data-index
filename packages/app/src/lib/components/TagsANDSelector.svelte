@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { apiUrl } from '$utils/api';
 	import ToggleGroup from './ToggleGroup.svelte';
 	import Tag from './Tag.svelte';
 	import type { RecordType, PhosphorIcon } from '@atm/shared/types';
@@ -57,7 +58,7 @@
 				query.set('selected', validSelectedTags.join(','));
 			}
 
-			const response = await fetch(`/api/tag-combinations?${query}`);
+			const response = await fetch(apiUrl('/api/tag-combinations', query));
 
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -87,7 +88,11 @@
 			try {
 				const effectiveRecordTypes = recordTypes.length > 0 ? recordTypes : allRecordTypes;
 				const response = await fetch(
-					`/api/tag-combinations?recordTypes=${effectiveRecordTypes.join(',')}&selected=${selectedArray.join(',')}&validateAll=true`
+					apiUrl('/api/tag-combinations', new URLSearchParams({
+						recordTypes: effectiveRecordTypes.join(','),
+						selected: selectedArray.join(','),
+						validateAll: 'true'
+					}))
 				);
 
 				if (response.ok) {

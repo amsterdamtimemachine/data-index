@@ -18,9 +18,9 @@ jobs:
     runs-on: ubuntu-latest
 
     # No `services:` block — the schema needs the roaringbitmap type (cell_features),
-    # so the test DB is our own image. Service containers can only pull a published
-    # image, never build one, so compose brings it up instead. Same file the local
-    # test:db:up uses, so CI and dev can't drift.
+    # so the test DB is our own image, pulled from GHCR (public) rather than rebuilt
+    # per run: db-image.yml builds and publishes it. Same file the local test:db:up
+    # uses, so CI and dev can't drift.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -80,5 +80,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # the experimental lane is served next to staging under a path prefix
+          build-args: |
+            BASE_PATH=${{ github.ref_name == 'experimental' && '/experimental' || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
