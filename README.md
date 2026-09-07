@@ -638,6 +638,13 @@ Repeat a setup section in a second clone: the other branch, its own `.env` with 
 `staging.yml`. Nothing is shared — separate volumes, container names and ports — so the
 order you set them up in doesn't matter, and neither does the `-f` overlay order.
 
+The `experimental` branch is the integration branch for features under trial. CI builds
+it into the `experimental` image tag, and a clone with `APP_IMAGE_TAG=experimental` in its
+`.env` runs it with the staging overlay. Feature branches merge into `experimental` to be
+previewed and into `staging` to graduate; a dropped feature is reverted on `experimental`
+alone. The lane has its own database, so a schema change on the branch lands with the
+reingest script and never touches the stable deployment.
+
 ### Environment variables
 
 | Variable | Required | Default | Description |
@@ -649,6 +656,7 @@ order you set them up in doesn't matter, and neither does the `-f` overlay order
 | `DB_PASSWORD` | Yes | `atm_dev_password` | PostgreSQL password |
 | `DB_NAME` | Yes | `amsterdam_time_machine` | PostgreSQL database name |
 | `APP_PORT` | No | `3000` | App port on host |
+| `APP_IMAGE_TAG` | No | `staging` | Image tag the staging overlay pulls; `experimental` for the integration branch |
 | `PUBLIC_DEFAULT_CENTER` | No | - | Map centre (WGS84 `lon,lat`) auto-selected on load, resolved to the cell containing it |
 | `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |
 | `PUBLIC_EXACT_CELLS` | No | `false` | Reproject heatmap cells to their exact RD footprint via proj4 (removes the ~0.4° skew); default draws axis-aligned rectangles |

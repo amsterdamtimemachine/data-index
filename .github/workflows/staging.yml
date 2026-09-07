@@ -1,9 +1,12 @@
 name: Build Staging Image
 
+# One image per deployable branch, tagged by branch name: `staging` is the stable
+# staging build, `experimental` the integration branch for features under trial.
 on:
   push:
     branches:
       - staging
+      - experimental
 
 env:
   REGISTRY: ghcr.io
@@ -66,8 +69,8 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=staging
-            type=sha,prefix=staging-
+            type=ref,event=branch
+            type=sha,prefix=${{ github.ref_name }}-
 
       - name: Build and push
         uses: docker/build-push-action@v5
