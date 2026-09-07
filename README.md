@@ -42,12 +42,14 @@ Rather than curating or contextualising the data, the index presents sources as 
   - [Prerequisites](#prerequisites)
   - [First time setup](#first-time-setup)
   - [Database UI](#database-ui)
+  - [URLs and the base path](#urls-and-the-base-path)
   - [Testing](#testing)
 - [Production](#production)
   - [Self-hosted setup](#self-hosted-setup)
   - [Existing Postgres setup](#existing-postgres-setup)
   - [Deploying a new image](#deploying-a-new-image)
   - [Adding a second deployment on the same host](#adding-a-second-deployment-on-the-same-host)
+  - [Serving under a path prefix](#serving-under-a-path-prefix)
   - [Environment variables](#environment-variables)
 
 ## Stack
@@ -471,6 +473,13 @@ bun run dev    # http://localhost:5175
 bun run db:studio    # http://local.drizzle.studio
 ```
 
+### URLs and the base path
+
+Never write an absolute app URL as a string. API calls build their URL with `apiUrl()` from
+`$utils/api`, internal links use `resolve()` and static files `asset()` from `$app/paths`, so
+a build served under a path prefix reaches its own API and assets. A lint rule fails the
+build on a bare `/api/…` string or a static `href`/`src` starting with `/`.
+
 ### Testing
 
 The two packages use different runners. The app tests run under vitest, the db tests under bun's runner. `bun test` discovery is scoped to `packages/db` via `bunfig.toml`, so neither runner can pick up the other's files. Use `bun run test` for the full CI-identical run and `bun test <filter>` for quick db iterations.
@@ -644,6 +653,25 @@ it into the `experimental` image tag, and a clone with `APP_IMAGE_TAG=experiment
 previewed and into `staging` to graduate; a dropped feature is reverted on `experimental`
 alone. The lane has its own database, so a schema change on the branch lands with the
 reingest script and never touches the stable deployment.
+
+### Serving under a path prefix
+
+The app can live under a path prefix, for a second deployment on the same hostname. The
+prefix is baked in at build time: `docker build --build-arg BASE_PATH=/experimental` (the
+`experimental` CI build passes it), and the image then serves at `/experimental` and health
+checks itself there. Route by prefix in Caddy without stripping it, SvelteKit expects the
+prefix to arrive:
+
+```
+handle /experimental* {
+        reverse_proxy 127.0.0.1:3001
+}
+handle {
+        reverse_proxy 127.0.0.1:3000
+}
+```
+
+Leave `BASE_PATH` unset for a deployment at the root; the published images are built that way.
 
 ### Environment variables
 

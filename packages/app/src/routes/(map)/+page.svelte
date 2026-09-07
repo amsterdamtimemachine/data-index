@@ -1,5 +1,7 @@
 <!-- (map)/+page.svelte -->
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import { apiUrl } from '$utils/api';
 	import { tick, untrack } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { createMapSelection } from '$state/map-selection.svelte';
@@ -196,14 +198,9 @@
 	// Fetch heatmap + histogram on the client, re-fetching when the filters change.
 	// One URL definition feeds both the <head> preloads and the fetches, so the
 	// browser's preload always matches (a differing URL would fetch twice).
-	const filterQs = $derived.by(() => {
-		if (data.filterQuery) {
-			return `?${data.filterQuery}`;
-		}
-		return '';
-	});
-	const heatmapUrl = $derived(`/api/heatmaps${filterQs}`);
-	const histogramUrl = $derived(`/api/histogram${filterQs}`);
+	const filterParams = $derived(new URLSearchParams(data.filterQuery));
+	const heatmapUrl = $derived(apiUrl('/api/heatmaps', filterParams));
+	const histogramUrl = $derived(apiUrl('/api/histogram', filterParams));
 
 	$effect(() => {
 		loadingState.startLoading();
@@ -253,13 +250,13 @@
 			return;
 		}
 
-		let qs = '';
-		if (filterQs) {
-			qs = `${filterQs}&`;
-		}
-		const boundsQs = `minLon=${cellBounds.minLon}&maxLon=${cellBounds.maxLon}&minLat=${cellBounds.minLat}&maxLat=${cellBounds.maxLat}`;
+		const params = new URLSearchParams(filterQs);
+		params.set('minLon', String(cellBounds.minLon));
+		params.set('maxLon', String(cellBounds.maxLon));
+		params.set('minLat', String(cellBounds.minLat));
+		params.set('maxLat', String(cellBounds.maxLat));
 		return fetchJson<Histogram>(
-			`/api/histogram?${qs}${boundsQs}`,
+			apiUrl('/api/histogram', params),
 			(res) => {
 				cellHistogram = res;
 			},
@@ -280,12 +277,10 @@
 		if (!open || !place) {
 			return;
 		}
-		let qs = '';
-		if (filterQs) {
-			qs = `${filterQs}&`;
-		}
+		const params = new URLSearchParams(filterQs);
+		params.set('placeId', place.placeId);
 		return fetchJson<Histogram>(
-			`/api/histogram?${qs}placeId=${encodeURIComponent(place.placeId)}`,
+			apiUrl('/api/histogram', params),
 			(res) => {
 				placeHistogram = res;
 			},
@@ -446,7 +441,7 @@
 		<NavContainer bind:isExpanded={navExpanded} class="absolute top-0 left-0 z-30">
 			{#snippet header()}
 				<Nav class="p-3">
-					<NavItem href="/about" label="Over" />
+					<NavItem href={resolve('/about')} label="Over" />
 				</Nav>
 			{/snippet}
 			<FilterPanel

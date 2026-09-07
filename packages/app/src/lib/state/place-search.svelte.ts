@@ -1,6 +1,7 @@
 /** Reactive fetcher for place-name search. */
 import debounce from 'lodash.debounce';
 import type { PlaceSearchMatch } from '@atm/shared/types';
+import { apiUrl } from '$utils/api';
 
 const DEBOUNCE_MS = 300;
 const RESULT_LIMIT = 10;
@@ -13,7 +14,7 @@ export function createPlaceSearch() {
 	const run = debounce(async (q: string) => {
 		const id = ++requestId;
 		try {
-			const response = await fetch(`/api/places?q=${encodeURIComponent(q)}&limit=${RESULT_LIMIT}`);
+			const response = await fetch(apiUrl('/api/places', new URLSearchParams({ q, limit: String(RESULT_LIMIT) })));
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}`);
 			}
