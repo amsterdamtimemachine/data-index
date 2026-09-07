@@ -18,9 +18,9 @@ jobs:
     runs-on: ubuntu-latest
 
     # No `services:` block — the schema needs the roaringbitmap type (cell_features),
-    # so the test DB is our own image. Service containers can only pull a published
-    # image, never build one, so compose brings it up instead. Same file the local
-    # test:db:up uses, so CI and dev can't drift.
+    # so the test DB is our own image, pulled from GHCR (public) rather than rebuilt
+    # per run: db-image.yml builds and publishes it. Same file the local test:db:up
+    # uses, so CI and dev can't drift.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
