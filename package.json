@@ -40,6 +40,7 @@
     "turbo": "^2.10.12"
   },
   "overrides": {
-    "protocol-buffers-schema": "3.6.1"
+    "protocol-buffers-schema": "3.6.1",
+    "@sveltejs/vite-plugin-svelte": "^6.2.4"
   }
 }

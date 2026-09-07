@@ -151,7 +151,7 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 					placement="bottom"
 				/>
 			</div>
-			<PlaceSearchInput onSelect={handlePlaceSelect} />
+			<PlaceSearchInput onSelect={handlePlaceSelect} {selectedPlace} />
 			{#if selectedPlace}
 				<div class="mt-2">
 					<PlaceFilterTag place={selectedPlace} onClear={handlePlaceClear} onToggle={onTogglePlacePanel} active={placePanelOpen} />
