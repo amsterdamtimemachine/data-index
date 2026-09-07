@@ -35,6 +35,8 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		onTogglePlacePanel?: () => void;
 		placePanelOpen?: boolean;
 		currentSearchQuery?: string | null;
+		searchPaused?: boolean;
+		onToggleSearch?: () => void;
 		// current filter params, forwarded so the search preview count matches them
 		filterQuery?: string;
 	}
@@ -53,6 +55,8 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		onTogglePlacePanel = undefined,
 		placePanelOpen = false,
 		currentSearchQuery = null,
+		searchPaused = false,
+		onToggleSearch = undefined,
 		filterQuery = ''
 	}: Props = $props();
 
@@ -194,7 +198,7 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 			<FeatureSearchInput onApply={handleSearchApply} {filterQuery} />
 			{#if currentSearchQuery}
 				<div class="mt-2">
-					<SearchFilterTag query={currentSearchQuery} onClear={handleSearchClear} />
+					<SearchFilterTag query={currentSearchQuery} onClear={handleSearchClear} onToggle={onToggleSearch} active={!searchPaused} />
 				</div>
 			{/if}
 		</div>
