@@ -649,6 +649,10 @@ $DC exec dataindex-db update-postgis.sh          # only if the PostGIS minor cha
 
 Only the `app` service is named, so `pull`/`up -d app` leaves a bundled DB running and its volume untouched.
 
+After a `git pull`, `scripts/sync-env.sh -w` folds variables added to `.env.example` into
+`.env` at their place in the example, keeping every value already set (previous copy in
+`.env.bak`). Run it without `-w` to preview the result.
+
 ### Adding a second deployment on the same host
 
 Repeat a setup section in a second clone: the other branch, its own `.env` with a distinct
