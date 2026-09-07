@@ -10,7 +10,9 @@ import {
 	generateCellIdMap,
 	generateCellGeometries,
 	createEmptyHeatmap,
-	placeOutlineGeometry
+	placeOutlineGeometry,
+	cellIdAtLonLat,
+	staleCells
 } from './heatmap';
 
 // A simple 2×2 grid over a 10°(lon) × 20°(lat) box — easy exact maths.
@@ -223,5 +225,44 @@ describe('placeOutlineGeometry', () => {
 		// index 3 = (row 0, col 3), index 4 = (row 1, col 0) — consecutive indices, not neighbours
 		const outline = placeOutlineGeometry([3, 4], geoms, DIMS.colsAmount);
 		expect(outline.geometry.coordinates.length).toBe(8);
+	});
+});
+
+describe('cellIdAtLonLat (the hover lookup, unclamped)', () => {
+	test('lon/lat mode resolves the containing cell and rejects points outside', () => {
+		expect(cellIdAtLonLat(2, 5, GRID, false)).toBe('0_0');
+		expect(cellIdAtLonLat(7, 15, GRID, false)).toBe('1_1');
+		expect(cellIdAtLonLat(12, 5, GRID, false)).toBeNull();
+		expect(cellIdAtLonLat(2, -1, GRID, false)).toBeNull();
+	});
+
+	test('reprojected mode resolves in RD space, matching the drawn (rotated) cells', () => {
+		// the centroid of each rendered ring must map back to that ring's cell
+		for (const cell of generateCellGeometries(RD_GRID, true)) {
+			const ring = cell.coordinates[0].slice(0, 4);
+			const lon = ring.reduce((sum, [x]) => sum + x, 0) / 4;
+			const lat = ring.reduce((sum, [, y]) => sum + y, 0) / 4;
+			expect(cellIdAtLonLat(lon, lat, RD_GRID, true)).toBe(cell.cellId);
+		}
+	});
+
+	test('reprojected mode rejects a point outside the RD grid', () => {
+		// a corner of the far-away lon/lat box is nowhere near the 2km RD square
+		expect(cellIdAtLonLat(0, 0, RD_GRID, true)).toBeNull();
+	});
+
+	test('reprojected mode without an RD frame falls back to lon/lat', () => {
+		expect(cellIdAtLonLat(2, 5, GRID, true)).toBe('0_0');
+	});
+});
+
+describe('staleCells', () => {
+	test('returns the previously active cells missing from the new set', () => {
+		const active = new Map([['b', 1]]);
+		expect(staleCells(['a', 'b', 'c'], active)).toEqual(['a', 'c']);
+	});
+
+	test('nothing previous means nothing to reset', () => {
+		expect(staleCells([], new Set(['a']))).toEqual([]);
 	});
 });

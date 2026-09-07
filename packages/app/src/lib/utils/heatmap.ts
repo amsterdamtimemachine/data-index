@@ -17,6 +17,12 @@ function rdToWgs84(x: number, y: number): [number, number] {
 	return [lon, lat];
 }
 
+/** Reproject a WGS84 point to RD/28992 [x, y] metres — the inverse of rdToWgs84. */
+function wgs84ToRd(lon: number, lat: number): [number, number] {
+	const [x, y] = proj4('WGS84', 'EPSG:28992', [lon, lat]);
+	return [x, y];
+}
+
 /**
  * Calculate cell bounds for a specific cell
  */
@@ -101,6 +107,56 @@ export function getCellIdFromLonLat(lon: number, lat: number, dimensions: Heatma
 	const col = clamp(Math.floor(((lon - minLon) / (maxLon - minLon)) * colsAmount), 0, colsAmount - 1);
 	const row = clamp(Math.floor(((lat - minLat) / (maxLat - minLat)) * rowsAmount), 0, rowsAmount - 1);
 	return getCellIdFromRowCol(row, col);
+}
+
+/**
+ * The cell under a WGS84 point, resolved the way the cells were drawn: in RD space
+ * when the grid is reprojected (cells are axis-aligned squares there), in lon/lat
+ * otherwise. O(1) arithmetic — no hit-testing against rendered geometry. Unlike
+ * getCellIdFromLonLat this does not clamp: a point outside the grid is null.
+ */
+export function cellIdAtLonLat(
+	lon: number,
+	lat: number,
+	dimensions: HeatmapDimensions,
+	reprojected: boolean
+): string | null {
+	const { colsAmount, rowsAmount } = dimensions;
+	const useRd =
+		reprojected &&
+		dimensions.rdOriginX != null &&
+		dimensions.rdOriginY != null &&
+		dimensions.rdCellWidth != null &&
+		dimensions.rdCellHeight != null;
+
+	let col: number;
+	let row: number;
+	if (useRd) {
+		const { rdOriginX, rdOriginY, rdCellWidth, rdCellHeight } = dimensions as Required<HeatmapDimensions>;
+		const [x, y] = wgs84ToRd(lon, lat);
+		col = Math.floor((x - rdOriginX) / rdCellWidth);
+		row = Math.floor((y - rdOriginY) / rdCellHeight);
+	} else {
+		const { minLon, maxLon, minLat, maxLat } = dimensions;
+		col = Math.floor(((lon - minLon) / (maxLon - minLon)) * colsAmount);
+		row = Math.floor(((lat - minLat) / (maxLat - minLat)) * rowsAmount);
+	}
+	if (col < 0 || col >= colsAmount || row < 0 || row >= rowsAmount) {
+		return null;
+	}
+	return getCellIdFromRowCol(row, col);
+}
+
+/** Cells that were active before but are not any more — the only ones a heatmap
+ * change has to zero, instead of resetting the whole grid. */
+export function staleCells(previous: Iterable<string>, active: { has(id: string): boolean }): string[] {
+	const stale: string[] = [];
+	for (const id of previous) {
+		if (!active.has(id)) {
+			stale.push(id);
+		}
+	}
+	return stale;
 }
 
 /**

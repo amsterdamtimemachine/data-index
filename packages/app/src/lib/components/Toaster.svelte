@@ -14,13 +14,9 @@
 	{#each toaster.toasts as toast (toast.id)}
 		<div
 			{...toast.content}
-			in:fade={{ duration: 150 }}
-			out:fade={{ duration: 450 }}
-			class="rounded-lg bg-white text-gray-800 shadow-md border max-w-sm"
-			class:border-red-200={toast.data.type === 'error'}
-			class:border-yellow-200={toast.data.type === 'warning'}
-			class:border-green-200={toast.data.type === 'success'}
-			class:border-blue-200={toast.data.type === 'info'}
+			in:fade={{ duration: 75 }}
+			out:fade={{ duration: 225 }}
+			class="rounded-lg bg-white text-gray-800 shadow-md border border-atm-sand-border max-w-sm"
 		>
 			<div class="relative w-[24rem] max-w-[calc(100vw-2rem)] p-5">
 				<div class="pr-10">
