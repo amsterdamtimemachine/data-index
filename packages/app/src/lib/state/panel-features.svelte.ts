@@ -5,6 +5,7 @@ import { untrack } from 'svelte';
 import type { FeatureResult, RecordType, PlaceSearchMatch } from '@atm/shared/types';
 import type { UiSortMode } from '$components/FeaturesSortSelect.svelte';
 import type { AppError } from '$types/error';
+import { apiUrl } from '$utils/api';
 
 /**
  * What the panel is showing: one display cell (picked on the map) or a place's
@@ -118,7 +119,7 @@ export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 				params.set('tags', query.tags.join(','));
 			}
 
-			const response = await fetch(`/api/features?${params}`);
+			const response = await fetch(apiUrl('/api/features', params));
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}`);
 			}

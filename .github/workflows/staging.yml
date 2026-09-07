@@ -80,5 +80,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # the experimental lane is served next to staging under a path prefix
+          build-args: |
+            BASE_PATH=${{ github.ref_name == 'experimental' && '/experimental' || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
