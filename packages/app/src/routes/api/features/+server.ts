@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import type { FeaturesSortField, SortDirection, TagOperator, FeaturesArea } from '@atm/shared/types';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_MAX } from '@atm/shared';
 import { getFeatures, UnknownTimeSliceError } from '@atm/db';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList, parseBounds, parseSeed } from '$lib/server/query-params';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList, parseBounds, parseSeed, parseSearchQuery } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -34,8 +34,9 @@ export const GET: RequestHandler = async ({ url }) => {
 		const sort = url.searchParams.get('sort') || 'sample';
 		const sortDirection = url.searchParams.get('sortDirection') || 'desc';
 		const seed = parseSeed(url);
+		const searchQuery = parseSearchQuery(url);
 
-		if (!['sample', 'relevance', 'spatialFrequency', 'datePrecision', 'date'].includes(sort)) {
+		if (!['sample', 'relevance', 'spatialFrequency', 'datePrecision', 'date', 'bestMatch'].includes(sort)) {
 			throw error(400, { code: 'INVALID_SORT', message: 'Invalid sort field' });
 		}
 		if (!['asc', 'desc'].includes(sortDirection)) {
@@ -54,6 +55,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			`tags: ${tags?.join(', ') || 'none'} (${tagOperator}), ` +
 			`timeSlice: ${timeSlice || 'all'}, ` +
 			`sort: ${sort} ${sortDirection}, ` +
+			`q: ${searchQuery || 'none'}, ` +
 			`page: ${page}, pageSize: ${pageSize}`
 		);
 
@@ -68,6 +70,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			sort: sort as FeaturesSortField,
 			sortDirection: sortDirection as SortDirection,
 			seed,
+			searchQuery,
 			page,
 			pageSize
 		});

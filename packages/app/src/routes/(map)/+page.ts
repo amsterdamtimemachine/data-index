@@ -9,7 +9,7 @@ import type { AppError } from '$types/error';
 import { createPageErrorData, createError, createValidationError, createPeriodNotFoundError } from '$utils/error';
 import { translateAll } from '$utils/translations';
 import type { UiSortMode } from '$components/FeaturesSortSelect.svelte';
-import { parsePlaceSelection, parsePlacePanelFlag, parseSortSelection } from '$utils/page-params';
+import { parsePlaceSelection, parsePlacePanelFlag, parseSortSelection, parseSearchQuery } from '$utils/page-params';
 
 // Helper functions for period validation
 function isValidPeriodFormat(period: string): boolean {
@@ -34,10 +34,15 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 	const cellParam = url.searchParams.get('cell');
 	const periodParam = url.searchParams.get('period');
 
+	// Text search rides inside filterQuery, so every fetch keyed on it (heatmap,
+	// histograms) inherits the filter with no extra wiring.
+	const currentSearchQuery = parseSearchQuery(url);
+
 	const filterParams = new URLSearchParams();
 	if (recordTypesParam) filterParams.set('recordTypes', recordTypesParam);
 	if (datasetsParam) filterParams.set('datasets', datasetsParam);
 	if (placeTypesParam) filterParams.set('placeTypes', placeTypesParam);
+	if (currentSearchQuery) filterParams.set('q', currentSearchQuery);
 	const filterQuery = filterParams.toString();
 
 	// Determine recordTypes to use for UI state
@@ -154,10 +159,12 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 	}
 
 	// Selected place (the search filter): hydrate the id into a full match — this is
-	// also how a shared URL restores its selection. Unknown id → no selection.
+	// also how a shared URL restores its selection. Unknown id → warning toast; failed
+	// fetch → error toast. Either way the selection is dropped.
 	const placeSelection = parsePlaceSelection(url);
 	let selectedPlace: PlaceSearchMatch | null = null;
 	if (placeSelection.placeId) {
+		let restoreFailed = false;
 		try {
 			let nameQs = '';
 			if (placeSelection.nameId) {
@@ -167,9 +174,25 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 			if (res.ok) {
 				const placeData = await res.json();
 				selectedPlace = placeData.matches[0] || null;
+			} else {
+				restoreFailed = true;
 			}
 		} catch (err) {
 			console.error('Failed to load selected place:', err);
+			restoreFailed = true;
+		}
+		if (restoreFailed) {
+			errors.push(
+				createError('error', 'Place Filter Load Failed', 'Could not restore the place filter. Please try again later.', {
+					placeId: placeSelection.placeId
+				})
+			);
+		} else if (!selectedPlace) {
+			errors.push(
+				createError('warning', 'Place Not Found', 'The place in this URL does not exist anymore. The place filter was removed.', {
+					placeId: placeSelection.placeId
+				})
+			);
 		}
 	}
 
@@ -193,6 +216,7 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 		currentTagOperator,
 		currentSort,
 		currentSampleSeed,
+		currentSearchQuery,
 		selectedPlace,
 		placePanelOpen,
 		validatedPeriod,

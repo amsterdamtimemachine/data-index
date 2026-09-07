@@ -18,6 +18,7 @@ import { featureYearOverlap } from './time-filter';
 import { featureIdsWithAllTags, featureIdsWithAnyTag } from './filters';
 import { UnknownTimeSliceError } from './errors';
 import { cellRangeCondition, placeCellsCondition } from './cell-features';
+import { searchMatch, searchRank } from './feature-search';
 import { db } from '../client';
 import { featureToPlace, place, placeGeometry, placeCells } from '../schema';
 import type { CountRow } from '../row-types';
@@ -208,6 +209,15 @@ function sortPlan(
     }
     return { rankedCte: sql`ranked AS (SELECT * FROM filtered)`, orderBy };
   }
+  if (sort === 'bestMatch') {
+    // flat search-result order on ts_rank; without a searchQuery every score is 0
+    // and this degrades to date order
+    let orderBy = sql`match_score DESC, start_date DESC NULLS LAST, id`;
+    if (sortDirection === 'asc') {
+      orderBy = sql`match_score ASC, start_date ASC NULLS LAST, id`;
+    }
+    return { rankedCte: sql`ranked AS (SELECT * FROM filtered)`, orderBy };
+  }
   // relevance: the legacy blended score, single rotation (API-only, no UI entry)
   let laneKey = sql`relevance_score ASC NULLS LAST, start_date ASC NULLS LAST`;
   if (sortDirection === 'asc') {
@@ -231,6 +241,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     sort = 'sample',
     sortDirection = 'desc',
     seed = '',
+    searchQuery,
     page = 1,
     pageSize = 50
   } = query;
@@ -297,6 +308,13 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     ? sql`f.id IN ${tagFilteredIds}`
     : sql`TRUE`;
 
+  let searchCondition: SQL = sql`TRUE`;
+  let matchScoreExpr: SQL = sql`0::float`;
+  if (searchQuery) {
+    searchCondition = searchMatch(sql`f.label_tsv`, searchQuery);
+    matchScoreExpr = searchRank(sql`f.label_tsv`, searchQuery);
+  }
+
   // The join spine and filter bundle the count and page queries MUST share —
   // defined once so they can never filter different populations.
   const featureSpine = sql`
@@ -309,7 +327,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       AND ${datasetCondition}
       AND ${dateCondition}
       AND ${tagCondition}
-      AND ${placeTypeCondition}`;
+      AND ${placeTypeCondition}
+      AND ${searchCondition}`;
 
   // Get total count
   const countResult = await db.execute<CountRow>(sql`
@@ -344,6 +363,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         f.temporal_frequency,
         (COALESCE(pg.spatial_frequency::float, 0) / ${maxSpatial}
          + COALESCE(f.temporal_frequency::float, 0) / ${maxTemporal}) as relevance_score,
+        ${matchScoreExpr} as match_score,
         p.type as place_type,
         p.id as place_id,
         fp.relation_id

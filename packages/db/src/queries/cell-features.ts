@@ -15,6 +15,19 @@ import { andIn } from './filters';
 export const countExpr = sql`rb_cardinality(rb_or_agg(${cellFeatures.featureIds}))`;
 
 /**
+ * countExpr, optionally intersected with a search bitmap (see feature-search.ts):
+ * the distinct features of the group that also match the search. NULL-safe — an
+ * empty search set (NULL bitmap) collapses every count to 0, which is exactly the
+ * zero-results semantics a no-match query should render.
+ */
+export function countMatchesExpr(searchBm: SQL | null): SQL {
+  if (!searchBm) {
+    return countExpr;
+  }
+  return sql`COALESCE(rb_and_cardinality(rb_or_agg(${cellFeatures.featureIds}), ${searchBm}), 0)`;
+}
+
+/**
  * Fold a base bin into its display bin. Both are anchored to round multiples of
  * their size (generateTimeSlices floors slice starts), so integer division lands a
  * base bin in the display bin that contains it — provided binSize is a multiple of

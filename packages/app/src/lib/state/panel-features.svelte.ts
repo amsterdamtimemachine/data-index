@@ -26,6 +26,9 @@ export type PanelFeaturesQuery = {
 	datasets: string[];
 	tags: string[];
 	tagOperator: 'AND' | 'OR';
+	// text-search filter: the panel lists only matching features, so its counts
+	// agree with a search-filtered heatmap
+	searchQuery?: string;
 	sortMode: UiSortMode;
 	sampleSeed?: string;
 };
@@ -39,6 +42,9 @@ function sortParams(query: PanelFeaturesQuery): Record<string, string> {
 	}
 	if (query.sortMode === 'relevance') {
 		return { sort: 'relevance', sortDirection: 'desc' };
+	}
+	if (query.sortMode === 'bestMatch') {
+		return { sort: 'bestMatch', sortDirection: 'desc' };
 	}
 	if (query.sortMode === 'oldest') {
 		return { sort: 'date', sortDirection: 'asc' };
@@ -116,6 +122,9 @@ export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 			}
 			if (query.tags.length > 0) {
 				params.set('tags', query.tags.join(','));
+			}
+			if (query.searchQuery) {
+				params.set('q', query.searchQuery);
 			}
 
 			const response = await fetch(`/api/features?${params}`);

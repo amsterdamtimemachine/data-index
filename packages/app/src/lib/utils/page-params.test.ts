@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { parsePlaceSelection, parsePlacePanelFlag, parseSortSelection } from './page-params';
+import { parsePlaceSelection, parsePlacePanelFlag, parseSortSelection, parseSearchQuery } from './page-params';
 
 function url(qs: string): URL {
 	return new URL(`http://x/?${qs}`);
@@ -46,5 +46,20 @@ describe('parseSortSelection', () => {
 
 	test('absent seed stays undefined', () => {
 		expect(parseSortSelection(url('')).sampleSeed).toBeUndefined();
+	});
+});
+
+describe('parseSearchQuery', () => {
+	test('reads and trims the query', () => {
+		expect(parseSearchQuery(url('q=%20zeedijk%20'))).toBe('zeedijk');
+	});
+
+	test('absent and blank collapse to null', () => {
+		expect(parseSearchQuery(url(''))).toBeNull();
+		expect(parseSearchQuery(url('q=%20%20'))).toBeNull();
+	});
+
+	test('oversized queries are clamped, not rejected', () => {
+		expect(parseSearchQuery(url(`q=${'a'.repeat(600)}`))).toHaveLength(512);
 	});
 });
