@@ -116,8 +116,8 @@ erDiagram
     }
 
     tags {
-        text id PK "e.g. nature"
-        text label  "e.g. Nature"
+        text id PK "classifier key, e.g. bridge_canal"
+        text label  "e.g. bridge canal # the app translates by id"
     }
 
     feature_to_place {
@@ -129,6 +129,12 @@ erDiagram
     feature_tags {
         uuid feature_id FK "links to features"
         text tag_id FK "links to tags"
+        text source  "tagger run, e.g. siglip2-baseline-v1 # unique with feature_id + tag_id"
+    }
+
+    tag_features {
+        text tag_id PK "links to tags"
+        roaringbitmap feature_ids  "feature_int_id set over every tagger # rebuilt by rebuild-index"
     }
 
     place_cells {
@@ -175,6 +181,8 @@ erDiagram
         text dataset_id FK "e.g. stadsarchief-beeldbank"
         integer temporal_frequency  "e.g. 2 # base time bins spanned"
         jsonb entity  "e.g. Person | CreativeWork | MediaObject"
+        integer feature_int_id  "identity # the surrogate the bitmaps store"
+        tsvector label_tsv  "generated from label # dutch FTS"
     }
 
     organisations||--o{datasets:"has datasets"
@@ -188,6 +196,8 @@ erDiagram
     relation||--o{feature_to_place:"describes"
     features||--o{feature_tags:"tagged"
     tags||--o{feature_tags:"links"
+    tags||--||tag_features:"rolled up into"
+    features||..o{tag_features:"counted in"
     place_cells||..o{cell_features:"rolled up into"
     features||..o{cell_features:"counted in"
 ```
@@ -197,7 +207,7 @@ erDiagram
 - **place**: Physical location identity (id, type, name); `source` is the provider organisation
 - **place_geometry**: A place's geometry (RD / EPSG:28992) and the period it was valid (1:1 with place)
 - **place_historical_name**: Dated past names linked to places (addresses, streets), used to show what a location was called at a given time
-- **tags**: Thematic categories (e.g. Nature, Transport, Living) assigned to features. Work in progress, generated via AI classification across datasets
+- **tags**: Classifier vocabulary, keyed by the classifier's own labels (e.g. `bridge_canal`); the app shows them in Dutch by id. Assigned to features through `feature_tags`, one row per feature, tag and tagger run (`source`). For now only images carry tags
 - **features**: Images, texts, persons, or other content items linked to places and displayed in the UI
 - **place_cells**: Pre-computed spatial grid that powers the heatmap. Each place is mapped to the 100m cells its geometry covers (one cell for a point, many for a street or neighbourhood). Features inherit cell coverage through their place link, cell assignments are stored once per place rather than duplicated per feature.
 - **cell_features**: Which features occupy each cell, base time bin and category — the cell-major counterpart of `place_cells`, written by `rebuild-index`. It materialises the `features → feature_to_place → place → place_cells` hop plus the time bin, so the heatmap and histogram read one table instead of re-running that join per request. Each bucket holds its feature set as a **roaring bitmap** rather than a count: merging buckets is then a set union, which de-duplicates a feature spanning several cells or place types, so base cells can be rolled up into *any* display grid and still yield an exact distinct count. The bitmap stores `features.feature_int_id`, a dense integer surrogate (roaringbitmap holds int4; `features.id` is a 128-bit uuid), so an external id set built on the same column — text-search matches, a tag's `tag_features` bitmap — can be intersected with the buckets.

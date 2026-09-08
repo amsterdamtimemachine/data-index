@@ -158,13 +158,15 @@ export const featureToPlace = pgTable('feature_to_place', {
 // JUNCTION: feature_tags - Links features to tags
 // source is the tagger run that produced the row (e.g. 'siglip2-baseline-v1')
 // and is part of the key: re-ingesting a tagger replaces only its own rows.
+// The key is a unique index rather than a composite primary key: drizzle push
+// orders a new primary key before the column it needs and fails on an existing table.
 // ============================================================================
 export const featureTags = pgTable('feature_tags', {
   featureId: uuid('feature_id').notNull().references(() => features.id),
   tagId: text('tag_id').notNull().references(() => tags.id),
   source: text('source').notNull()
 }, (table) => [
-  primaryKey({ columns: [table.featureId, table.tagId, table.source] }),
+  uniqueIndex('feature_tags_feature_id_tag_id_source_uq').on(table.featureId, table.tagId, table.source),
   index('idx_feature_tags_tag').on(table.tagId)
 ]);
 

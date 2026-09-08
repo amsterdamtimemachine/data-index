@@ -133,10 +133,10 @@ export async function setupTestDb() {
     CREATE TABLE IF NOT EXISTS feature_tags (
       feature_id UUID NOT NULL REFERENCES features(id),
       tag_id TEXT NOT NULL REFERENCES tags(id),
-      source TEXT NOT NULL,
-      PRIMARY KEY (feature_id, tag_id, source)
+      source TEXT NOT NULL
     )
   `);
+  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS feature_tags_feature_id_tag_id_source_uq ON feature_tags(feature_id, tag_id, source)`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_feature_tags_tag ON feature_tags(tag_id)`);
   // One bitmap of feature surrogates per tag; rebuilt by the tags ingest and rebuild-index.
   await db.execute(sql`
