@@ -18,6 +18,8 @@ import PlaceSearchInput from './PlaceSearchInput.svelte';
 import PlaceFilterTag from './PlaceFilterTag.svelte';
 import FeatureSearchInput from './FeatureSearchInput.svelte';
 import SearchFilterTag from './SearchFilterTag.svelte';
+	import Button from './Button.svelte';
+	import X from 'phosphor-svelte/lib/X';
 	import TagOperatorSwitch from './TagOperatorSwitch.svelte';
 
 	interface Props {
@@ -266,27 +268,24 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 
 	{#if availableTags.length > 0}
 		<div class="mb-4">
-			<div class="flex items-center mb-2">
+			<div class="flex mb-2">
 				<Heading level={3} class="pr-2">{translate('topics')}</Heading>
 				<Tooltip
 					icon={QuestionMark}
 					text="Onderwerpen zijn automatisch toegekend door beeldclassificatie, zonder handmatige correctie, en voorlopig alleen aan afbeeldingen. Het getal is het aantal resultaten binnen de andere filters. Minimaal één: resultaten met minstens één gekozen onderwerp. Alle: alleen resultaten met alle gekozen onderwerpen."
 					placement="bottom"
 				/>
-				{#if currentTags.length > 0}
-					<button type="button" onclick={handleTagsClear} class="ml-auto text-xs text-gray-600 underline cursor-pointer whitespace-nowrap">
-						{translate('clearTopics')}
-					</button>
-				{/if}
 			</div>
 			<TagOperatorSwitch
 				operator={currentTagOperator}
 				onOperatorChange={handleTagOperatorChange}
 				anyLabel={translate('topicsAny')}
 				allLabel={translate('topicsAll')}
-				class="mb-1"
+				class="mb-2"
 			/>
-			<p class="mb-2 text-xs text-gray-600">{translate('topicsImagesOnly')}</p>
+			{#if currentTags.length > 0}
+				<Button icon={X} size={16} onclick={handleTagsClear} class="mb-2">{translate('clearAll')}</Button>
+			{/if}
 			<ToggleGroup
 				items={translatedTags}
 				selectedItems={translatedCurrentTags}
@@ -295,13 +294,15 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 				requireOneItemSelected={false}
 			>
 				{#snippet children(item, isSelected, isDisabled)}
+					{@const count = tagCountByLabel.get(item)}
 					{#if isSelected}
-						<Tag variant="selected-outline" disabled={isDisabled} interactive={true}>{item}</Tag>
+						<Tag variant="selected-outline" disabled={isDisabled} interactive={true}>
+							{item}{#if count !== undefined}&nbsp;({count}){/if}
+						</Tag>
 					{:else}
-						<Tag variant="outline" disabled={isDisabled} interactive={true}>{item}</Tag>
-					{/if}
-					{#if tagCounts.counts}
-						<span class="ml-auto pr-1 text-xs text-gray-600 tabular-nums">{tagCountByLabel.get(item) ?? 0}</span>
+						<Tag variant="outline" disabled={isDisabled} interactive={true}>
+							{item}{#if count !== undefined}&nbsp;({count}){/if}
+						</Tag>
 					{/if}
 				{/snippet}
 			</ToggleGroup>

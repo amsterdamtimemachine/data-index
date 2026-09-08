@@ -503,6 +503,8 @@
 			allDatasets={datasetLabels}
 			selectedTags={currentTags}
 			tagOperator={currentTagOperator as 'AND' | 'OR'}
+			selectedPlace={data.selectedPlace}
+			searchQuery={activeSearchQuery}
 			class="absolute top-3 left-3 max-w-[calc(100%-1.5rem)]"
 		/>
 	{/if}

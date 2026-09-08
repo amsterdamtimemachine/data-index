@@ -40,6 +40,17 @@ export function formatDatasetTitle(title: string): string {
  * '' when the sources record no window. The matched name's window wins over the
  * geometry's.
  */
+/** The name a place is shown under: the matched (possibly historical) name, else the current one, else the id. */
+export function formatPlaceName(match: PlaceSearchMatch): string {
+	if (match.matchedName) {
+		return match.matchedName;
+	}
+	if (match.name) {
+		return match.name;
+	}
+	return match.placeId;
+}
+
 export function formatPlaceWindow(match: PlaceSearchMatch): string {
 	let window = match.matchedWindow;
 	if (!window) {

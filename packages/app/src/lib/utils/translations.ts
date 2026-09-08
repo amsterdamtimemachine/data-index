@@ -76,8 +76,7 @@ const TRANSLATIONS: Record<string, string> = {
 	topics: 'Onderwerpen',
 	topicsAny: 'Minimaal één',
 	topicsAll: 'Alle',
-	topicsImagesOnly: 'Voorlopig alleen voor afbeeldingen',
-	clearTopics: 'Wis onderwerpen',
+	clearAll: 'Wis alles',
 	toggleTopicOperator: 'Wissel tussen minimaal één en alle onderwerpen',
 	source: 'Bron',
 

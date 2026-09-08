@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { formatPlaceName } from '$utils/format';
 	import Pagination from '$components/Pagination.svelte';
 	import FeaturesCount from '$components/FeaturesCount.svelte';
 	import Button from '$components/Button.svelte';
@@ -83,13 +84,7 @@
 			return translate('ofThisCell');
 		}
 		const place = subject.place;
-		let shown = place.matchedName;
-		if (!shown && place.name) {
-			shown = place.name;
-		}
-		if (!shown) {
-			shown = place.placeId;
-		}
+		const shown = formatPlaceName(place);
 		let phrase = translate('ofCellsOf');
 		if (place.cells.length === 1) {
 			phrase = translate('ofCellOf');

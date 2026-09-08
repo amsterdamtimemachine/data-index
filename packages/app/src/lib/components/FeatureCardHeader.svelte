@@ -46,7 +46,7 @@
 				{formatTimePeriod(feature.dateRange)}
 			</span>
 			{#if !expanded && onExpand}
-				<Button onclick={onExpand} icon={ArrowsOut} aria-label="View feature details">Expand</Button>
+				<Button onclick={onExpand} icon={ArrowsOut} aria-label="View feature details" />
 			{/if}
 		</div>
 	</div>

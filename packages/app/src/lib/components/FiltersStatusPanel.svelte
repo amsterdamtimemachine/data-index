@@ -2,7 +2,8 @@
 	import { mergeCss } from '$utils/utils';
 	import { translate, translateAll } from '$utils/translations';
 	import Tag from './Tag.svelte';
-	import type { RecordType } from '@atm/shared/types';
+	import type { RecordType, PlaceSearchMatch } from '@atm/shared/types';
+	import { formatPlaceName } from '$utils/format';
 
 	interface Props {
 		selectedRecordTypes: RecordType[];
@@ -13,6 +14,9 @@
 		allDatasets: string[];
 		selectedTags: string[];
 		tagOperator?: 'AND' | 'OR';
+		selectedPlace?: PlaceSearchMatch | null;
+		// the applied search term (undefined while paused)
+		searchQuery?: string | null;
 		class?: string;
 	}
 
@@ -25,6 +29,8 @@
 		allDatasets,
 		selectedTags,
 		tagOperator = 'OR',
+		selectedPlace = null,
+		searchQuery = null,
 		class: className
 	}: Props = $props();
 
@@ -89,10 +95,18 @@
 				<span>en</span>
 			{/if}
 		{/each}
+		{#if selectedPlace}
+			<span>bij</span>
+			<Tag variant="selected-outline">{formatPlaceName(selectedPlace)}</Tag>
+		{/if}
+		{#if searchQuery}
+			<span>met</span>
+			<Tag variant="selected-outline">{searchQuery}</Tag>
+		{/if}
 		{#if selectedTags.length > 0}
-			<span>{tagOperator === 'AND' ? 'en' : 'of'}</span>
+			<span>over</span>
 			{#each selectedTags as tag, index}
-				<Tag variant="selected">{translate(tag)}</Tag>
+				<Tag variant="selected-outline">{translate(tag)}</Tag>
 				{#if index < selectedTags.length - 1}
 					<span>{tagOperator === 'AND' ? 'en' : 'of'}</span>
 				{/if}

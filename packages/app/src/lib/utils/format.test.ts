@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { PlaceSearchMatch } from '@atm/shared/types';
-import { formatPlaceWindow } from './format';
+import { formatPlaceWindow, formatPlaceName } from './format';
 
 function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 	return {
@@ -41,5 +41,13 @@ describe('formatPlaceWindow', () => {
 			geometryWindow: ['1850-01-01', '1909-12-31']
 		});
 		expect(formatPlaceWindow(m)).toBe('tot 1943');
+	});
+});
+
+describe('formatPlaceName', () => {
+	test('prefers the matched name, then the current name, then the id', () => {
+		expect(formatPlaceName(match({ matchedName: 'Oude naam', name: 'Nieuwe naam' }))).toBe('Oude naam');
+		expect(formatPlaceName(match({ matchedName: '', name: 'Nieuwe naam' }))).toBe('Nieuwe naam');
+		expect(formatPlaceName(match({ matchedName: '', name: null }))).toBe('p');
 	});
 });
