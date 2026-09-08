@@ -14,6 +14,23 @@ const TRANSLATIONS: Record<string, string> = {
 	neighbourhood: 'Buurt',
 	district: 'Wijk',
 
+	// Tags (classifier keys → Dutch)
+	animals: 'Dieren',
+	art: 'Kunst',
+	birds_eye_view: 'Vogelvlucht',
+	bridge_canal: 'Bruggen en grachten',
+	building_architecture: 'Gebouwen',
+	building_interior: 'Interieurs',
+	construction_demolition: 'Bouw en sloop',
+	drawing_architecture: 'Bouwtekeningen',
+	harbor_industrial: 'Haven en industrie',
+	maps: 'Kaarten',
+	parks_green: 'Parken en groen',
+	portrait_people: 'Mensen en portretten',
+	public_event: 'Evenementen',
+	shops_commerce: 'Winkels en handel',
+	transportation: 'Vervoer',
+
 	// Relations
 	isAbout: 'Gaat over',
 	hadLastLivingLocation: 'Laatste woonadres',
@@ -57,11 +74,17 @@ const TRANSLATIONS: Record<string, string> = {
 	geometrySource: 'Geometriebron',
 	contentType: 'Inhoudstype',
 	topics: 'Onderwerpen',
+	topicsAny: 'Minimaal één',
+	topicsAll: 'Alle',
+	topicsImagesOnly: 'Voorlopig alleen voor afbeeldingen',
+	clearTopics: 'Wis onderwerpen',
+	toggleTopicOperator: 'Wissel tussen minimaal één en alle onderwerpen',
 	source: 'Bron',
 
 	// Error titles
 	'Invalid Content Type Removed': 'Ongeldig inhoudstype verwijderd',
 	'Invalid Tag Removed': 'Ongeldig onderwerp verwijderd',
+	'Tag Counts Failed': 'Aantallen per onderwerp niet geladen',
 	'Invalid Input': 'Ongeldige invoer',
 	'Period Not Found': 'Periode niet gevonden',
 	'Invalid Cell': 'Ongeldige cel',
@@ -85,7 +108,8 @@ const TRANSLATIONS: Record<string, string> = {
 	'Could not restore the place filter. Please try again later.':
 		'Kon het plekfilter niet herstellen. Probeer het later opnieuw.',
 	'Could not search places. Please try again later.':
-		'Kon geen plekken zoeken. Probeer het later opnieuw.'
+		'Kon geen plekken zoeken. Probeer het later opnieuw.',
+	'Could not load the topic counts.': 'Kon de aantallen per onderwerp niet laden.'
 };
 
 // Reverse map (built once)

@@ -3,7 +3,6 @@
  * imports). Presentation knobs clamp; they never throw.
  */
 import type { TagOperator } from '@atm/shared/types';
-import { MAX_FILTER_ITEMS } from '@atm/shared';
 import { UI_SORT_MODES, type UiSortMode } from './sort-modes';
 
 const ID_MAX_LENGTH = 512;
@@ -47,13 +46,14 @@ export function parseSearchQuery(url: URL): string | null {
 
 /**
  * The tag selection (`tags`, `tagOperator`), mirroring the server-side parsers:
- * trimmed ids capped at MAX_FILTER_ITEMS, and AND only when asked for.
+ * trimmed ids, and AND only when asked for. The item cap lives server-side (the
+ * shared config reads process.env, which the browser does not have).
  */
 export function parseTagSelection(url: URL): { tags: string[]; tagOperator: TagOperator } {
 	let tags: string[] = [];
 	const raw = url.searchParams.get('tags');
 	if (raw) {
-		tags = raw.split(',').map((t) => t.trim()).filter((t) => t.length > 0).slice(0, MAX_FILTER_ITEMS);
+		tags = raw.split(',').map((t) => t.trim()).filter((t) => t.length > 0);
 	}
 	let tagOperator: TagOperator = 'OR';
 	if ((url.searchParams.get('tagOperator') || '').toUpperCase() === 'AND') {

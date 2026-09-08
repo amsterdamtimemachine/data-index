@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createSwitch, melt } from '@melt-ui/svelte';
 	import { mergeCss } from '$utils/utils';
+	import { translate } from '$utils/translations';
 
 	interface Props {
 		operator: 'AND' | 'OR';
@@ -38,20 +39,20 @@
 </script>
 
 <div class={mergeCss('flex items-center gap-1', className)}>
-	<span class="font-sans text-base text-black select-none">{anyLabel}</span>
+	<span class="font-sans text-base text-black select-none whitespace-nowrap">{anyLabel}</span>
 	<button
 		use:melt={$root}
 		class="relative h-5 w-9 cursor-pointer rounded-full bg-atm-sand-darkish hover:bg-atm-sand-dark border border-atm-gold transition-transform duration-200 ease-in-out
 			   data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50
 			   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2"
-		aria-label="Toggle between Any and All search modes"
+		aria-label={translate('toggleTopicOperator')}
 	>
 		<span
 			class="thumb block h-4 w-4 rounded-full bg-atm-gold-dark shadow-sm transition-transform duration-200 ease-in-out"
 		></span>
 	</button>
 	<input use:melt={$input} />
-	<span class="font-sans text-sm text-black select-none">{allLabel}</span>
+	<span class="font-sans text-base text-black select-none whitespace-nowrap">{allLabel}</span>
 </div>
 
 <style>

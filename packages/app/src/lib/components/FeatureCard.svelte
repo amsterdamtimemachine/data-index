@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { FeatureResult } from '@atm/shared/types';
-	import { translate } from '$utils/translations';
+	import { translate, translateAll } from '$utils/translations';
 	import { resolveCardFields, dataSourceFields } from '$utils/cardFields';
 	import { featureViewerState } from '$lib/state/featureState.svelte';
 	import FeatureCardHeader from '$components/FeatureCardHeader.svelte';
@@ -19,9 +19,6 @@
 
 	const entityFields = $derived(feature.entity ? resolveCardFields(feature.entity, expanded) : []);
 	const sourceFields = $derived(dataSourceFields(feature, expanded));
-
-	// Feature flag to disable tags for launch
-	const SHOW_TAGS = false;
 
 	function handleExpand() {
 		featureViewerState.openFeature(feature);
@@ -66,14 +63,11 @@
 		     the type tags in the header; these rows are provider/dataset attribution. -->
 		<FieldList fields={sourceFields} class="px-2 py-2" />
 
-		<!-- Tags - Temporarily disabled for launch -->
-		{#if SHOW_TAGS}
-			<TagList
-				tags={feature.tags || []}
-				{expanded}
-				maxVisible={expanded ? undefined : 2}
-				class={expanded ? 'py-2 px-2' : 'pt-2'}
-			/>
-		{/if}
+		<TagList
+			tags={translateAll(feature.tags || [])}
+			{expanded}
+			maxVisible={expanded ? undefined : 2}
+			class={expanded ? 'py-2 px-2' : 'pt-2'}
+		/>
 	</div>
 </div>

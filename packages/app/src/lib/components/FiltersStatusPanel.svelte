@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { mergeCss } from '$utils/utils';
-	import { translateAll } from '$utils/translations';
+	import { translate, translateAll } from '$utils/translations';
 	import Tag from './Tag.svelte';
 	import type { RecordType } from '@atm/shared/types';
 
@@ -92,7 +92,7 @@
 		{#if selectedTags.length > 0}
 			<span>{tagOperator === 'AND' ? 'en' : 'of'}</span>
 			{#each selectedTags as tag, index}
-				<Tag variant="selected">{tag}</Tag>
+				<Tag variant="selected">{translate(tag)}</Tag>
 				{#if index < selectedTags.length - 1}
 					<span>{tagOperator === 'AND' ? 'en' : 'of'}</span>
 				{/if}

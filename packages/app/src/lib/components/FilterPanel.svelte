@@ -1,12 +1,13 @@
 <!--
-	The map's filter sidebar: record type, dataset, geometry, and (when ready) topics.
+	The map's filter sidebar: place, search term, record type, dataset, geometry, topics.
 	Owns the URL writing — each change sets/deletes its query param and navigates, which
 	re-runs the loader and re-fetches the map data.
 -->
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import type { RecordType, PlaceType, PlaceSearchMatch } from '@atm/shared/types';
-	import { translateAll, reverseTranslateAll } from '$utils/translations';
+	import { translate, translateAll, reverseTranslateAll } from '$utils/translations';
+	import { createTagCounts } from '$lib/state/tag-counts.svelte';
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
 	import Heading from './Heading.svelte';
 	import Tooltip from './Tooltip.svelte';
@@ -17,9 +18,7 @@ import PlaceSearchInput from './PlaceSearchInput.svelte';
 import PlaceFilterTag from './PlaceFilterTag.svelte';
 import FeatureSearchInput from './FeatureSearchInput.svelte';
 import SearchFilterTag from './SearchFilterTag.svelte';
-	import TagsANDSelector from './TagsANDSelector.svelte';
 	import TagOperatorSwitch from './TagOperatorSwitch.svelte';
-	import DummyTagsSection from './DummyTagsSection.svelte';
 
 	interface Props {
 		recordTypes?: RecordType[];
@@ -60,9 +59,6 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		filterQuery = ''
 	}: Props = $props();
 
-	// keep false until real tags are added to the app
-	const TAGS_FEATURE_READY = false;
-
 	// Dutch labels for display; the handlers translate the selection back before writing it.
 	let translatedRecordTypes = $derived(translateAll(recordTypes));
 	let translatedCurrentRecordTypes = $derived(translateAll(currentRecordTypes));
@@ -73,10 +69,44 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 	let datasetLookup = $derived(new Map(datasets.map((s) => [s.id, s.label])));
 	let currentDatasetLabels = $derived(currentDatasets.map((id) => datasetLookup.get(id) || id));
 
-	// Local mirrors so the disabled topics UI can update optimistically before the
-	// navigation lands; the props take over again on the next load.
-	let tagOperator = $derived<'AND' | 'OR'>(currentTagOperator);
-	let selectedTags = $derived<string[]>(currentTags);
+	// Tags render by Dutch label like the other filters; the handler translates back.
+	let translatedTags = $derived(translateAll(availableTags));
+	let translatedCurrentTags = $derived(translateAll(currentTags));
+
+	// Per-tag counts under the other filters. The selection itself is stripped so
+	// toggling a tag never refetches counts that cannot change.
+	const tagCounts = createTagCounts();
+	const tagCountsQuery = $derived.by(() => {
+		const params = new URLSearchParams(filterQuery);
+		params.delete('tags');
+		params.delete('tagOperator');
+		return params.toString();
+	});
+	// A boolean derived, not the array: a reloaded metadata array must not refetch.
+	const hasTags = $derived(availableTags.length > 0);
+	$effect(() => {
+		if (hasTags) {
+			tagCounts.load(tagCountsQuery);
+		}
+	});
+	const tagCountByLabel = $derived.by(() => {
+		const byLabel = new Map<string, number>();
+		if (!tagCounts.counts) {
+			return byLabel;
+		}
+		for (const id of availableTags) {
+			byLabel.set(translate(id), tagCounts.counts.get(id) ?? 0);
+		}
+		return byLabel;
+	});
+	// A tag with nothing behind it under the current filters is greyed out, unless it
+	// is selected (so it can still be deselected).
+	const disabledTagLabels = $derived.by(() => {
+		if (!tagCounts.counts) {
+			return [];
+		}
+		return translatedTags.filter((label) => tagCountByLabel.get(label) === 0 && !translatedCurrentTags.includes(label));
+	});
 
 	function navigate(mutate: (params: URLSearchParams) => void) {
 		const url = new URL(window.location.href);
@@ -90,7 +120,6 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		navigate((p) => {
 			if (english.length > 0) p.set('recordTypes', english.join(','));
 			else p.delete('recordTypes');
-			p.delete('tags'); // resetTags
 		});
 	}
 
@@ -113,11 +142,18 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		});
 	}
 
-	function handleTagsChange(tags: string | string[]) {
-		const tagArray = Array.isArray(tags) ? tags : [tags];
+	function handleTagsChange(selected: string | string[]) {
+		const dutch = Array.isArray(selected) ? selected : [selected];
+		const ids = reverseTranslateAll(dutch);
 		navigate((p) => {
-			if (tagArray.length > 0) p.set('tags', tagArray.join(','));
+			if (ids.length > 0) p.set('tags', ids.join(','));
 			else p.delete('tags');
+		});
+	}
+
+	function handleTagsClear() {
+		navigate((p) => {
+			p.delete('tags');
 		});
 	}
 
@@ -155,12 +191,10 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		});
 	}
 
+	// The selection survives an operator change; the counts and the map answer for it.
 	function handleTagOperatorChange(operator: 'AND' | 'OR') {
-		tagOperator = operator;
-		selectedTags = [];
 		navigate((p) => {
 			p.set('tagOperator', operator);
-			p.delete('tags'); // resetTags
 		});
 	}
 </script>
@@ -230,47 +264,47 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		/>
 	{/if}
 
-	<!-- Topics Section - Use dummy version until tags data is ready -->
-	{#if TAGS_FEATURE_READY}
+	{#if availableTags.length > 0}
 		<div class="mb-4">
-			<div class="flex">
-				<Heading level={3} class="pr-2"> Onderwerpen </Heading>
-				<Tooltip icon={QuestionMark} text="Thematic categories based on newspaper sections, applied across all data using machine learning." placement="bottom" />
-			</div>
-			<div class="mt-2 mb-3">
-				<TagOperatorSwitch
-					operator={tagOperator}
-					onOperatorChange={handleTagOperatorChange}
-					class="block"
+			<div class="flex items-center mb-2">
+				<Heading level={3} class="pr-2">{translate('topics')}</Heading>
+				<Tooltip
+					icon={QuestionMark}
+					text="Onderwerpen zijn automatisch toegekend door beeldclassificatie, zonder handmatige correctie, en voorlopig alleen aan afbeeldingen. Het getal is het aantal resultaten binnen de andere filters. Minimaal één: resultaten met minstens één gekozen onderwerp. Alle: alleen resultaten met alle gekozen onderwerpen."
+					placement="bottom"
 				/>
-				<span class="text-xs text-black">
-					{tagOperator === 'AND' ? 'Include only content with all selected topics' : 'Include content with any selected topics'}
-				</span>
+				{#if currentTags.length > 0}
+					<button type="button" onclick={handleTagsClear} class="ml-auto text-xs text-gray-600 underline cursor-pointer whitespace-nowrap">
+						{translate('clearTopics')}
+					</button>
+				{/if}
 			</div>
-		</div>
-
-		{#if tagOperator === 'AND'}
-			<TagsANDSelector
-				recordTypes={currentRecordTypes}
-				allRecordTypes={recordTypes}
-				availableTags={availableTags}
-				selectedTags={selectedTags}
-				onTagsSelected={handleTagsChange}
+			<TagOperatorSwitch
+				operator={currentTagOperator}
+				onOperatorChange={handleTagOperatorChange}
+				anyLabel={translate('topicsAny')}
+				allLabel={translate('topicsAll')}
+				class="mb-1"
 			/>
-		{:else}
+			<p class="mb-2 text-xs text-gray-600">{translate('topicsImagesOnly')}</p>
 			<ToggleGroup
-				items={availableTags}
-				selectedItems={selectedTags}
+				items={translatedTags}
+				selectedItems={translatedCurrentTags}
+				disabledItems={disabledTagLabels}
 				onItemSelected={handleTagsChange}
-				requireOneItemSelected={false}>
+				requireOneItemSelected={false}
+			>
 				{#snippet children(item, isSelected, isDisabled)}
-					<Tag variant={isSelected ? 'selected' : 'default'} disabled={isDisabled} interactive={true}>
-						{item}
-					</Tag>
+					{#if isSelected}
+						<Tag variant="selected-outline" disabled={isDisabled} interactive={true}>{item}</Tag>
+					{:else}
+						<Tag variant="outline" disabled={isDisabled} interactive={true}>{item}</Tag>
+					{/if}
+					{#if tagCounts.counts}
+						<span class="ml-auto pr-1 text-xs text-gray-600 tabular-nums">{tagCountByLabel.get(item) ?? 0}</span>
+					{/if}
 				{/snippet}
 			</ToggleGroup>
-		{/if}
-	{:else}
-		<DummyTagsSection />
+		</div>
 	{/if}
 </div>
