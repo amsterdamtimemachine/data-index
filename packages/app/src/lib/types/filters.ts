@@ -1,4 +1,4 @@
-import type { RecordType, PlaceType, TagOperator } from '@atm/shared/types';
+import type { RecordType, PlaceType, TagOperator, PlaceSearchMatch, VisualizationMetadata } from '@atm/shared/types';
 
 /**
  * The population filters: which features the map, the histogram, the tag counts and
@@ -12,4 +12,15 @@ export interface FilterState {
 	tags: string[];
 	tagOperator: TagOperator;
 	searchQuery: string | null;
+}
+
+/**
+ * What the collapsed filters line describes: the applied filters, the options they
+ * are read against (to tell a full selection from a partial one), and the place
+ * they are scoped to.
+ */
+export interface FiltersStatus {
+	filters: FilterState;
+	metadata: VisualizationMetadata | null;
+	place: PlaceSearchMatch | null;
 }

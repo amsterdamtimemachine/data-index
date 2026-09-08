@@ -4,22 +4,21 @@
 	import { selectsAll } from '$utils/filters';
 	import { formatPlaceName } from '$utils/format';
 	import Tag from './Tag.svelte';
-	import type { PlaceSearchMatch, VisualizationMetadata } from '@atm/shared/types';
-	import type { FilterState } from '$types/filters';
+	import type { FiltersStatus } from '$types/filters';
 
 	interface Props {
-		// the applied filters (a paused search term already left out)
-		filters: FilterState;
-		metadata: VisualizationMetadata | null;
-		selectedPlace?: PlaceSearchMatch | null;
+		// everything the line describes, with a paused search term already left out
+		status: FiltersStatus;
 		class?: string;
 	}
 
-	let { filters, metadata, selectedPlace = null, class: className }: Props = $props();
+	let { status, class: className }: Props = $props();
 
-	const allRecordTypes = $derived(metadata?.recordTypes ?? []);
-	const allPlaceTypes = $derived(metadata?.placeTypes ?? []);
-	const allDatasets = $derived(metadata?.datasets ?? []);
+	const filters = $derived(status.filters);
+	const selectedPlace = $derived(status.place);
+	const allRecordTypes = $derived(status.metadata?.recordTypes ?? []);
+	const allPlaceTypes = $derived(status.metadata?.placeTypes ?? []);
+	const allDatasets = $derived(status.metadata?.datasets ?? []);
 
 	// a category that selects everything reads as everything, not as a list of picks
 	const displayedRecordTypes = $derived.by(() => {

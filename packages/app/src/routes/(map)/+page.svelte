@@ -62,6 +62,9 @@
 		return { ...filters, searchQuery: null };
 	});
 
+	// the collapsed filters line, in one piece
+	const filtersStatus = $derived({ filters: activeFilters, metadata: data.metadata, place: data.selectedPlace });
+
 	function handleToggleSearch() {
 		if (searchPaused) {
 			pausedTerm = null;
@@ -473,12 +476,7 @@
 
 	<!-- Show filters status when nav is collapsed -->
 	{#if !navExpanded}
-		<FiltersStatusPanel
-			filters={activeFilters}
-			metadata={data.metadata}
-			selectedPlace={data.selectedPlace}
-			class="absolute top-3 left-3 max-w-[calc(100%-1.5rem)]"
-		/>
+		<FiltersStatusPanel status={filtersStatus} class="absolute top-3 left-3 max-w-[calc(100%-1.5rem)]" />
 	{/if}
 
 		{#if showPanel && panelSubject}
