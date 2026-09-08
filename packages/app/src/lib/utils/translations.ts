@@ -61,6 +61,7 @@ const TRANSLATIONS: Record<string, string> = {
 
 	// Error titles
 	'Invalid Content Type Removed': 'Ongeldig inhoudstype verwijderd',
+	'Invalid Tag Removed': 'Ongeldig onderwerp verwijderd',
 	'Invalid Input': 'Ongeldige invoer',
 	'Period Not Found': 'Periode niet gevonden',
 	'Invalid Cell': 'Ongeldige cel',
@@ -70,6 +71,7 @@ const TRANSLATIONS: Record<string, string> = {
 
 	// Error messages
 	'is not a valid content type and was removed from your selection': 'is geen geldig inhoudstype en is verwijderd uit uw selectie',
+	'is not a valid tag and was removed from your selection': 'is geen geldig onderwerp en is verwijderd uit uw selectie',
 	'No valid content types found. Defaulting to all content types': 'Geen geldige inhoudstypes gevonden. Standaard ingesteld op alle inhoudstypes',
 	'invalid format. Expected YYYY_YYYY': 'ongeldig formaat. Verwacht YYYY_YYYY',
 	'Defaulting to most recent period': 'Standaard ingesteld op meest recente periode',

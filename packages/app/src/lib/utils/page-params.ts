@@ -2,6 +2,8 @@
  * Pure parsers for the map page's URL params (universal loader — no server-only
  * imports). Presentation knobs clamp; they never throw.
  */
+import type { TagOperator } from '@atm/shared/types';
+import { MAX_FILTER_ITEMS } from '@atm/shared';
 import { UI_SORT_MODES, type UiSortMode } from './sort-modes';
 
 const ID_MAX_LENGTH = 512;
@@ -41,6 +43,23 @@ export function parseSearchQuery(url: URL): string | null {
 		return null;
 	}
 	return trimmed;
+}
+
+/**
+ * The tag selection (`tags`, `tagOperator`), mirroring the server-side parsers:
+ * trimmed ids capped at MAX_FILTER_ITEMS, and AND only when asked for.
+ */
+export function parseTagSelection(url: URL): { tags: string[]; tagOperator: TagOperator } {
+	let tags: string[] = [];
+	const raw = url.searchParams.get('tags');
+	if (raw) {
+		tags = raw.split(',').map((t) => t.trim()).filter((t) => t.length > 0).slice(0, MAX_FILTER_ITEMS);
+	}
+	let tagOperator: TagOperator = 'OR';
+	if ((url.searchParams.get('tagOperator') || '').toUpperCase() === 'AND') {
+		tagOperator = 'AND';
+	}
+	return { tags, tagOperator };
 }
 
 /** Sort mode (unknown modes fall back to the default) and shuffle seed. */

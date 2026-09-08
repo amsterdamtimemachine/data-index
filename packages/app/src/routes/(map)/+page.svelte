@@ -207,7 +207,7 @@
 				const defaultRecordTypes = currentRecordTypes.length > 0 ? currentRecordTypes : recordTypes;
 
 				if (lastPeriod && defaultRecordTypes.length > 0) {
-					mapSelection.syncUrlParameters(lastPeriod, currentTagOperator, defaultRecordTypes);
+					mapSelection.syncUrlParameters(lastPeriod, defaultRecordTypes);
 
 					// Skip the default cell on mobile — the map opens unfiltered there.
 					if (window.innerWidth > MOBILE_MAX_WIDTH && env.PUBLIC_DEFAULT_CENTER && dimensions) {

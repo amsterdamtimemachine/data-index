@@ -9,7 +9,7 @@ import type { AppError } from '$types/error';
 import { createPageErrorData, createError, createValidationError, createPeriodNotFoundError } from '$utils/error';
 import { translateAll } from '$utils/translations';
 import type { UiSortMode } from '$components/FeaturesSortSelect.svelte';
-import { parsePlaceSelection, parsePlacePanelFlag, parseSortSelection, parseSearchQuery } from '$utils/page-params';
+import { parsePlaceSelection, parsePlacePanelFlag, parseSortSelection, parseSearchQuery, parseTagSelection } from '$utils/page-params';
 import { apiUrl } from '$utils/api';
 
 // Helper functions for period validation
@@ -30,20 +30,44 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 	const recordTypesParam = url.searchParams.get('recordTypes');
 	const datasetsParam = url.searchParams.get('datasets');
 	const placeTypesParam = url.searchParams.get('placeTypes');
-	const tagsParam = url.searchParams.get('tags');
-	const tagOperatorParam = url.searchParams.get('tagOperator');
 	const cellParam = url.searchParams.get('cell');
 	const periodParam = url.searchParams.get('period');
 
-	// Text search rides inside filterQuery, so every fetch keyed on it (heatmap,
-	// histograms) inherits the filter with no extra wiring.
+	// Text search and the tag selection ride inside filterQuery, so every fetch keyed
+	// on it (heatmap, histograms, tag counts) inherits them with no extra wiring.
 	const currentSearchQuery = parseSearchQuery(url);
+
+	// Tags are validated against metadata; an unknown id is dropped with a warning and
+	// never reaches a fetch.
+	const tagSelection = parseTagSelection(url);
+	const currentTagOperator = tagSelection.tagOperator;
+	let currentTags: string[] | undefined;
+	if (metadata?.tags && tagSelection.tags.length > 0) {
+		const existingTags = tagSelection.tags.filter((tag) => metadata.tags.includes(tag));
+		const nonExistentTags = tagSelection.tags.filter((tag) => !metadata.tags.includes(tag));
+
+		for (const invalidTag of nonExistentTags) {
+			errors.push(
+				createError('warning', 'Invalid Tag Removed', `"${invalidTag}" is not a valid tag and was removed from your selection.`, {
+					invalidTag,
+					availableTags: metadata.tags
+				})
+			);
+		}
+		if (existingTags.length > 0) {
+			currentTags = existingTags;
+		}
+	}
 
 	const filterParams = new URLSearchParams();
 	if (recordTypesParam) filterParams.set('recordTypes', recordTypesParam);
 	if (datasetsParam) filterParams.set('datasets', datasetsParam);
 	if (placeTypesParam) filterParams.set('placeTypes', placeTypesParam);
 	if (currentSearchQuery) filterParams.set('q', currentSearchQuery);
+	if (currentTags) {
+		filterParams.set('tags', currentTags.join(','));
+		filterParams.set('tagOperator', currentTagOperator);
+	}
 	const filterQuery = filterParams.toString();
 
 	// Determine recordTypes to use for UI state
@@ -110,27 +134,6 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 		} else {
 			currentPlaceTypes = metadata.placeTypes;
 		}
-	}
-
-	// Parse tags if provided. Existence is validated against metadata here; the tags
-	// feature is not yet exposed in the UI, so no tag data is fetched.
-	let currentTags: string[] | undefined;
-	const currentTagOperator = tagOperatorParam === 'AND' ? 'AND' : 'OR';
-
-	if (metadata?.tags && tagsParam) {
-		const requestedTags = tagsParam.split(',').map((t) => t.trim()) as string[];
-		const existingTags = requestedTags.filter((tag) => metadata.tags.includes(tag));
-		const nonExistentTags = requestedTags.filter((tag) => !metadata.tags.includes(tag));
-
-		for (const invalidTag of nonExistentTags) {
-			errors.push(
-				createError('warning', 'Invalid Tag Removed', `"${invalidTag}" is not a valid tag and was removed from your search.`, {
-					invalidTag,
-					availableTags: metadata.tags
-				})
-			);
-		}
-		currentTags = existingTags;
 	}
 
 	// Validate the period param against metadata (format, chronology, availability). The

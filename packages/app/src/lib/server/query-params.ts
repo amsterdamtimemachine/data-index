@@ -5,7 +5,7 @@
  * arguments in @atm/db.
  */
 import { error } from '@sveltejs/kit';
-import type { RecordType, PlaceType } from '@atm/shared/types';
+import type { RecordType, PlaceType, TagOperator, MatchFilters } from '@atm/shared/types';
 import { MAX_FILTER_ITEMS } from '@atm/shared';
 
 /**
@@ -55,6 +55,32 @@ export function parseSearchQuery(url: URL): string | undefined {
 		return undefined;
 	}
 	return trimmed;
+}
+
+/** Tag filter (`tags`): tag ids. An unknown id matches nothing, so nothing to validate here. */
+export function parseTags(url: URL): string[] | undefined {
+	return parseList(url, 'tags');
+}
+
+/** `tagOperator`: AND when asked for, otherwise OR. Never throws. */
+export function parseTagOperator(url: URL): TagOperator {
+	if ((url.searchParams.get('tagOperator') || '').toUpperCase() === 'AND') {
+		return 'AND';
+	}
+	return 'OR';
+}
+
+/**
+ * The per-feature match filters (text search + tag selection) every count
+ * endpoint accepts, parsed once so heatmap, histogram and feature list can't
+ * read them differently.
+ */
+export function parseMatchFilters(url: URL): MatchFilters {
+	return {
+		searchQuery: parseSearchQuery(url),
+		tags: parseTags(url),
+		tagOperator: parseTagOperator(url)
+	};
 }
 
 export type Bounds = { minLon: number; maxLon: number; minLat: number; maxLat: number };

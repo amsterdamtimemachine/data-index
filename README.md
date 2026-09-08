@@ -283,6 +283,8 @@ Each match carries the matched name, the id of the matched historical name row w
 
 `/api/heatmaps`, `/api/histogram` and `/api/features` accept `q`: a free-text search over feature labels. All three share one definition of what matches, so the heatmap, the timeline and the feature list always describe the same population.
 
+The same three accept `tags` (comma-separated tag ids) with `tagOperator` (`OR`, the default, or `AND`). Tags are classifier output ingested per dataset (see the `tags` source); the count endpoints intersect the precomputed per-tag bitmaps with their buckets, and an unknown tag id matches nothing. `/api/available-tags` lists every tag with its feature count under the same category filters and `q`, so the filter panel's counts always agree with the map.
+
 Matching uses Dutch full-text search with web search syntax: plain words must all appear, `"quoted phrases"` must appear side by side, `OR` offers alternatives, and `-word` excludes. Words are stemmed, so `verkooping` also finds `Verkoopingen`, and the stemmer folds doubled vowels, which lets old spellings find their modern forms. The search reads labels only, not article text or descriptions. A query that matches nothing, including one consisting only of stopwords, returns zero counts everywhere.
 
 Heatmap and histogram counts under a search are computed by intersecting each cell's precomputed feature set with the set of matching features, so a search request costs about the same as an unfiltered one regardless of how many features match.
@@ -426,9 +428,8 @@ Ingestion is idempotent and source-driven: corrections are made in the **source 
 | `GET /api/heatmaps` | Sparse heatmap data with grid dimensions |
 | `GET /api/histogram` | Feature count distribution by time period |
 | `GET /api/features` | Paginated features within geographic bounds or a place's cells |
-| `GET /api/available-tags` | Tags with feature counts |
+| `GET /api/available-tags` | Every tag with its feature count under the request's filters |
 | `GET /api/places` | Place name search and place lookup for the search filter |
-| `GET /api/tag-combinations` | Valid next tags for a tag selection — progressive tag filtering (WIP, not yet exposed in the UI) |
 
 Heatmaps, histogram, features, and available-tags accept `recordTypes`, `datasets`, and `placeTypes` (`address` / `street` / `neighbourhood` / `district`) query parameters to filter results.
 

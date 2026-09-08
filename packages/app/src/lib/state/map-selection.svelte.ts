@@ -54,7 +54,6 @@ export function createMapSelection() {
 	 */
 	function syncUrlParameters(
 		serverPeriod: string,
-		serverTagOperator: string = 'OR',
 		serverRecordTypes: string[] = []
 	) {
 		if (!browser) return;
@@ -66,12 +65,6 @@ export function createMapSelection() {
 		const urlPeriod = page.url.searchParams.get('period');
 		if (!urlPeriod) {
 			paramsToAdd.period = serverPeriod;
-		}
-
-		// Set tagOperator to URL if not already present
-		const urlTagOperator = page.url.searchParams.get('tagOperator');
-		if (!urlTagOperator) {
-			paramsToAdd.tagOperator = serverTagOperator;
 		}
 
 		// Set recordTypes to URL if not already present

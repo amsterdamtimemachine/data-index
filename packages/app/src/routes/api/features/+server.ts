@@ -1,9 +1,9 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { FeaturesSortField, SortDirection, TagOperator, FeaturesArea } from '@atm/shared/types';
+import type { FeaturesSortField, SortDirection, FeaturesArea } from '@atm/shared/types';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_MAX } from '@atm/shared';
 import { getFeatures, UnknownTimeSliceError } from '@atm/db';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList, parseBounds, parseSeed, parseSearchQuery } from '$lib/server/query-params';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseTags, parseTagOperator, parseBounds, parseSeed, parseSearchQuery } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -27,9 +27,8 @@ export const GET: RequestHandler = async ({ url }) => {
 		const recordTypes = parseRecordTypes(url);
 		const datasetIds = parseDatasets(url);
 		const placeTypes = parsePlaceTypes(url);
-		const tags = parseList(url, 'tags');
-
-		const tagOperator = (url.searchParams.get('tagOperator') || 'OR').toUpperCase() as TagOperator;
+		const tags = parseTags(url);
+		const tagOperator = parseTagOperator(url);
 		const timeSlice = url.searchParams.get('timeSlice') || undefined;
 		const sort = url.searchParams.get('sort') || 'sample';
 		const sortDirection = url.searchParams.get('sortDirection') || 'desc';
