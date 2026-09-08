@@ -64,7 +64,7 @@ export async function setupTestDb() {
   // schema changes (e.g. a newly added column) to an already-created table. Drop
   // first so the schema always matches this file — otherwise drift silently breaks
   // rebuild-index (which is how the missing grid_config.min_x/min_y went unnoticed).
-  await db.execute(sql`DROP TABLE IF EXISTS cell_features, grid_config, place_cells, feature_tags, feature_to_place, features, place_historical_name, place_geometry, place, relation, tags, datasets, organisations CASCADE`);
+  await db.execute(sql`DROP TABLE IF EXISTS cell_features, grid_config, place_cells, tag_features, feature_tags, feature_to_place, features, place_historical_name, place_geometry, place, relation, tags, datasets, organisations CASCADE`);
 
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS organisations (
@@ -129,7 +129,16 @@ export async function setupTestDb() {
     CREATE TABLE IF NOT EXISTS feature_tags (
       feature_id UUID NOT NULL REFERENCES features(id),
       tag_id TEXT NOT NULL REFERENCES tags(id),
-      PRIMARY KEY (feature_id, tag_id)
+      source TEXT NOT NULL,
+      PRIMARY KEY (feature_id, tag_id, source)
+    )
+  `);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_feature_tags_tag ON feature_tags(tag_id)`);
+  // One bitmap of feature surrogates per tag; rebuilt by the tags ingest and rebuild-index.
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS tag_features (
+      tag_id TEXT PRIMARY KEY REFERENCES tags(id),
+      feature_ids roaringbitmap NOT NULL
     )
   `);
   await db.execute(sql`
@@ -167,7 +176,7 @@ export async function setupTestDb() {
 
 export async function cleanTestDb() {
   await assertTestDb();
-  await db.execute(sql`TRUNCATE cell_features, grid_config, place_cells, feature_tags, feature_to_place, features, place_historical_name, place_geometry, place, relation, tags, datasets, organisations CASCADE`);
+  await db.execute(sql`TRUNCATE cell_features, grid_config, place_cells, tag_features, feature_tags, feature_to_place, features, place_historical_name, place_geometry, place, relation, tags, datasets, organisations CASCADE`);
 }
 
 export async function teardownTestDb() {

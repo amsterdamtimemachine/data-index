@@ -63,11 +63,11 @@ describe('tag queries', () => {
     `);
     await db.execute(sql`INSERT INTO tags (id, label) VALUES ('nature','Nature'), ('transport','Transport'), ('water','Water')`);
     await db.execute(sql`
-      INSERT INTO feature_tags (feature_id, tag_id) VALUES
-        (${F1}, 'nature'), (${F1}, 'water'),
-        (${F2}, 'nature'), (${F2}, 'transport'),
-        (${F3}, 'water'),
-        (${F4}, 'transport')
+      INSERT INTO feature_tags (feature_id, tag_id, source) VALUES
+        (${F1}, 'nature', 'test'), (${F1}, 'water', 'test'),
+        (${F2}, 'nature', 'test'), (${F2}, 'transport', 'test'),
+        (${F3}, 'water', 'test'),
+        (${F4}, 'transport', 'test')
     `);
   });
 

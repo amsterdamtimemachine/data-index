@@ -142,12 +142,15 @@ export const featureToPlace = pgTable('feature_to_place', {
 
 // ============================================================================
 // JUNCTION: feature_tags - Links features to tags
+// source is the tagger run that produced the row (e.g. 'siglip2-baseline-v1')
+// and is part of the key: re-ingesting a tagger replaces only its own rows.
 // ============================================================================
 export const featureTags = pgTable('feature_tags', {
   featureId: uuid('feature_id').notNull().references(() => features.id),
-  tagId: text('tag_id').notNull().references(() => tags.id)
+  tagId: text('tag_id').notNull().references(() => tags.id),
+  source: text('source').notNull()
 }, (table) => [
-  primaryKey({ columns: [table.featureId, table.tagId] }),
+  primaryKey({ columns: [table.featureId, table.tagId, table.source] }),
   index('idx_feature_tags_tag').on(table.tagId)
 ]);
 
@@ -192,6 +195,17 @@ export const cellFeatures = pgTable('cell_features', {
   primaryKey({ columns: [table.cellX, table.cellY, table.timeBin, table.recordType, table.datasetId, table.placeType] }),
   index('idx_cell_features_filters').on(table.recordType, table.datasetId, table.placeType)
 ]);
+
+// ============================================================================
+// TAG_FEATURES - The features carrying each tag, as one bitmap per tag
+// Same int surrogate as cell_features.feature_ids, so a tag filter is a single
+// rb_and per bucket (OR = rb_or_agg, AND = rb_and_agg over the selected rows).
+// Rebuilt by the tags ingest and by rebuild-index.
+// ============================================================================
+export const tagFeatures = pgTable('tag_features', {
+  tagId: text('tag_id').primaryKey().references(() => tags.id),
+  featureIds: roaringbitmap('feature_ids').notNull()
+});
 
 // ============================================================================
 // GRID_CONFIG - Pre-computed grid metadata from rebuild-index
@@ -248,4 +262,5 @@ export type NewFeature = typeof features.$inferInsert;
 
 export type FeatureToPlace = typeof featureToPlace.$inferSelect;
 export type FeatureTag = typeof featureTags.$inferSelect;
+export type TagFeatures = typeof tagFeatures.$inferSelect;
 export type PlaceCell = typeof placeCells.$inferSelect;
