@@ -47,6 +47,34 @@
 
 	const isMobile = createMediaQuery(MOBILE_QUERY);
 
+	// Pausing the text search is view state, not part of the address: the chip
+	// keeps the term, every fetch drops it. Remembering the paused term means a
+	// new or cleared term un-pauses by itself, while other filter changes keep it.
+	let pausedTerm = $state<string | null>(null);
+	const searchPaused = $derived(pausedTerm !== null && pausedTerm === data.currentSearchQuery);
+	const filterQuery = $derived.by(() => {
+		if (!searchPaused) {
+			return data.filterQuery;
+		}
+		const params = new URLSearchParams(data.filterQuery);
+		params.delete('q');
+		return params.toString();
+	});
+	const activeSearchQuery = $derived.by(() => {
+		if (searchPaused) {
+			return undefined;
+		}
+		return data.currentSearchQuery ?? undefined;
+	});
+
+	function handleToggleSearch() {
+		if (searchPaused) {
+			pausedTerm = null;
+		} else {
+			pausedTerm = data.currentSearchQuery ?? null;
+		}
+	}
+
 	// Page-owned so the chosen size survives the panel's open/close cycles.
 	let panelCols = $state<PanelCols>(3);
 
@@ -198,7 +226,7 @@
 	// Fetch heatmap + histogram on the client, re-fetching when the filters change.
 	// One URL definition feeds both the <head> preloads and the fetches, so the
 	// browser's preload always matches (a differing URL would fetch twice).
-	const filterParams = $derived(new URLSearchParams(data.filterQuery));
+	const filterParams = $derived(new URLSearchParams(filterQuery));
 	const heatmapUrl = $derived(apiUrl('/api/heatmaps', filterParams));
 	const histogramUrl = $derived(apiUrl('/api/histogram', filterParams));
 
@@ -243,7 +271,7 @@
 	// Nulled up front: a cell switch must never show the previous cell's bars.
 	$effect(() => {
 		const cellBounds = selectedCellBounds;
-		const filterQs = data.filterQuery;
+		const filterQs = filterQuery;
 
 		cellHistogram = null;
 		if (!cellBounds) {
@@ -271,7 +299,7 @@
 	$effect(() => {
 		const open = placePanelOpen;
 		const place = data.selectedPlace;
-		const filterQs = data.filterQuery;
+		const filterQs = filterQuery;
 
 		placeHistogram = null;
 		if (!open || !place) {
@@ -457,6 +485,10 @@
 				selectedPlace={data.selectedPlace}
 				onTogglePlacePanel={handleTogglePlacePanel}
 				{placePanelOpen}
+				currentSearchQuery={data.currentSearchQuery}
+				{searchPaused}
+				onToggleSearch={handleToggleSearch}
+				{filterQuery}
 			/>
 		</NavContainer>
 
@@ -494,6 +526,7 @@
 						datasets={currentDatasets}
 						tags={currentTags}
 						tagOperator={currentTagOperator as 'AND' | 'OR'}
+						searchQuery={activeSearchQuery}
 						{gridColumns}
 						{sortMode}
 						{sampleSeed}
