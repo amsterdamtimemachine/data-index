@@ -4,7 +4,7 @@ import { computeTimeSlices } from './time-slices';
 import { getRecordTypes } from './record-types';
 import { createTTLCache } from './cache';
 import { db } from '../client';
-import { datasets, tags, featureTags, cellFeatures } from '../schema';
+import { datasets, tagFeatures, cellFeatures } from '../schema';
 
 // Query result types
 type PlaceTypeRow = { place_type: PlaceType };
@@ -37,14 +37,14 @@ async function getPlaceTypes(): Promise<PlaceType[]> {
 }
 
 /**
- * Get all tags that are actually used (linked to features)
+ * Tag ids the index knows: the tags with a rebuilt bitmap, so the list and the
+ * counts (getAvailableTags) always describe the same tags.
  */
 async function getTags(): Promise<string[]> {
   const result = await db.execute<TagRow>(sql`
-    SELECT DISTINCT ${tags.id} as id
-    FROM ${tags}
-    JOIN ${featureTags} ON ${tags.id} = ${featureTags.tagId}
-    ORDER BY ${tags.id}
+    SELECT ${tagFeatures.tagId} as id
+    FROM ${tagFeatures}
+    ORDER BY ${tagFeatures.tagId}
   `);
   return result.rows.map(r => r.id);
 }

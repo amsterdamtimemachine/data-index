@@ -1,5 +1,5 @@
-import { sql, type SQL } from 'drizzle-orm';
-import type { Heatmap, HeatmapTimeline, HeatmapResponse, HeatmapDimensions, HeatmapResolutionConfig, RecordType, PlaceType } from '@atm/shared';
+import { sql } from 'drizzle-orm';
+import type { Heatmap, HeatmapTimeline, HeatmapResponse, HeatmapDimensions, HeatmapResolutionConfig, RecordType, PlaceType, MatchFilters } from '@atm/shared';
 import { DISPLAY_TIME_BIN_DEFAULT_YEARS, PRECOMP_GRID_CELL_METERS } from '@atm/shared';
 import { normaliseBinSize } from './bin-size';
 import { db } from '../client';
@@ -8,7 +8,7 @@ import { computeTimeSlices } from './time-slices';
 import { getRecordTypes } from './record-types';
 import { getGridConfig } from './grid-config';
 import { countMatchesExpr, displayBinExpr, gridColExpr, gridRowExpr, categoryFilter, binWindow, deriveGrid } from './cell-features';
-import { searchBitmap } from './feature-search';
+import { matchBitmap } from './match-filters';
 import { UnknownTimeSliceError } from './errors';
 
 // Query result types
@@ -80,7 +80,7 @@ export async function getHeatmap(
   datasetIds?: string[],
   placeTypes?: PlaceType[],
   binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS,
-  searchQuery?: string
+  filters?: MatchFilters
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
 
@@ -116,16 +116,13 @@ export async function getHeatmap(
   const startYear = timeSlice.startYear;
   const endYear = timeSlice.endYear;
 
-  let searchBm: SQL | null = null;
-  if (searchQuery) {
-    searchBm = searchBitmap(searchQuery);
-  }
+  const matchBm = matchBitmap(filters);
 
   const result = await db.execute<GridCellCount>(sql`
     SELECT
       ${gridColExpr(sql`${cellFeatures.cellX}`, gridCols, maxX)} as grid_col,
       ${gridRowExpr(sql`${cellFeatures.cellY}`, gridRows, maxY)} as grid_row,
-      ${countMatchesExpr(searchBm)} as count
+      ${countMatchesExpr(matchBm)} as count
     FROM ${cellFeatures}
     WHERE ${categoryFilter(types, datasetIds, placeTypes)}
       AND ${binWindow(startYear, endYear)}
@@ -134,7 +131,7 @@ export async function getHeatmap(
 
   const countsMap = new Map<number, number>();
   for (const row of result.rows) {
-    // a search can zero out a group; keep the heatmap sparse
+    // a match filter can zero out a group; keep the heatmap sparse
     const count = parseInt(row.count);
     if (count === 0) {
       continue;
@@ -160,7 +157,7 @@ export async function getHeatmapTimeline(
   datasetIds?: string[],
   placeTypes?: PlaceType[],
   binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS,
-  searchQuery?: string
+  filters?: MatchFilters
 ): Promise<HeatmapResponse> {
   const types = recordTypes || await getRecordTypes();
   binSizeYears = normaliseBinSize(binSizeYears);
@@ -183,10 +180,7 @@ export async function getHeatmapTimeline(
   const firstSlice = timeSlices[0];
   const lastSlice = timeSlices[timeSlices.length - 1];
 
-  let searchBm: SQL | null = null;
-  if (searchQuery) {
-    searchBm = searchBitmap(searchQuery);
-  }
+  const matchBm = matchBitmap(filters);
 
   // No slices CTE and no range join: each bucket already knows its base bin, so the
   // display bin is integer division and the whole timeline is one grouped scan.
@@ -195,7 +189,7 @@ export async function getHeatmapTimeline(
       ${gridColExpr(sql`${cellFeatures.cellX}`, gridCols, maxX)} as grid_col,
       ${gridRowExpr(sql`${cellFeatures.cellY}`, gridRows, maxY)} as grid_row,
       ${displayBinExpr(binSizeYears)} as display_bin,
-      ${countMatchesExpr(searchBm)} as count
+      ${countMatchesExpr(matchBm)} as count
     FROM ${cellFeatures}
     WHERE ${categoryFilter(types, datasetIds, placeTypes)}
       AND ${binWindow(firstSlice.startYear, lastSlice.endYear)}
@@ -204,7 +198,7 @@ export async function getHeatmapTimeline(
 
   const countsBySlice = new Map<number, Map<number, number>>();
   for (const row of result.rows) {
-    // a search can zero out a group; keep the heatmap sparse
+    // a match filter can zero out a group; keep the heatmap sparse
     const count = parseInt(row.count);
     if (count === 0) {
       continue;

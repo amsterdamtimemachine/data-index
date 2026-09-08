@@ -1,5 +1,5 @@
-import { sql, type SQL } from 'drizzle-orm';
-import type { Histogram, HistogramBin, RecordType, PlaceType } from '@atm/shared';
+import { sql } from 'drizzle-orm';
+import type { Histogram, HistogramBin, RecordType, PlaceType, MatchFilters } from '@atm/shared';
 import { DISPLAY_TIME_BIN_DEFAULT_YEARS } from '@atm/shared';
 import { normaliseBinSize } from './bin-size';
 import { db } from '../client';
@@ -8,7 +8,7 @@ import type { CountRow } from '../row-types';
 import { computeTimeSlices, computeTimeRange } from './time-slices';
 import { getRecordTypes } from './record-types';
 import { countMatchesExpr, displayBinExpr, categoryFilter, binWindow, cellRangeCondition, placeCellsCondition } from './cell-features';
-import { searchBitmap } from './feature-search';
+import { matchBitmap } from './match-filters';
 import { boundsToBaseCellRange } from './features';
 
 // Query result types
@@ -34,7 +34,7 @@ export async function getHistogram(
   binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS,
   bounds?: { minLon: number; maxLon: number; minLat: number; maxLat: number },
   placeId?: string,
-  searchQuery?: string
+  filters?: MatchFilters
 ): Promise<Histogram> {
   const types = recordTypes || await getRecordTypes();
 
@@ -65,13 +65,10 @@ export async function getHistogram(
     cellCondition = sql`${cellCondition} AND ${placeCellsCondition(sql`${cellFeatures.cellX}`, sql`${cellFeatures.cellY}`, placeId)}`;
   }
 
-  let searchBm: SQL | null = null;
-  if (searchQuery) {
-    searchBm = searchBitmap(searchQuery);
-  }
+  const matchBm = matchBitmap(filters);
 
   const result = await db.execute<BinRow>(sql`
-    SELECT (${displayBinExpr(binSizeYears)})::text as bin_start, ${countMatchesExpr(searchBm)} as count
+    SELECT (${displayBinExpr(binSizeYears)})::text as bin_start, ${countMatchesExpr(matchBm)} as count
     FROM ${cellFeatures}
     WHERE ${categoryFilter(types, datasetIds, placeTypes)}
       AND ${binWindow(firstSlice.startYear, lastSlice.endYear)}
@@ -97,7 +94,7 @@ export async function getHistogram(
   // COALESCE: aggregating zero buckets (e.g. bounds outside the data extent)
   // yields NULL, which would otherwise parse to NaN.
   const totalResult = await db.execute<CountRow>(sql`
-    SELECT COALESCE(${countMatchesExpr(searchBm)}, 0) as count
+    SELECT COALESCE(${countMatchesExpr(matchBm)}, 0) as count
     FROM ${cellFeatures}
     WHERE ${categoryFilter(types, datasetIds, placeTypes)}
       AND ${binWindow(firstSlice.startYear, lastSlice.endYear)}

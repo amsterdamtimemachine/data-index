@@ -15,16 +15,16 @@ import { andIn } from './filters';
 export const countExpr = sql`rb_cardinality(rb_or_agg(${cellFeatures.featureIds}))`;
 
 /**
- * countExpr, optionally intersected with a search bitmap (see feature-search.ts):
- * the distinct features of the group that also match the search. NULL-safe — an
- * empty search set (NULL bitmap) collapses every count to 0, which is exactly the
- * zero-results semantics a no-match query should render.
+ * countExpr, optionally intersected with a match bitmap (see match-filters.ts):
+ * the distinct features of the group that also match the search and/or tags.
+ * NULL-safe — an empty match set (NULL bitmap) collapses every count to 0, which
+ * is exactly the zero-results semantics a no-match query should render.
  */
-export function countMatchesExpr(searchBm: SQL | null): SQL {
-  if (!searchBm) {
+export function countMatchesExpr(matchBm: SQL | null): SQL {
+  if (!matchBm) {
     return countExpr;
   }
-  return sql`COALESCE(rb_and_cardinality(rb_or_agg(${cellFeatures.featureIds}), ${searchBm}), 0)`;
+  return sql`COALESCE(rb_and_cardinality(rb_or_agg(${cellFeatures.featureIds}), ${matchBm}), 0)`;
 }
 
 /**

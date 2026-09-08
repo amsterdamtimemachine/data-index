@@ -15,7 +15,7 @@ import { computeTimeSlices } from './time-slices';
 import { getRecordTypes } from './record-types';
 import { getGridConfig } from './grid-config';
 import { featureYearOverlap } from './time-filter';
-import { featureIdsWithAllTags, featureIdsWithAnyTag } from './filters';
+import { tagMatch } from './tag-filter';
 import { UnknownTimeSliceError } from './errors';
 import { cellRangeCondition, placeCellsCondition } from './cell-features';
 import { searchMatch, searchRank } from './feature-search';
@@ -266,20 +266,6 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   // Calculate offset
   const offset = (page - 1) * pageSize;
 
-  // Get feature IDs matching tag filter (if any)
-  let tagFilteredIds: string[] | null = null;
-  if (tagFilters && tagFilters.length > 0) {
-    const tagResult = await db.execute<{ feature_id: string }>(
-      tagOperator === 'AND' ? featureIdsWithAllTags(tagFilters) : featureIdsWithAnyTag(tagFilters)
-    );
-    tagFilteredIds = tagResult.rows.map(r => r.feature_id);
-
-    // Early return if no features match tag filter
-    if (tagFilteredIds.length === 0) {
-      return { data: [], total: 0, page, pageSize, totalPages: 0 };
-    }
-  }
-
   // Resolve the area to one population predicate; everything below is agnostic
   // of which kind it was.
   let areaCondition: SQL;
@@ -304,9 +290,10 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     ? featureYearOverlap(sql`f.start_date`, sql`f.end_date`, dateRange.startYear, dateRange.endYear)
     : sql`TRUE`;
 
-  const tagCondition = tagFilteredIds
-    ? sql`f.id IN ${tagFilteredIds}`
-    : sql`TRUE`;
+  let tagCondition: SQL = sql`TRUE`;
+  if (tagFilters && tagFilters.length > 0) {
+    tagCondition = tagMatch(sql`f.id`, tagFilters, tagOperator);
+  }
 
   let searchCondition: SQL = sql`TRUE`;
   let matchScoreExpr: SQL = sql`0::float`;
@@ -417,14 +404,11 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       po.url as place_provider_url,
       go.label as geometry_provider_label,
       pg.url as geometry_url,
-      COALESCE(
-        ARRAY(
-          SELECT t.label
-          FROM feature_tags ft
-          JOIN tags t ON ft.tag_id = t.id
-          WHERE ft.feature_id = page.id
-        ),
-        ARRAY[]::text[]
+      ARRAY(
+        SELECT DISTINCT ft.tag_id
+        FROM feature_tags ft
+        WHERE ft.feature_id = page.id
+        ORDER BY ft.tag_id
       ) as tags
     FROM page
     JOIN features f ON f.id = page.id

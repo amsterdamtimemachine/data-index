@@ -25,7 +25,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		console.log(`Histogram API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, binSize: ${binSize}, q: ${searchQuery || 'none'}`);
 
-		const histogram = await getHistogram(recordTypes, datasetIds, placeTypes, binSize, bounds, placeId, searchQuery);
+		const histogram = await getHistogram(recordTypes, datasetIds, placeTypes, binSize, bounds, placeId, { searchQuery });
 
 		console.log(
 			`Histogram: ${histogram.bins.length} bins, ${histogram.totalFeatures} total features`

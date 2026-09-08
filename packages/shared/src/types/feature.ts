@@ -11,6 +11,17 @@ export type SortDirection = 'asc' | 'desc';
 export type TagOperator = 'AND' | 'OR';
 
 /**
+ * Filters that select individual features rather than bucket categories: a text
+ * search and/or a tag selection. The heatmap, histogram and feature list apply
+ * them identically (see @atm/db queries/match-filters.ts).
+ */
+export interface MatchFilters {
+  searchQuery?: string;
+  tags?: string[];
+  tagOperator?: TagOperator;
+}
+
+/**
  * Schema.org entity types
  */
 export interface EntityBase {
@@ -102,7 +113,7 @@ export interface FeatureResult {
   description?: string;
   contentUrl?: string;
   dateRange: [number, number];
-  tags: string[];
+  tags: string[]; // tag ids; the UI translates them
   datasetLabel?: string;
   datasetUrl?: string;
   organisationLabel?: string;
