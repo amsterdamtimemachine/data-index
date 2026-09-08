@@ -2,6 +2,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { apiUrl } from '$utils/api';
+	import { filterParams } from '$utils/filters';
 	import { tick, untrack } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { createMapSelection } from '$state/map-selection.svelte';
@@ -51,27 +52,21 @@
 	// keeps the term, every fetch drops it. Remembering the paused term means a
 	// new or cleared term un-pauses by itself, while other filter changes keep it.
 	let pausedTerm = $state<string | null>(null);
-	const searchPaused = $derived(pausedTerm !== null && pausedTerm === data.currentSearchQuery);
-	const filterQuery = $derived.by(() => {
+	const filters = $derived(data.filters);
+	const searchPaused = $derived(pausedTerm !== null && pausedTerm === filters.searchQuery);
+	// what the fetches, the panel and the collapsed line see: the URL's filters minus a paused term
+	const activeFilters = $derived.by(() => {
 		if (!searchPaused) {
-			return data.filterQuery;
+			return filters;
 		}
-		const params = new URLSearchParams(data.filterQuery);
-		params.delete('q');
-		return params.toString();
-	});
-	const activeSearchQuery = $derived.by(() => {
-		if (searchPaused) {
-			return undefined;
-		}
-		return data.currentSearchQuery ?? undefined;
+		return { ...filters, searchQuery: null };
 	});
 
 	function handleToggleSearch() {
 		if (searchPaused) {
 			pausedTerm = null;
 		} else {
-			pausedTerm = data.currentSearchQuery ?? null;
+			pausedTerm = filters.searchQuery;
 		}
 	}
 
@@ -119,18 +114,7 @@
 	});
 
 	let recordTypes = $derived(data?.metadata?.recordTypes || []);
-	let currentRecordTypes = $derived(data?.currentRecordTypes || []);
-	let placeTypes = $derived(data?.metadata?.placeTypes || []);
-	let currentPlaceTypes = $derived(data?.currentPlaceTypes || []);
-	let currentDatasets = $derived(data?.currentDatasets || []);
-	let currentTags = $derived(data?.currentTags || []);
-	let currentTagOperator = $derived(data?.currentTagOperator || 'OR');
 	let validatedPeriod = $derived(data?.validatedPeriod);
-
-	// dataset id → label, for the status panel (FilterPanel derives its own copy)
-	let datasetLookup = $derived(new Map(data?.metadata?.datasets?.map((s: { id: string; label: string }) => [s.id, s.label]) || []));
-	let datasetLabels = $derived(data?.metadata?.datasets?.map((s: { label: string }) => s.label) || []);
-	let currentDatasetLabels = $derived(currentDatasets.map((id: string) => datasetLookup.get(id) || id));
 
 	const mapSelection = createMapSelection();
 	let currentPeriod = $derived(mapSelection.currentPeriod);
@@ -204,7 +188,10 @@
 			const hasUrlParams = window.location.search.length > 0;
 			if (!hasUrlParams && heatmapTimeline && recordTypes.length > 0) {
 				const lastPeriod = getLastAvailablePeriod(heatmapTimeline);
-				const defaultRecordTypes = currentRecordTypes.length > 0 ? currentRecordTypes : recordTypes;
+				let defaultRecordTypes = recordTypes;
+				if (filters.recordTypes.length > 0) {
+					defaultRecordTypes = filters.recordTypes;
+				}
 
 				if (lastPeriod && defaultRecordTypes.length > 0) {
 					mapSelection.syncUrlParameters(lastPeriod, defaultRecordTypes);
@@ -226,9 +213,9 @@
 	// Fetch heatmap + histogram on the client, re-fetching when the filters change.
 	// One URL definition feeds both the <head> preloads and the fetches, so the
 	// browser's preload always matches (a differing URL would fetch twice).
-	const filterParams = $derived(new URLSearchParams(filterQuery));
-	const heatmapUrl = $derived(apiUrl('/api/heatmaps', filterParams));
-	const histogramUrl = $derived(apiUrl('/api/histogram', filterParams));
+	const activeParams = $derived(filterParams(activeFilters, data.metadata));
+	const heatmapUrl = $derived(apiUrl('/api/heatmaps', activeParams));
+	const histogramUrl = $derived(apiUrl('/api/histogram', activeParams));
 
 	$effect(() => {
 		loadingState.startLoading();
@@ -243,7 +230,7 @@
 				clientErrors = [
 					...clientErrors,
 					createError('warning', 'Heatmap Load Error', 'Could not load heatmap. Spatial visualization may be limited.', {
-						recordTypes: currentRecordTypes
+						recordTypes: filters.recordTypes
 					})
 				];
 			},
@@ -261,7 +248,7 @@
 				clientErrors = [
 					...clientErrors,
 					createError('warning', 'Histogram Load Error', 'Could not load histogram. Temporal data may be limited.', {
-						recordTypes: currentRecordTypes
+						recordTypes: filters.recordTypes
 					})
 				];
 			}
@@ -271,14 +258,14 @@
 	// Nulled up front: a cell switch must never show the previous cell's bars.
 	$effect(() => {
 		const cellBounds = selectedCellBounds;
-		const filterQs = filterQuery;
+		const base = activeParams.toString();
 
 		cellHistogram = null;
 		if (!cellBounds) {
 			return;
 		}
 
-		const params = new URLSearchParams(filterQs);
+		const params = new URLSearchParams(base);
 		params.set('minLon', String(cellBounds.minLon));
 		params.set('maxLon', String(cellBounds.maxLon));
 		params.set('minLat', String(cellBounds.minLat));
@@ -299,13 +286,13 @@
 	$effect(() => {
 		const open = placePanelOpen;
 		const place = data.selectedPlace;
-		const filterQs = filterQuery;
+		const base = activeParams.toString();
 
 		placeHistogram = null;
 		if (!open || !place) {
 			return;
 		}
-		const params = new URLSearchParams(filterQs);
+		const params = new URLSearchParams(base);
 		params.set('placeId', place.placeId);
 		return fetchJson<Histogram>(
 			apiUrl('/api/histogram', params),
@@ -473,38 +460,23 @@
 				</Nav>
 			{/snippet}
 			<FilterPanel
-				{recordTypes}
-				{currentRecordTypes}
-				{placeTypes}
-				{currentPlaceTypes}
-				datasets={data?.metadata?.datasets || []}
-				{currentDatasets}
-				availableTags={data?.metadata?.tags || []}
-				{currentTags}
-				currentTagOperator={currentTagOperator as 'AND' | 'OR'}
+				metadata={data.metadata}
+				{filters}
+				activeParams={activeParams.toString()}
 				selectedPlace={data.selectedPlace}
 				onTogglePlacePanel={handleTogglePlacePanel}
 				{placePanelOpen}
-				currentSearchQuery={data.currentSearchQuery}
 				{searchPaused}
 				onToggleSearch={handleToggleSearch}
-				{filterQuery}
 			/>
 		</NavContainer>
 
 	<!-- Show filters status when nav is collapsed -->
 	{#if !navExpanded}
 		<FiltersStatusPanel
-			selectedRecordTypes={currentRecordTypes}
-			allRecordTypes={recordTypes}
-			selectedPlaceTypes={currentPlaceTypes}
-			allPlaceTypes={placeTypes}
-			selectedDatasets={currentDatasetLabels}
-			allDatasets={datasetLabels}
-			selectedTags={currentTags}
-			tagOperator={currentTagOperator as 'AND' | 'OR'}
+			filters={activeFilters}
+			metadata={data.metadata}
 			selectedPlace={data.selectedPlace}
-			searchQuery={activeSearchQuery}
 			class="absolute top-3 left-3 max-w-[calc(100%-1.5rem)]"
 		/>
 	{/if}
@@ -523,12 +495,7 @@
 						timeline={heatmapTimeline ?? undefined}
 						dimensions={dimensions ?? undefined}
 						selectionPeriod={panelSelectionPeriod}
-						recordTypes={currentRecordTypes}
-						placeTypes={currentPlaceTypes}
-						datasets={currentDatasets}
-						tags={currentTags}
-						tagOperator={currentTagOperator as 'AND' | 'OR'}
-						searchQuery={activeSearchQuery}
+						filters={activeFilters}
 						{gridColumns}
 						{sortMode}
 						{sampleSeed}

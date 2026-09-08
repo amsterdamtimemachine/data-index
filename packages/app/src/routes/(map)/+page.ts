@@ -4,12 +4,12 @@
 // so the shell renders immediately — see +layout.ts and +page.svelte.
 
 import type { PageLoad } from './$types';
-import type { RecordType, PlaceType, PlaceSearchMatch } from '@atm/shared/types';
+import type { PlaceSearchMatch } from '@atm/shared/types';
 import type { AppError } from '$types/error';
 import { createPageErrorData, createError, createValidationError, createPeriodNotFoundError } from '$utils/error';
-import { translateAll } from '$utils/translations';
 import type { UiSortMode } from '$components/FeaturesSortSelect.svelte';
-import { parsePlaceSelection, parsePlacePanelFlag, parseSortSelection, parseSearchQuery, parseTagSelection } from '$utils/page-params';
+import { parsePlaceSelection, parsePlacePanelFlag, parseSortSelection } from '$utils/page-params';
+import { parseFilterState } from '$utils/filters';
 import { apiUrl } from '$utils/api';
 
 // Helper functions for period validation
@@ -26,115 +26,14 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 	const { metadata, metadataErrors } = await parent();
 	const errors: AppError[] = [...metadataErrors];
 
-	// Parse URL parameters
-	const recordTypesParam = url.searchParams.get('recordTypes');
-	const datasetsParam = url.searchParams.get('datasets');
-	const placeTypesParam = url.searchParams.get('placeTypes');
 	const cellParam = url.searchParams.get('cell');
 	const periodParam = url.searchParams.get('period');
 
-	// Text search and the tag selection ride inside filterQuery, so every fetch keyed
-	// on it (heatmap, histograms, tag counts) inherits them with no extra wiring.
-	const currentSearchQuery = parseSearchQuery(url);
-
-	// Tags are validated against metadata; an unknown id is dropped with a warning and
-	// never reaches a fetch.
-	const tagSelection = parseTagSelection(url);
-	const currentTagOperator = tagSelection.tagOperator;
-	let currentTags: string[] | undefined;
-	if (metadata?.tags && tagSelection.tags.length > 0) {
-		const existingTags = tagSelection.tags.filter((tag) => metadata.tags.includes(tag));
-		const nonExistentTags = tagSelection.tags.filter((tag) => !metadata.tags.includes(tag));
-
-		for (const invalidTag of nonExistentTags) {
-			errors.push(
-				createError('warning', 'Invalid Tag Removed', `"${invalidTag}" is not a valid tag and was removed from your selection.`, {
-					invalidTag,
-					availableTags: metadata.tags
-				})
-			);
-		}
-		if (existingTags.length > 0) {
-			currentTags = existingTags;
-		}
-	}
-
-	const filterParams = new URLSearchParams();
-	if (recordTypesParam) filterParams.set('recordTypes', recordTypesParam);
-	if (datasetsParam) filterParams.set('datasets', datasetsParam);
-	if (placeTypesParam) filterParams.set('placeTypes', placeTypesParam);
-	if (currentSearchQuery) filterParams.set('q', currentSearchQuery);
-	if (currentTags) {
-		filterParams.set('tags', currentTags.join(','));
-		filterParams.set('tagOperator', currentTagOperator);
-	}
-	const filterQuery = filterParams.toString();
-
-	// Determine recordTypes to use for UI state
-	let currentRecordTypes: RecordType[] = [];
-	if (metadata?.recordTypes) {
-		if (recordTypesParam) {
-			const requestedTypes = recordTypesParam.split(',').map((t) => t.trim()) as RecordType[];
-			const validTypes = requestedTypes.filter((type) => metadata.recordTypes.includes(type));
-			const invalidTypes = requestedTypes.filter((type) => !metadata.recordTypes.includes(type));
-
-			if (validTypes.length > 0) {
-				for (const invalidType of invalidTypes) {
-					errors.push(
-						createError(
-							'warning',
-							'Invalid Content Type Removed',
-							`"${invalidType}" is not a valid content type and was removed from your selection.`,
-							{ invalidType, availableTypes: translateAll(metadata.recordTypes) }
-						)
-					);
-				}
-				currentRecordTypes = validTypes;
-			} else {
-				// All requested types invalid: warn, and reflect all types in the UI. The
-				// component's fetch already ran with the raw param, so the map shows empty.
-				errors.push(
-					createValidationError(
-						'recordTypes',
-						recordTypesParam,
-						`No valid content types found. Showing all content types: ${translateAll(metadata.recordTypes).join(', ')}`
-					)
-				);
-				currentRecordTypes = metadata.recordTypes;
-			}
-		} else {
-			currentRecordTypes = metadata.recordTypes;
-		}
-	}
-
-	// Determine sources to use
-	let currentDatasets: string[] = [];
-	if (metadata?.datasets) {
-		const availableDatasetIds = metadata.datasets.map((s) => s.id);
-		if (datasetsParam) {
-			const requestedDatasets = datasetsParam.split(',').map((s) => s.trim());
-			currentDatasets = requestedDatasets.filter((s) => availableDatasetIds.includes(s));
-			if (currentDatasets.length === 0) {
-				currentDatasets = availableDatasetIds;
-			}
-		} else {
-			currentDatasets = availableDatasetIds;
-		}
-	}
-
-	// Determine place types to use
-	let currentPlaceTypes: PlaceType[] = [];
-	if (metadata?.placeTypes) {
-		if (placeTypesParam) {
-			const requestedPlaceTypes = placeTypesParam.split(',').map((t) => t.trim()) as PlaceType[];
-			currentPlaceTypes = requestedPlaceTypes.filter((t) => metadata.placeTypes.includes(t));
-			if (currentPlaceTypes.length === 0) {
-				currentPlaceTypes = metadata.placeTypes;
-			}
-		} else {
-			currentPlaceTypes = metadata.placeTypes;
-		}
-	}
+	// One filter state, validated against metadata; unknown values warn and drop out.
+	// The page serialises it for every fetch, so nothing is parsed twice.
+	const parsed = parseFilterState(url, metadata);
+	const filters = parsed.filters;
+	errors.push(...parsed.errors);
 
 	// Validate the period param against metadata (format, chronology, availability). The
 	// default when it's absent or invalid needs the heatmap timeline, so it's computed in
@@ -211,16 +110,10 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 	const currentSampleSeed = sortSelection.sampleSeed;
 
 	return {
-		filterQuery,
+		filters,
 		cellParam,
-		currentRecordTypes,
-		currentPlaceTypes,
-		currentDatasets,
-		currentTags,
-		currentTagOperator,
 		currentSort,
 		currentSampleSeed,
-		currentSearchQuery,
 		selectedPlace,
 		placePanelOpen,
 		validatedPeriod,

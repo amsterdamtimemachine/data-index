@@ -1,71 +1,50 @@
 <script lang="ts">
 	import { mergeCss } from '$utils/utils';
 	import { translate, translateAll } from '$utils/translations';
-	import Tag from './Tag.svelte';
-	import type { RecordType, PlaceSearchMatch } from '@atm/shared/types';
+	import { selectsAll } from '$utils/filters';
 	import { formatPlaceName } from '$utils/format';
+	import Tag from './Tag.svelte';
+	import type { PlaceSearchMatch, VisualizationMetadata } from '@atm/shared/types';
+	import type { FilterState } from '$types/filters';
 
 	interface Props {
-		selectedRecordTypes: RecordType[];
-		allRecordTypes: RecordType[];
-		selectedPlaceTypes?: string[];
-		allPlaceTypes?: string[];
-		selectedDatasets: string[];
-		allDatasets: string[];
-		selectedTags: string[];
-		tagOperator?: 'AND' | 'OR';
+		// the applied filters (a paused search term already left out)
+		filters: FilterState;
+		metadata: VisualizationMetadata | null;
 		selectedPlace?: PlaceSearchMatch | null;
-		// the applied search term (undefined while paused)
-		searchQuery?: string | null;
 		class?: string;
 	}
 
-	let {
-		selectedRecordTypes,
-		allRecordTypes,
-		selectedPlaceTypes = [],
-		allPlaceTypes = [],
-		selectedDatasets,
-		allDatasets,
-		selectedTags,
-		tagOperator = 'OR',
-		selectedPlace = null,
-		searchQuery = null,
-		class: className
-	}: Props = $props();
+	let { filters, metadata, selectedPlace = null, class: className }: Props = $props();
 
-	const hasAllTypes = $derived(
-		selectedRecordTypes.length === 0 ||
-			(selectedRecordTypes.length === allRecordTypes.length &&
-				allRecordTypes.every((type) => selectedRecordTypes.includes(type)))
-	);
+	const allRecordTypes = $derived(metadata?.recordTypes ?? []);
+	const allPlaceTypes = $derived(metadata?.placeTypes ?? []);
+	const allDatasets = $derived(metadata?.datasets ?? []);
 
-	const hasAllPlaceTypes = $derived(
-		selectedPlaceTypes.length === 0 ||
-			(selectedPlaceTypes.length === allPlaceTypes.length &&
-				allPlaceTypes.every((pt) => selectedPlaceTypes.includes(pt)))
-	);
-
-	const hasAllDatasets = $derived(
-		selectedDatasets.length === 0 ||
-			(selectedDatasets.length === allDatasets.length &&
-				allDatasets.every((ds) => selectedDatasets.includes(ds)))
-	);
-
-	const displayedRecordTypes = $derived(
-		translateAll(hasAllTypes ? allRecordTypes : selectedRecordTypes)
-	);
-
+	// a category that selects everything reads as everything, not as a list of picks
+	const displayedRecordTypes = $derived.by(() => {
+		if (selectsAll(filters.recordTypes, allRecordTypes)) {
+			return translateAll(allRecordTypes);
+		}
+		return translateAll(filters.recordTypes);
+	});
 	const displayedPlaceTypes = $derived.by(() => {
-		if (hasAllPlaceTypes) {
+		if (selectsAll(filters.placeTypes, allPlaceTypes)) {
 			return translateAll(allPlaceTypes);
 		}
-		return translateAll(selectedPlaceTypes);
+		return translateAll(filters.placeTypes);
 	});
-
-	const displayedDatasets = $derived(
-		hasAllDatasets ? allDatasets : selectedDatasets
-	);
+	const displayedDatasets = $derived.by(() => {
+		const label = new Map(allDatasets.map((d) => [d.id, d.label]));
+		let ids = filters.datasets;
+		if (selectsAll(filters.datasets, allDatasets.map((d) => d.id))) {
+			ids = allDatasets.map((d) => d.id);
+		}
+		return ids.map((id) => label.get(id) || id);
+	});
+	const searchQuery = $derived(filters.searchQuery);
+	const selectedTags = $derived(filters.tags);
+	const tagOperator = $derived(filters.tagOperator);
 </script>
 
 <div

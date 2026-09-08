@@ -5,7 +5,8 @@
 -->
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { RecordType, PlaceType, PlaceSearchMatch } from '@atm/shared/types';
+	import type { PlaceSearchMatch, VisualizationMetadata } from '@atm/shared/types';
+	import type { FilterState } from '$types/filters';
 	import { translate, translateAll, reverseTranslateAll } from '$utils/translations';
 	import { createTagCounts } from '$lib/state/tag-counts.svelte';
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
@@ -23,53 +24,47 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 	import TagOperatorSwitch from './TagOperatorSwitch.svelte';
 
 	interface Props {
-		recordTypes?: RecordType[];
-		currentRecordTypes?: RecordType[];
-		placeTypes?: PlaceType[];
-		currentPlaceTypes?: PlaceType[];
-		datasets?: { id: string; label: string }[];
-		currentDatasets?: string[];
-		availableTags?: string[];
-		currentTags?: string[];
-		currentTagOperator?: 'AND' | 'OR';
+		metadata: VisualizationMetadata | null;
+		// the URL's filter state, what the controls show
+		filters: FilterState;
+		// the applied filters as request params (a paused search term left out), so the
+		// preview counts match what the map shows
+		activeParams?: string;
 		selectedPlace?: PlaceSearchMatch | null;
 		onTogglePlacePanel?: () => void;
 		placePanelOpen?: boolean;
-		currentSearchQuery?: string | null;
 		searchPaused?: boolean;
 		onToggleSearch?: () => void;
-		// current filter params, forwarded so the search preview count matches them
-		filterQuery?: string;
 	}
 
 	let {
-		recordTypes = [],
-		currentRecordTypes = [],
-		placeTypes = [],
-		currentPlaceTypes = [],
-		datasets = [],
-		currentDatasets = [],
-		availableTags = [],
-		currentTags = [],
-		currentTagOperator = 'OR',
+		metadata,
+		filters,
+		activeParams = '',
 		selectedPlace = null,
 		onTogglePlacePanel = undefined,
 		placePanelOpen = false,
-		currentSearchQuery = null,
 		searchPaused = false,
-		onToggleSearch = undefined,
-		filterQuery = ''
+		onToggleSearch = undefined
 	}: Props = $props();
+
+	const recordTypes = $derived(metadata?.recordTypes ?? []);
+	const placeTypes = $derived(metadata?.placeTypes ?? []);
+	const datasets = $derived(metadata?.datasets ?? []);
+	const availableTags = $derived(metadata?.tags ?? []);
+	const currentTags = $derived(filters.tags);
+	const currentTagOperator = $derived(filters.tagOperator);
+	const currentSearchQuery = $derived(filters.searchQuery);
 
 	// Dutch labels for display; the handlers translate the selection back before writing it.
 	let translatedRecordTypes = $derived(translateAll(recordTypes));
-	let translatedCurrentRecordTypes = $derived(translateAll(currentRecordTypes));
+	let translatedCurrentRecordTypes = $derived(translateAll(filters.recordTypes));
 	let translatedPlaceTypes = $derived(translateAll(placeTypes));
-	let translatedCurrentPlaceTypes = $derived(translateAll(currentPlaceTypes));
+	let translatedCurrentPlaceTypes = $derived(translateAll(filters.placeTypes));
 
 	let datasetLabels = $derived(datasets.map((s) => s.label));
 	let datasetLookup = $derived(new Map(datasets.map((s) => [s.id, s.label])));
-	let currentDatasetLabels = $derived(currentDatasets.map((id) => datasetLookup.get(id) || id));
+	let currentDatasetLabels = $derived(filters.datasets.map((id) => datasetLookup.get(id) || id));
 
 	// Tags render by Dutch label like the other filters; the handler translates back.
 	let translatedTags = $derived(translateAll(availableTags));
@@ -79,7 +74,7 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 	// toggling a tag never refetches counts that cannot change.
 	const tagCounts = createTagCounts();
 	const tagCountsQuery = $derived.by(() => {
-		const params = new URLSearchParams(filterQuery);
+		const params = new URLSearchParams(activeParams);
 		params.delete('tags');
 		params.delete('tagOperator');
 		return params.toString();
@@ -231,7 +226,7 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 					placement="bottom"
 				/>
 			</div>
-			<FeatureSearchInput onApply={handleSearchApply} {filterQuery} />
+			<FeatureSearchInput onApply={handleSearchApply} filterQuery={activeParams} />
 			{#if currentSearchQuery}
 				<div class="mt-2">
 					<SearchFilterTag query={currentSearchQuery} onClear={handleSearchClear} onToggle={onToggleSearch} active={!searchPaused} />
