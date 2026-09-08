@@ -3,6 +3,7 @@ import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { Tokenizer, TokenParser } from '@streamparser/json';
 import { pipeline } from 'node:stream';
+import { createInterface } from 'node:readline';
 
 export class FileReader<SourceRecord> {
     createJSONStream(filePath: string) {
@@ -31,6 +32,16 @@ export class FileReader<SourceRecord> {
         })();
     }
 
+    createJSONLinesStream(filePath: string) {
+        return (async function* () {
+            const lines = createInterface({ input: createReadStream(filePath), crlfDelay: Infinity });
+            for await (const line of lines) {
+                if (line.trim() === '') continue;
+                yield JSON.parse(line) as SourceRecord;
+            }
+        })();
+    }
+
     createCSVFileStream(filePath: string) {
         const fileStream = createReadStream(filePath);
         const parser = parse({ columns: true, relax_column_count: true, relax_quotes: true, bom: true });
@@ -52,6 +63,9 @@ export class FileReader<SourceRecord> {
                 break;
             case '.json':
                 fs = this.createJSONStream(filePath)
+                break;
+            case '.jsonl':
+                fs = this.createJSONLinesStream(filePath)
                 break;
             default:
                 return undefined

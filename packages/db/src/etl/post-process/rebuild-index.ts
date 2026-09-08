@@ -3,6 +3,7 @@ import { PRECOMP_GRID_CELL_METERS, PRECOMP_TIME_BIN_YEARS } from '@atm/shared';
 import { db } from '../../client';
 import { placeGeometry, features, featureToPlace, placeCells, gridConfig } from '../../schema';
 import { buildCellFeatures } from './build-cell-features';
+import { buildTagFeatures } from './build-tag-features';
 import { yearBin, cellIndex, cellEnvelope } from '../sql';
 import { datedFeatures } from '../../queries/time-filter';
 
@@ -283,6 +284,7 @@ export async function rebuildIndex() {
 
   // Depends on place_cells, so it has to come after the rasterisation above.
   await buildCellFeatures();
+  await buildTagFeatures();
 
   console.log(`\n=== Summary ===`);
   console.log(`  Features:         ${total}`);

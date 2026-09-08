@@ -200,7 +200,8 @@ erDiagram
 - **tags**: Thematic categories (e.g. Nature, Transport, Living) assigned to features. Work in progress, generated via AI classification across datasets
 - **features**: Images, texts, persons, or other content items linked to places and displayed in the UI
 - **place_cells**: Pre-computed spatial grid that powers the heatmap. Each place is mapped to the 100m cells its geometry covers (one cell for a point, many for a street or neighbourhood). Features inherit cell coverage through their place link, cell assignments are stored once per place rather than duplicated per feature.
-- **cell_features**: Which features occupy each cell, base time bin and category — the cell-major counterpart of `place_cells`, written by `rebuild-index`. It materialises the `features → feature_to_place → place → place_cells` hop plus the time bin, so the heatmap and histogram read one table instead of re-running that join per request. Each bucket holds its feature set as a **roaring bitmap** rather than a count: merging buckets is then a set union, which de-duplicates a feature spanning several cells or place types, so base cells can be rolled up into *any* display grid and still yield an exact distinct count. The bitmap stores a dense integer surrogate assigned during the rebuild (roaringbitmap holds int4; `features.id` is a 128-bit uuid) — only cardinality is ever read back, never identity, so the mapping is discarded.
+- **cell_features**: Which features occupy each cell, base time bin and category — the cell-major counterpart of `place_cells`, written by `rebuild-index`. It materialises the `features → feature_to_place → place → place_cells` hop plus the time bin, so the heatmap and histogram read one table instead of re-running that join per request. Each bucket holds its feature set as a **roaring bitmap** rather than a count: merging buckets is then a set union, which de-duplicates a feature spanning several cells or place types, so base cells can be rolled up into *any* display grid and still yield an exact distinct count. The bitmap stores `features.feature_int_id`, a dense integer surrogate (roaringbitmap holds int4; `features.id` is a 128-bit uuid), so an external id set built on the same column — text-search matches, a tag's `tag_features` bitmap — can be intersected with the buckets.
+- **feature_tags** / **tag_features**: Classifier tags per feature. `feature_tags` holds one row per feature, tag and `source` (the tagger run that produced it, e.g. `siglip2-baseline-v1`), so re-ingesting a tagger replaces only its own rows. `tag_features` is the query-side rollup, one roaring bitmap of `feature_int_id` per tag unioned over every tagger, rebuilt by `rebuild-index` like `cell_features`, so tags follow the same rule as every other ingest. A tag filter is then a single bitmap intersection against each `cell_features` bucket, the same path a text search takes.
 - **grid_config**: Single row (`id = 'current'`) of grid metadata written by `rebuild-index`: the RD/28992 grid origin (`min_x`, `min_y`), the base-cell index extent, the WGS84 bounds of the cell grid, and the max spatial/temporal frequencies used to normalise relevance. Read once per heatmap/feature request.
 
 ## Indexing
@@ -470,6 +471,9 @@ bun run db:ingest -s pdok-places -f <data-dir>/bag-addresses.ndjson
 bun run db:ingest -s <dataset-name> -f <path-to-file>
 
 # Rebuild index
+# Tags (optional): classifier output for an ingested dataset
+bun run db:ingest -s tags -f <path-to-tags.jsonl> --tagger <tagger-id> --dataset <dataset-name>
+
 bun run db:rebuild-index
 
 # Run the frontend
@@ -565,6 +569,7 @@ etl -s pdok-places -f /data/bag-addresses.ndjson
 etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
+etl -s tags -f /data/siglip2-baseline-v1.jsonl --tagger siglip2-baseline-v1 --dataset beeldbank   # optional: classifier tags
 
 # required, or the map stays empty; raise DB_STATEMENT_TIMEOUT_MS in .env if it times out
 $DC run --rm app bun run db:rebuild-index
@@ -618,6 +623,7 @@ etl -s pdok-places -f /data/bag-addresses.ndjson
 etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
+etl -s tags -f /data/siglip2-baseline-v1.jsonl --tagger siglip2-baseline-v1 --dataset beeldbank   # optional: classifier tags
 $DC run --rm app bun run db:rebuild-index
 
 $DC up -d app

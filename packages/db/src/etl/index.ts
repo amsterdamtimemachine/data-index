@@ -25,6 +25,8 @@ program
   .requiredOption('-s, --source <name>', 'Source name to ingest')
   .requiredOption('-f, --file <path>', 'Input file path')
   .option('-x, --adamlink-streets <path>', 'Adamlink straten TTL (required by the nwb-streets source, to dedup against)')
+  .option('-t, --tagger <id>', 'Id of the classifier run, stamped on its rows (required by the tags source)')
+  .option('-d, --dataset <id>', 'Dataset whose natural keys the file carries (required by the tags source)')
   .action(async (opts) => {
     try {
       // Dynamically import the source module
@@ -60,7 +62,11 @@ program
       console.log(`Ingesting from source: ${opts.source}`);
       console.log(`File: ${opts.file}\n`);
 
-      await sourceModule.ingest(opts.file, { adamlinkStreets: opts.adamlinkStreets });
+      await sourceModule.ingest(opts.file, {
+        adamlinkStreets: opts.adamlinkStreets,
+        tagger: opts.tagger,
+        dataset: opts.dataset,
+      });
 
       console.log('\nRun `db:rebuild-index` once all sources are ingested.');
       process.exit(0);
