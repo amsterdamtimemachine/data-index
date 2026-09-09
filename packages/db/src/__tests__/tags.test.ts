@@ -178,6 +178,28 @@ describe('tag filtering', () => {
     expect(none.data).toEqual([]);
   });
 
+  test('the sample sort favours features carrying more of the selected tags, without fixing the order', async () => {
+    // image lane: F1 carries both selected tags (weight 4), F2 one (weight 2), so F1
+    // leads two runs in three. Fixed seeds keep the count deterministic.
+    const area = { kind: 'bounds' as const, bounds: await fullBounds() };
+    const seeds = Array.from({ length: 150 }, (_, i) => `seed-${i}`);
+    let f1First = 0;
+    for (const seed of seeds) {
+      const res = await getFeatures({ area, recordTypes: ['image'], tags: ['nature', 'water'], tagOperator: 'OR', sort: 'sample', seed });
+      expect(res.data.map(f => f.id).sort()).toEqual([F1, F2].sort());
+      if (res.data[0].id === F1) {
+        f1First++;
+      }
+    }
+    // expectation 100 of 150; an unweighted shuffle would sit near 75
+    expect(f1First).toBeGreaterThan(87);
+    expect(f1First).toBeLessThan(113);
+
+    const again = await getFeatures({ area, recordTypes: ['image'], tags: ['nature', 'water'], tagOperator: 'OR', sort: 'sample', seed: 'seed-3' });
+    const before = await getFeatures({ area, recordTypes: ['image'], tags: ['nature', 'water'], tagOperator: 'OR', sort: 'sample', seed: 'seed-3' });
+    expect(again.data.map(f => f.id)).toEqual(before.data.map(f => f.id));
+  });
+
   test('cross-validation: bitmap-intersected count equals a live DISTINCT count', async () => {
     const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { tags: ['water', 'transport'], tagOperator: 'AND' });
     const live = await db.execute<{ n: string }>(sql`

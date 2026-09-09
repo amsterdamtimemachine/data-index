@@ -15,7 +15,7 @@ import { computeTimeSlices } from './time-slices';
 import { getRecordTypes } from './record-types';
 import { getGridConfig } from './grid-config';
 import { featureYearOverlap } from './time-filter';
-import { tagMatch } from './tag-filter';
+import { tagMatch, tagMatchCount } from './tag-filter';
 import { UnknownTimeSliceError } from './errors';
 import { cellRangeCondition, placeCellsCondition } from './cell-features';
 import { searchMatch, searchRank } from './feature-search';
@@ -175,6 +175,18 @@ function singleRotationCte(laneKey: SQL): SQL {
 
 const INTERLEAVED_ORDER = sql`type_rank, record_type, id`;
 
+/**
+ * The sample lane key: a seeded shuffle, weighted by the tag selection. Each feature
+ * draws u in (0, 1] from its id and the seed, and is ordered by -ln(u) / w with
+ * w = 2^tag_matches (weighted sampling without replacement): a feature carrying one
+ * more of the selected tags is twice as likely to precede another, never certain to.
+ * With no tags selected every w is 1 and this is a plain uniform shuffle.
+ */
+function sampleKey(seed: string): SQL {
+  const u = sql`((('x' || substr(md5(id::text || ${seed}), 1, 7))::bit(28)::int + 1) / 268435456.0)`;
+  return sql`-ln(${u}) / power(2, tag_matches)`;
+}
+
 function sortPlan(
   sort: FeaturesSortField,
   sortDirection: SortDirection,
@@ -182,7 +194,7 @@ function sortPlan(
 ): { rankedCte: SQL; orderBy: SQL } {
   if (sort === 'sample') {
     return {
-      rankedCte: doubleRotationCte(sql`md5(id::text || ${seed})`),
+      rankedCte: doubleRotationCte(sampleKey(seed)),
       orderBy: INTERLEAVED_ORDER
     };
   }
@@ -291,8 +303,11 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     : sql`TRUE`;
 
   let tagCondition: SQL = sql`TRUE`;
+  // selected tags the feature carries; weights the sample sort
+  let tagMatchesExpr: SQL = sql`0`;
   if (tagFilters && tagFilters.length > 0) {
     tagCondition = tagMatch(sql`f.id`, tagFilters, tagOperator);
+    tagMatchesExpr = tagMatchCount(sql`f.id`, tagFilters);
   }
 
   let searchCondition: SQL = sql`TRUE`;
@@ -351,6 +366,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         (COALESCE(pg.spatial_frequency::float, 0) / ${maxSpatial}
          + COALESCE(f.temporal_frequency::float, 0) / ${maxTemporal}) as relevance_score,
         ${matchScoreExpr} as match_score,
+        ${tagMatchesExpr} as tag_matches,
         p.type as place_type,
         p.id as place_id,
         fp.relation_id

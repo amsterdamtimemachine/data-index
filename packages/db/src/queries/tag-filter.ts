@@ -23,14 +23,22 @@ export function tagBitmap(tagIds: string[], operator: TagOperator): SQL {
 }
 
 /**
- * Row predicate for the feature list: does the feature (its id column passed as
- * SQL, e.g. sql`f.id`) carry the tags? Index-backed per row, the right tool for a
- * paginated query; the bitmap above serves the aggregates.
+ * How many of the selected tags the feature (its id column passed as SQL, e.g.
+ * sql`f.id`) carries. Index-backed per row: the AND predicate and the sample sort's
+ * weighting both read it.
+ */
+export function tagMatchCount(featureIdCol: SQL, tagIds: string[]): SQL {
+  return sql`(SELECT COUNT(DISTINCT ft.tag_id) FROM ${featureTags} ft
+    WHERE ft.feature_id = ${featureIdCol} AND ft.tag_id IN ${tagIds})`;
+}
+
+/**
+ * Row predicate for the feature list: does the feature carry the tags? Per row,
+ * the right tool for a paginated query; the bitmap above serves the aggregates.
  */
 export function tagMatch(featureIdCol: SQL, tagIds: string[], operator: TagOperator): SQL {
   if (operator === 'AND') {
-    return sql`(SELECT COUNT(DISTINCT ft.tag_id) FROM ${featureTags} ft
-      WHERE ft.feature_id = ${featureIdCol} AND ft.tag_id IN ${tagIds}) = ${tagIds.length}`;
+    return sql`${tagMatchCount(featureIdCol, tagIds)} = ${tagIds.length}`;
   }
   return sql`EXISTS (SELECT 1 FROM ${featureTags} ft
     WHERE ft.feature_id = ${featureIdCol} AND ft.tag_id IN ${tagIds})`;
