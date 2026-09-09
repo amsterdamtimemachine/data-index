@@ -70,8 +70,8 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 	let translatedTags = $derived(translateAll(availableTags));
 	let translatedCurrentTags = $derived(translateAll(currentTags));
 
-	// Per-tag counts under the other filters. The selection itself is stripped so
-	// toggling a tag never refetches counts that cannot change.
+	// Per-tag counts under the other filters, used only to grey out empty tags. The
+	// selection itself is stripped so toggling a tag never refetches counts that cannot change.
 	const tagCounts = createTagCounts();
 	const tagCountsQuery = $derived.by(() => {
 		const params = new URLSearchParams(activeParams);
@@ -104,6 +104,13 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		}
 		return translatedTags.filter((label) => tagCountByLabel.get(label) === 0 && !translatedCurrentTags.includes(label));
 	});
+
+	// bestMatch ranks against the term and the tags; with neither left it means nothing
+	function dropIdleBestMatch(p: URLSearchParams) {
+		if (p.get('sort') === 'bestMatch' && !p.get('q') && !p.get('tags')) {
+			p.delete('sort');
+		}
+	}
 
 	function navigate(mutate: (params: URLSearchParams) => void) {
 		const url = new URL(window.location.href);
@@ -145,12 +152,14 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		navigate((p) => {
 			if (ids.length > 0) p.set('tags', ids.join(','));
 			else p.delete('tags');
+			dropIdleBestMatch(p);
 		});
 	}
 
 	function handleTagsClear() {
 		navigate((p) => {
 			p.delete('tags');
+			dropIdleBestMatch(p);
 		});
 	}
 
@@ -181,10 +190,7 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 	function handleSearchClear() {
 		navigate((p) => {
 			p.delete('q');
-			// bestMatch order is meaningless without a query
-			if (p.get('sort') === 'bestMatch') {
-				p.delete('sort');
-			}
+			dropIdleBestMatch(p);
 		});
 	}
 
@@ -267,7 +273,7 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 				<Heading level={3} class="pr-2">{translate('topics')}</Heading>
 				<Tooltip
 					icon={QuestionMark}
-					text="Onderwerpen zijn automatisch toegekend door beeldclassificatie, zonder handmatige correctie, en voorlopig alleen aan afbeeldingen. Het getal is het aantal resultaten binnen de andere filters. Minimaal één: resultaten met minstens één gekozen onderwerp. Alle: alleen resultaten met alle gekozen onderwerpen."
+					text="Onderwerpen zijn automatisch toegekend door beeldclassificatie, zonder handmatige correctie, en voorlopig alleen aan afbeeldingen. Een grijs onderwerp heeft geen resultaten binnen de andere filters. Minimaal één: resultaten met minstens één gekozen onderwerp. Alle: alleen resultaten met alle gekozen onderwerpen."
 					placement="bottom"
 				/>
 			</div>
@@ -289,15 +295,10 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 				requireOneItemSelected={false}
 			>
 				{#snippet children(item, isSelected, isDisabled)}
-					{@const count = tagCountByLabel.get(item)}
 					{#if isSelected}
-						<Tag variant="selected-outline" disabled={isDisabled} interactive={true}>
-							{item}{#if count !== undefined}&nbsp;({count}){/if}
-						</Tag>
+						<Tag variant="selected-outline" disabled={isDisabled} interactive={true}>{item}</Tag>
 					{:else}
-						<Tag variant="outline" disabled={isDisabled} interactive={true}>
-							{item}{#if count !== undefined}&nbsp;({count}){/if}
-						</Tag>
+						<Tag variant="outline" disabled={isDisabled} interactive={true}>{item}</Tag>
 					{/if}
 				{/snippet}
 			</ToggleGroup>

@@ -178,6 +178,17 @@ describe('tag filtering', () => {
     expect(none.data).toEqual([]);
   });
 
+  test('bestMatch ranks by selected tags carried, then by the search term', async () => {
+    const area = { kind: 'bounds' as const, bounds: await fullBounds() };
+    const byTags = await getFeatures({ area, tags: ['nature', 'water'], tagOperator: 'OR', sort: 'bestMatch' });
+    expect(byTags.total).toBe(4);
+    expect(byTags.data[0].id).toBe(F1); // both tags; the others carry one
+    const both = await getFeatures({ area, searchQuery: 'foto', tags: ['water', 'transport'], tagOperator: 'OR', sort: 'bestMatch' });
+    expect(both.data.map(f => f.id)).toEqual([F1, F2]); // one tag each, so ts_rank decides: identical here, then the earliest id
+    const asc = await getFeatures({ area, tags: ['nature', 'water'], tagOperator: 'OR', sort: 'bestMatch', sortDirection: 'asc' });
+    expect(asc.data[asc.data.length - 1].id).toBe(F1);
+  });
+
   test('a card lists the selected tags first, then the rest alphabetically', async () => {
     const area = { kind: 'bounds' as const, bounds: await fullBounds() };
     // F2 carries nature + transport: alphabetical puts nature first

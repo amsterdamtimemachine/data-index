@@ -222,11 +222,11 @@ function sortPlan(
     return { rankedCte: sql`ranked AS (SELECT * FROM filtered)`, orderBy };
   }
   if (sort === 'bestMatch') {
-    // flat search-result order on ts_rank; without a searchQuery every score is 0
-    // and this degrades to date order
-    let orderBy = sql`match_score DESC, start_date DESC NULLS LAST, id`;
+    // flat match-quality order: selected tags carried, then ts_rank against the
+    // search term; without either every key is 0 and this degrades to date order
+    let orderBy = sql`tag_matches DESC, match_score DESC, start_date DESC NULLS LAST, id`;
     if (sortDirection === 'asc') {
-      orderBy = sql`match_score ASC, start_date ASC NULLS LAST, id`;
+      orderBy = sql`tag_matches ASC, match_score ASC, start_date ASC NULLS LAST, id`;
     }
     return { rankedCte: sql`ranked AS (SELECT * FROM filtered)`, orderBy };
   }

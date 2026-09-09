@@ -279,7 +279,7 @@ The cell view sorts features in one of six modes. All modes are deterministic.
 - **Relevance** ("Relevantie" in the UI). The blended `relevance_score` above, with the record type rotation. Features most unique to the time and place come first.
 - **Oldest / newest**. Plain chronological order on `start_date`. No rotation. An explicit date sort returns true chronology, even when that puts several items of one type in a row.
 
-`/api/features` accepts `sort` (`sample` / `relevance` / `spatialFrequency` / `datePrecision` / `date` / `bestMatch`), `sortDirection`, and `seed`. `sort` defaults to `sample`. `seed` is optional: without one the sample order is fixed and reproducible, and every request without a seed gets the same order. With a tag selection, the sample shuffle is weighted: a feature carrying one more of the selected tags is twice as likely to come earlier, so richer matches drift up without fixing the order. `bestMatch` orders by match quality against the `q` text search and is only meaningful together with one.
+`/api/features` accepts `sort` (`sample` / `relevance` / `spatialFrequency` / `datePrecision` / `date` / `bestMatch`), `sortDirection`, and `seed`. `sort` defaults to `sample`. `seed` is optional: without one the sample order is fixed and reproducible, and every request without a seed gets the same order. With a tag selection, the sample shuffle is weighted: a feature carrying one more of the selected tags is twice as likely to come earlier, so richer matches drift up without fixing the order. `bestMatch` orders by match quality: the number of selected `tags` a feature carries first, then its rank against the `q` text search; it is only meaningful together with at least one of them.
 
 ### Place search
 

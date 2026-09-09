@@ -13,10 +13,10 @@
 		value: UiSortMode;
 		onChange: (mode: UiSortMode) => void;
 		onShuffle: () => void;
-		// a text search is active: offer bestMatch (rank by match quality)
-		searchActive?: boolean;
+		// a search term or a tag selection is active: offer bestMatch (rank by match quality)
+		matchActive?: boolean;
 	};
-	let { value, onChange, onShuffle, searchActive = false }: Props = $props();
+	let { value, onChange, onShuffle, matchActive = false }: Props = $props();
 
 	const OPTIONS: SelectOption<UiSortMode>[] = [
 		{ value: 'sample', label: translate('sortSample') },
@@ -28,9 +28,9 @@
 	];
 
 	// also offered while it IS the value (a URL can carry sort=bestMatch without a
-	// search), so the select never holds a value it can't display
+	// term or tags), so the select never holds a value it can't display
 	const options = $derived.by(() => {
-		if (searchActive || value === 'bestMatch') {
+		if (matchActive || value === 'bestMatch') {
 			return [{ value: 'bestMatch' as UiSortMode, label: translate('sortBestMatch') }, ...OPTIONS];
 		}
 		return OPTIONS;

@@ -23,7 +23,7 @@
 		sortMode: UiSortMode;
 		onSortChange?: (mode: UiSortMode) => void;
 		onShuffle?: () => void;
-		searchActive?: boolean;
+		matchActive?: boolean;
 		totalCount: number;
 		currentPage: number;
 		pageSize: number;
@@ -44,7 +44,7 @@
 		sortMode,
 		onSortChange,
 		onShuffle,
-		searchActive = false,
+		matchActive = false,
 		totalCount,
 		currentPage,
 		pageSize,
@@ -157,7 +157,7 @@
 		{/if}
 		{#if onSortChange && onShuffle}
 			<div class="header-sort">
-				<FeaturesSortSelect value={sortMode} onChange={onSortChange} {onShuffle} {searchActive} />
+				<FeaturesSortSelect value={sortMode} onChange={onSortChange} {onShuffle} {matchActive} />
 			</div>
 		{/if}
 	{/if}
