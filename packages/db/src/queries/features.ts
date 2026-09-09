@@ -305,9 +305,12 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   let tagCondition: SQL = sql`TRUE`;
   // selected tags the feature carries; weights the sample sort
   let tagMatchesExpr: SQL = sql`0`;
+  // a card's tags list the selected ones first, so the collapsed card never hides them
+  let tagOrderExpr: SQL = sql`ft.tag_id`;
   if (tagFilters && tagFilters.length > 0) {
     tagCondition = tagMatch(sql`f.id`, tagFilters, tagOperator);
     tagMatchesExpr = tagMatchCount(sql`f.id`, tagFilters);
+    tagOrderExpr = sql`(ft.tag_id IN ${tagFilters}) DESC, ft.tag_id`;
   }
 
   let searchCondition: SQL = sql`TRUE`;
@@ -421,10 +424,11 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       go.label as geometry_provider_label,
       pg.url as geometry_url,
       ARRAY(
-        SELECT DISTINCT ft.tag_id
+        SELECT ft.tag_id
         FROM feature_tags ft
         WHERE ft.feature_id = page.id
-        ORDER BY ft.tag_id
+        GROUP BY ft.tag_id
+        ORDER BY ${tagOrderExpr}
       ) as tags
     FROM page
     JOIN features f ON f.id = page.id

@@ -178,6 +178,17 @@ describe('tag filtering', () => {
     expect(none.data).toEqual([]);
   });
 
+  test('a card lists the selected tags first, then the rest alphabetically', async () => {
+    const area = { kind: 'bounds' as const, bounds: await fullBounds() };
+    // F2 carries nature + transport: alphabetical puts nature first
+    const unselected = await getFeatures({ area, recordTypes: ['image'], sort: 'date' });
+    expect(unselected.data.find(f => f.id === F2)?.tags).toEqual(['nature', 'transport']);
+    // selecting transport moves it to the front
+    const selected = await getFeatures({ area, tags: ['transport', 'water'], tagOperator: 'OR', sort: 'date' });
+    expect(selected.data.find(f => f.id === F2)?.tags).toEqual(['transport', 'nature']);
+    expect(selected.data.find(f => f.id === F1)?.tags).toEqual(['water', 'nature']);
+  });
+
   test('the sample sort favours features carrying more of the selected tags, without fixing the order', async () => {
     // image lane: F1 carries both selected tags (weight 4), F2 one (weight 2), so F1
     // leads two runs in three. Fixed seeds keep the count deterministic.

@@ -66,7 +66,7 @@
 		<TagList
 			tags={translateAll(feature.tags || [])}
 			{expanded}
-			maxVisible={expanded ? undefined : 2}
+			maxVisible={expanded ? undefined : 3}
 			class={expanded ? 'py-2 px-2' : 'pt-2'}
 		/>
 	</div>

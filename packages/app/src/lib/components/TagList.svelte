@@ -9,7 +9,7 @@
 		expanded?: boolean;
 	}
 
-	let { tags, class: className, maxVisible = 2, expanded = false }: Props = $props();
+	let { tags, class: className, maxVisible = 3, expanded = false }: Props = $props();
 
 	const visibleTags = $derived(expanded ? tags : tags.slice(0, maxVisible));
 	const hiddenCount = $derived(tags.length - maxVisible);
