@@ -2,11 +2,11 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { apiUrl } from '$utils/api';
-	import { translate } from '$utils/translations';
 	import { formatPlaceTitle } from '$utils/format';
 	import { tick, untrack } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { createMapSelection } from '$state/map-selection.svelte';
+	import { createTimelineView } from '$state/timeline-view.svelte';
 	import { createPageErrorData, createError, createValidationError } from '$utils/error';
 	import { validateCellId } from '$utils/utils';
 	import { loadingState } from '$lib/state/loadingState.svelte';
@@ -44,11 +44,6 @@
 	let dimensions = $state<HeatmapDimensions | null>(null);
 	let histogram = $state<Histogram | null>(null);
 	// Selected cell's histogram, mobile only — see the gated effect below.
-	let cellHistogram = $state<Histogram | null>(null);
-	// true from a cell's histogram request until it settles; the timeline keeps an
-	// empty local band meanwhile instead of flashing the city-wide series
-	let cellHistogramLoading = $state(false);
-	let cellHistogramRequest = 0;
 	let clientErrors = $state<AppError[]>([]);
 
 	const isMobile = createMediaQuery(MOBILE_QUERY);
@@ -246,133 +241,67 @@
 		);
 	});
 
-	// Nulled up front: a cell switch must never show the previous cell's bars.
+	// The timeline's view: city-wide, or the panel subject's series. The view owns the
+	// subject series and the switch; the effects below only fetch and hand results in.
+	const timelineView = createTimelineView(() => {
+		let placeTitle: string | null = null;
+		if (data.selectedPlace) {
+			placeTitle = formatPlaceTitle(data.selectedPlace);
+		}
+		return { isMobile: isMobile.matches, cellModalOpen: showCellModal, placePanelOpen, placeTitle };
+	});
+
+	// The selected cell's series: a request per cell, cleared up front so a cell switch
+	// never shows the previous cell's bars.
 	$effect(() => {
 		const cellBounds = selectedCellBounds;
 		const filterQs = data.filterQuery;
-
-		cellHistogram = null;
 		if (!cellBounds) {
-			cellHistogramLoading = false;
+			timelineView.clearCell();
 			return;
 		}
-
 		const params = new URLSearchParams(filterQs);
 		params.set('minLon', String(cellBounds.minLon));
 		params.set('maxLon', String(cellBounds.maxLon));
 		params.set('minLat', String(cellBounds.minLat));
 		params.set('maxLat', String(cellBounds.maxLat));
-		const request = ++cellHistogramRequest;
-		cellHistogramLoading = true;
+		const request = timelineView.cellRequest();
 		return fetchJson<Histogram>(
 			apiUrl('/api/histogram', params),
-			(res) => {
-				cellHistogram = res;
-			},
+			request.loaded,
 			() => {
 				// silent by design: the timeline degrades to the city-wide histogram
 			},
 			() => {
-				// an aborted request settles after its successor started; only the latest clears
-				if (request === cellHistogramRequest) {
-					cellHistogramLoading = false;
-				}
+				request.settled();
+				timelineView.settled();
 			}
 		);
 	});
 
 	// The open place panel's series: features in the place's cells per bin.
-	let placeHistogram = $state<Histogram | null>(null);
-	let placeHistogramLoading = $state(false);
-	let placeHistogramRequest = 0;
 	$effect(() => {
 		const open = placePanelOpen;
 		const place = data.selectedPlace;
 		const filterQs = data.filterQuery;
-
-		placeHistogram = null;
 		if (!open || !place) {
-			placeHistogramLoading = false;
+			timelineView.clearPlace();
 			return;
 		}
 		const params = new URLSearchParams(filterQs);
 		params.set('placeId', place.placeId);
-		const request = ++placeHistogramRequest;
-		placeHistogramLoading = true;
+		const request = timelineView.placeRequest();
 		return fetchJson<Histogram>(
 			apiUrl('/api/histogram', params),
-			(res) => {
-				placeHistogram = res;
-			},
+			request.loaded,
 			() => {
 				// silent by design: the timeline degrades to the city-wide histogram
 			},
 			() => {
-				if (request === placeHistogramRequest) {
-					placeHistogramLoading = false;
-				}
+				request.settled();
+				timelineView.settled();
 			}
 		);
-	});
-
-	// Whether the timeline shows the panel subject's series instead of the city-wide
-	// one. On mobile the open cell modal or place panel decides; on desktop only the
-	// timeline's switch does, so selecting a cell or a place never flips it by itself.
-	let showLocalTimeline = $state(false);
-	function handleToggleLocalTimeline() {
-		showLocalTimeline = !showLocalTimeline;
-	}
-	const timelineShowsLocal = $derived.by(() => {
-		if (isMobile.matches) {
-			return showCellModal || placePanelOpen;
-		}
-		return showLocalTimeline;
-	});
-	// the switch is a desktop control; without a handler the timeline renders none
-	const onToggleLocalTimeline = $derived.by(() => {
-		if (isMobile.matches) {
-			return undefined;
-		}
-		return handleToggleLocalTimeline;
-	});
-
-	// What the local series is: the open place, named as the panel names it, else the cell.
-	const localLabel = $derived.by(() => {
-		if (placePanelOpen && data.selectedPlace) {
-			return `${translate('timelineOf')} ${formatPlaceTitle(data.selectedPlace)}`;
-		}
-		return translate('timelineOfCell');
-	});
-
-	// The panel subject's series, when there is one: the open place's, else the cell's.
-	const localSeries = $derived.by(() => {
-		if (placePanelOpen) {
-			if (!placeHistogram || placeHistogram.bins.length === 0) {
-				return null;
-			}
-			return placeHistogram;
-		}
-		if (!cellHistogram || cellHistogram.bins.length === 0) {
-			return null;
-		}
-		return cellHistogram;
-	});
-	// A selection's series is on its way: the timeline keeps an empty local band rather
-	// than falling back to the city-wide one for the duration.
-	const EMPTY_HISTOGRAM: Histogram = { bins: [], maxCount: 0, timeRange: { start: '', end: '' }, totalFeatures: 0 };
-	const localPending = $derived(cellHistogramLoading || placeHistogramLoading);
-	// Handed to the timeline only while it should replace the city-wide one.
-	const localHistogram = $derived.by(() => {
-		if (!timelineShowsLocal) {
-			return null;
-		}
-		if (localSeries) {
-			return localSeries;
-		}
-		if (localPending) {
-			return EMPTY_HISTOGRAM;
-		}
-		return null;
 	});
 
 	// A filter change reloads the page data (new errorData); drop the previous load's
@@ -577,11 +506,11 @@
 		<TimePeriodSelector
 			period={currentPeriod}
 			{histogram}
-			{localHistogram}
-			{localLabel}
-			onToggleLocal={onToggleLocalTimeline}
-			localToggleOn={showLocalTimeline}
-			localAvailable={localSeries !== null || localPending}
+			localHistogram={timelineView.histogram}
+			localLabel={timelineView.label}
+			onToggleLocal={timelineView.onToggle}
+			localToggleOn={timelineView.switchOn}
+			localAvailable={timelineView.available}
 			onPeriodChange={handlePeriodChange}
 			class="z-40 bg-atm-sand border-t border-atm-sand-border"
 		/>
