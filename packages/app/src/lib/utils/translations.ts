@@ -41,7 +41,7 @@ const TRANSLATIONS: Record<string, string> = {
 	clearPlaceFilter: 'Verwijder plekfilter',
 	viewPlace: 'bekijk',
 	ofThisCell: 'van deze cel',
-	timelineOfCell: 'Tijdlijn van deze plek',
+	timelineOfCell: 'Tijdlijn van deze cel',
 	timelineOf: 'Tijdlijn van',
 	toggleLocalTimeline: 'Tijdlijn van de selectie tonen',
 	toggleGlobalTimeline: 'Tijdlijn van de hele stad tonen',
