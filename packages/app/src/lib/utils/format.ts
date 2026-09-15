@@ -1,4 +1,5 @@
 import type { PlaceSearchMatch } from '@atm/shared/types';
+import { translate } from './translations';
 
 export function formatTimePeriod(per: [number, number]): string {
 	const [start, end] = per;
@@ -40,6 +41,24 @@ export function formatDatasetTitle(title: string): string {
  * '' when the sources record no window. The matched name's window wins over the
  * geometry's.
  */
+/**
+ * A place as the UI names it: the matched (possibly historical) name, else the current
+ * one, else the id — followed by "(nu <current>)" when the shown name is an old one.
+ */
+export function formatPlaceTitle(match: PlaceSearchMatch): string {
+	let shown = match.matchedName;
+	if (!shown && match.name) {
+		shown = match.name;
+	}
+	if (!shown) {
+		shown = match.placeId;
+	}
+	if (match.name && match.name !== shown) {
+		return `${shown} (${translate('nowKnownAs')} ${match.name})`;
+	}
+	return shown;
+}
+
 export function formatPlaceWindow(match: PlaceSearchMatch): string {
 	let window = match.matchedWindow;
 	if (!window) {
