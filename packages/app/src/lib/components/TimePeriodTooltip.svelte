@@ -24,7 +24,7 @@
 	style="left: {x}px; top: {y - 8}px;"
 >
 	{#if localCount !== null}
-		<div class="font-medium text-atm-red">{localCount} {pluralised(localCount)} in de cel</div>
+		<div class="font-medium text-atm-red">{localCount} {pluralised(localCount)} in de selectie</div>
 	{:else}
 		<div class="font-medium text-atm-blue">{bin.count} {pluralised(bin.count)}</div>
 	{/if}

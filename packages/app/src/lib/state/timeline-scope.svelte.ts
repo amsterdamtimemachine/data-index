@@ -1,12 +1,12 @@
 /**
- * Which series the timeline shows: the city-wide one, or the panel subject's (a
- * cell's or a place's). Owns the subject series, their loading state and the
- * desktop switch; the page only fetches and hands results in.
+ * The timeline's scope: the whole city, or the panel subject (a cell or a place).
+ * Owns the subject series, their loading state and the desktop switch between the
+ * two; the page only fetches and hands results in.
  */
 import type { Histogram } from '@atm/shared/types';
 import { translate } from '$utils/translations';
 
-export type TimelineViewInputs = {
+export type TimelineScopeInputs = {
 	isMobile: boolean;
 	// mobile: the open cell modal or place panel is the switch
 	cellModalOpen: boolean;
@@ -62,7 +62,7 @@ function createSubjectSeries() {
 	};
 }
 
-export function createTimelineView(getInputs: () => TimelineViewInputs) {
+export function createTimelineScope(getInputs: () => TimelineScopeInputs) {
 	const cell = createSubjectSeries();
 	const place = createSubjectSeries();
 	// the desktop switch; off by default, so selecting never flips the view by itself
@@ -153,8 +153,8 @@ export function createTimelineView(getInputs: () => TimelineViewInputs) {
 			place.clear();
 			resetIfIdle();
 		},
-		/** call when a request settles without a series, so an idle view resets too */
-		settled() {
+		/** call when a request settles; without a series left, the scope resets too */
+		requestSettled() {
 			resetIfIdle();
 		}
 	};

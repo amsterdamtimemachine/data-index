@@ -6,7 +6,7 @@
 	import { tick, untrack } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { createMapSelection } from '$state/map-selection.svelte';
-	import { createTimelineView } from '$state/timeline-view.svelte';
+	import { createTimelineScope } from '$state/timeline-scope.svelte';
 	import { createPageErrorData, createError, createValidationError } from '$utils/error';
 	import { validateCellId } from '$utils/utils';
 	import { loadingState } from '$lib/state/loadingState.svelte';
@@ -241,9 +241,9 @@
 		);
 	});
 
-	// The timeline's view: city-wide, or the panel subject's series. The view owns the
+	// The timeline's scope: the whole city, or the panel subject. The scope owns the
 	// subject series and the switch; the effects below only fetch and hand results in.
-	const timelineView = createTimelineView(() => {
+	const timelineScope = createTimelineScope(() => {
 		let placeTitle: string | null = null;
 		if (data.selectedPlace) {
 			placeTitle = formatPlaceTitle(data.selectedPlace);
@@ -257,7 +257,7 @@
 		const cellBounds = selectedCellBounds;
 		const filterQs = data.filterQuery;
 		if (!cellBounds) {
-			timelineView.clearCell();
+			timelineScope.clearCell();
 			return;
 		}
 		const params = new URLSearchParams(filterQs);
@@ -265,7 +265,7 @@
 		params.set('maxLon', String(cellBounds.maxLon));
 		params.set('minLat', String(cellBounds.minLat));
 		params.set('maxLat', String(cellBounds.maxLat));
-		const request = timelineView.cellRequest();
+		const request = timelineScope.cellRequest();
 		return fetchJson<Histogram>(
 			apiUrl('/api/histogram', params),
 			request.loaded,
@@ -274,7 +274,7 @@
 			},
 			() => {
 				request.settled();
-				timelineView.settled();
+				timelineScope.requestSettled();
 			}
 		);
 	});
@@ -285,12 +285,12 @@
 		const place = data.selectedPlace;
 		const filterQs = data.filterQuery;
 		if (!open || !place) {
-			timelineView.clearPlace();
+			timelineScope.clearPlace();
 			return;
 		}
 		const params = new URLSearchParams(filterQs);
 		params.set('placeId', place.placeId);
-		const request = timelineView.placeRequest();
+		const request = timelineScope.placeRequest();
 		return fetchJson<Histogram>(
 			apiUrl('/api/histogram', params),
 			request.loaded,
@@ -299,7 +299,7 @@
 			},
 			() => {
 				request.settled();
-				timelineView.settled();
+				timelineScope.requestSettled();
 			}
 		);
 	});
@@ -506,11 +506,11 @@
 		<TimePeriodSelector
 			period={currentPeriod}
 			{histogram}
-			localHistogram={timelineView.histogram}
-			localLabel={timelineView.label}
-			onToggleLocal={timelineView.onToggle}
-			localToggleOn={timelineView.switchOn}
-			localAvailable={timelineView.available}
+			localHistogram={timelineScope.histogram}
+			localLabel={timelineScope.label}
+			onToggleLocal={timelineScope.onToggle}
+			localToggleOn={timelineScope.switchOn}
+			localAvailable={timelineScope.available}
 			onPeriodChange={handlePeriodChange}
 			class="z-40 bg-atm-sand border-t border-atm-sand-border"
 		/>
