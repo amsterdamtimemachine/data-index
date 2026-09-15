@@ -1,8 +1,12 @@
 <!-- (map)/+page.svelte -->
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import { apiUrl } from '$utils/api';
+	import { formatPlaceTitle } from '$utils/format';
 	import { tick, untrack } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { createMapSelection } from '$state/map-selection.svelte';
+	import { createTimelineScope } from '$state/timeline-scope.svelte';
 	import { createPageErrorData, createError, createValidationError } from '$utils/error';
 	import { validateCellId } from '$utils/utils';
 	import { loadingState } from '$lib/state/loadingState.svelte';
@@ -40,7 +44,6 @@
 	let dimensions = $state<HeatmapDimensions | null>(null);
 	let histogram = $state<Histogram | null>(null);
 	// Selected cell's histogram, mobile only — see the gated effect below.
-	let cellHistogram = $state<Histogram | null>(null);
 	let clientErrors = $state<AppError[]>([]);
 
 	const isMobile = createMediaQuery(MOBILE_QUERY);
@@ -194,11 +197,16 @@
 	}
 
 	// Fetch heatmap + histogram on the client, re-fetching when the filters change.
+	// One URL definition feeds both the <head> preloads and the fetches, so the
+	// browser's preload always matches (a differing URL would fetch twice).
+	const filterParams = $derived(new URLSearchParams(data.filterQuery));
+	const heatmapUrl = $derived(apiUrl('/api/heatmaps', filterParams));
+	const histogramUrl = $derived(apiUrl('/api/histogram', filterParams));
+
 	$effect(() => {
-		const qs = data.filterQuery ? `?${data.filterQuery}` : '';
 		loadingState.startLoading();
 		return fetchJson<HeatmapResponse>(
-			`/api/heatmaps${qs}`,
+			heatmapUrl,
 			(res) => {
 				heatmapTimeline = res.timeline;
 				dimensions = res.dimensions;
@@ -217,9 +225,8 @@
 	});
 
 	$effect(() => {
-		const qs = data.filterQuery ? `?${data.filterQuery}` : '';
 		return fetchJson<Histogram>(
-			`/api/histogram${qs}`,
+			histogramUrl,
 			(res) => {
 				histogram = res;
 			},
@@ -234,74 +241,67 @@
 		);
 	});
 
-	// Nulled up front: a cell switch must never show the previous cell's bars.
+	// The timeline's scope: the whole city, or the panel subject. The scope owns the
+	// subject series and the switch; the effects below only fetch and hand results in.
+	const timelineScope = createTimelineScope(() => {
+		let placeTitle: string | null = null;
+		if (data.selectedPlace) {
+			placeTitle = formatPlaceTitle(data.selectedPlace);
+		}
+		return { isMobile: isMobile.matches, cellModalOpen: showCellModal, placePanelOpen, placeTitle };
+	});
+
+	// The selected cell's series: a request per cell, cleared up front so a cell switch
+	// never shows the previous cell's bars.
 	$effect(() => {
 		const cellBounds = selectedCellBounds;
 		const filterQs = data.filterQuery;
-
-		cellHistogram = null;
 		if (!cellBounds) {
+			timelineScope.clearCell();
 			return;
 		}
-
-		let qs = '';
-		if (filterQs) {
-			qs = `${filterQs}&`;
-		}
-		const boundsQs = `minLon=${cellBounds.minLon}&maxLon=${cellBounds.maxLon}&minLat=${cellBounds.minLat}&maxLat=${cellBounds.maxLat}`;
+		const params = new URLSearchParams(filterQs);
+		params.set('minLon', String(cellBounds.minLon));
+		params.set('maxLon', String(cellBounds.maxLon));
+		params.set('minLat', String(cellBounds.minLat));
+		params.set('maxLat', String(cellBounds.maxLat));
+		const request = timelineScope.cellRequest();
 		return fetchJson<Histogram>(
-			`/api/histogram?${qs}${boundsQs}`,
-			(res) => {
-				cellHistogram = res;
-			},
+			apiUrl('/api/histogram', params),
+			request.loaded,
 			() => {
 				// silent by design: the timeline degrades to the city-wide histogram
+			},
+			() => {
+				request.settled();
+				timelineScope.requestSettled();
 			}
 		);
 	});
 
 	// The open place panel's series: features in the place's cells per bin.
-	let placeHistogram = $state<Histogram | null>(null);
 	$effect(() => {
 		const open = placePanelOpen;
 		const place = data.selectedPlace;
 		const filterQs = data.filterQuery;
-
-		placeHistogram = null;
 		if (!open || !place) {
+			timelineScope.clearPlace();
 			return;
 		}
-		let qs = '';
-		if (filterQs) {
-			qs = `${filterQs}&`;
-		}
+		const params = new URLSearchParams(filterQs);
+		params.set('placeId', place.placeId);
+		const request = timelineScope.placeRequest();
 		return fetchJson<Histogram>(
-			`/api/histogram?${qs}placeId=${encodeURIComponent(place.placeId)}`,
-			(res) => {
-				placeHistogram = res;
-			},
+			apiUrl('/api/histogram', params),
+			request.loaded,
 			() => {
 				// silent by design: the timeline degrades to the city-wide histogram
+			},
+			() => {
+				request.settled();
+				timelineScope.requestSettled();
 			}
 		);
-	});
-
-	// The panel subject's series, overlaid on the timeline in red; on mobile it
-	// only accompanies the open panel.
-	const localHistogram = $derived.by(() => {
-		if (placePanelOpen) {
-			if (!placeHistogram || placeHistogram.bins.length === 0) {
-				return null;
-			}
-			return placeHistogram;
-		}
-		if (!cellHistogram || cellHistogram.bins.length === 0) {
-			return null;
-		}
-		if (isMobile.matches && !showCellModal) {
-			return null;
-		}
-		return cellHistogram;
 	});
 
 	// A filter change reloads the page data (new errorData); drop the previous load's
@@ -410,6 +410,13 @@
 	});
 </script>
 
+<!-- Preloaded from the SSR head: the map data downloads alongside the app bundle
+     instead of after hydration. crossorigin matches fetch()'s cors/same-origin mode. -->
+<svelte:head>
+	<link rel="preload" as="fetch" href={heatmapUrl} crossorigin="anonymous" />
+	<link rel="preload" as="fetch" href={histogramUrl} crossorigin="anonymous" />
+</svelte:head>
+
 <ErrorHandler errorData={allErrors} />
 
 <!-- inline 100dvh tracks the mobile browser chrome; browsers without dvh drop the
@@ -430,7 +437,7 @@
 		<NavContainer bind:isExpanded={navExpanded} class="absolute top-0 left-0 z-30">
 			{#snippet header()}
 				<Nav class="p-3">
-					<NavItem href="/about" label="Over" />
+					<NavItem href={resolve('/about')} label="Over" />
 				</Nav>
 			{/snippet}
 			<FilterPanel
@@ -499,7 +506,11 @@
 		<TimePeriodSelector
 			period={currentPeriod}
 			{histogram}
-			{localHistogram}
+			localHistogram={timelineScope.histogram}
+			localLabel={timelineScope.label}
+			onToggleLocal={timelineScope.onToggle}
+			localToggleOn={timelineScope.switchOn}
+			localAvailable={timelineScope.available}
 			onPeriodChange={handlePeriodChange}
 			class="z-40 bg-atm-sand border-t border-atm-sand-border"
 		/>

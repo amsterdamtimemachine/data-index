@@ -20,8 +20,14 @@
 FROM postgis/postgis:16-3.5
 
 ARG ROARINGBITMAP_VERSION=v1.2.0
+# The base is Debian 11, past its end of life (August 2026), and its mirrors no longer
+# serve a consistent package set. A dated snapshot does; bump the date only together
+# with the base image.
+ARG DEBIAN_SNAPSHOT=20260830T000000Z
 
 RUN set -eux; \
+    printf 'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/%s bullseye main\ndeb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/%s bullseye-security main\ndeb [check-valid-until=no] http://snapshot.debian.org/archive/debian/%s bullseye-updates main\n' \
+        "$DEBIAN_SNAPSHOT" "$DEBIAN_SNAPSHOT" "$DEBIAN_SNAPSHOT" > /etc/apt/sources.list; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         build-essential \

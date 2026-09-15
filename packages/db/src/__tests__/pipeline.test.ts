@@ -175,13 +175,18 @@ describe('computeTimeSlices', () => {
 });
 
 describe('getMetadata', () => {
-  test('returns datasets, recordTypes, timeSlices, stats', async () => {
+  test('returns datasets, recordTypes, placeTypes, timeSlices', async () => {
     const meta = await getMetadata();
-    // dataset ids, record types and total all match the seeded data (no hardcoded lists)
+    // dataset ids and record types match the seeded data (no hardcoded lists)
     expect(meta.datasets.map(d => d.id).sort()).toEqual(await dbq.datasetIdList());
     expect([...meta.recordTypes].map(String).sort()).toEqual(await dbq.recordTypeList());
+    // place types come from cell_features: only types with features on the map
+    expect(meta.placeTypes.length).toBeGreaterThan(0);
+    for (const t of meta.placeTypes) {
+      expect(['address', 'street', 'neighbourhood', 'district']).toContain(t);
+    }
     expect(meta.timeSlices.length).toBeGreaterThan(0);
-    expect(meta.stats!.totalFeatures).toBe(await dbq.featureCount());
+    expect(meta).not.toHaveProperty('stats');
   });
 });
 

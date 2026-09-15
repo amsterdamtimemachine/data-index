@@ -7,8 +7,19 @@
 
 	type Props = {
 		onSelect?: (match: PlaceSearchMatch) => void;
+		selectedPlace?: PlaceSearchMatch | null;
 	};
-	let { onSelect }: Props = $props();
+	let { onSelect, selectedPlace = null }: Props = $props();
+
+	const selectedLabel = $derived.by(() => {
+		if (!selectedPlace) {
+			return null;
+		}
+		if (selectedPlace.matchedName) {
+			return selectedPlace.matchedName;
+		}
+		return selectedPlace.name ?? null;
+	});
 
 	const search = createPlaceSearch();
 
@@ -39,7 +50,8 @@
 	{options}
 	onInput={search.setQuery}
 	onSelect={handleSelect}
-	clearOnSelect={true}
+	resetValueOnSelect={true}
+	{selectedLabel}
 	placeholder={translate('searchPlaceholder')}
 	aria-label={translate('searchPlaceholder')}
 />

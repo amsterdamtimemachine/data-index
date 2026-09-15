@@ -5,13 +5,10 @@
 	interface Props {
 		bins: HistogramBin[];
 		maxCount: number;
-		// the selected cell's series, drawn in its own band
+		// the selected cell's or place's series, shown instead of the global one
 		localBins?: HistogramBin[];
 		localMaxCount?: number;
 		timelineHeight: number;
-		// band layout, computed once by the selector
-		bandHeight: number;
-		stacked: boolean;
 		hideGlobal: boolean;
 	}
 	let {
@@ -20,33 +17,22 @@
 		localBins = [],
 		localMaxCount = 0,
 		timelineHeight,
-		bandHeight,
-		stacked,
 		hideGlobal
 	}: Props = $props();
 
-	// the global band's floor: mid-track when stacked, the track line otherwise;
-	// the local band always sits on the track line
-	const globalBase = $derived.by(() => {
-		if (stacked) {
-			return bandHeight;
-		}
-		return timelineHeight;
-	});
-
-	// Each series is normalised to its own max (log scaling); heights are not
-	// comparable across series — the hover carries the absolute counts.
+	// Each series is normalised to its own max (log scaling); the hover carries
+	// the absolute counts.
 	const barHeights = $derived.by(() => {
 		if (bins.length === 0) {
 			return [];
 		}
-		return calculateHistogramBarHeights(bins, maxCount, bandHeight, 1);
+		return calculateHistogramBarHeights(bins, maxCount, timelineHeight, 1);
 	});
 	const localBarHeights = $derived.by(() => {
 		if (localBins.length === 0) {
 			return [];
 		}
-		return calculateHistogramBarHeights(localBins, localMaxCount, bandHeight, 1);
+		return calculateHistogramBarHeights(localBins, localMaxCount, timelineHeight, 1);
 	});
 
 	// nudge the outermost ticks inward so they stay visible at the edges
@@ -70,7 +56,7 @@
 			{@const x = (i / bins.length) * 100}
 			<rect
 				x="{x}%"
-				y={globalBase - barHeight}
+				y={timelineHeight - barHeight}
 				width="{barWidth}%"
 				height={barHeight}
 				class="fill-atm-blue"
@@ -78,7 +64,7 @@
 		{/each}
 	{/if}
 
-	<!-- Selected cell's bars: own band below the global one on desktop -->
+	<!-- The selection's bars, in place of the global ones -->
 	{#each localBins as bin, i (bin.timeSlice.key)}
 		{@const barWidth = 100 / localBins.length}
 		{@const barHeight = localBarHeights[i]}
@@ -91,11 +77,6 @@
 			class="fill-atm-red"
 		></rect>
 	{/each}
-
-	<!-- floor of the global band -->
-	{#if stacked}
-		<line x1="0%" y1={globalBase} x2="100%" y2={globalBase} stroke="black" stroke-width="0.5" />
-	{/if}
 
 	<!-- Ticks at period boundaries -->
 	{#each Array(bins.length + 1) as _, i}

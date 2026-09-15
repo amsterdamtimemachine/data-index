@@ -7,6 +7,7 @@
 	import FeaturesSortSelect, { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
 	import { createMediaQuery, MOBILE_QUERY } from '$utils/media.svelte';
 	import { translate } from '$utils/translations';
+	import { formatPlaceTitle } from '$utils/format';
 	import type { HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
 	import type { PanelSubject } from '$lib/state/panel-features.svelte';
 
@@ -81,22 +82,11 @@
 			return translate('ofThisCell');
 		}
 		const place = subject.place;
-		let shown = place.matchedName;
-		if (!shown && place.name) {
-			shown = place.name;
-		}
-		if (!shown) {
-			shown = place.placeId;
-		}
 		let phrase = translate('ofCellsOf');
 		if (place.cells.length === 1) {
 			phrase = translate('ofCellOf');
 		}
-		let label = `${phrase} ${shown}`;
-		if (place.name && place.name !== shown) {
-			label = `${label} (${translate('nowKnownAs')} ${place.name})`;
-		}
-		return label;
+		return `${phrase} ${formatPlaceTitle(place)}`;
 	});
 
 	// desktop: live period; mobile: frozen at cell selection

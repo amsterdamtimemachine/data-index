@@ -24,7 +24,11 @@
 				onChange(next);
 			}
 		},
-		sameWidth: false
+		sameWidth: false,
+		// melt's popover refocuses the trigger on every close, stealing focus from
+		// whatever was clicked outside; the builder's own Enter/Escape paths still
+		// return focus to the trigger for keyboard users
+		focus: { onClose: null }
 	});
 
 	const currentLabel = $derived.by(() => {

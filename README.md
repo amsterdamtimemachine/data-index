@@ -4,7 +4,7 @@
 
 The Amsterdam Time Machine [Data Index](https://data.amsterdamtimemachine.nl) provides location-based access to historical information about Amsterdam across centuries. It serves as a unified entry point to heritage collections from multiple Amsterdam and national institutions, connecting digitised sources through place and time.
 
-The interface overlays Amsterdam with a spatial heatmap grid and a timeline spanning the 17th century to the present in configurable periods. Each grid cell shows the density of available data for that area and time period. Clicking a cell reveals the available images, texts, and person records from that neighbourhood. All results link directly to the original source at the holding institution.
+The interface overlays Amsterdam with a spatial heatmap grid and a timeline spanning the 16th century to the present in configurable periods. Each grid cell shows the density of available data for that area and time period. Clicking a cell reveals the available images, texts, and person records from that neighbourhood, and the timeline can be switched to show that cell's or place's own distribution instead of the city-wide one. All results link directly to the original source at the holding institution.
 
 Rather than curating or contextualising the data, the index presents sources as they are, including any OCR errors or metadata gaps. This makes visible not only what is documented but also what is missing, inviting critical reflection on digitisation practices and historical documentation.
 
@@ -42,12 +42,14 @@ Rather than curating or contextualising the data, the index presents sources as 
   - [Prerequisites](#prerequisites)
   - [First time setup](#first-time-setup)
   - [Database UI](#database-ui)
+  - [URLs and the base path](#urls-and-the-base-path)
   - [Testing](#testing)
 - [Production](#production)
   - [Self-hosted setup](#self-hosted-setup)
   - [Existing Postgres setup](#existing-postgres-setup)
   - [Deploying a new image](#deploying-a-new-image)
   - [Adding a second deployment on the same host](#adding-a-second-deployment-on-the-same-host)
+  - [Serving under a path prefix](#serving-under-a-path-prefix)
   - [Environment variables](#environment-variables)
 
 ## Stack
@@ -410,7 +412,7 @@ Ingestion is idempotent and source-driven: corrections are made in the **source 
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /api/metadata` | Time slices, record types, datasets, stats |
+| `GET /api/metadata` | Time slices, record types, place types, datasets, tags |
 | `GET /api/heatmaps` | Sparse heatmap data with grid dimensions |
 | `GET /api/histogram` | Feature count distribution by time period |
 | `GET /api/features` | Paginated features within geographic bounds or a place's cells |
@@ -470,6 +472,13 @@ bun run dev    # http://localhost:5175
 ```bash
 bun run db:studio    # http://local.drizzle.studio
 ```
+
+### URLs and the base path
+
+Never write an absolute app URL as a string. API calls build their URL with `apiUrl()` from
+`$utils/api`, internal links use `resolve()` and static files `asset()` from `$app/paths`, so
+a build served under a path prefix reaches its own API and assets. A lint rule fails the
+build on a bare `/api/…` string or a static `href`/`src` starting with `/`.
 
 ### Testing
 
@@ -631,12 +640,42 @@ $DC exec dataindex-db update-postgis.sh          # only if the PostGIS minor cha
 
 Only the `app` service is named, so `pull`/`up -d app` leaves a bundled DB running and its volume untouched.
 
+After a `git pull`, `scripts/sync-env.sh -w` folds variables added to `.env.example` into
+`.env` at their place in the example, keeping every value already set (previous copy in
+`.env.bak`). Run it without `-w` to preview the result.
+
 ### Adding a second deployment on the same host
 
 Repeat a setup section in a second clone: the other branch, its own `.env` with a distinct
 `COMPOSE_PROJECT_NAME` and free `APP_PORT` / `DB_PORT`, and `production.yml` in place of
 `staging.yml`. Nothing is shared — separate volumes, container names and ports — so the
 order you set them up in doesn't matter, and neither does the `-f` overlay order.
+
+The `experimental` branch is the integration branch for features under trial. CI builds
+it into the `experimental` image tag, and a clone with `APP_IMAGE_TAG=experimental` in its
+`.env` runs it with the staging overlay. Feature branches merge into `experimental` to be
+previewed and into `staging` to graduate; a dropped feature is reverted on `experimental`
+alone. The lane has its own database, so a schema change on the branch lands with the
+reingest script and never touches the stable deployment.
+
+### Serving under a path prefix
+
+The app can live under a path prefix, for a second deployment on the same hostname. The
+prefix is baked in at build time: `docker build --build-arg BASE_PATH=/experimental` (the
+`experimental` CI build passes it), and the image then serves at `/experimental` and health
+checks itself there. Route by prefix in Caddy without stripping it, SvelteKit expects the
+prefix to arrive:
+
+```
+handle /experimental* {
+        reverse_proxy 127.0.0.1:3001
+}
+handle {
+        reverse_proxy 127.0.0.1:3000
+}
+```
+
+Leave `BASE_PATH` unset for a deployment at the root; the published images are built that way.
 
 ### Environment variables
 
@@ -649,6 +688,7 @@ order you set them up in doesn't matter, and neither does the `-f` overlay order
 | `DB_PASSWORD` | Yes | `atm_dev_password` | PostgreSQL password |
 | `DB_NAME` | Yes | `amsterdam_time_machine` | PostgreSQL database name |
 | `APP_PORT` | No | `3000` | App port on host |
+| `APP_IMAGE_TAG` | No | `staging` | Image tag the staging overlay pulls; `experimental` for the integration branch |
 | `PUBLIC_DEFAULT_CENTER` | No | - | Map centre (WGS84 `lon,lat`) auto-selected on load, resolved to the cell containing it |
 | `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |
 | `PUBLIC_EXACT_CELLS` | No | `false` | Reproject heatmap cells to their exact RD footprint via proj4 (removes the ~0.4° skew); default draws axis-aligned rectangles |
@@ -662,4 +702,4 @@ order you set them up in doesn't matter, and neither does the `-f` overlay order
 | `STREET_MAX_DISTANCE_M` | No | `50` | Same, for streets (areas link by containment, no radius) |
 | `ERA_CUTOFF` | No | `1943-01-01` | Historical↔present address boundary: a feature dated before this resolves to an Adamlink address, on/after to a BAG one |
 | `CURRENT_ANCHOR` | No | `2020-01-01` | Present-day reference date for scoring current place names |
-| `CACHE_TTL_MINUTES` | No | `10` | TTL for cached DB queries |
+| `CACHE_TTL_MINUTES` | No | `10` | TTL for cached DB queries (metadata, record types, time slices). Raise it on a deployed box; the data only changes at rebuild |

@@ -5,11 +5,20 @@
 	import TimePeriodSelectorLabels from '$components/TimePeriodSelectorLabels.svelte';
 	import TimePeriodSelectorThumb from '$components/TimePeriodSelectorThumb.svelte';
 	import TimePeriodSelectorTrack from '$components/TimePeriodSelectorTrack.svelte';
-	import { createMediaQuery, MOBILE_QUERY } from '$utils/media.svelte';
+	import Button from '$components/Button.svelte';
+	import { asset } from '$app/paths';
+	import { translate } from '$utils/translations';
 
 	interface Props {
 		histogram: Histogram;
 		localHistogram?: Histogram | null;
+		// names the local series ("deze cel", a place name); shown only while it is on screen
+		localLabel?: string;
+		// the switch between the city-wide and the selection's series: rendered only
+		// when the page hands over a handler (desktop); on/available describe its state
+		onToggleLocal?: () => void;
+		localToggleOn?: boolean;
+		localAvailable?: boolean;
 		period?: string;
 		onPeriodChange?: (newPeriod: string) => void;
 		class?: string;
@@ -17,6 +26,10 @@
 	let {
 		histogram,
 		localHistogram = null,
+		localLabel = '',
+		onToggleLocal = undefined,
+		localToggleOn = false,
+		localAvailable = false,
 		period = undefined,
 		onPeriodChange = undefined,
 		class: className
@@ -26,24 +39,24 @@
 	const timePeriods = $derived(histogram?.bins?.map((bin) => bin.timeSlice.key) || []);
 	const displayPeriods = $derived(createDisplayPeriods(histogram?.bins || []));
 
-	// Desktop grows to two stacked bands (selection over global) when a cell is
-	// selected; mobile keeps one band (the selection's own series).
-	const BAND_HEIGHT = 15;
-	const BAND_GAP = 2;
-	const isMobile = createMediaQuery(MOBILE_QUERY);
-	const hasLocal = $derived.by(() => {
-		if (!localHistogram) {
-			return false;
+	// One band. A local series, when the page passes one, replaces the city-wide
+	// one; the page decides when that is (see its localHistogram). An empty series
+	// still replaces it: that is the band while a selection's data loads.
+	const timelineHeight = 15;
+	const hideGlobal = $derived(localHistogram !== null);
+
+	// the button shows the series a press leads to, not the one on screen
+	const toggleGlyph = $derived.by(() => {
+		if (localToggleOn) {
+			return asset('/glyphs/ToggleGlobalTimeline.svg');
 		}
-		return localHistogram.bins.length > 0;
+		return asset('/glyphs/ToggleLocalTimeline.svg');
 	});
-	const stacked = $derived(hasLocal && !isMobile.matches);
-	const hideGlobal = $derived(hasLocal && isMobile.matches);
-	const timelineHeight = $derived.by(() => {
-		if (stacked) {
-			return BAND_HEIGHT * 2 + BAND_GAP;
+	const toggleLabel = $derived.by(() => {
+		if (localToggleOn) {
+			return translate('toggleGlobalTimeline');
 		}
-		return BAND_HEIGHT;
+		return translate('toggleLocalTimeline');
 	});
 
 	// Slider state
@@ -170,14 +183,22 @@
 />
 
 {#if histogram?.bins?.length > 0}
-	<div class={mergeCss('bg-atm-sand border-t border-atm-sand-border w-full px-4 pt-2', className)}>
+	<div class={mergeCss('bg-atm-sand border-t border-atm-sand-border w-full px-4 pt-1', className)}>
+		<!-- Caption: which series this is; the city-wide default needs none. Kept tight
+		     so the bar grows by one small line at most. -->
+		{#if hideGlobal && localLabel}
+			<div class="text-xs leading-none text-black mb-1 select-none">{localLabel}</div>
+		{:else}
+			<div class="h-1"></div>
+		{/if}
+		<div class="flex items-start gap-2">
 		<!-- Horizontal scroll wrapper for mobile; pointerdown only forfeits the one-shot
 		     auto-scroll, it is not an interaction affordance -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			bind:this={scrollWrapper}
 			onpointerdown={() => (hasAutoScrolled = true)}
-			class="w-full overflow-x-auto max-[850px]:overflow-x-auto min-[851px]:overflow-x-visible relative max-[850px]:shadow-[inset_10px_0_10px_-10px_rgba(0,0,0,0.3),inset_-10px_0_10px_-10px_rgba(0,0,0,0.3)]"
+			class="flex-1 min-w-0 overflow-x-auto max-[850px]:overflow-x-auto min-[851px]:overflow-x-visible relative max-[850px]:shadow-[inset_10px_0_10px_-10px_rgba(0,0,0,0.3),inset_-10px_0_10px_-10px_rgba(0,0,0,0.3)]"
 		>
 			<div
 				class="relative"
@@ -191,8 +212,6 @@
 				localBins={localHistogram?.bins || []}
 				localMaxCount={localHistogram?.maxCount || 0}
 				{timelineHeight}
-				bandHeight={BAND_HEIGHT}
-				{stacked}
 				{hideGlobal}
 			/>
 
@@ -220,6 +239,12 @@
 				bins={histogram.bins}
 			/>
 			</div>
+		</div>
+		{#if onToggleLocal}
+			<Button onclick={onToggleLocal} disabled={!localAvailable} aria-label={toggleLabel} class="p-1 shrink-0">
+				<img src={toggleGlyph} alt="" width="24" height="24" />
+			</Button>
+		{/if}
 		</div>
 	</div>
 {/if}

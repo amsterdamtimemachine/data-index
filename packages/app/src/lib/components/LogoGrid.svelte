@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { asset } from '$app/paths';
 	import { mergeCss } from '$utils/utils';
 
 	type Props = {
@@ -8,14 +9,14 @@
 	let { class: className }: Props = $props();
 
 	const logos = [
-		{ name: "Amsterdam Time Machine", src: "/logos/atm_logo_big.png", alt: "Amsterdam Time Machine logo", url: "https://amsterdamtimemachine.nl/" },
-		{ name: "CREATE", src: "/logos/create.svg", alt: "CREATE logo", url: "https://create.humanities.uva.nl/" },
-		{ name: "Delpher", src: "/logos/delpher.svg", alt: "Delpher logo", url: "https://www.delpher.nl/" },
-		{ name: "Joods Cultureel Kwartier", src: "/logos/Joods_cultureel_kwartier.png", alt: "Joods Cultureel Kwartier logo", url: "https://jck.nl/" },
-		{ name: "Koninklijke Bibliotheek", src: "/logos/koninklijke_bibliotheek.svg", alt: "Koninklijke Bibliotheek logo", url: "https://www.kb.nl/" },
-		{ name: "Stadsarchief Amsterdam", src: "/logos/stadsarchief.svg", alt: "Stadsarchief Amsterdam logo", url: "https://www.amsterdam.nl/stadsarchief/" },
-		{ name: "Surf", src: "/logos/surf.svg", alt: "Surf logo", url: "https://www.surf.nl/"},
-		{ name: "Universiteit van Amsterdam", src: "/logos/uva_logo.png", alt: "Universiteit van Amsterdam logo", url: "https://www.uva.nl/" }
+		{ name: "Amsterdam Time Machine", src: asset('/logos/atm_logo_big.png'), alt: "Amsterdam Time Machine logo", url: "https://amsterdamtimemachine.nl/" },
+		{ name: "CREATE", src: asset('/logos/create.svg'), alt: "CREATE logo", url: "https://create.humanities.uva.nl/" },
+		{ name: "Delpher", src: asset('/logos/delpher.svg'), alt: "Delpher logo", url: "https://www.delpher.nl/" },
+		{ name: "Joods Cultureel Kwartier", src: asset('/logos/Joods_cultureel_kwartier.png'), alt: "Joods Cultureel Kwartier logo", url: "https://jck.nl/" },
+		{ name: "Koninklijke Bibliotheek", src: asset('/logos/koninklijke_bibliotheek.svg'), alt: "Koninklijke Bibliotheek logo", url: "https://www.kb.nl/" },
+		{ name: "Stadsarchief Amsterdam", src: asset('/logos/stadsarchief.svg'), alt: "Stadsarchief Amsterdam logo", url: "https://www.amsterdam.nl/stadsarchief/" },
+		{ name: "Surf", src: asset('/logos/surf.svg'), alt: "Surf logo", url: "https://www.surf.nl/"},
+		{ name: "Universiteit van Amsterdam", src: asset('/logos/uva_logo.png'), alt: "Universiteit van Amsterdam logo", url: "https://www.uva.nl/" }
 	];
 </script>
 

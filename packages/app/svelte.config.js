@@ -8,6 +8,10 @@ import { dirname, join } from 'path';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
+// Path prefix the app is served under, baked in at build time (BASE_PATH=/experimental
+// builds an image that lives at /experimental). Empty serves at the root.
+const base = (process.env.BASE_PATH ?? '').replace(/\/+$/, '');
+
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
 	extensions: ['.svelte', '.svx'],
@@ -21,6 +25,7 @@ const config = {
 
 	kit: {
 		adapter: adapter(),
+		paths: { base },
 		alias: {
 			$routes: 'src/routes',
 			$components: 'src/lib/components',
