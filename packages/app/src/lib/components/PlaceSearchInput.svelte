@@ -23,9 +23,14 @@
 
 	const search = createPlaceSearch();
 
+	// a row matched on an old name or an alias also names the place as it is called
+	// now, so two places sharing an old name read as two different rows
 	const options = $derived(
 		search.matches.map((m) => {
 			let detail = translate(m.type);
+			if (m.matchedNameId && m.name && m.name !== m.matchedName) {
+				detail = `${translate('nowKnownAs')} ${m.name} · ${detail}`;
+			}
 			const period = formatPlaceWindow(m);
 			if (period) {
 				detail = `${detail} · ${period}`;

@@ -59,8 +59,10 @@ async function displayCellsExpr(cols: number): Promise<SQL> {
 }
 
 function toMatch(row: SearchRow): PlaceSearchMatch {
+  // an alias is a historical row without dates: no window, so a dated geometry's
+  // window can still show for it
   let matchedWindow: [string | null, string | null] | null = null;
-  if (row.matched_historical) {
+  if (row.matched_historical && (row.matched_since || row.matched_until)) {
     matchedWindow = [row.matched_since, row.matched_until];
   }
   let cells: number[] = [];
@@ -123,11 +125,13 @@ export async function searchPlaces(query: string, options: PlaceSearchOptions = 
       WHERE lower(h.name) LIKE ${prefix}
         AND (p.type <> 'address' OR ${withAddresses})
     ),
-    -- one row per place: a current-name match outranks a historical one, and
-    -- among historical names the most recent window wins
+    -- one row per place: a current-name match outranks a historical one; among
+    -- historical names the most recent window wins, and among undated aliases the
+    -- exact, then the shortest, match
     deduped AS (
       SELECT DISTINCT ON (id) * FROM matches
-      ORDER BY id, matched_historical, matched_since DESC NULLS LAST
+      ORDER BY id, matched_historical, matched_since DESC NULLS LAST,
+        (lower(matched_name) = ${lowered}) DESC, length(matched_name)
     ),
     -- has_features: features link to addresses and streets, never to an area, so
     -- an area counts as data-bearing when anything on the map lies in its cells

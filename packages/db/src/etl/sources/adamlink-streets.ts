@@ -2,7 +2,7 @@
  * Shared parsing of the Adamlink straten TTL, used by both the `streets` source
  * (native streets, which have geometry) and the `nwb-streets` source (which backfills
  * geometry-less streets from NWB by bagOrl). Kept in one place so the geometry pick,
- * the dated-name extraction, and the owl:sameAs bagOrl crosswalk never drift apart.
+ * the name extraction, and the owl:sameAs bagOrl crosswalk never drift apart.
  */
 import { Parser } from 'n3';
 import { createNameWriter } from '../writers/place-writer';
@@ -11,6 +11,8 @@ export interface StreetName {
   label: string;
   since: string | null;
   until: string | null;
+  // an undated variant (altLabel): a label with no claim about when it applied
+  alias: boolean;
 }
 
 export interface AdamlinkStreet {
@@ -45,15 +47,25 @@ function resolveWkt(preds: Pred[], subjects: Map<string, Pred[]>): string | null
   return (subjects.get(geomNodes[0].object) || []).find(p => p.predicate.endsWith('asWKT'))?.object ?? null;
 }
 
-function resolveNames(preds: Pred[], subjects: Map<string, Pred[]>): StreetName[] {
+// Dated variants become historical names; undated ones become aliases, deduplicated
+// case-insensitively and without the preferred label itself, which Adamlink repeats.
+function resolveNames(preds: Pred[], subjects: Map<string, Pred[]>, prefLabel: string): StreetName[] {
   const names: StreetName[] = [];
+  const seenAliases = new Set<string>([prefLabel.toLowerCase()]);
   for (const nn of preds.filter(p => p.predicate.endsWith('/name'))) {
     const nnPreds = subjects.get(nn.object) || [];
     const label = nnPreds.find(p => p.predicate.endsWith('label'))?.object;
     if (!label) continue;
     const since = nnPreds.find(p => p.predicate.includes('EarliestBegin'))?.object || null;
     const until = nnPreds.find(p => p.predicate.includes('EarliestEnd'))?.object || null;
-    if (since || until) names.push({ label, since, until });
+    if (since || until) {
+      names.push({ label, since, until, alias: false });
+      continue;
+    }
+    const key = label.toLowerCase();
+    if (seenAliases.has(key)) continue;
+    seenAliases.add(key);
+    names.push({ label, since: null, until: null, alias: true });
   }
   return names;
 }
@@ -83,7 +95,7 @@ export function parseAdamlinkStreets(ttl: string): AdamlinkStreet[] {
     out.push({
       uri,
       prefLabel,
-      names: resolveNames(preds, subjects),
+      names: resolveNames(preds, subjects, prefLabel),
       wkt: resolveWkt(preds, subjects),
       bagOrl: resolveBagOrl(preds),
     });
@@ -91,8 +103,10 @@ export function parseAdamlinkStreets(ttl: string): AdamlinkStreet[] {
   return out;
 }
 
-// Write the dated name variants (place_historical_name) for a set of streets. Shared so
-// backfilled streets get the same historical-name timeline native streets do.
+// Write the name variants (place_historical_name) for a set of streets, dated and
+// undated alike: a row without a period is a label, and readers that need a period
+// (resolution, canonicalisation) skip it by that. Shared so backfilled streets get the
+// same names native streets do.
 export async function insertStreetNames(
   streets: Pick<AdamlinkStreet, 'uri' | 'names'>[],
   batchSize = 100,
@@ -100,10 +114,20 @@ export async function insertStreetNames(
   const writer = createNameWriter(batchSize);
   let count = 0;
   for (const s of streets) {
-    for (let i = 0; i < s.names.length; i++) {
-      const n = s.names[i];
+    // dated names keep their #name-<n> ids (URLs restore a match by name id); aliases
+    // are numbered on their own so adding them never shifts an existing id
+    let dated = 0;
+    let aliases = 0;
+    for (const n of s.names) {
+      let id = `${s.uri}#name-${dated}`;
+      if (n.alias) {
+        id = `${s.uri}#alias-${aliases}`;
+        aliases++;
+      } else {
+        dated++;
+      }
       writer.add({
-        id: `${s.uri}#name-${i}`,
+        id,
         placeId: s.uri,
         name: n.label,
         since: n.since ? `${n.since}-01-01` : null,

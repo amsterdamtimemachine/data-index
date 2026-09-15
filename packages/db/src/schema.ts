@@ -76,7 +76,11 @@ export const placeGeometry = pgTable('place_geometry', {
 ]);
 
 // ============================================================================
-// PLACE_HISTORICAL_NAME - Dated past names for places (addresses, streets)
+// PLACE_HISTORICAL_NAME - Past names for places (addresses, streets)
+// A row with a since and/or until is an observation: the place was called this then
+// (until null = still is). A row with neither is a label (an Adamlink alias, spelling
+// variant, abbreviation): findable by the place search, but no reader that needs a
+// period (resolution, canonicalisation) considers it.
 // ============================================================================
 export const placeHistoricalName = pgTable('place_historical_name', {
   id: text('id').primaryKey(),                    // adamlink URI "https://adamlink.nl/geo/address/A1"
