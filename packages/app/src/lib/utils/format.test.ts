@@ -19,8 +19,8 @@ function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 }
 
 describe('formatPlaceWindow', () => {
-	test('closed window renders a year range', () => {
-		expect(formatPlaceWindow(match({ geometryWindow: ['1850-01-01', '1909-12-31'] }))).toBe('1850–1909');
+	test('closed window renders "… tot …"', () => {
+		expect(formatPlaceWindow(match({ geometryWindow: ['1850-01-01', '1909-12-31'] }))).toBe('1850 tot 1909');
 	});
 
 	test('until-only renders "tot"', () => {

@@ -37,11 +37,6 @@ export function formatDatasetTitle(title: string): string {
 }
 
 /**
- * Era label for a place search match: "1850–1909", "tot 1850", "vanaf 1921", or
- * '' when the sources record no window. The matched name's window wins over the
- * geometry's.
- */
-/**
  * A place as the UI names it: the matched (possibly historical) name, else the current
  * one, else the id — followed by "(nu <current>)" when the shown name is an old one.
  */
@@ -59,6 +54,11 @@ export function formatPlaceTitle(match: PlaceSearchMatch): string {
 	return shown;
 }
 
+/**
+ * Era label for a place search match: "1850 tot 1909", "tot 1850", "vanaf 1921",
+ * or '' when the sources record no window. The matched name's window wins over the
+ * geometry's.
+ */
 export function formatPlaceWindow(match: PlaceSearchMatch): string {
 	let window = match.matchedWindow;
 	if (!window) {
@@ -69,7 +69,7 @@ export function formatPlaceWindow(match: PlaceSearchMatch): string {
 	}
 	const [since, until] = window;
 	if (since && until) {
-		return `${since.slice(0, 4)}–${until.slice(0, 4)}`;
+		return `${since.slice(0, 4)} tot ${until.slice(0, 4)}`;
 	}
 	if (until) {
 		return `tot ${until.slice(0, 4)}`;
