@@ -67,8 +67,9 @@ export const placeGeometry = pgTable('place_geometry', {
   // e.g. NWB backfilling an Adamlink street that has no line. null = same provider as the place.
   source: text('source').$type<PlaceSource>().references(() => organisations.id),
   url: text('url'),                               // link to the geometry's source record
-  // Period this geometry was the city's division — set ONLY for neighbourhood/district
-  // (null for address/street). until null = open/current.
+  // The period the place existed in this shape: a division's validity for
+  // neighbourhood/district, the street's existence for Adamlink streets; null for
+  // addresses. until null = open/current.
   since: date('since'),
   until: date('until')
 }, (table) => [

@@ -21,6 +21,9 @@ export interface AdamlinkStreet {
   names: StreetName[];
   wkt: string | null;    // current geometry, or null when Adamlink carries no line
   bagOrl: string | null; // BAG openbare-ruimte id (owl:sameAs), or null when uncrosswalkable
+  // the street's existence as Adamlink dates it (year strings), or null
+  since: string | null;
+  until: string | null;
 }
 
 type Pred = { predicate: string; object: string };
@@ -98,6 +101,9 @@ export function parseAdamlinkStreets(ttl: string): AdamlinkStreet[] {
       names: resolveNames(preds, subjects, prefLabel),
       wkt: resolveWkt(preds, subjects),
       bagOrl: resolveBagOrl(preds),
+      // the street's own timestamps; nested name and geometry nodes are separate subjects
+      since: preds.find(p => p.predicate.endsWith('hasEarliestBeginTimeStamp'))?.object || null,
+      until: preds.find(p => p.predicate.endsWith('hasLatestEndTimeStamp'))?.object || null,
     });
   }
   return out;
@@ -107,6 +113,19 @@ export function parseAdamlinkStreets(ttl: string): AdamlinkStreet[] {
 // undated alike: a row without a period is a label, and readers that need a period
 // (resolution, canonicalisation) skip it by that. Shared so backfilled streets get the
 // same names native streets do.
+/** A street's existence window as place_geometry dates: year strings to first-of-January dates. */
+export function streetWindow(s: Pick<AdamlinkStreet, 'since' | 'until'>): { since: string | null; until: string | null } {
+  let since: string | null = null;
+  if (s.since) {
+    since = `${s.since}-01-01`;
+  }
+  let until: string | null = null;
+  if (s.until) {
+    until = `${s.until}-01-01`;
+  }
+  return { since, until };
+}
+
 export async function insertStreetNames(
   streets: Pick<AdamlinkStreet, 'uri' | 'names'>[],
   batchSize = 100,

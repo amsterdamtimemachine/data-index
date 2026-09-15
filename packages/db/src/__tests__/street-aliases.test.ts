@@ -73,6 +73,19 @@ describe('street name aliases', () => {
     expect(r.rows[0].name).toBe('Kerkweg');
   });
 
+  test("a street's existence dates become its geometry window", () => {
+    const streets = parseAdamlinkStreets(readFileSync(FIXTURE, 'utf8'));
+    expect(streets.find(s => s.uri === MEDIEVAL)).toMatchObject({ since: '1380', until: '1663' });
+    expect(streets.find(s => s.uri === SQUARE)).toMatchObject({ since: '1873', until: null });
+    expect(streets.find(s => s.uri === KERKWEG)).toMatchObject({ since: null, until: null });
+  });
+
+  test('the search returns the window, so two streets sharing a name can be told apart', async () => {
+    const matches = await searchPlaces('Deventer Houtmarkt');
+    expect(matches.find(m => m.placeId === MEDIEVAL)?.geometryWindow).toEqual(['1380-01-01', '1663-01-01']);
+    expect(matches.find(m => m.placeId === SQUARE)?.geometryWindow).toEqual(['1873-01-01', null]);
+  });
+
   test('aliases are not resolution candidates', async () => {
     const byAlias = await getCandidatesByName('Houtmarkt', '1900-01-01', '1900-12-31');
     expect(byAlias).toEqual([]);
