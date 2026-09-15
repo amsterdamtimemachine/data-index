@@ -11,9 +11,9 @@ export type PlaceSearchMatch = {
   matchedName: string;
   /** Id of the matched place_historical_name row; null for a current-name match. */
   matchedNameId: string | null;
-  /** [since, until] when a historical name matched; null for a current-name match. */
+  /** [since, until] when a dated historical name matched; null for a current-name match or an undated variant. */
   matchedWindow: [string | null, string | null] | null;
-  /** [since, until] of the place's geometry when dated (historical area divisions); null otherwise. */
+  /** [since, until] of the place's geometry when dated (area divisions, Adamlink streets); null otherwise. */
   geometryWindow: [string | null, string | null] | null;
   featureCount: number;
   /**

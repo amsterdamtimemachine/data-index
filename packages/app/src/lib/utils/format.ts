@@ -55,21 +55,28 @@ export function formatPlaceTitle(match: PlaceSearchMatch): string {
 }
 
 /**
- * Era label for a place search match: "1850 tot 1909", "tot 1850", "vanaf 1921",
- * or '' when the sources record no window. The matched name's window wins over the
- * geometry's.
+ * Era label for a place search match: the period of the name the row shows. A match
+ * on the current name carries the place's own window (a street's existence, a
+ * division's years in force); a match on a historical name row carries that row's
+ * window, so an undated variant carries none. "1850 tot 1909", "in 1853" (both ends
+ * in one year), "tot 1850", "vanaf 1921", or '' without a window.
  */
 export function formatPlaceWindow(match: PlaceSearchMatch): string {
-	let window = match.matchedWindow;
-	if (!window) {
-		window = match.geometryWindow;
+	let window = match.geometryWindow;
+	if (match.matchedNameId) {
+		window = match.matchedWindow;
 	}
 	if (!window) {
 		return '';
 	}
 	const [since, until] = window;
 	if (since && until) {
-		return `${since.slice(0, 4)} tot ${until.slice(0, 4)}`;
+		const sinceYear = since.slice(0, 4);
+		const untilYear = until.slice(0, 4);
+		if (sinceYear === untilYear) {
+			return `in ${sinceYear}`;
+		}
+		return `${sinceYear} tot ${untilYear}`;
 	}
 	if (until) {
 		return `tot ${until.slice(0, 4)}`;
