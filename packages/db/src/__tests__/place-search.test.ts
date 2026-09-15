@@ -1,6 +1,6 @@
 /**
  * Place-name search over the gazetteer, asserted as ranking invariants:
- * data-bearing places outrank bare gazetteer entries, exact name matches outrank
+ * exact name matches outrank everything, data-bearing places outrank bare gazetteer entries,
  * prefix matches, historical names match with their validity window, a place
  * matching on both names appears once, and unlinked places are findable with cells.
  */
@@ -21,7 +21,11 @@ const RENAMED = 'ps-renamed';
 const BOTH = 'ps-both';
 const HOOD = 'ps-hood';
 const RENUMBERED = 'ps-renumbered';
+const DISTRICT_EXACT = 'ps-wijk-2';      // named exactly like a query that also prefixes many addresses
+const ADDR_NUMBERED = 'ps-wijk-20-nr-1'; // one of those addresses, with a feature
+const DISTRICT_FULL = 'ps-kerkwijk';     // an area whose cells hold a feature, without links of its own
 const FID = '22222222-2222-2222-2222-2222222222aa';
+const FID2 = '22222222-2222-2222-2222-2222222222bb';
 
 describe('place search', () => {
   beforeAll(async () => {
@@ -42,7 +46,10 @@ describe('place search', () => {
       (${RENAMED}, 'street', 'Modernstraat'),
       (${BOTH}, 'address', 'Kerkstraat 9'),
       (${HOOD}, 'neighbourhood', 'Kerkbuurt'),
-      (${RENUMBERED}, 'street', 'Oudekerkspad')`);
+      (${RENUMBERED}, 'street', 'Oudekerkspad'),
+      (${DISTRICT_EXACT}, 'district', 'Wijk 2'),
+      (${ADDR_NUMBERED}, 'address', 'Wijk 20, nr 1'),
+      (${DISTRICT_FULL}, 'district', 'Kerkwijk')`);
     await db.execute(sql`UPDATE place SET source = 'adamlink' WHERE id = ${RENUMBERED}`);
     // non-adamlink open-ended name: canonicalisation must leave it alone
     await db.execute(sql`INSERT INTO place (id, type, name, source) VALUES ('ps-foreign', 'street', 'Vreemdstraat', 'ps-org')`);
@@ -54,7 +61,10 @@ describe('place search', () => {
       (${ADDR}, ST_GeomFromText('POINT(120050 485050)', 28992)),
       (${RENAMED}, ST_GeomFromText('POINT(120150 485150)', 28992)),
       (${BOTH}, ST_GeomFromText('POINT(120250 485250)', 28992)),
-      (${RENUMBERED}, ST_GeomFromText('POINT(120350 485350)', 28992))`);
+      (${RENUMBERED}, ST_GeomFromText('POINT(120350 485350)', 28992)),
+      (${ADDR_NUMBERED}, ST_GeomFromText('POINT(121250 485950)', 28992)),
+      (${DISTRICT_EXACT}, ST_GeomFromText('POLYGON((120800 485800, 120990 485800, 120990 485950, 120800 485950, 120800 485800))', 28992)),
+      (${DISTRICT_FULL}, ST_GeomFromText('POLYGON((120000 485000, 120300 485000, 120300 485100, 120000 485100, 120000 485000))', 28992))`);
     // a historical area division: geometry valid for a closed era
     await db.execute(sql`INSERT INTO place_geometry (place_id, geometry, since, until) VALUES
       (${HOOD}, ST_GeomFromText('POLYGON((120400 485400, 120700 485400, 120700 485700, 120400 485700, 120400 485400))', 28992), '1850-01-01', '1909-12-31')`);
@@ -68,9 +78,10 @@ describe('place search', () => {
 
     await db.execute(sql`
       INSERT INTO features (id, record_type, label, start_date, end_date, dataset_id)
-      VALUES (${FID}, 'image', 'kerk feature', '1950-01-01', '1950-12-31', 'ps-ds')`);
+      VALUES (${FID}, 'image', 'kerk feature', '1950-01-01', '1950-12-31', 'ps-ds'),
+             (${FID2}, 'image', 'wijk feature', '1950-01-01', '1950-12-31', 'ps-ds')`);
     await db.execute(sql`INSERT INTO feature_to_place (feature_id, place_id, relation_id)
-      VALUES (${FID}, ${STREET_DATA}, 'isAbout')`);
+      VALUES (${FID}, ${STREET_DATA}, 'isAbout'), (${FID2}, ${ADDR_NUMBERED}, 'isAbout')`);
 
     await rebuildIndex();
   });
@@ -80,7 +91,25 @@ describe('place search', () => {
     await teardownTestDb();
   });
 
-  test('data first, then exact match; no digit hides addresses', async () => {
+  test('an exact name match leads even when data-bearing prefix matches outnumber it', async () => {
+    // "Wijk 2" is a district without links; "Wijk 20, nr 1" is an address with a feature
+    const matches = await searchPlaces('Wijk 2');
+    const ids = matches.map((m) => m.placeId);
+    expect(ids[0]).toBe(DISTRICT_EXACT);
+    expect(ids).toContain(ADDR_NUMBERED);
+  });
+
+  test('an area counts as data-bearing through its cells, not through links', async () => {
+    // Kerkwijk holds Kerkstraat's feature in its cells; Kerkbuurt's cells are empty
+    const matches = await searchPlaces('Kerk');
+    const ids = matches.map((m) => m.placeId);
+    expect(ids.indexOf(DISTRICT_FULL)).toBeGreaterThan(-1);
+    expect(ids.indexOf(DISTRICT_FULL)).toBeLessThan(ids.indexOf(STREET_BARE));
+    expect(ids.indexOf(DISTRICT_FULL)).toBeLessThan(ids.indexOf(HOOD));
+    expect(ids.indexOf(STREET_DATA)).toBe(0); // a linked street still leads a non-exact query
+  });
+
+  test('exact match, then data; no digit hides addresses', async () => {
     const matches = await searchPlaces('Kerkstraat');
     const ids = matches.map((m) => m.placeId);
     expect(ids.indexOf(STREET_DATA)).toBe(0);
@@ -148,8 +177,11 @@ describe('place search', () => {
   // cells and the street's folded cells must be the same set — pinning that both
   // fold with the same partition.
   test('folded cells land exactly on heatmap cells', async () => {
+    // the two feature-bearing places between them cover every heatmap cell
     const [first] = await searchPlaces('Kerkstraat', { cols: 50 });
     expect(first.placeId).toBe(STREET_DATA);
+    const [numbered] = await searchPlaces('Wijk 20, nr 1', { cols: 50 });
+    expect(numbered.placeId).toBe(ADDR_NUMBERED);
     const heat = await getHeatmapTimeline({ cols: 50 });
     const heatCells = new Set<number>();
     for (const h of Object.values(heat.timeline)) {
@@ -157,7 +189,7 @@ describe('place search', () => {
         heatCells.add(i);
       }
     }
-    expect(new Set(first.cells)).toEqual(heatCells);
+    expect(new Set([...first.cells, ...numbered.cells])).toEqual(heatCells);
   });
 
   test('a dated area division carries its geometry window', async () => {

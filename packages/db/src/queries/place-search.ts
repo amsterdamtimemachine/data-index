@@ -10,8 +10,8 @@ const MIN_QUERY_LENGTH = 2;
 const MAX_QUERY_LENGTH = 100;
 const MAX_RESULTS = 20;
 
-// data-bearing places first, then exact name matches, then finest granularity
-const SEARCH_ORDER = sql`has_features DESC, exact_match DESC,
+// exact name matches first, then data-bearing places, then finest granularity
+const SEARCH_ORDER = sql`exact_match DESC, has_features DESC,
   CASE type WHEN 'address' THEN 0 WHEN 'street' THEN 1 WHEN 'neighbourhood' THEN 2 ELSE 3 END,
   lower(matched_name), id`;
 
@@ -129,9 +129,16 @@ export async function searchPlaces(query: string, options: PlaceSearchOptions = 
       SELECT DISTINCT ON (id) * FROM matches
       ORDER BY id, matched_historical, matched_since DESC NULLS LAST
     ),
+    -- has_features: features link to addresses and streets, never to an area, so
+    -- an area counts as data-bearing when anything on the map lies in its cells
     ranked AS (
       SELECT d.*,
-        EXISTS (SELECT 1 FROM feature_to_place fp WHERE fp.place_id = d.id) AS has_features,
+        CASE WHEN d.type IN ('neighbourhood', 'district') THEN EXISTS (
+          SELECT 1 FROM place_cells pc
+          JOIN cell_features cf ON cf.cell_x = pc.cell_x AND cf.cell_y = pc.cell_y
+          WHERE pc.place_id = d.id)
+        ELSE EXISTS (SELECT 1 FROM feature_to_place fp WHERE fp.place_id = d.id)
+        END AS has_features,
         (lower(d.matched_name) = ${lowered}) AS exact_match
       FROM deduped d
     ),
