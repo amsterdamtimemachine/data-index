@@ -4,14 +4,13 @@
 	re-runs the loader and re-fetches the map data.
 -->
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { asset } from '$app/paths';
 	import type { RecordType, PlaceType, PlaceSearchMatch } from '@atm/shared/types';
 	import { translate, translateAll, reverseTranslateAll } from '$utils/translations';
+	import { navigateParams, withoutPlace } from '$utils/navigate';
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
 	import Heading from './Heading.svelte';
 	import Tooltip from './Tooltip.svelte';
-	import Button from './Button.svelte';
 	import ToggleGroup from './ToggleGroup.svelte';
 	import Tag from './Tag.svelte';
 	import FilterSection from './FilterSection.svelte';
@@ -69,16 +68,10 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 	let tagOperator = $derived<'AND' | 'OR'>(currentTagOperator);
 	let selectedTags = $derived<string[]>(currentTags);
 
-	function navigate(mutate: (params: URLSearchParams) => void) {
-		const url = new URL(window.location.href);
-		mutate(url.searchParams);
-		goto(url.pathname + url.search);
-	}
-
 	function handleRecordTypeChange(selected: string[] | string) {
 		const dutch = Array.isArray(selected) ? selected : [selected];
 		const english = reverseTranslateAll(dutch);
-		navigate((p) => {
+		navigateParams((p) => {
 			if (english.length > 0) p.set('recordTypes', english.join(','));
 			else p.delete('recordTypes');
 			p.delete('tags'); // resetTags
@@ -89,7 +82,7 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 		const labels = Array.isArray(selected) ? selected : [selected];
 		const labelToId = new Map(datasets.map((s) => [s.label, s.id]));
 		const ids = labels.map((label) => labelToId.get(label) || label);
-		navigate((p) => {
+		navigateParams((p) => {
 			if (ids.length > 0) p.set('datasets', ids.join(','));
 			else p.delete('datasets');
 		});
@@ -98,7 +91,7 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 	function handlePlaceTypeChange(selected: string[] | string) {
 		const dutch = Array.isArray(selected) ? selected : [selected];
 		const raw = reverseTranslateAll(dutch);
-		navigate((p) => {
+		navigateParams((p) => {
 			if (raw.length > 0) p.set('placeTypes', raw.join(','));
 			else p.delete('placeTypes');
 		});
@@ -106,34 +99,34 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 
 	function handleTagsChange(tags: string | string[]) {
 		const tagArray = Array.isArray(tags) ? tags : [tags];
-		navigate((p) => {
+		navigateParams((p) => {
 			if (tagArray.length > 0) p.set('tags', tagArray.join(','));
 			else p.delete('tags');
 		});
 	}
 
+	// a picked place opens its panel at once; the cell gives way to it
 	function handlePlaceSelect(match: PlaceSearchMatch) {
-		navigate((p) => {
+		navigateParams((p) => {
 			p.set('place', match.placeId);
 			if (match.matchedNameId) {
 				p.set('name', match.matchedNameId);
 			} else {
 				p.delete('name');
 			}
+			p.set('placePanel', '1');
+			p.delete('cell');
 		});
 	}
 
 	function handlePlaceClear() {
-		navigate((p) => {
-			p.delete('place');
-			p.delete('name');
-		});
+		navigateParams(withoutPlace);
 	}
 
 	function handleTagOperatorChange(operator: 'AND' | 'OR') {
 		tagOperator = operator;
 		selectedTags = [];
-		navigate((p) => {
+		navigateParams((p) => {
 			p.set('tagOperator', operator);
 			p.delete('tags'); // resetTags
 		});
@@ -150,13 +143,6 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 				<Tooltip icon={QuestionMark} placement="bottom">
 					{translate('placeSearchTooltipLead')}
 					<img src={asset('/glyphs/PlaceBorder.svg')} alt="" width="24" height="24" class="inline align-middle mx-1" />
-					{translate('placeSearchTooltipBorder')}
-					<!-- the chip's select button, shown as is; inert keeps it out of the tab order and unclickable -->
-					<span inert aria-hidden="true">
-						<Button class="inline-flex align-middle mx-1 p-1">
-							<img src={asset('/glyphs/SelectPlaceFeatures.svg')} alt="" width="24" height="24" />
-						</Button>
-					</span>
 					{translate('placeSearchTooltipTail')}
 				</Tooltip>
 			</div>

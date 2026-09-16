@@ -39,12 +39,11 @@ const TRANSLATIONS: Record<string, string> = {
 	cellsOf: 'Cellen van',
 	cellOf: 'Cel van',
 	clearPlaceFilter: 'Verwijder plekfilter',
-	selectPlaceFeatures: 'Features van deze plek tonen',
-	// the place search tooltip, split around the border glyph and the chip's select button
-	placeSearchTooltipLead: 'Zoek op huidige of historische plaatsnamen. De resultaten staan in chronologische volgorde. De gouden rand',
-	placeSearchTooltipBorder: 'op de kaart markeert de cellen waarin de plek ligt. Klik op',
-	placeSearchTooltipTail: 'om de features van de gevonden plek te zien.',
-	unselectPlaceFeatures: 'Features van deze plek niet meer tonen',
+	showPlaceFeatures: 'Features van deze plek tonen',
+	hidePlaceFeatures: 'Features van deze plek verbergen',
+	// the place search tooltip, split around the border glyph
+	placeSearchTooltipLead: 'Zoek op huidige of historische plaatsnamen. De resultaten staan in chronologische volgorde. Kies een plek: de gouden rand',
+	placeSearchTooltipTail: 'op de kaart markeert de cellen waarin de plek ligt en het paneel toont de features van die cellen.',
 	ofThisCell: 'van deze cel',
 	timelineOfCell: 'Tijdlijn van deze cel',
 	timelineOf: 'Tijdlijn van',

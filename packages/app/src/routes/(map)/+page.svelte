@@ -160,7 +160,7 @@
 		tick().then(() => {
 			// Validate the deep-linked cell against the now-available dimensions (this used
 			// to be done in the loader, but dimensions arrive client-side now).
-			if (data.cellParam && dimensions) {
+			if (data.cellParam && dimensions && !placePanelOpen) {
 				const validation = validateCellId(data.cellParam, dimensions);
 				if (validation.isValid) {
 					const bounds = getCellBoundsFromCellId(data.cellParam, dimensions);
@@ -343,9 +343,22 @@
 		mapSelection.selectCell(null);
 	}
 
-	// Place panel: the features panel showing a searched place's cell set. Open
-	// state is client-owned and mirrored to the URL like the cell selection.
+	// Place panel: the features panel showing a searched place's cell set. A search
+	// pick opens it through the URL flag; the chip toggles it and the X clears the
+	// place. Open state is client-owned and mirrored to the URL like the cell.
 	let placePanelOpen = $state(untrack(() => data.placePanelOpen ?? false));
+
+	// the loader's flag wins whenever it changes: a search pick arrives as a
+	// navigation with the flag set, and an open place takes the panel from the cell
+	$effect(() => {
+		const open = data.placePanelOpen ?? false;
+		untrack(() => {
+			placePanelOpen = open;
+			if (open) {
+				mapSelection.selectCell(null);
+			}
+		});
+	});
 
 	function handleOpenPlacePanel() {
 		mapSelection.selectCell(null);
