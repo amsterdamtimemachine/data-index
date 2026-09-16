@@ -24,7 +24,7 @@
 <div class="mb-4">
 	<div class="flex mb-2">
 		<Heading level={3} class="pr-2">{heading}</Heading>
-		<Tooltip icon={QuestionMark} text={tooltip} placement="bottom" />
+		<Tooltip icon={QuestionMark} placement="bottom">{tooltip}</Tooltip>
 	</div>
 	<ToggleGroup {items} {selectedItems} {onItemSelected} requireOneItemSelected={requireOne}>
 		{#snippet children(item, isSelected, isDisabled)}

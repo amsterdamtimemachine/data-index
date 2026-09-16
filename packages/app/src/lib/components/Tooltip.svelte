@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { Tooltip } from 'melt/builders';
+	import type { Snippet } from 'svelte';
 	import { mergeCss } from '$utils/utils';
 	import type { PhosphorIcon, PhosphorIconProps } from '@atm/shared/types';
 
 	interface Props {
-		text: string;
+		// the tooltip's content; the box owns its text style, so callers pass plain content
+		children: Snippet;
 		icon: PhosphorIcon;
 		placement?:
 			| 'top'
@@ -33,7 +35,7 @@
 	};
 
 	let {
-		text,
+		children,
 		placement = 'top',
 		openDelay = 100,
 		closeDelay = 300,
@@ -73,23 +75,23 @@
 	<!-- Tooltip content -->
 	<div
 		{...tooltip.content}
-		class="tooltip-content z-50 max-w-xs rounded-lg bg-gray-900 border border-gray-700 text-white shadow-lg"
+		class="tooltip-content z-50 max-w-xs rounded-lg bg-atm-gold-deep border border-atm-gold-darkest text-white shadow-lg"
 	>
 		<div {...tooltip.arrow} class="tooltip-arrow"></div>
 		<div class="px-3 py-2 text-base">
-			{text}
+			{@render children()}
 		</div>
 	</div>
 {/if}
 
 <style lang="postcss">
 	.tooltip-content {
-		@apply border border-gray-700;
+		@apply border border-atm-gold-darkest;
 		margin: 0;
 		inset: auto;
 	}
 
 	.tooltip-arrow {
-		@apply bg-gray-900 border-gray-700;
+		@apply bg-atm-gold-deep border-atm-gold-darkest;
 	}
 </style>

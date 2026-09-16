@@ -40,6 +40,10 @@ const TRANSLATIONS: Record<string, string> = {
 	cellOf: 'Cel van',
 	clearPlaceFilter: 'Verwijder plekfilter',
 	selectPlaceFeatures: 'Features van deze plek tonen',
+	// the place search tooltip, split around the border glyph and the chip's select button
+	placeSearchTooltipLead: 'Zoek op huidige of historische plaatsnamen. De resultaten staan in chronologische volgorde. De gouden rand',
+	placeSearchTooltipBorder: 'op de kaart markeert de cellen waarin de plek ligt. Klik op',
+	placeSearchTooltipTail: 'om de features van de gevonden plek te zien.',
 	unselectPlaceFeatures: 'Features van deze plek niet meer tonen',
 	ofThisCell: 'van deze cel',
 	timelineOfCell: 'Tijdlijn van deze cel',

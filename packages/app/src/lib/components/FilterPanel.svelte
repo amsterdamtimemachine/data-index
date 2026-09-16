@@ -5,11 +5,13 @@
 -->
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { asset } from '$app/paths';
 	import type { RecordType, PlaceType, PlaceSearchMatch } from '@atm/shared/types';
-	import { translateAll, reverseTranslateAll } from '$utils/translations';
+	import { translate, translateAll, reverseTranslateAll } from '$utils/translations';
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
 	import Heading from './Heading.svelte';
 	import Tooltip from './Tooltip.svelte';
+	import Button from './Button.svelte';
 	import ToggleGroup from './ToggleGroup.svelte';
 	import Tag from './Tag.svelte';
 	import FilterSection from './FilterSection.svelte';
@@ -145,11 +147,18 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 		<div class="mb-4">
 			<div class="flex mb-2">
 				<Heading level={3} class="pr-2">Plek</Heading>
-				<Tooltip
-					icon={QuestionMark}
-					text="Zoek op huidige of historische plaatsnamen. De kaart markeert de cellen van de gevonden plek."
-					placement="bottom"
-				/>
+				<Tooltip icon={QuestionMark} placement="bottom">
+					{translate('placeSearchTooltipLead')}
+					<img src={asset('/glyphs/PlaceBorder.svg')} alt="" width="24" height="24" class="inline align-middle mx-1" />
+					{translate('placeSearchTooltipBorder')}
+					<!-- the chip's select button, shown as is; inert keeps it out of the tab order and unclickable -->
+					<span inert aria-hidden="true">
+						<Button class="inline-flex align-middle mx-1 p-1">
+							<img src={asset('/glyphs/SelectPlaceFeatures.svg')} alt="" width="24" height="24" />
+						</Button>
+					</span>
+					{translate('placeSearchTooltipTail')}
+				</Tooltip>
 			</div>
 			<PlaceSearchInput onSelect={handlePlaceSelect} {selectedPlace} />
 			{#if selectedPlace}
@@ -191,7 +200,7 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 		<div class="mb-4">
 			<div class="flex">
 				<Heading level={3} class="pr-2"> Onderwerpen </Heading>
-				<Tooltip icon={QuestionMark} text="Thematic categories based on newspaper sections, applied across all data using machine learning." placement="bottom" />
+				<Tooltip icon={QuestionMark} placement="bottom">Thematic categories based on newspaper sections, applied across all data using machine learning.</Tooltip>
 			</div>
 			<div class="mt-2 mb-3">
 				<TagOperatorSwitch
