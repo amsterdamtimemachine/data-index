@@ -22,25 +22,24 @@ type UncoveredRow = { uncovered: string };
  * union deduplicates, letting base cells roll up into any display grid as an exact
  * distinct count.
  *
- * Roaring bitmaps hold int4, but features.id is a uuid, so the build assigns each
- * feature a dense integer (row_number, 1..N) and packs those instead. That numbering is
- * scoped to this run and discarded — only cardinality is read back, never a feature's
- * identity. (A future bitmap that must intersect with these, e.g. per-tag sets, would
- * have to be built in the same pass off the same numbering.)
+ * Roaring bitmaps hold int4, but features.id is a uuid, so the buckets pack
+ * features.feature_int_id — the DB-assigned surrogate. Because it is persisted, an
+ * external id set (e.g. text-search matches mapped through the same column) can be
+ * intersected with these bitmaps after the rebuild.
  */
 export async function buildCellFeatures() {
   console.log(`\nRebuilding cell_features (base bin: ${PRECOMP_TIME_BIN_YEARS} years)...`);
 
-  await db.execute(sql`TRUNCATE ${cellFeatures}`);
+  // One transaction: SET LOCAL lifts the pool's defensive statement_timeout
+  // (sized for API queries, not batch rebuilds) for the bulk insert only.
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL statement_timeout = 0`);
 
-  await db.execute(sql`
+    await tx.execute(sql`TRUNCATE ${cellFeatures}`);
+
+    await tx.execute(sql`
     INSERT INTO ${cellFeatures} (cell_x, cell_y, time_bin, record_type, dataset_id, place_type, feature_ids)
-    WITH seq AS (
-      SELECT ${features.id} AS id, (row_number() OVER ())::int AS n
-      FROM ${features}
-      WHERE ${datedFeatures(sql`${features.startDate}`, sql`${features.endDate}`)}
-    ),
-    expanded AS (
+    WITH expanded AS (
       SELECT
         pc.cell_x,
         pc.cell_y,
@@ -48,12 +47,11 @@ export async function buildCellFeatures() {
         f.record_type,
         f.dataset_id,
         p.type AS place_type,
-        s.n
+        f.feature_int_id AS n
       FROM ${placeCells} pc
       JOIN ${featureToPlace} fp ON pc.place_id = fp.place_id
       JOIN ${features} f ON fp.feature_id = f.id
       JOIN ${place} p ON pc.place_id = p.id
-      JOIN seq s ON s.id = f.id
       -- every base bin the feature's date range touches, floored to the bin grid so
       -- it lines up with generateTimeSlices' round boundaries
       CROSS JOIN LATERAL generate_series(
@@ -61,11 +59,13 @@ export async function buildCellFeatures() {
         ${yearBin(sql`f.end_date`)},
         ${PRECOMP_TIME_BIN_YEARS}::int
       ) AS b(bin)
+      WHERE ${datedFeatures(sql`f.start_date`, sql`f.end_date`)}
     )
     SELECT cell_x, cell_y, time_bin, record_type, dataset_id, place_type, rb_build_agg(n)
     FROM expanded
     GROUP BY cell_x, cell_y, time_bin, record_type, dataset_id, place_type
   `);
+  });
 
   await db.execute(sql`ANALYZE ${cellFeatures}`);
 

@@ -17,6 +17,19 @@ import { getGridConfig } from './grid-config';
 export const countExpr = sql`rb_cardinality(rb_or_agg(${cellFeatures.featureIds}))`;
 
 /**
+ * countExpr, optionally intersected with a search bitmap (see feature-search.ts):
+ * the distinct features of the group that also match the search. NULL-safe — an
+ * empty search set (NULL bitmap) collapses every count to 0, which is exactly the
+ * zero-results semantics a no-match query should render.
+ */
+export function countMatchesExpr(searchBm: SQL | null): SQL {
+  if (!searchBm) {
+    return countExpr;
+  }
+  return sql`COALESCE(rb_and_cardinality(rb_or_agg(${cellFeatures.featureIds}), ${searchBm}), 0)`;
+}
+
+/**
  * Fold a base bin into its display bin. Both are anchored to round multiples of
  * their size (generateTimeSlices floors slice starts), so integer division lands a
  * base bin in the display bin that contains it — provided binSize is a multiple of
@@ -89,7 +102,7 @@ type DisplayCellRow = { dc: number; dr: number };
 /**
  * Restrict rows to the base cells inside the display cells a place lies in: the
  * cells the map outlines for it, so a selected place reads like clicking those
- * cells. The cell set is computed here and inlined as literal pairs, so the
+ * cells. The cell set is computed here and bound as two integer arrays, so the
  * planner sees its exact size and joins it against the cell indexes; generating
  * it in SQL made the planner guess millions of rows and scan place_cells instead.
  * Takes the cell columns as SQL so cell_features (histogram) and place_cells
@@ -100,19 +113,22 @@ export async function placeCellsCondition(cellX: SQL, cellY: SQL, placeId: strin
     SELECT DISTINCT ${gridColExpr(sql`cell_x`, grid.gridCols, grid.maxCellX)} AS dc,
                     ${gridRowExpr(sql`cell_y`, grid.gridRows, grid.maxCellY)} AS dr
     FROM place_cells WHERE place_id = ${placeId}`);
-  const pairs: string[] = [];
+  const xs: number[] = [];
+  const ys: number[] = [];
   for (const d of result.rows) {
     const r = displayCellBaseRange(d.dc, d.dr, grid);
     for (let x = r.minCellX; x <= r.maxCellX; x++) {
       for (let y = r.minCellY; y <= r.maxCellY; y++) {
-        pairs.push(`(${x},${y})`);
+        xs.push(x);
+        ys.push(y);
       }
     }
   }
-  if (pairs.length === 0) {
+  if (xs.length === 0) {
     return sql`FALSE`;
   }
-  return sql`(${cellX}, ${cellY}) IN (VALUES ${sql.raw(pairs.join(','))})`;
+  return sql`(${cellX}, ${cellY}) IN (
+    SELECT x, y FROM unnest(${sql.param(xs)}::int[], ${sql.param(ys)}::int[]) AS c(x, y))`;
 }
 
 /**

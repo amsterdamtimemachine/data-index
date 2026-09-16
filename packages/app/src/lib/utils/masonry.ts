@@ -36,7 +36,7 @@ export function createMasonry(container: HTMLElement): MasonryInstance {
 		const gap = parseFloat(getComputedStyle(active[0]).rowGap) || 16;
 		const heights = items.map((item) => item.offsetHeight);
 
-		// Phase 2 — pure JS: greedy shortest-column assignment on the measured heights.
+		// Phase 2 —  greedy shortest-column assignment on the measured heights.
 		const columnHeights = new Array<number>(count).fill(0);
 		const assignment = heights.map((h) => {
 			let shortest = 0;

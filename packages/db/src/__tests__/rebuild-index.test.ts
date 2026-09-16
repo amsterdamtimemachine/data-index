@@ -90,6 +90,17 @@ describe('rebuild-index line + polygon rasterisation', () => {
     expect(r.rows[0].spatial_frequency).toBe(9);
   });
 
+  test('buckets pack the persisted feature_int_id, not a run-scoped numbering', async () => {
+    const surrogate = await db.execute<{ feature_int_id: number }>(
+      sql`SELECT feature_int_id FROM features WHERE id = ${FID}`
+    );
+    const bucket = await db.execute<{ ids: number[] }>(
+      sql`SELECT rb_to_array(feature_ids) AS ids FROM cell_features WHERE cell_x = 1 AND cell_y = 1`
+    );
+    expect(bucket.rows.length).toBe(1);
+    expect(bucket.rows[0].ids).toEqual([surrogate.rows[0].feature_int_id]);
+  });
+
   test('line is assigned every cell it crosses', async () => {
     const cells = await db.execute<{ cell_x: number; cell_y: number }>(
       sql`SELECT cell_x, cell_y FROM place_cells WHERE place_id = ${LINE_ID}`

@@ -298,7 +298,7 @@ describe('place search', () => {
     const coarse = await getFeatures({ area: { kind: 'place', placeId: RENAMED, cols: 7 } });
     expect(coarse.total).toBe(1);
     expect(coarse.data[0].id).toBe(FID);
-    const series = await getHistogram(undefined, undefined, undefined, 50, undefined, RENAMED, 7);
+    const series = await getHistogram(undefined, undefined, undefined, 50, undefined, RENAMED, undefined, 7);
     expect(series.totalFeatures).toBe(1);
   });
 

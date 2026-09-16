@@ -2,8 +2,8 @@
  * Feature → place resolution behaviour (the new point/name resolvers). Seeds small
  * controlled fixtures per test — places in RD/28992 so distances are exact — and asserts
  * era discrimination, the distance caps, finest-granularity linking, the dated-area
- * tiebreak, exact/ambiguous name matching, defensive both-open dating, and the tagged
- * skip reasons.
+ * tiebreak, exact/ambiguous name matching, undated name rows being labels rather than
+ * candidates, and the tagged skip reasons.
  */
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test';
 import { sql } from 'drizzle-orm';
@@ -83,12 +83,18 @@ describe('feature → place resolution', () => {
     expect(await inferByName(nkey('Kerkstraat', '1920-01-01', '1920-01-01'))).toEqual({ skip: 'ambiguous' });
   });
 
-  test('name both-open historical scores below a dated overlap (defensive, req 11)', async () => {
+  // a name row without any period is a label (an undated Adamlink variant), not an
+  // observation: it never competes, so only the dated overlap resolves, and a
+  // place that has nothing but the label is not found at all
+  test('an undated name row is a label, not a candidate', async () => {
     await place('pA', 'street', 'adamlink', null);
-    await histName('hA', 'pA', 'Oudekerk', null, null);              // both-open
+    await histName('hA', 'pA', 'Oudekerk', null, null);
     await place('pB', 'street', 'adamlink', null);
-    await histName('hB', 'pB', 'Oudekerk', '1900-01-01', '1950-01-01'); // dated, overlaps 1920
+    await histName('hB', 'pB', 'Oudekerk', '1900-01-01', '1950-01-01');
+    expect(await getCandidatesByName('Oudekerk', '1920-01-01', '1920-01-01').then((c) => c.map((x) => x.placeId))).toEqual(['pB']);
     expect(await inferByName(nkey('Oudekerk', '1920-01-01', '1920-01-01'))).toEqual({ placeId: 'pB' });
+    await db.execute(sql`DELETE FROM place_historical_name WHERE id = 'hB'`);
+    expect(await getCandidatesByName('Oudekerk', '1920-01-01', '1920-01-01')).toEqual([]);
   });
 
   test('name transition day: feature on until = successor.since resolves to the successor, not ambiguous', async () => {

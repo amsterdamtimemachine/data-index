@@ -32,22 +32,25 @@ const TRANSLATIONS: Record<string, string> = {
 	sortRelevance: 'Relevantie',
 	sortOldest: 'Oudste eerst',
 	sortNewest: 'Nieuwste eerst',
+	sortBestMatch: 'Beste match',
 	reshuffle: 'Schud opnieuw',
 
 	// UI labels
 	searchPlaceholder: 'Zoek een plek op de kaart',
+	featureSearchPlaceholder: 'Zoek in de collectie',
+	applySearch: 'Zoek',
+	clearSearchFilter: 'Verwijder zoekfilter',
+	searchResult: 'resultaat',
+	searchResults: 'resultaten',
 	cellsOf: 'Cellen van',
 	cellOf: 'Cel van',
 	clearPlaceFilter: 'Verwijder plekfilter',
 	noFeaturesForSelection: 'Geen features gevonden voor deze selectie en periode.',
-	// the empty panel's hint, split around the timeline picture and the switch button
-	emptyPanelDotHintLead: 'Een rode stip op de tijdlijn',
-	emptyPanelDotHintTail: 'laat zien in welke periodes de selectie wel data heeft.',
+	// the empty panel's hints; {picture} and {button} stand for the inline elements
+	emptyPanelDotHint: 'Een rode stip op de tijdlijn {picture} laat zien in welke periodes de selectie wel data heeft. Klik op {button} rechtsonder om de tijdlijn van de selectie te tonen.',
 	redDotTimelineAlt: 'Tijdlijn met een rode stip onder een periode',
-	emptyPanelSwitchHintLead: 'Of klik op',
-	emptyPanelSwitchHintTail: 'rechtsonder om de tijdlijn van de selectie te tonen.',
-	emptyPanelBarHintLead: 'Kies op de tijdlijn',
-	emptyPanelBarHintTail: 'een periode met een rode balk: daar heeft de selectie wel features.',
+	emptyPanelBarHint: 'Kies op de tijdlijn {picture} een periode met een rode balk: daar heeft de selectie wel features.',
+	emptyPanelOtherCell: 'Of kies een andere cel op de kaart.',
 	localTimelineAlt: 'Tijdlijn van de selectie met rode balken',
 	// the timeline hover
 	featureOne: 'feature',
@@ -56,9 +59,12 @@ const TRANSLATIONS: Record<string, string> = {
 	periodLabel: 'Periode',
 	showPlaceFeatures: 'Features van deze plek tonen',
 	hidePlaceFeatures: 'Features van deze plek verbergen',
-	// the place search tooltip, split around the border glyph
-	placeSearchTooltipLead: 'Zoek op huidige of historische plaatsnamen. De resultaten staan in chronologische volgorde. Kies een plek: de gouden rand',
-	placeSearchTooltipTail: 'op de kaart markeert de cellen waarin de plek ligt en het paneel toont de features van die cellen.',
+	// the collapsed filter status line
+	statusInCellsOf: 'in de cellen van',
+	statusWithSearch: 'met zoekterm',
+	searchTooltip: 'Doorzoek de titels van alle features. Voorlopig wordt alleen op titels gezocht, niet op beschrijvingen of volledige teksten. Na een geslaagde zoekopdracht tonen de kaart en de tijdlijn alleen de gevonden features.',
+	// the place search tooltip; {border} stands for the map's outline glyph
+	placeSearchTooltip: 'Zoek op huidige of historische plaatsnamen. De resultaten staan in chronologische volgorde. Kies een plek: de gouden rand {border} op de kaart markeert de cellen waarin de plek ligt en het paneel toont de features van die cellen.',
 	ofThisCell: 'van deze cel',
 	timelineOfCell: 'Tijdlijn van deze cel',
 	timelineOf: 'Tijdlijn van',
@@ -85,6 +91,9 @@ const TRANSLATIONS: Record<string, string> = {
 	'Invalid Input': 'Ongeldige invoer',
 	'Period Not Found': 'Periode niet gevonden',
 	'Invalid Cell': 'Ongeldige cel',
+	'Place Not Found': 'Plek niet gevonden',
+	'Place Filter Load Failed': 'Plekfilter laden mislukt',
+	'Place Search Failed': 'Zoeken naar plekken mislukt',
 
 	// Error messages
 	'is not a valid content type and was removed from your selection': 'is geen geldig inhoudstype en is verwijderd uit uw selectie',
@@ -95,7 +104,13 @@ const TRANSLATIONS: Record<string, string> = {
 	spans: 'beslaat',
 	'years. Maximum 50 years supported': 'jaar. Maximaal 50 jaar ondersteund',
 	"doesn't exist in the dataset. Defaulting to most recent period": 'bestaat niet in de dataset. Standaard ingesteld op meest recente periode',
-	'not found. Please select a valid cell from the map': 'niet gevonden. Selecteer een geldige cel op de kaart'
+	'not found. Please select a valid cell from the map': 'niet gevonden. Selecteer een geldige cel op de kaart',
+	'The place in this URL does not exist anymore. The place filter was removed.':
+		'De plek in deze URL bestaat niet meer. Het plekfilter is verwijderd.',
+	'Could not restore the place filter. Please try again later.':
+		'Kon het plekfilter niet herstellen. Probeer het later opnieuw.',
+	'Could not search places. Please try again later.':
+		'Kon geen plekken zoeken. Probeer het later opnieuw.'
 };
 
 // Reverse map (built once)

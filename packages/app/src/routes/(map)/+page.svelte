@@ -5,6 +5,7 @@
 	import { formatPlaceTitle } from '$utils/format';
 	import { tick, untrack } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
+	import { navigateParams } from '$utils/navigate';
 	import { createMapSelection } from '$state/map-selection.svelte';
 	import { createTimelineScope } from '$state/timeline-scope.svelte';
 	import { createPageErrorData, createError, createValidationError } from '$utils/error';
@@ -47,6 +48,34 @@
 	let clientErrors = $state<AppError[]>([]);
 
 	const isMobile = createMediaQuery(MOBILE_QUERY);
+
+	// Pausing the text search is view state, not part of the address: the chip
+	// keeps the term, every fetch drops it. Remembering the paused term means a
+	// new or cleared term un-pauses by itself, while other filter changes keep it.
+	let pausedTerm = $state<string | null>(null);
+	const searchPaused = $derived(pausedTerm !== null && pausedTerm === data.currentSearchQuery);
+	const filterQuery = $derived.by(() => {
+		if (!searchPaused) {
+			return data.filterQuery;
+		}
+		const params = new URLSearchParams(data.filterQuery);
+		params.delete('q');
+		return params.toString();
+	});
+	const activeSearchQuery = $derived.by(() => {
+		if (searchPaused) {
+			return undefined;
+		}
+		return data.currentSearchQuery ?? undefined;
+	});
+
+	function handleToggleSearch() {
+		if (searchPaused) {
+			pausedTerm = null;
+		} else {
+			pausedTerm = data.currentSearchQuery ?? null;
+		}
+	}
 
 	// Page-owned so the chosen size survives the panel's open/close cycles.
 	let panelCols = $state<PanelCols>(3);
@@ -199,7 +228,7 @@
 	// Fetch heatmap + histogram on the client, re-fetching when the filters change.
 	// One URL definition feeds both the <head> preloads and the fetches, so the
 	// browser's preload always matches (a differing URL would fetch twice).
-	const filterParams = $derived(new URLSearchParams(data.filterQuery));
+	const filterParams = $derived(new URLSearchParams(filterQuery));
 	const heatmapUrl = $derived(apiUrl('/api/heatmaps', filterParams));
 	const histogramUrl = $derived(apiUrl('/api/histogram', filterParams));
 
@@ -255,7 +284,7 @@
 	// never shows the previous cell's bars.
 	$effect(() => {
 		const cellBounds = selectedCellBounds;
-		const filterQs = data.filterQuery;
+		const filterQs = filterQuery;
 		if (!cellBounds) {
 			timelineScope.clearCell();
 			return;
@@ -283,7 +312,7 @@
 	$effect(() => {
 		const open = placePanelOpen;
 		const place = data.selectedPlace;
-		const filterQs = data.filterQuery;
+		const filterQs = filterQuery;
 		if (!open || !place) {
 			timelineScope.clearPlace();
 			return;
@@ -318,9 +347,6 @@
 	// Handle cell selection from map; selecting a cell takes over the panel from
 	// the place view, but never clears the place filter itself.
 	function handleCellClick(cellId: string | null) {
-		if (cellId) {
-			handleClosePlacePanel();
-		}
 		if (cellId && dimensions) {
 			// Calculate bounds on-demand from dimensions
 			const bounds = getCellBoundsFromCellId(cellId, dimensions);
@@ -332,57 +358,43 @@
 		} else {
 			mapSelection.selectCell(null);
 		}
+		if (cellId && placePanelOpen) {
+			setPlacePanel(false);
+		}
 	}
 
 	function handleFeaturesPanelClose() {
 		if (placePanelOpen) {
-			handleClosePlacePanel();
+			setPlacePanel(false);
 			return;
 		}
 		mapSelection.clearErrors();
 		mapSelection.selectCell(null);
 	}
 
-	// Place panel: the features panel showing a searched place's cell set. A search
-	// pick opens it through the URL flag; the chip toggles it and the X clears the
-	// place. Open state is client-owned and mirrored to the URL like the cell.
-	let placePanelOpen = $state(untrack(() => data.placePanelOpen ?? false));
+	// Place panel: the features panel showing a searched place's cell set. The URL
+	// flag is its only state, read by the loader; a search pick, the chip and the
+	// panel's close all navigate to set or clear it, like any other filter change.
+	const placePanelOpen = $derived(data.placePanelOpen ?? false);
 
-	// the loader's flag wins whenever it changes: a search pick arrives as a
-	// navigation with the flag set, and an open place takes the panel from the cell
-	$effect(() => {
-		const open = data.placePanelOpen ?? false;
-		untrack(() => {
-			placePanelOpen = open;
+	function setPlacePanel(open: boolean) {
+		navigateParams((p) => {
 			if (open) {
-				mapSelection.selectCell(null);
+				p.set('placePanel', '1');
+			} else {
+				p.delete('placePanel');
 			}
 		});
-	});
-
-	function handleOpenPlacePanel() {
-		mapSelection.selectCell(null);
-		placePanelOpen = true;
-		mapSelection.updateUrlParam('placePanel', '1');
-	}
-
-	function handleClosePlacePanel() {
-		placePanelOpen = false;
-		mapSelection.updateUrlParam('placePanel', null);
 	}
 
 	function handleTogglePlacePanel() {
-		if (placePanelOpen) {
-			handleClosePlacePanel();
-			return;
-		}
-		handleOpenPlacePanel();
+		setPlacePanel(!placePanelOpen);
 	}
 
-	// clearing the place filter also closes its panel
+	// an open place panel takes the panel from the cell
 	$effect(() => {
-		if (!data.selectedPlace && placePanelOpen) {
-			placePanelOpen = false;
+		if (placePanelOpen) {
+			untrack(() => mapSelection.selectCell(null));
 		}
 	});
 
@@ -478,6 +490,10 @@
 				selectedPlace={data.selectedPlace}
 				onTogglePlacePanel={handleTogglePlacePanel}
 				{placePanelOpen}
+				currentSearchQuery={data.currentSearchQuery}
+				{searchPaused}
+				onToggleSearch={handleToggleSearch}
+				{filterQuery}
 			/>
 		</NavContainer>
 
@@ -492,6 +508,8 @@
 			allDatasets={datasetLabels}
 			selectedTags={currentTags}
 			tagOperator={currentTagOperator as 'AND' | 'OR'}
+			selectedPlace={data.selectedPlace}
+			searchQuery={activeSearchQuery}
 			class="absolute top-3 left-3 max-w-[calc(100%-1.5rem)]"
 		/>
 	{/if}
@@ -515,6 +533,7 @@
 						datasets={currentDatasets}
 						tags={currentTags}
 						tagOperator={currentTagOperator as 'AND' | 'OR'}
+						searchQuery={activeSearchQuery}
 						{gridColumns}
 						{sortMode}
 						{sampleSeed}

@@ -4,6 +4,7 @@
 	import FeaturesGrid from '$components/FeaturesGrid.svelte';
 	import Image from '$components/Image.svelte';
 	import ButtonIllustration from '$components/ButtonIllustration.svelte';
+	import TextWithSlots from '$components/TextWithSlots.svelte';
 	import FeaturesPanelHeader from '$components/FeaturesPanelHeader.svelte';
 	import ErrorHandler from '$components/ErrorHandler.svelte';
 	import { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
@@ -19,6 +20,7 @@
 		datasets: string[];
 		tags: string[];
 		tagOperator?: 'AND' | 'OR';
+		searchQuery?: string;
 		onClose?: () => void;
 		timeline?: HeatmapTimeline;
 		dimensions?: HeatmapDimensions;
@@ -42,6 +44,7 @@
 		datasets,
 		tags,
 		tagOperator = 'OR',
+		searchQuery = undefined,
 		onClose,
 		timeline,
 		dimensions,
@@ -62,6 +65,7 @@
 		datasets,
 		tags,
 		tagOperator,
+		searchQuery,
 		sortMode,
 		sampleSeed
 	}));
@@ -86,6 +90,7 @@
 	{sortMode}
 	{onSortChange}
 	{onShuffle}
+	searchActive={!!searchQuery}
 	totalCount={panelFeatures.totalCount}
 	currentPage={panelFeatures.currentPage}
 	pageSize={panelFeatures.pageSize}
@@ -102,16 +107,26 @@
 		<p class="text-base text-black p-4 leading-loose">
 			<span class="font-bold">{translate('noFeaturesForSelection')}</span>
 			{#if timelineView === 'cityWide'}
-				{translate('emptyPanelDotHintLead')}
-				<Image src={asset('/images/red-dot-timeline-detail.png')} alt={translate('redDotTimelineAlt')} inline />
-				{translate('emptyPanelDotHintTail')}
-				{translate('emptyPanelSwitchHintLead')}
-				<ButtonIllustration glyph="/glyphs/ToggleLocalTimeline.svg" />
-				{translate('emptyPanelSwitchHintTail')}
+				<TextWithSlots text={translate('emptyPanelDotHint')}>
+					{#snippet children(slot)}
+						{#if slot === 'picture'}
+							<Image src={asset('/images/red-dot-timeline-detail.png')} alt={translate('redDotTimelineAlt')} inline />
+						{:else if slot === 'button'}
+							<ButtonIllustration glyph="/glyphs/ToggleLocalTimeline.svg" />
+						{/if}
+					{/snippet}
+				</TextWithSlots>
 			{:else if timelineView === 'local'}
-				{translate('emptyPanelBarHintLead')}
-				<Image src={asset('/images/local-timeline-detail.png')} alt={translate('localTimelineAlt')} inline />
-				{translate('emptyPanelBarHintTail')}
+				<TextWithSlots text={translate('emptyPanelBarHint')}>
+					{#snippet children(slot)}
+						{#if slot === 'picture'}
+							<Image src={asset('/images/local-timeline-detail.png')} alt={translate('localTimelineAlt')} inline />
+						{/if}
+					{/snippet}
+				</TextWithSlots>
+			{/if}
+			{#if timelineView}
+				{translate('emptyPanelOtherCell')}
 			{/if}
 		</p>
 	{/if}

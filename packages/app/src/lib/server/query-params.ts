@@ -40,6 +40,23 @@ export function parseSeed(url: URL): string | undefined {
 	return raw.slice(0, 64);
 }
 
+/**
+ * Free-text feature search (`q`): dutch FTS with websearch syntax. Any string is
+ * safe to forward (websearch_to_tsquery never throws on user input); trimmed and
+ * capped like the place id params. Blank → undefined → no filter.
+ */
+export function parseSearchQuery(url: URL): string | undefined {
+	const raw = url.searchParams.get('q');
+	if (!raw) {
+		return undefined;
+	}
+	const trimmed = raw.trim().slice(0, 512);
+	if (trimmed.length === 0) {
+		return undefined;
+	}
+	return trimmed;
+}
+
 export type Bounds = { minLon: number; maxLon: number; minLat: number; maxLat: number };
 
 /**

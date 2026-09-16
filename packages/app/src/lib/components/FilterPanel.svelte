@@ -11,11 +11,14 @@
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
 	import Heading from './Heading.svelte';
 	import Tooltip from './Tooltip.svelte';
+	import TextWithSlots from './TextWithSlots.svelte';
 	import ToggleGroup from './ToggleGroup.svelte';
 	import Tag from './Tag.svelte';
 	import FilterSection from './FilterSection.svelte';
 import PlaceSearchInput from './PlaceSearchInput.svelte';
 import PlaceFilterTag from './PlaceFilterTag.svelte';
+import FeatureSearchInput from './FeatureSearchInput.svelte';
+import SearchFilterTag from './SearchFilterTag.svelte';
 	import TagsANDSelector from './TagsANDSelector.svelte';
 	import TagOperatorSwitch from './TagOperatorSwitch.svelte';
 	import DummyTagsSection from './DummyTagsSection.svelte';
@@ -33,6 +36,11 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 		selectedPlace?: PlaceSearchMatch | null;
 		onTogglePlacePanel?: () => void;
 		placePanelOpen?: boolean;
+		currentSearchQuery?: string | null;
+		searchPaused?: boolean;
+		onToggleSearch?: () => void;
+		// current filter params, forwarded so the search preview count matches them
+		filterQuery?: string;
 	}
 
 	let {
@@ -47,7 +55,11 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 		currentTagOperator = 'OR',
 		selectedPlace = null,
 		onTogglePlacePanel = undefined,
-		placePanelOpen = false
+		placePanelOpen = false,
+		currentSearchQuery = null,
+		searchPaused = false,
+		onToggleSearch = undefined,
+		filterQuery = ''
 	}: Props = $props();
 
 	// keep false until real tags are added to the app
@@ -123,6 +135,22 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 		navigateParams(withoutPlace);
 	}
 
+	function handleSearchApply(q: string) {
+		navigateParams((p) => {
+			p.set('q', q);
+		});
+	}
+
+	function handleSearchClear() {
+		navigateParams((p) => {
+			p.delete('q');
+			// bestMatch order is meaningless without a query
+			if (p.get('sort') === 'bestMatch') {
+				p.delete('sort');
+			}
+		});
+	}
+
 	function handleTagOperatorChange(operator: 'AND' | 'OR') {
 		tagOperator = operator;
 		selectedTags = [];
@@ -141,15 +169,32 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 			<div class="flex mb-2">
 				<Heading level={3} class="pr-2">Plek</Heading>
 				<Tooltip icon={QuestionMark} placement="bottom">
-					{translate('placeSearchTooltipLead')}
-					<img src={asset('/glyphs/PlaceBorder.svg')} alt="" width="24" height="24" class="inline align-middle mx-1" />
-					{translate('placeSearchTooltipTail')}
+					<TextWithSlots text={translate('placeSearchTooltip')}>
+						{#snippet children(slot)}
+							{#if slot === 'border'}
+								<img src={asset('/glyphs/PlaceBorder.svg')} alt="" width="24" height="24" class="inline align-middle mx-1" />
+							{/if}
+						{/snippet}
+					</TextWithSlots>
 				</Tooltip>
 			</div>
 			<PlaceSearchInput onSelect={handlePlaceSelect} {selectedPlace} />
 			{#if selectedPlace}
 				<div class="mt-2">
 					<PlaceFilterTag place={selectedPlace} onClear={handlePlaceClear} onToggle={onTogglePlacePanel} active={placePanelOpen} />
+				</div>
+			{/if}
+		</div>
+
+		<div class="mb-4">
+			<div class="flex mb-2">
+				<Heading level={3} class="pr-2">Zoekterm</Heading>
+				<Tooltip icon={QuestionMark} placement="bottom">{translate('searchTooltip')}</Tooltip>
+			</div>
+			<FeatureSearchInput onApply={handleSearchApply} {filterQuery} />
+			{#if currentSearchQuery}
+				<div class="mt-2">
+					<SearchFilterTag query={currentSearchQuery} onClear={handleSearchClear} onToggle={onToggleSearch} active={!searchPaused} />
 				</div>
 			{/if}
 		</div>
