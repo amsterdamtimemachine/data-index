@@ -4,8 +4,8 @@
  * force an oversized IN (...) query.
  */
 import { describe, test, expect } from 'vitest';
-import { MAX_FILTER_ITEMS } from '@atm/shared';
-import { parseBounds, parseList } from './query-params';
+import { MAX_FILTER_ITEMS, DISPLAY_GRID_DEFAULT_COLS, DISPLAY_GRID_MIN_COLS, DISPLAY_GRID_MAX_COLS } from '@atm/shared';
+import { parseBounds, parseList, parseGridCols } from './query-params';
 
 function url(qs: string): URL {
 	return new URL(`http://test/api/x${qs}`);
@@ -68,5 +68,18 @@ describe('parseList', () => {
 	test('caps at MAX_FILTER_ITEMS', () => {
 		const many = Array.from({ length: MAX_FILTER_ITEMS + 10 }, (_, i) => `t${i}`).join(',');
 		expect(parseList(url(`?tags=${many}`), 'tags')?.length).toBe(MAX_FILTER_ITEMS);
+	});
+});
+
+describe('parseGridCols', () => {
+	test('absent or malformed falls back to the default width', () => {
+		expect(parseGridCols(url(''))).toBe(DISPLAY_GRID_DEFAULT_COLS);
+		expect(parseGridCols(url('?cols=wide'))).toBe(DISPLAY_GRID_DEFAULT_COLS);
+	});
+
+	test('a width is clamped to the allowed range', () => {
+		expect(parseGridCols(url('?cols=50'))).toBe(50);
+		expect(parseGridCols(url('?cols=1'))).toBe(DISPLAY_GRID_MIN_COLS);
+		expect(parseGridCols(url('?cols=100000'))).toBe(DISPLAY_GRID_MAX_COLS);
 	});
 });

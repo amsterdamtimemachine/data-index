@@ -3,6 +3,7 @@
      so the translation decides where a picture or button goes in the sentence. -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { splitSlots } from '$utils/slots';
 
 	interface Props {
 		text: string;
@@ -11,14 +12,13 @@
 	}
 	let { text, children }: Props = $props();
 
-	// "a {picture} b" splits into ['a ', 'picture', ' b']: odd entries are slot names
-	const parts = $derived(text.split(/\{(\w+)\}/));
+	const parts = $derived(splitSlots(text));
 </script>
 
 {#each parts as part, i (i)}
-	{#if i % 2 === 1}
-		{@render children(part)}
+	{#if part.kind === 'slot'}
+		{@render children(part.name)}
 	{:else}
-		{part}
+		{part.value}
 	{/if}
 {/each}
