@@ -5,14 +5,17 @@
 
 	interface Props {
 		bins: HistogramBin[];
-		// the selected cell's series, for the hover tooltip's second line
+		// the selection's series while it is on screen, for the hover tooltip
 		localBins?: HistogramBin[];
+		// the selection's series under the city-wide one: the hover names its count
+		// for bins where it has data
+		markerBins?: HistogramBin[];
 		currentIndex: number;
 		onIndexChange: (newIndex: number) => void;
 		timelineHeight: number;
 		onKeyDown?: (event: KeyboardEvent) => void;
 	}
-	let { bins, localBins = [], currentIndex, onIndexChange, timelineHeight, onKeyDown }: Props = $props();
+	let { bins, localBins = [], markerBins = [], currentIndex, onIndexChange, timelineHeight, onKeyDown }: Props = $props();
 
 	const hoverCapable = createMediaQuery(HOVER_QUERY);
 
@@ -44,6 +47,18 @@
 			return null;
 		}
 		return local.count;
+	});
+
+	const hoveredSelectionCount = $derived.by(() => {
+		if (!hoveredBin) {
+			return null;
+		}
+		const key = hoveredBin.bin.timeSlice.key;
+		const marked = markerBins.find((bin) => bin.timeSlice.key === key);
+		if (!marked || marked.count === 0) {
+			return null;
+		}
+		return marked.count;
 	});
 
 	function handleTrackClick(event: MouseEvent) {
@@ -95,6 +110,7 @@
 	<TimePeriodTooltip
 		bin={hoveredBin.bin}
 		localCount={hoveredLocalCount}
+		selectionCount={hoveredSelectionCount}
 		x={mousePosition.x}
 		y={mousePosition.y}
 	/>

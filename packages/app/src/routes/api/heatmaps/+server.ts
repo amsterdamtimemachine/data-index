@@ -2,16 +2,9 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { HeatmapResolutionConfig } from '@atm/shared/types';
-import { DISPLAY_GRID_DEFAULT_COLS, DISPLAY_GRID_MIN_COLS, DISPLAY_GRID_MAX_COLS, DISPLAY_TIME_BIN_DEFAULT_YEARS } from '@atm/shared';
+import { DISPLAY_TIME_BIN_DEFAULT_YEARS } from '@atm/shared';
 import { getHeatmap, getHeatmapTimeline } from '@atm/db/queries';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes } from '$lib/server/query-params';
-
-function parseGridParam(value: string | null, defaultVal: number): number {
-	if (value === null) return defaultVal;
-	const parsed = parseInt(value, 10);
-	if (isNaN(parsed)) return defaultVal;
-	return Math.min(Math.max(parsed, DISPLAY_GRID_MIN_COLS), DISPLAY_GRID_MAX_COLS);
-}
+import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseGridCols } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -22,7 +15,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		// Parse grid resolution — only width (cols); rows are derived from the data's
 		// aspect ratio server-side so display cells are square.
-		const cols = parseGridParam(url.searchParams.get('cols'), DISPLAY_GRID_DEFAULT_COLS);
+		const cols = parseGridCols(url);
 		const resolution: HeatmapResolutionConfig = { cols };
 
 		// Parse bin size

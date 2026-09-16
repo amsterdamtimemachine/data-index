@@ -4,9 +4,10 @@
 	re-runs the loader and re-fetches the map data.
 -->
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { asset } from '$app/paths';
 	import type { RecordType, PlaceType, PlaceSearchMatch } from '@atm/shared/types';
-	import { translateAll, reverseTranslateAll } from '$utils/translations';
+	import { translate, translateAll, reverseTranslateAll } from '$utils/translations';
+	import { navigateParams, withoutPlace } from '$utils/navigate';
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
 	import Heading from './Heading.svelte';
 	import Tooltip from './Tooltip.svelte';
@@ -67,16 +68,10 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 	let tagOperator = $derived<'AND' | 'OR'>(currentTagOperator);
 	let selectedTags = $derived<string[]>(currentTags);
 
-	function navigate(mutate: (params: URLSearchParams) => void) {
-		const url = new URL(window.location.href);
-		mutate(url.searchParams);
-		goto(url.pathname + url.search);
-	}
-
 	function handleRecordTypeChange(selected: string[] | string) {
 		const dutch = Array.isArray(selected) ? selected : [selected];
 		const english = reverseTranslateAll(dutch);
-		navigate((p) => {
+		navigateParams((p) => {
 			if (english.length > 0) p.set('recordTypes', english.join(','));
 			else p.delete('recordTypes');
 			p.delete('tags'); // resetTags
@@ -87,7 +82,7 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 		const labels = Array.isArray(selected) ? selected : [selected];
 		const labelToId = new Map(datasets.map((s) => [s.label, s.id]));
 		const ids = labels.map((label) => labelToId.get(label) || label);
-		navigate((p) => {
+		navigateParams((p) => {
 			if (ids.length > 0) p.set('datasets', ids.join(','));
 			else p.delete('datasets');
 		});
@@ -96,7 +91,7 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 	function handlePlaceTypeChange(selected: string[] | string) {
 		const dutch = Array.isArray(selected) ? selected : [selected];
 		const raw = reverseTranslateAll(dutch);
-		navigate((p) => {
+		navigateParams((p) => {
 			if (raw.length > 0) p.set('placeTypes', raw.join(','));
 			else p.delete('placeTypes');
 		});
@@ -104,34 +99,34 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 
 	function handleTagsChange(tags: string | string[]) {
 		const tagArray = Array.isArray(tags) ? tags : [tags];
-		navigate((p) => {
+		navigateParams((p) => {
 			if (tagArray.length > 0) p.set('tags', tagArray.join(','));
 			else p.delete('tags');
 		});
 	}
 
+	// a picked place opens its panel at once; the cell gives way to it
 	function handlePlaceSelect(match: PlaceSearchMatch) {
-		navigate((p) => {
+		navigateParams((p) => {
 			p.set('place', match.placeId);
 			if (match.matchedNameId) {
 				p.set('name', match.matchedNameId);
 			} else {
 				p.delete('name');
 			}
+			p.set('placePanel', '1');
+			p.delete('cell');
 		});
 	}
 
 	function handlePlaceClear() {
-		navigate((p) => {
-			p.delete('place');
-			p.delete('name');
-		});
+		navigateParams(withoutPlace);
 	}
 
 	function handleTagOperatorChange(operator: 'AND' | 'OR') {
 		tagOperator = operator;
 		selectedTags = [];
-		navigate((p) => {
+		navigateParams((p) => {
 			p.set('tagOperator', operator);
 			p.delete('tags'); // resetTags
 		});
@@ -145,11 +140,11 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 		<div class="mb-4">
 			<div class="flex mb-2">
 				<Heading level={3} class="pr-2">Plek</Heading>
-				<Tooltip
-					icon={QuestionMark}
-					text="Zoek op huidige of historische plaatsnamen. De kaart markeert de cellen van de gevonden plek."
-					placement="bottom"
-				/>
+				<Tooltip icon={QuestionMark} placement="bottom">
+					{translate('placeSearchTooltipLead')}
+					<img src={asset('/glyphs/PlaceBorder.svg')} alt="" width="24" height="24" class="inline align-middle mx-1" />
+					{translate('placeSearchTooltipTail')}
+				</Tooltip>
 			</div>
 			<PlaceSearchInput onSelect={handlePlaceSelect} {selectedPlace} />
 			{#if selectedPlace}
@@ -191,7 +186,7 @@ import PlaceFilterTag from './PlaceFilterTag.svelte';
 		<div class="mb-4">
 			<div class="flex">
 				<Heading level={3} class="pr-2"> Onderwerpen </Heading>
-				<Tooltip icon={QuestionMark} text="Thematic categories based on newspaper sections, applied across all data using machine learning." placement="bottom" />
+				<Tooltip icon={QuestionMark} placement="bottom">Thematic categories based on newspaper sections, applied across all data using machine learning.</Tooltip>
 			</div>
 			<div class="mt-2 mb-3">
 				<TagOperatorSwitch

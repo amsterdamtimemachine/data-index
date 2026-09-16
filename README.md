@@ -195,7 +195,7 @@ erDiagram
 - **datasets**: Data collections from organisations
 - **place**: Physical location identity (id, type, name); `source` is the provider organisation
 - **place_geometry**: A place's geometry (RD / EPSG:28992) and the period it was valid (1:1 with place)
-- **place_historical_name**: Dated past names linked to places (addresses, streets), used to show what a location was called at a given time
+- **place_historical_name**: Dated past names linked to places (addresses, streets), used to show what a location was called at a given time. Undated Adamlink name variants (spelling variants, abbreviations, old names without a date) are kept too, as rows without a `since` or `until`: a row with a period is an observation of what the place was called then, a row without one is a label. The place search finds labels and shows the current name in brackets after them, while feature-to-place resolution and name canonicalisation consider dated rows only
 - **tags**: Thematic categories (e.g. Nature, Transport, Living) assigned to features. Work in progress, generated via AI classification across datasets
 - **features**: Images, texts, persons, or other content items linked to places and displayed in the UI
 - **place_cells**: Pre-computed spatial grid that powers the heatmap. Each place is mapped to the 100m cells its geometry covers (one cell for a point, many for a street or neighbourhood). Features inherit cell coverage through their place link, cell assignments are stored once per place rather than duplicated per feature.
@@ -271,11 +271,11 @@ The cell view sorts features in one of six modes. All modes are deterministic.
 
 ### Place search
 
-`/api/places` finds places by name prefix, across all place types and all sources. It searches current names and dated historical names together, so an old street name finds today's street. Address places only match when the query contains a digit, which keeps a street search from flooding with its house numbers. Places with linked features rank first, then exact name matches, then the finest place type.
+`/api/places` finds places by name prefix, across all place types and all sources. It searches current names, dated historical names and undated name variants together, so an old street name or a spelling variant finds today's street, and a match on anything but the current name carries that current name in brackets, as feature cards do. Address places only match when the query contains a digit, which keeps a street search from flooding with its house numbers. Exact name matches rank first; the rest follow a timeline: rows still current, youngest first, then ended rows, latest end first, then rows without dates. A dated historical name takes its own place on that timeline, an undated variant takes its place's, so a variant of a living street ranks as current while displaying no date. Place type and name only break ties, and whether a place has features plays no part.
 
-Each match carries the matched name, the id of the matched historical name row when one applies, its validity window, the place's own geometry window for dated area divisions, the feature count, and the place's cells as display-grid indices in the same space as heatmap indices. The UI stores a selection in the URL as the place id plus the matched name row id, so a shared link restores the exact clicked alias.
+Each match carries the matched name, the id of the matched historical name row when one applies, its validity window when that row has one, the place's own geometry window when the place has one, the feature count, and the place's cells as display-grid indices in the same space as heatmap indices. The dropdown shows the period of the name it displays: a match on the current name carries the place's window, a match on a historical name row carries that row's window, so an undated variant carries none rather than borrowing the place's. The UI stores a selection in the URL as the place id plus the matched name row id, so a shared link restores the exact clicked alias.
 
-`/api/places` accepts `q` (search) or `id` with optional `nameId` (restore), plus `cols` and `limit`. `/api/features` and `/api/histogram` accept `placeId` to scope their results to the cells of one place.
+`/api/places` accepts `q` (search) or `id` with optional `nameId` (restore), plus `cols` and `limit`. `/api/features` and `/api/histogram` accept `placeId` to scope their results to the display cells one place lies in, at the grid width `cols` like the heatmap, so a selected place reads exactly like clicking the cells the map outlines for it: whatever else lies in those cells counts too.
 
 ## Dating
 
@@ -283,7 +283,7 @@ Each match carries the matched name, the id of the matched historical name row w
 Feature dates (`features.start_date` / `end_date`) are the source feature's own date range. They drive the histogram and heatmap, `temporal_frequency`, and thus an item's ranking.
 
 ### Place dates
-Place dates (`place_geometry.since` / `until`) mark the period a neighbourhood or district geometry was the city's division — these are the only place types whose geometry changes over time, as documented in Adamlink. They're used at ingest to match a neighbourhood/district feature's date range to the geometry of the right era.
+Place dates (`place_geometry.since` / `until`) mark the period a place existed in that shape: for a neighbourhood or district the period its geometry was the city's division, the only place types whose geometry changes over time as documented in Adamlink, and for an Adamlink street the years Adamlink gives for the street's existence. Area dates are used at ingest to match a neighbourhood/district feature's date range to the geometry of the right era; street dates are informational and shown in the place search, so two streets that shared a name in different centuries can be told apart.
  
 ### Place name dates
 Name dates (`place_historical_name.since` / `until`) record the period a historical name of an address or street was in use. They supply the `historicalLabel` shown on a feature. Adamlink provides historical names only for streets and addresses.
@@ -415,7 +415,7 @@ Ingestion is idempotent and source-driven: corrections are made in the **source 
 | `GET /api/metadata` | Time slices, record types, place types, datasets, tags |
 | `GET /api/heatmaps` | Sparse heatmap data with grid dimensions |
 | `GET /api/histogram` | Feature count distribution by time period |
-| `GET /api/features` | Paginated features within geographic bounds or a place's cells |
+| `GET /api/features` | Paginated features within geographic bounds or the display cells of a place |
 | `GET /api/available-tags` | Tags with feature counts |
 | `GET /api/places` | Place name search and place lookup for the search filter |
 | `GET /api/tag-combinations` | Valid next tags for a tag selection — progressive tag filtering (WIP, not yet exposed in the UI) |

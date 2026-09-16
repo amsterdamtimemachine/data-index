@@ -1,8 +1,9 @@
 /**
  * Place-name search over the gazetteer, asserted as ranking invariants:
- * data-bearing places outrank bare gazetteer entries, exact name matches outrank
- * prefix matches, historical names match with their validity window, a place
- * matching on both names appears once, and unlinked places are findable with cells.
+ * exact name matches outrank everything, the rest follow a timeline (current rows
+ * youngest first, then ended rows latest end first, then undated rows; data presence
+ * plays no part), prefix matches, historical names match with their validity window,
+ * a place matching on both names appears once, and unlinked places are findable with cells.
  */
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
@@ -10,6 +11,7 @@ import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
 import { upsertSource } from '../etl/writers/feature-writer';
 import { rebuildIndex } from '../etl/post-process/rebuild-index';
 import { searchPlaces, getPlaceById } from '../queries/place-search';
+import { displayGrid, displayCellBaseRange } from '../queries/cell-features';
 import { getHeatmapTimeline } from '../queries/heatmap';
 import { getHistogram } from '../queries/histogram';
 import { getFeatures } from '../queries/features';
@@ -21,7 +23,17 @@ const RENAMED = 'ps-renamed';
 const BOTH = 'ps-both';
 const HOOD = 'ps-hood';
 const RENUMBERED = 'ps-renumbered';
+const DISTRICT_EXACT = 'ps-wijk-2';      // named exactly like a query that also prefixes many addresses
+const ADDR_NUMBERED = 'ps-wijk-20-nr-1'; // one of those addresses, with a feature
+const TOREN_YOUNG = 'ps-toren-young';    // Torenstraat rows that differ only in their place on the timeline
+const TOREN_OPEN = 'ps-toren-open';
+const TOREN_1900 = 'ps-toren-1900';
+const TOREN_1700 = 'ps-toren-1700';
+const TOREN_HIST = 'ps-toren-hist';      // still-open street that was called Torenstraat until 1850
+const TOREN_ALIAS = 'ps-toren-alias';    // street begun 1950 with Torenstraat as an undated variant
+const TOREN_UNDATED = 'ps-toren-undated';
 const FID = '22222222-2222-2222-2222-2222222222aa';
+const FID2 = '22222222-2222-2222-2222-2222222222bb';
 
 describe('place search', () => {
   beforeAll(async () => {
@@ -42,7 +54,16 @@ describe('place search', () => {
       (${RENAMED}, 'street', 'Modernstraat'),
       (${BOTH}, 'address', 'Kerkstraat 9'),
       (${HOOD}, 'neighbourhood', 'Kerkbuurt'),
-      (${RENUMBERED}, 'street', 'Oudekerkspad')`);
+      (${RENUMBERED}, 'street', 'Oudekerkspad'),
+      (${DISTRICT_EXACT}, 'district', 'Wijk 2'),
+      (${ADDR_NUMBERED}, 'address', 'Wijk 20, nr 1'),
+      (${TOREN_YOUNG}, 'street', 'Torenstraat'),
+      (${TOREN_OPEN}, 'street', 'Torenstraat'),
+      (${TOREN_1900}, 'street', 'Torenstraat'),
+      (${TOREN_1700}, 'street', 'Torenstraat'),
+      (${TOREN_HIST}, 'street', 'Zuidstraat'),
+      (${TOREN_ALIAS}, 'street', 'Torenplein'),
+      (${TOREN_UNDATED}, 'street', 'Torenstraat')`);
     await db.execute(sql`UPDATE place SET source = 'adamlink' WHERE id = ${RENUMBERED}`);
     // non-adamlink open-ended name: canonicalisation must leave it alone
     await db.execute(sql`INSERT INTO place (id, type, name, source) VALUES ('ps-foreign', 'street', 'Vreemdstraat', 'ps-org')`);
@@ -54,23 +75,35 @@ describe('place search', () => {
       (${ADDR}, ST_GeomFromText('POINT(120050 485050)', 28992)),
       (${RENAMED}, ST_GeomFromText('POINT(120150 485150)', 28992)),
       (${BOTH}, ST_GeomFromText('POINT(120250 485250)', 28992)),
-      (${RENUMBERED}, ST_GeomFromText('POINT(120350 485350)', 28992))`);
+      (${RENUMBERED}, ST_GeomFromText('POINT(120350 485350)', 28992)),
+      (${ADDR_NUMBERED}, ST_GeomFromText('POINT(121250 485950)', 28992)),
+      (${DISTRICT_EXACT}, ST_GeomFromText('POLYGON((120800 485800, 120990 485800, 120990 485950, 120800 485950, 120800 485800))', 28992)),
+      (${TOREN_UNDATED}, ST_GeomFromText('LINESTRING(120800 485990, 120900 485990)', 28992))`);
     // a historical area division: geometry valid for a closed era
     await db.execute(sql`INSERT INTO place_geometry (place_id, geometry, since, until) VALUES
-      (${HOOD}, ST_GeomFromText('POLYGON((120400 485400, 120700 485400, 120700 485700, 120400 485700, 120400 485400))', 28992), '1850-01-01', '1909-12-31')`);
+      (${HOOD}, ST_GeomFromText('POLYGON((120400 485400, 120700 485400, 120700 485700, 120400 485700, 120400 485400))', 28992), '1850-01-01', '1909-12-31'),
+      (${TOREN_YOUNG}, ST_GeomFromText('LINESTRING(120000 485990, 120100 485990)', 28992), '1990-01-01', NULL),
+      (${TOREN_OPEN}, ST_GeomFromText('LINESTRING(120000 485900, 120100 485900)', 28992), '1920-01-01', NULL),
+      (${TOREN_1900}, ST_GeomFromText('LINESTRING(120200 485900, 120300 485900)', 28992), '1600-01-01', '1900-01-01'),
+      (${TOREN_1700}, ST_GeomFromText('LINESTRING(120400 485900, 120500 485900)', 28992), '1400-01-01', '1700-01-01'),
+      (${TOREN_HIST}, ST_GeomFromText('LINESTRING(120600 485900, 120700 485900)', 28992), '1500-01-01', NULL),
+      (${TOREN_ALIAS}, ST_GeomFromText('LINESTRING(120200 485990, 120300 485990)', 28992), '1950-01-01', NULL)`);
 
     // Modernstraat 5 was named Kerkhofpad until the 1943 renumbering
     await db.execute(sql`INSERT INTO place_historical_name (id, place_id, name, since, until) VALUES
       ('ps-hist-1', ${RENAMED}, 'Kerkhofpad', '1850-01-01', '1943-01-01'),
       ('ps-hist-2', ${BOTH}, 'Kerkstraat 9', '1900-01-01', '1943-01-01'),
       ('ps-hist-3', ${RENUMBERED}, 'Kerkelaan', '1957-01-01', NULL),
-      ('ps-hist-4', ${RENUMBERED}, 'Oudekerkspad', NULL, '1957-01-01')`);
+      ('ps-hist-4', ${RENUMBERED}, 'Oudekerkspad', NULL, '1957-01-01'),
+      ('ps-hist-6', ${TOREN_HIST}, 'Torenstraat', '1800-01-01', '1850-01-01'),
+      ('ps-hist-7', ${TOREN_ALIAS}, 'Torenstraat', NULL, NULL)`);
 
     await db.execute(sql`
       INSERT INTO features (id, record_type, label, start_date, end_date, dataset_id)
-      VALUES (${FID}, 'image', 'kerk feature', '1950-01-01', '1950-12-31', 'ps-ds')`);
+      VALUES (${FID}, 'image', 'kerk feature', '1950-01-01', '1950-12-31', 'ps-ds'),
+             (${FID2}, 'image', 'wijk feature', '1950-01-01', '1950-12-31', 'ps-ds')`);
     await db.execute(sql`INSERT INTO feature_to_place (feature_id, place_id, relation_id)
-      VALUES (${FID}, ${STREET_DATA}, 'isAbout')`);
+      VALUES (${FID}, ${STREET_DATA}, 'isAbout'), (${FID2}, ${ADDR_NUMBERED}, 'isAbout')`);
 
     await rebuildIndex();
   });
@@ -80,12 +113,30 @@ describe('place search', () => {
     await teardownTestDb();
   });
 
-  test('data first, then exact match; no digit hides addresses', async () => {
+  test('an exact name match leads even when prefix matches outnumber it', async () => {
+    // "Wijk 2" is a district; "Wijk 20, nr 1" is one of many addresses it prefixes
+    const matches = await searchPlaces('Wijk 2');
+    const ids = matches.map((m) => m.placeId);
+    expect(ids[0]).toBe(DISTRICT_EXACT);
+    expect(ids).toContain(ADDR_NUMBERED);
+  });
+
+  test('exact matches follow a timeline: current youngest first, ended latest end first, undated last', async () => {
+    // the variant of the 1950 street sorts with its place; the historical match sorts
+    // on its name's end (1850), not on its still-open geometry
+    const matches = await searchPlaces('Torenstraat');
+    const ids = matches.map((m) => m.placeId);
+    expect(ids).toEqual([TOREN_YOUNG, TOREN_ALIAS, TOREN_OPEN, TOREN_1900, TOREN_HIST, TOREN_1700, TOREN_UNDATED]);
+    expect(matches[1].matchedNameId).toBe('ps-hist-7');
+    expect(matches[1].matchedWindow).toBeNull();
+  });
+
+  test('data presence plays no part; no digit hides addresses', async () => {
+    // both Kerkstraat rows are exact, undated homonyms; only one carries a feature
     const matches = await searchPlaces('Kerkstraat');
     const ids = matches.map((m) => m.placeId);
-    expect(ids.indexOf(STREET_DATA)).toBe(0);
-    expect(matches[0].featureCount).toBe(1);
-    expect(ids).toContain(STREET_BARE);
+    expect(ids.slice(0, 2).sort()).toEqual([STREET_BARE, STREET_DATA].sort());
+    expect(matches.find((m) => m.placeId === STREET_DATA)!.featureCount).toBe(1);
     expect(ids).not.toContain(ADDR);
   });
 
@@ -148,8 +199,11 @@ describe('place search', () => {
   // cells and the street's folded cells must be the same set — pinning that both
   // fold with the same partition.
   test('folded cells land exactly on heatmap cells', async () => {
-    const [first] = await searchPlaces('Kerkstraat', { cols: 50 });
-    expect(first.placeId).toBe(STREET_DATA);
+    // the two feature-bearing places between them cover every heatmap cell
+    const first = (await searchPlaces('Kerkstraat', { cols: 50 })).find((m) => m.placeId === STREET_DATA)!;
+    expect(first).toBeDefined();
+    const [numbered] = await searchPlaces('Wijk 20, nr 1', { cols: 50 });
+    expect(numbered.placeId).toBe(ADDR_NUMBERED);
     const heat = await getHeatmapTimeline({ cols: 50 });
     const heatCells = new Set<number>();
     for (const h of Object.values(heat.timeline)) {
@@ -157,7 +211,7 @@ describe('place search', () => {
         heatCells.add(i);
       }
     }
-    expect(new Set(first.cells)).toEqual(heatCells);
+    expect(new Set([...first.cells, ...numbered.cells])).toEqual(heatCells);
   });
 
   test('a dated area division carries its geometry window', async () => {
@@ -203,7 +257,9 @@ describe('place search', () => {
   });
 
   // Same cell semantics as the histogram: the address has no linked features,
-  // but its cell holds the street's feature, so its population counts 1.
+  // but its cell holds the street's feature, so its population counts 1. The
+  // fixture's extent is smaller than the default grid, so display cells are base
+  // cells here.
   test('getFeatures by place counts features in the place cells', async () => {
     const street = await getFeatures({ area: { kind: 'place', placeId: STREET_DATA } });
     expect(street.total).toBe(1);
@@ -231,5 +287,36 @@ describe('place search', () => {
     expect(addr.totalFeatures).toBe(1);
     const bare = await getHistogram(undefined, undefined, undefined, 50, undefined, STREET_BARE);
     expect(bare.totalFeatures).toBe(0);
+  });
+
+  // A place is read at the display grid the map outlines it on: at a coarser grid
+  // Modernstraat's base cell shares a display cell with Kerkstraat's feature, so
+  // the panel and the series count it, as a click on that cell would.
+  test('a place counts the display cells it lies in, not only its base cells', async () => {
+    const fine = await getFeatures({ area: { kind: 'place', placeId: RENAMED } });
+    expect(fine.total).toBe(0);
+    const coarse = await getFeatures({ area: { kind: 'place', placeId: RENAMED, cols: 7 } });
+    expect(coarse.total).toBe(1);
+    expect(coarse.data[0].id).toBe(FID);
+    const series = await getHistogram(undefined, undefined, undefined, 50, undefined, RENAMED, 7);
+    expect(series.totalFeatures).toBe(1);
+  });
+
+  // the fold is gridColExpr/gridRowExpr's floor(i * grid / extent)
+  test('the display fold and its inverse agree for every base cell', async () => {
+    for (const cols of [7, 125]) {
+      const grid = await displayGrid(cols);
+      for (let x = 0; x <= grid.maxCellX; x++) {
+        for (let y = 0; y <= grid.maxCellY; y++) {
+          const col = Math.min(Math.floor((x * grid.gridCols) / (grid.maxCellX + 1)), grid.gridCols - 1);
+          const row = Math.min(Math.floor((y * grid.gridRows) / (grid.maxCellY + 1)), grid.gridRows - 1);
+          const range = displayCellBaseRange(col, row, grid);
+          expect(x).toBeGreaterThanOrEqual(range.minCellX);
+          expect(x).toBeLessThanOrEqual(range.maxCellX);
+          expect(y).toBeGreaterThanOrEqual(range.minCellY);
+          expect(y).toBeLessThanOrEqual(range.maxCellY);
+        }
+      }
+    }
   });
 });

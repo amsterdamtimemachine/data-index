@@ -15,7 +15,8 @@ const allPlacesCTE = sql`
     SELECT LOWER(pn.name) AS name, p.type AS type
     FROM place_historical_name pn
     JOIN place p ON p.id = pn.place_id
-    WHERE pn.name IS NOT NULL;
+    WHERE pn.name IS NOT NULL
+      AND (pn.since IS NOT NULL OR pn.until IS NOT NULL);
 `
 
 /**

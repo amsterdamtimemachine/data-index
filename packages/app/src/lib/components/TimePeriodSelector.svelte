@@ -12,6 +12,9 @@
 	interface Props {
 		histogram: Histogram;
 		localHistogram?: Histogram | null;
+		// the selection's series whether or not it is on screen; drawn as dots under
+		// the city-wide bars
+		markerHistogram?: Histogram | null;
 		// names the local series ("deze cel", a place name); shown only while it is on screen
 		localLabel?: string;
 		// the switch between the city-wide and the selection's series: rendered only
@@ -26,6 +29,7 @@
 	let {
 		histogram,
 		localHistogram = null,
+		markerHistogram = null,
 		localLabel = '',
 		onToggleLocal = undefined,
 		localToggleOn = false,
@@ -211,6 +215,7 @@
 				maxCount={histogram?.maxCount || 0}
 				localBins={localHistogram?.bins || []}
 				localMaxCount={localHistogram?.maxCount || 0}
+				markerBins={markerHistogram?.bins || []}
 				{timelineHeight}
 				{hideGlobal}
 			/>
@@ -222,6 +227,7 @@
 			<TimePeriodSelectorTrack
 				bins={histogram.bins}
 				localBins={localHistogram?.bins || []}
+				markerBins={markerHistogram?.bins || []}
 				{currentIndex}
 				onIndexChange={handleIndexChange}
 				{timelineHeight}

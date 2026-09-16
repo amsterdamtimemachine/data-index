@@ -2,7 +2,7 @@
 	import Combobox from '$components/Combobox.svelte';
 	import { createPlaceSearch } from '$lib/state/place-search.svelte';
 	import { translate } from '$utils/translations';
-	import { formatPlaceWindow } from '$utils/format';
+	import { formatPlaceTitle, formatPlaceWindow } from '$utils/format';
 	import type { PlaceSearchMatch } from '@atm/shared/types';
 
 	type Props = {
@@ -15,10 +15,7 @@
 		if (!selectedPlace) {
 			return null;
 		}
-		if (selectedPlace.matchedName) {
-			return selectedPlace.matchedName;
-		}
-		return selectedPlace.name ?? null;
+		return formatPlaceTitle(selectedPlace);
 	});
 
 	const search = createPlaceSearch();
@@ -32,7 +29,7 @@
 			}
 			return {
 				value: m.placeId,
-				label: m.matchedName,
+				label: formatPlaceTitle(m),
 				detail
 			};
 		})

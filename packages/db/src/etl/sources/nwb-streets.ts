@@ -16,7 +16,7 @@
 import { readFileSync } from 'fs';
 import { insertPlaces, type PlaceInsert } from '../writers/place-writer';
 import { readFeatures, pdokRow } from './pdok-places';
-import { parseAdamlinkStreets, insertStreetNames, type AdamlinkStreet } from './adamlink-streets';
+import { parseAdamlinkStreets, insertStreetNames, type AdamlinkStreet, streetWindow } from './adamlink-streets';
 
 // NWB place ids are `nwb-<bagOrl>` (16-digit) or `nwb-<gmeId>-<slug>` for segments without
 // one. Only the former can be crosswalked to Adamlink.
@@ -60,6 +60,7 @@ export async function ingest(filePath: string, opts?: { adamlinkStreets?: string
         source: 'adamlink', url: adamStreet.uri,
         wkt: pdokRow(f).wkt,
         geometrySource: 'nwb', geometryUrl: bagViewer(bagOrl),
+        ...streetWindow(adamStreet),
       });
       backfilledStreets.push(adamStreet);
       backfilled++;

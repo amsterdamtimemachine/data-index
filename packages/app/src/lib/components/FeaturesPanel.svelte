@@ -1,5 +1,9 @@
 <script lang="ts">
+	import { translate } from '$utils/translations';
+	import { asset } from '$app/paths';
 	import FeaturesGrid from '$components/FeaturesGrid.svelte';
+	import Image from '$components/Image.svelte';
+	import ButtonIllustration from '$components/ButtonIllustration.svelte';
 	import FeaturesPanelHeader from '$components/FeaturesPanelHeader.svelte';
 	import ErrorHandler from '$components/ErrorHandler.svelte';
 	import { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
@@ -24,6 +28,9 @@
 		sampleSeed?: string;
 		onSortChange?: (mode: UiSortMode) => void;
 		onShuffle?: () => void;
+		// what the timeline shows, when an empty panel can point the user at it: the
+		// city-wide series with the switch (desktop), or the selection's own series
+		timelineView?: 'cityWide' | 'local';
 	}
 
 	let {
@@ -43,7 +50,8 @@
 		sortMode = 'sample',
 		sampleSeed,
 		onSortChange,
-		onShuffle
+		onShuffle,
+		timelineView = undefined
 	}: Props = $props();
 
 	const panelFeatures = createPanelFeatures(() => ({
@@ -91,6 +99,20 @@
 	{#if panelFeatures.features.length > 0}
 		<FeaturesGrid features={panelFeatures.features} columns={gridColumns} />
 	{:else if !panelFeatures.initialLoading && !panelFeatures.loading}
-		<div class="text-base text-gray-500 p-4">No features found for this cell and period</div>
+		<p class="text-base text-black p-4 leading-loose">
+			<span class="font-bold">{translate('noFeaturesForSelection')}</span>
+			{#if timelineView === 'cityWide'}
+				{translate('emptyPanelDotHintLead')}
+				<Image src={asset('/images/red-dot-timeline-detail.png')} alt={translate('redDotTimelineAlt')} inline />
+				{translate('emptyPanelDotHintTail')}
+				{translate('emptyPanelSwitchHintLead')}
+				<ButtonIllustration glyph="/glyphs/ToggleLocalTimeline.svg" />
+				{translate('emptyPanelSwitchHintTail')}
+			{:else if timelineView === 'local'}
+				{translate('emptyPanelBarHintLead')}
+				<Image src={asset('/images/local-timeline-detail.png')} alt={translate('localTimelineAlt')} inline />
+				{translate('emptyPanelBarHintTail')}
+			{/if}
+		</p>
 	{/if}
 </div>

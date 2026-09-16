@@ -7,7 +7,7 @@ import { cellFeatures } from '../schema';
 import type { CountRow } from '../row-types';
 import { computeTimeSlices, computeTimeRange } from './time-slices';
 import { getRecordTypes } from './record-types';
-import { countExpr, displayBinExpr, categoryFilter, binWindow, cellRangeCondition, placeCellsCondition } from './cell-features';
+import { countExpr, displayBinExpr, categoryFilter, binWindow, cellRangeCondition, placeCellsCondition, displayGrid } from './cell-features';
 import { boundsToBaseCellRange } from './features';
 
 // Query result types
@@ -25,6 +25,8 @@ type BinRow = { bin_start: string; count: string };
  * `bounds` (optional) restricts the histogram to the base cells inside a WGS84 box —
  * the mobile per-cell timeline. Converted with the same boundsToBaseCellRange as
  * getFeatures, so "this cell's histogram" counts exactly the features the panel lists.
+ * `placeId` (optional) restricts it to the display cells the place lies in, at the
+ * grid width `cols`, the same cells the map outlines for it.
  */
 export async function getHistogram(
   recordTypes?: RecordType[],
@@ -32,7 +34,8 @@ export async function getHistogram(
   placeTypes?: PlaceType[],
   binSizeYears: number = DISPLAY_TIME_BIN_DEFAULT_YEARS,
   bounds?: { minLon: number; maxLon: number; minLat: number; maxLat: number },
-  placeId?: string
+  placeId?: string,
+  cols?: number
 ): Promise<Histogram> {
   const types = recordTypes || await getRecordTypes();
 
@@ -60,7 +63,9 @@ export async function getHistogram(
     cellCondition = cellRangeCondition(sql`${cellFeatures.cellX}`, sql`${cellFeatures.cellY}`, range);
   }
   if (placeId) {
-    cellCondition = sql`${cellCondition} AND ${placeCellsCondition(sql`${cellFeatures.cellX}`, sql`${cellFeatures.cellY}`, placeId)}`;
+    const grid = await displayGrid(cols);
+    const placeCondition = await placeCellsCondition(sql`${cellFeatures.cellX}`, sql`${cellFeatures.cellY}`, placeId, grid);
+    cellCondition = sql`${cellCondition} AND ${placeCondition}`;
   }
 
 

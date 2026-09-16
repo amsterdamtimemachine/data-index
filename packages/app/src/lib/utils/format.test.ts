@@ -19,12 +19,17 @@ function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 }
 
 describe('formatPlaceWindow', () => {
-	test('closed window renders a year range', () => {
-		expect(formatPlaceWindow(match({ geometryWindow: ['1850-01-01', '1909-12-31'] }))).toBe('1850–1909');
+	test('a current-name match shows the place window', () => {
+		expect(formatPlaceWindow(match({ geometryWindow: ['1850-01-01', '1909-12-31'] }))).toBe('1850 tot 1909');
+	});
+
+	test('both ends in one year render "in"', () => {
+		const m = match({ matchedNameId: 'n', matchedWindow: ['1853-01-01', '1853-12-31'] });
+		expect(formatPlaceWindow(m)).toBe('in 1853');
 	});
 
 	test('until-only renders "tot"', () => {
-		expect(formatPlaceWindow(match({ matchedWindow: [null, '1850-01-01'] }))).toBe('tot 1850');
+		expect(formatPlaceWindow(match({ matchedNameId: 'n', matchedWindow: [null, '1850-01-01'] }))).toBe('tot 1850');
 	});
 
 	test('since-only renders "vanaf"', () => {
@@ -35,12 +40,18 @@ describe('formatPlaceWindow', () => {
 		expect(formatPlaceWindow(match({}))).toBe('');
 	});
 
-	test('the matched name window wins over the geometry window', () => {
+	test('a historical-name match shows that name\'s window, not the place\'s', () => {
 		const m = match({
+			matchedNameId: 'n',
 			matchedWindow: [null, '1943-01-01'],
 			geometryWindow: ['1850-01-01', '1909-12-31']
 		});
 		expect(formatPlaceWindow(m)).toBe('tot 1943');
+	});
+
+	test('an undated variant shows no window even when the place has one', () => {
+		const m = match({ matchedNameId: 'n', matchedWindow: null, geometryWindow: ['1923-01-01', null] });
+		expect(formatPlaceWindow(m)).toBe('');
 	});
 });
 

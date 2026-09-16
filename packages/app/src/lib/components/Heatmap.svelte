@@ -71,7 +71,7 @@
 		heatmap: Heatmap;
 		dimensions: HeatmapDimensions;
 		selectedCellId: string | null;
-		// display-cell indices of the selected place (the search filter outline)
+		// display-cell indices of the selected place (the gold outline)
 		placeCells?: number[];
 		// the place is the panel's active subject: add the red selection outline
 		placeSelected?: boolean;
@@ -180,7 +180,7 @@
 		}
 	});
 
-	// Sync the place-filter outline with the selected place's cells
+	// Sync the place outline with the selected place's cells
 	$effect(() => {
 		if (!isMapLoaded || !map || !dimensions) return;
 		const source = map.getSource('place-outline') as maplibre.GeoJSONSource | undefined;
