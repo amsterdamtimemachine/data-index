@@ -74,15 +74,15 @@ export function formatPlaceWindow(match: PlaceSearchMatch): string {
 		const sinceYear = since.slice(0, 4);
 		const untilYear = until.slice(0, 4);
 		if (sinceYear === untilYear) {
-			return `in ${sinceYear}`;
+			return `${translate('windowIn')} ${sinceYear}`;
 		}
-		return `${sinceYear} tot ${untilYear}`;
+		return `${sinceYear} ${translate('windowUntil')} ${untilYear}`;
 	}
 	if (until) {
-		return `tot ${until.slice(0, 4)}`;
+		return `${translate('windowUntil')} ${until.slice(0, 4)}`;
 	}
 	if (since) {
-		return `vanaf ${since.slice(0, 4)}`;
+		return `${translate('windowSince')} ${since.slice(0, 4)}`;
 	}
 	return '';
 }

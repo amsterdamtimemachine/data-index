@@ -10,8 +10,12 @@ const MIN_QUERY_LENGTH = 2;
 const MAX_QUERY_LENGTH = 100;
 const MAX_RESULTS = 20;
 
-// exact name matches first, then data-bearing places, then finest granularity
-const SEARCH_ORDER = sql`exact_match DESC, has_features DESC,
+// exact name matches first, then a timeline: rows still current, youngest first;
+// then ended rows, latest end first; then undated rows. Finest granularity and the
+// name only break ties; whether a place has features plays no part
+const SEARCH_ORDER = sql`exact_match DESC,
+  CASE WHEN sort_until IS NOT NULL THEN 1 WHEN sort_since IS NOT NULL THEN 0 ELSE 2 END,
+  sort_until DESC, sort_since DESC,
   CASE type WHEN 'address' THEN 0 WHEN 'street' THEN 1 WHEN 'neighbourhood' THEN 2 ELSE 3 END,
   lower(matched_name), id`;
 
@@ -133,30 +137,30 @@ export async function searchPlaces(query: string, options: PlaceSearchOptions = 
       ORDER BY id, matched_historical, matched_since DESC NULLS LAST,
         (lower(matched_name) = ${lowered}) DESC, length(matched_name)
     ),
-    -- has_features: features link to addresses and streets, never to an area, so
-    -- an area counts as data-bearing when anything on the map lies in its cells
+    -- sort_since/until: the row's place on the timeline. A dated historical name
+    -- sorts on its own window; an undated variant sorts with its place, so a variant
+    -- of a living street ranks as current even though it displays no date
     ranked AS (
       SELECT d.*,
-        CASE WHEN d.type IN ('neighbourhood', 'district') THEN EXISTS (
-          SELECT 1 FROM place_cells pc
-          JOIN cell_features cf ON cf.cell_x = pc.cell_x AND cf.cell_y = pc.cell_y
-          WHERE pc.place_id = d.id)
-        ELSE EXISTS (SELECT 1 FROM feature_to_place fp WHERE fp.place_id = d.id)
-        END AS has_features,
-        (lower(d.matched_name) = ${lowered}) AS exact_match
+        (lower(d.matched_name) = ${lowered}) AS exact_match,
+        pg.since AS geometry_since, pg.until AS geometry_until,
+        CASE WHEN d.matched_since IS NOT NULL OR d.matched_until IS NOT NULL
+          THEN d.matched_since ELSE pg.since END AS sort_since,
+        CASE WHEN d.matched_since IS NOT NULL OR d.matched_until IS NOT NULL
+          THEN d.matched_until ELSE pg.until END AS sort_until
       FROM deduped d
+      LEFT JOIN place_geometry pg ON pg.place_id = d.id
     ),
     page AS (
       SELECT * FROM ranked ORDER BY ${SEARCH_ORDER} LIMIT ${limit}
     )
     SELECT page.id, page.name, page.type, page.source,
       page.matched_name, page.matched_since::text, page.matched_until::text,
-      page.matched_historical, page.matched_name_id, page.has_features, page.exact_match,
-      pg.since::text AS geometry_since, pg.until::text AS geometry_until,
+      page.matched_historical, page.matched_name_id,
+      page.geometry_since::text, page.geometry_until::text,
       (SELECT COUNT(*) FROM feature_to_place fp WHERE fp.place_id = page.id) AS feature_count,
       ${cells} AS cells
     FROM page
-    LEFT JOIN place_geometry pg ON pg.place_id = page.id
     ORDER BY ${SEARCH_ORDER}
   `);
 

@@ -49,6 +49,10 @@ const TRANSLATIONS: Record<string, string> = {
 	ofCellsOf: 'van de cellen van',
 	ofCellOf: 'van de cel van',
 	nowKnownAs: 'nu',
+	// place window words: "vanaf 1923", "1380 tot 1663", "in 1853"
+	windowSince: 'vanaf',
+	windowUntil: 'tot',
+	windowIn: 'in',
 	filters: 'Filters',
 	dataset: 'Dataset',
 	dataProvider: 'Databron',
