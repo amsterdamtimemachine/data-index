@@ -39,6 +39,21 @@ const TRANSLATIONS: Record<string, string> = {
 	cellsOf: 'Cellen van',
 	cellOf: 'Cel van',
 	clearPlaceFilter: 'Verwijder plekfilter',
+	noFeaturesForSelection: 'Geen features gevonden voor deze selectie en periode.',
+	// the empty panel's hint, split around the timeline picture and the switch button
+	emptyPanelDotHintLead: 'Een rode stip op de tijdlijn',
+	emptyPanelDotHintTail: 'laat zien in welke periodes de selectie wel data heeft.',
+	redDotTimelineAlt: 'Tijdlijn met een rode stip onder een periode',
+	emptyPanelSwitchHintLead: 'Of klik op',
+	emptyPanelSwitchHintTail: 'rechtsonder om de tijdlijn van de selectie te tonen.',
+	emptyPanelBarHintLead: 'Kies op de tijdlijn',
+	emptyPanelBarHintTail: 'een periode met een rode balk: daar heeft de selectie wel features.',
+	localTimelineAlt: 'Tijdlijn van de selectie met rode balken',
+	// the timeline hover
+	featureOne: 'feature',
+	featureMany: 'features',
+	inSelection: 'in de selectie',
+	periodLabel: 'Periode',
 	showPlaceFeatures: 'Features van deze plek tonen',
 	hidePlaceFeatures: 'Features van deze plek verbergen',
 	// the place search tooltip, split around the border glyph

@@ -1,7 +1,9 @@
 import { sql, type SQL } from 'drizzle-orm';
-import { PRECOMP_TIME_BIN_YEARS } from '@atm/shared';
+import { PRECOMP_TIME_BIN_YEARS, DISPLAY_GRID_DEFAULT_COLS } from '@atm/shared';
 import { cellFeatures } from '../schema';
+import { db } from '../client';
 import { andIn } from './filters';
+import { getGridConfig } from './grid-config';
 
 /**
  * Shared pieces of every cell_features read. getHeatmap, getHeatmapTimeline and
@@ -55,11 +57,62 @@ export function deriveGrid(cols: number, maxCellX: number, maxCellY: number): { 
   return { gridCols, gridRows };
 }
 
-/** Restrict rows to the cells a place covers. Takes the cell columns as SQL so
- * cell_features (histogram) and place_cells (features spine) share the fragment. */
-export function placeCellsCondition(cellX: SQL, cellY: SQL, placeId: string): SQL {
-  return sql`(${cellX}, ${cellY}) IN (
-    SELECT cell_x, cell_y FROM place_cells WHERE place_id = ${placeId})`;
+/** The display grid a request folds base cells into, with the base extent it partitions. */
+export type DisplayGrid = { gridCols: number; gridRows: number; maxCellX: number; maxCellY: number };
+
+export async function displayGrid(cols: number = DISPLAY_GRID_DEFAULT_COLS): Promise<DisplayGrid> {
+  const cfg = await getGridConfig();
+  const { gridCols, gridRows } = deriveGrid(cols, cfg.maxCellX, cfg.maxCellY);
+  return { gridCols, gridRows, maxCellX: cfg.maxCellX, maxCellY: cfg.maxCellY };
+}
+
+export type BaseCellRange = { minCellX: number; maxCellX: number; minCellY: number; maxCellY: number };
+
+/**
+ * Inverse of gridColExpr/gridRowExpr: the base cells one display cell covers. A
+ * base index i folds to floor(i * grid / extent), so display index d holds every i
+ * from ceil(d * extent / grid) up to ceil((d + 1) * extent / grid) - 1.
+ */
+export function displayCellBaseRange(col: number, row: number, grid: DisplayGrid): BaseCellRange {
+  const spanX = grid.maxCellX + 1;
+  const spanY = grid.maxCellY + 1;
+  return {
+    minCellX: Math.max(Math.ceil((col * spanX) / grid.gridCols), 0),
+    maxCellX: Math.min(Math.ceil(((col + 1) * spanX) / grid.gridCols) - 1, grid.maxCellX),
+    minCellY: Math.max(Math.ceil((row * spanY) / grid.gridRows), 0),
+    maxCellY: Math.min(Math.ceil(((row + 1) * spanY) / grid.gridRows) - 1, grid.maxCellY)
+  };
+}
+
+type DisplayCellRow = { dc: number; dr: number };
+
+/**
+ * Restrict rows to the base cells inside the display cells a place lies in: the
+ * cells the map outlines for it, so a selected place reads like clicking those
+ * cells. The cell set is computed here and inlined as literal pairs, so the
+ * planner sees its exact size and joins it against the cell indexes; generating
+ * it in SQL made the planner guess millions of rows and scan place_cells instead.
+ * Takes the cell columns as SQL so cell_features (histogram) and place_cells
+ * (features spine) share the fragment.
+ */
+export async function placeCellsCondition(cellX: SQL, cellY: SQL, placeId: string, grid: DisplayGrid): Promise<SQL> {
+  const result = await db.execute<DisplayCellRow>(sql`
+    SELECT DISTINCT ${gridColExpr(sql`cell_x`, grid.gridCols, grid.maxCellX)} AS dc,
+                    ${gridRowExpr(sql`cell_y`, grid.gridRows, grid.maxCellY)} AS dr
+    FROM place_cells WHERE place_id = ${placeId}`);
+  const pairs: string[] = [];
+  for (const d of result.rows) {
+    const r = displayCellBaseRange(d.dc, d.dr, grid);
+    for (let x = r.minCellX; x <= r.maxCellX; x++) {
+      for (let y = r.minCellY; y <= r.maxCellY; y++) {
+        pairs.push(`(${x},${y})`);
+      }
+    }
+  }
+  if (pairs.length === 0) {
+    return sql`FALSE`;
+  }
+  return sql`(${cellX}, ${cellY}) IN (VALUES ${sql.raw(pairs.join(','))})`;
 }
 
 /**

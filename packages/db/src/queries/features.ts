@@ -17,7 +17,7 @@ import { getGridConfig } from './grid-config';
 import { featureYearOverlap } from './time-filter';
 import { featureIdsWithAllTags, featureIdsWithAnyTag } from './filters';
 import { UnknownTimeSliceError } from './errors';
-import { cellRangeCondition, placeCellsCondition } from './cell-features';
+import { cellRangeCondition, placeCellsCondition, displayGrid, displayCellBaseRange } from './cell-features';
 import { db } from '../client';
 import { featureToPlace, place, placeGeometry, placeCells } from '../schema';
 import type { CountRow } from '../row-types';
@@ -103,22 +103,7 @@ export async function boundsToBaseCellRange(bounds: HeatmapCellBounds): Promise<
   const col = Math.round((minLon - config.minLon) / cellW);
   const row = Math.round((minLat - config.minLat) / cellH);
 
-  // Base cells are 0-indexed (cell_x = floor((x - min_x) / cellSize)), so the
-  // index span is [0, maxN]; the partition divisor is maxN + 1 — matching getHeatmap.
-  const spanX = config.maxCellX + 1;
-  const spanY = config.maxCellY + 1;
-
-  const minCellX = Math.ceil((col * spanX) / gridCols);
-  const maxCellX = Math.ceil(((col + 1) * spanX) / gridCols) - 1;
-  const minCellY = Math.ceil((row * spanY) / gridRows);
-  const maxCellY = Math.ceil(((row + 1) * spanY) / gridRows) - 1;
-
-  return {
-    minCellX: Math.max(minCellX, 0),
-    maxCellX: Math.min(maxCellX, config.maxCellX),
-    minCellY: Math.max(minCellY, 0),
-    maxCellY: Math.min(maxCellY, config.maxCellY)
-  };
+  return displayCellBaseRange(col, row, { gridCols, gridRows, maxCellX: config.maxCellX, maxCellY: config.maxCellY });
 }
 
 /**
@@ -276,7 +261,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     const cellRange = await boundsToBaseCellRange(area.bounds);
     areaCondition = cellRangeCondition(sql`pc.cell_x`, sql`pc.cell_y`, cellRange);
   } else {
-    areaCondition = placeCellsCondition(sql`pc.cell_x`, sql`pc.cell_y`, area.placeId);
+    const grid = await displayGrid(area.cols);
+    areaCondition = await placeCellsCondition(sql`pc.cell_x`, sql`pc.cell_y`, area.placeId, grid);
   }
 
   const typeCondition = sql`f.record_type IN ${types}`;

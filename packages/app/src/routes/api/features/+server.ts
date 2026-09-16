@@ -3,17 +3,17 @@ import type { RequestHandler } from './$types';
 import type { FeaturesSortField, SortDirection, TagOperator, FeaturesArea } from '@atm/shared/types';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_MAX } from '@atm/shared';
 import { getFeatures, UnknownTimeSliceError } from '@atm/db';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList, parseBounds, parseSeed } from '$lib/server/query-params';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseList, parseBounds, parseSeed, parseGridCols } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
 		// Parse bounds (required here, unlike the histogram endpoint)
 		const bounds = parseBounds(url);
-		// The spatial population: a place's cell set, or a display cell's bounds.
+		// The spatial population: the display cells a place lies in, or a display cell's bounds.
 		const placeIdParam = url.searchParams.get('placeId');
 		let area: FeaturesArea;
 		if (placeIdParam) {
-			area = { kind: 'place', placeId: placeIdParam.slice(0, 512) };
+			area = { kind: 'place', placeId: placeIdParam.slice(0, 512), cols: parseGridCols(url) };
 		} else if (bounds) {
 			area = { kind: 'bounds', bounds };
 		} else {

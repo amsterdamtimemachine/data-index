@@ -3,8 +3,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import type { PlaceSearchMatch, PlaceType, PlaceSource } from '@atm/shared';
 import { DISPLAY_GRID_DEFAULT_COLS } from '@atm/shared';
 import { db } from '../client';
-import { getGridConfig } from './grid-config';
-import { deriveGrid, gridColExpr, gridRowExpr } from './cell-features';
+import { displayGrid, gridColExpr, gridRowExpr } from './cell-features';
 
 const MIN_QUERY_LENGTH = 2;
 const MAX_QUERY_LENGTH = 100;
@@ -50,13 +49,12 @@ type SearchRow = {
 // The place's cells folded onto the display grid — the same partition the heatmap
 // uses, so these indices land exactly on heatmap cells.
 async function displayCellsExpr(cols: number): Promise<SQL> {
-  const cfg = await getGridConfig();
-  const { gridCols, gridRows } = deriveGrid(cols, cfg.maxCellX, cfg.maxCellY);
-  const col = gridColExpr(sql`pc.cell_x`, gridCols, cfg.maxCellX);
-  const row = gridRowExpr(sql`pc.cell_y`, gridRows, cfg.maxCellY);
+  const grid = await displayGrid(cols);
+  const col = gridColExpr(sql`pc.cell_x`, grid.gridCols, grid.maxCellX);
+  const row = gridRowExpr(sql`pc.cell_y`, grid.gridRows, grid.maxCellY);
   return sql`(
     SELECT json_agg(DISTINCT idx ORDER BY idx) FROM (
-      SELECT (${row} * ${gridCols} + ${col}) AS idx
+      SELECT (${row} * ${grid.gridCols} + ${col}) AS idx
       FROM place_cells pc WHERE pc.place_id = page.id
     ) folded
   )`;

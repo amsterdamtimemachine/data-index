@@ -275,7 +275,7 @@ The cell view sorts features in one of six modes. All modes are deterministic.
 
 Each match carries the matched name, the id of the matched historical name row when one applies, its validity window when that row has one, the place's own geometry window when the place has one, the feature count, and the place's cells as display-grid indices in the same space as heatmap indices. The dropdown shows the period of the name it displays: a match on the current name carries the place's window, a match on a historical name row carries that row's window, so an undated variant carries none rather than borrowing the place's. The UI stores a selection in the URL as the place id plus the matched name row id, so a shared link restores the exact clicked alias.
 
-`/api/places` accepts `q` (search) or `id` with optional `nameId` (restore), plus `cols` and `limit`. `/api/features` and `/api/histogram` accept `placeId` to scope their results to the cells of one place.
+`/api/places` accepts `q` (search) or `id` with optional `nameId` (restore), plus `cols` and `limit`. `/api/features` and `/api/histogram` accept `placeId` to scope their results to the display cells one place lies in, at the grid width `cols` like the heatmap, so a selected place reads exactly like clicking the cells the map outlines for it: whatever else lies in those cells counts too.
 
 ## Dating
 
@@ -415,7 +415,7 @@ Ingestion is idempotent and source-driven: corrections are made in the **source 
 | `GET /api/metadata` | Time slices, record types, place types, datasets, tags |
 | `GET /api/heatmaps` | Sparse heatmap data with grid dimensions |
 | `GET /api/histogram` | Feature count distribution by time period |
-| `GET /api/features` | Paginated features within geographic bounds or a place's cells |
+| `GET /api/features` | Paginated features within geographic bounds or the display cells of a place |
 | `GET /api/available-tags` | Tags with feature counts |
 | `GET /api/places` | Place name search and place lookup for the search filter |
 | `GET /api/tag-combinations` | Valid next tags for a tag selection — progressive tag filtering (WIP, not yet exposed in the UI) |

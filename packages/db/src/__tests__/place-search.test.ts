@@ -11,6 +11,7 @@ import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
 import { upsertSource } from '../etl/writers/feature-writer';
 import { rebuildIndex } from '../etl/post-process/rebuild-index';
 import { searchPlaces, getPlaceById } from '../queries/place-search';
+import { displayGrid, displayCellBaseRange } from '../queries/cell-features';
 import { getHeatmapTimeline } from '../queries/heatmap';
 import { getHistogram } from '../queries/histogram';
 import { getFeatures } from '../queries/features';
@@ -256,7 +257,9 @@ describe('place search', () => {
   });
 
   // Same cell semantics as the histogram: the address has no linked features,
-  // but its cell holds the street's feature, so its population counts 1.
+  // but its cell holds the street's feature, so its population counts 1. The
+  // fixture's extent is smaller than the default grid, so display cells are base
+  // cells here.
   test('getFeatures by place counts features in the place cells', async () => {
     const street = await getFeatures({ area: { kind: 'place', placeId: STREET_DATA } });
     expect(street.total).toBe(1);
@@ -284,5 +287,36 @@ describe('place search', () => {
     expect(addr.totalFeatures).toBe(1);
     const bare = await getHistogram(undefined, undefined, undefined, 50, undefined, STREET_BARE);
     expect(bare.totalFeatures).toBe(0);
+  });
+
+  // A place is read at the display grid the map outlines it on: at a coarser grid
+  // Modernstraat's base cell shares a display cell with Kerkstraat's feature, so
+  // the panel and the series count it, as a click on that cell would.
+  test('a place counts the display cells it lies in, not only its base cells', async () => {
+    const fine = await getFeatures({ area: { kind: 'place', placeId: RENAMED } });
+    expect(fine.total).toBe(0);
+    const coarse = await getFeatures({ area: { kind: 'place', placeId: RENAMED, cols: 7 } });
+    expect(coarse.total).toBe(1);
+    expect(coarse.data[0].id).toBe(FID);
+    const series = await getHistogram(undefined, undefined, undefined, 50, undefined, RENAMED, 7);
+    expect(series.totalFeatures).toBe(1);
+  });
+
+  // the fold is gridColExpr/gridRowExpr's floor(i * grid / extent)
+  test('the display fold and its inverse agree for every base cell', async () => {
+    for (const cols of [7, 125]) {
+      const grid = await displayGrid(cols);
+      for (let x = 0; x <= grid.maxCellX; x++) {
+        for (let y = 0; y <= grid.maxCellY; y++) {
+          const col = Math.min(Math.floor((x * grid.gridCols) / (grid.maxCellX + 1)), grid.gridCols - 1);
+          const row = Math.min(Math.floor((y * grid.gridRows) / (grid.maxCellY + 1)), grid.gridRows - 1);
+          const range = displayCellBaseRange(col, row, grid);
+          expect(x).toBeGreaterThanOrEqual(range.minCellX);
+          expect(x).toBeLessThanOrEqual(range.maxCellX);
+          expect(y).toBeGreaterThanOrEqual(range.minCellY);
+          expect(y).toBeLessThanOrEqual(range.maxCellY);
+        }
+      }
+    }
   });
 });

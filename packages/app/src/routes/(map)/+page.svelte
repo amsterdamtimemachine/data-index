@@ -409,6 +409,18 @@
 		return showCellModal;
 	});
 
+	// what the timeline shows, for the empty panel's hint: the selection's series,
+	// else the city-wide one where the switch exists to leave it
+	const timelineView = $derived.by(() => {
+		if (timelineScope.histogram !== null) {
+			return 'local' as const;
+		}
+		if (timelineScope.onToggle !== undefined) {
+			return 'cityWide' as const;
+		}
+		return undefined;
+	});
+
 	// The period active when the panel's subject was picked — the mobile minimap
 	// shows the map as it was at that moment, so it must not track later drags.
 	let panelSelectionPeriod = $state('');
@@ -509,6 +521,7 @@
 						onSortChange={handleSortChange}
 						onShuffle={handleShuffle}
 						onClose={handleFeaturesPanelClose}
+						{timelineView}
 					/>
 				</div>
 			</div>
@@ -520,6 +533,7 @@
 			period={currentPeriod}
 			{histogram}
 			localHistogram={timelineScope.histogram}
+			markerHistogram={timelineScope.subjectSeries}
 			localLabel={timelineScope.label}
 			onToggleLocal={timelineScope.onToggle}
 			localToggleOn={timelineScope.switchOn}

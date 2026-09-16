@@ -123,6 +123,10 @@ export function createTimelineScope(getInputs: () => TimelineScopeInputs) {
 		get histogram() {
 			return histogram;
 		},
+		/** the subject's series regardless of the switch: the markers under the city-wide bars */
+		get subjectSeries() {
+			return series;
+		},
 		get label() {
 			return label;
 		},
