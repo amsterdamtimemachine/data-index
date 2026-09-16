@@ -350,6 +350,7 @@ Ingestion reads files from a local data directory; how you obtain each differs b
 
   Splitting fetch from ingest keeps ingestion offline and reproducible and pins each PDOK snapshot as an inspectable file; re-run a fetch to refresh it.
 - **Feature datasets (Beeldbank, Joods Monument, Delpher)** — currently private derivatives of mostly-public source collections, so they are not publicly distributable.
+- **Classifier tags (optional)** — the output of a tagger run over an ingested dataset, as JSONL with one row per record: `{"id": <the dataset's natural key>, "tags": ["<tag id>", ...]}`. The id must be the same natural key the dataset's ingestor derives feature ids from (for Beeldbank the record's identifier, not its image URL); if the classifier emits another key, convert the file first. One file per run, ingested with that run's id as `--tagger`.
 
 All files land in the data directory; the ingestion steps below read them.
 
@@ -420,7 +421,9 @@ bun run db:ingest -s <dataset-name> -f <path-to-file>
 bun run db:rebuild-index
 ```
 
-`rebuild-index` computes spatial grid cells, the `cell_features` rollup the heatmap and histogram read, and frequency values. Must run after every data change — a feature ingested without it won't appear on the map.
+`rebuild-index` computes spatial grid cells, the `cell_features` rollup the heatmap and histogram read, the per-tag `tag_features` bitmaps, and frequency values. Must run after every data change, and after updating to a version that changes how the index is built: a feature ingested without it won't appear on the map, and bitmaps built by different versions cannot be combined.
+
+To offer topics for the dataset, run a classifier over it and ingest its output with the `tags` source, keyed by the dataset's natural keys (see [Getting the data](#getting-the-data)), then rebuild.
 
 ### Re-ingesting and corrections
 
@@ -429,6 +432,8 @@ Ingestion is idempotent and source-driven: corrections are made in the **source 
 **Fixing a feature.** A feature's id is a deterministic UUID derived from its dataset id plus the source's stable identifier (`featureUuid(datasetId, key)`); the dataset prefix keeps identical keys in different datasets from colliding. Editing a field in the source and re-ingesting that source upserts the existing row in place — `label`, `description`, `content_url`, dates, `entity`, and record type are all refreshed. A corrected place link is reconciled too: the feature's old `feature_to_place` rows are cleared and the new link replaces them rather than accumulating a second. Keep the source identifier stable — it is the key, so changing it creates a new feature and orphans the old one. Removing a feature is *not* automatic: a row dropped from the source file stays in the DB until you delete it by hand.
 
 **Fixing a place.** Re-ingest the relevant place source (`lps`, `streets`, `neighbourhoods-and-districts`, or `adressen`). Place rows refresh under one of two conflict modes — streets, neighbourhoods, and districts overwrite everything including their label from the source (`replaceAll`), while addresses refresh only their geometry and keep the label the `adressen` step owns (`replaceGeometry`). So you re-ingest `lps` to correct an address's point without losing its name, and `adressen` to correct the name.
+
+**Fixing tags.** Re-run the `tags` source with the corrected file and the same `--tagger`: it replaces that tagger's rows only, and other taggers' rows stay. Then rebuild.
 
 ## API endpoints
 
@@ -481,10 +486,10 @@ bun run db:ingest -s pdok-places -f <data-dir>/bag-addresses.ndjson
 # Ingest datasets (any order)
 bun run db:ingest -s <dataset-name> -f <path-to-file>
 
-# Rebuild index
-# Tags (optional): classifier output for an ingested dataset
+# Tags (optional): classifier output for an ingested dataset, keyed by its natural keys
 bun run db:ingest -s tags -f <path-to-tags.jsonl> --tagger <tagger-id> --dataset <dataset-name>
 
+# Rebuild index (after every ingest, tags included)
 bun run db:rebuild-index
 
 # Run the frontend
@@ -508,7 +513,7 @@ build on a bare `/api/…` string or a static `href`/`src` starting with `/`.
 
 The two packages use different runners. The app tests run under vitest, the db tests under bun's runner. `bun test` discovery is scoped to `packages/db` via `bunfig.toml`, so neither runner can pick up the other's files. Use `bun run test` for the full CI-identical run and `bun test <filter>` for quick db iterations.
 
-`bun run test` runs both suites via `turbo run test`: the **db** tests against an isolated Postgres+PostGIS container (port `5434`, ephemeral — wiped on `test:db:down`), and the **app** unit tests (pure heatmap/cell maths, no DB). The db integration tests exercise the pipeline end-to-end — LPS + adressen + streets + beeldbank + Joods Monument ingestion on real-data fixtures under `packages/db/src/__tests__/fixtures/`, then the query layer (features, heatmap, timeline, histogram) and `rebuild-index` — alongside pure-function unit tests for the query helpers.
+`bun run test` runs both suites via `turbo run test`: the **db** tests against an isolated Postgres+PostGIS container (port `5434`, ephemeral — wiped on `test:db:down`), and the **app** unit tests (pure utilities and the runes state modules, no DB or DOM). The db integration tests exercise the pipeline end-to-end — LPS + adressen + streets + beeldbank + Joods Monument ingestion on real-data fixtures under `packages/db/src/__tests__/fixtures/`, then the query layer (features, heatmap, timeline, histogram) and `rebuild-index` — alongside pure-function unit tests for the query helpers.
 
 ```bash
 bun run test:db:up     # start the isolated test DB (required for the db suite)
@@ -580,7 +585,7 @@ etl -s pdok-places -f /data/bag-addresses.ndjson
 etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
-etl -s tags -f /data/siglip2-baseline-v1.jsonl --tagger siglip2-baseline-v1 --dataset beeldbank   # optional: classifier tags
+etl -s tags -f /data/siglip2-baseline-v1.natural-key.jsonl --tagger siglip2-baseline-v1 --dataset beeldbank   # optional: classifier tags, keyed by natural keys
 
 # required, or the map stays empty; raise DB_STATEMENT_TIMEOUT_MS in .env if it times out
 $DC run --rm app bun run db:rebuild-index
@@ -634,7 +639,7 @@ etl -s pdok-places -f /data/bag-addresses.ndjson
 etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
-etl -s tags -f /data/siglip2-baseline-v1.jsonl --tagger siglip2-baseline-v1 --dataset beeldbank   # optional: classifier tags
+etl -s tags -f /data/siglip2-baseline-v1.natural-key.jsonl --tagger siglip2-baseline-v1 --dataset beeldbank   # optional: classifier tags, keyed by natural keys
 $DC run --rm app bun run db:rebuild-index
 
 $DC up -d app
@@ -652,12 +657,13 @@ export DC="docker compose --env-file .env \
   -f docker/docker-compose.production.yml"
 
 $DC pull app
-$DC up -d app                                    # recreates app only; the bundled DB is untouched
 
-# only if the new image changed the schema or ingestors:
+# only if the new image changed the schema, an ingestor or how the index is built:
 $DC run --rm app bun run db:push-schema
 $DC run --rm -v $DATA:/data:ro app bun run db:ingest -s <source> -f /data/<file>
 $DC run --rm app bun run db:rebuild-index
+
+$DC up -d app                                    # recreates app only; the bundled DB is untouched
 
 # to move the bundled DB to a newer image too:
 $DC pull dataindex-db && $DC up -d --wait dataindex-db
