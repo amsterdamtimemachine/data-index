@@ -46,11 +46,11 @@
 		oninput={handleInput}
 		placeholder={translate('featureSearchPlaceholder')}
 		aria-label={translate('featureSearchPlaceholder')}
-		class="h-[32px] w-full px-3 bg-atm-sand-darkish rounded border border-atm-gold border-[1px] text-sm placeholder:text-gray-500"
+		class="h-[32px] w-full px-3 bg-atm-sand-darkish rounded border border-atm-gold border-[1px] text-base placeholder:text-gray-500"
 	/>
 	<!-- no onclick: the button submits the form, same path as Enter -->
 	<Button icon={MagnifyingGlass} size={18} aria-label={translate('applySearch')} class="shrink-0" />
 </form>
 {#if countLabel}
-	<div class="mt-1 text-xs text-gray-600">{countLabel}</div>
+	<div class="mt-1 text-base text-black">{countLabel}</div>
 {/if}

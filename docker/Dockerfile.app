@@ -17,6 +17,10 @@ RUN bun install
 # Copy source code
 COPY packages/ ./packages/
 
+# Path prefix the app is served under (empty = root), baked into the build
+ARG BASE_PATH=""
+ENV BASE_PATH=$BASE_PATH
+
 # Build app
 RUN bun run build:app
 
@@ -25,7 +29,7 @@ EXPOSE 3000
 
 # Health check endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:3000/api/metadata || exit 1
+  CMD curl -f http://localhost:3000${BASE_PATH}/api/metadata || exit 1
 
 # Start the SvelteKit application
 CMD ["sh", "-c", "cd packages/app && bun build/index.js"]

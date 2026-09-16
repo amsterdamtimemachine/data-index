@@ -1,8 +1,13 @@
 <!-- (map)/+page.svelte -->
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import { apiUrl } from '$utils/api';
+	import { formatPlaceTitle } from '$utils/format';
 	import { tick, untrack } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
+	import { navigateParams } from '$utils/navigate';
 	import { createMapSelection } from '$state/map-selection.svelte';
+	import { createTimelineScope } from '$state/timeline-scope.svelte';
 	import { createPageErrorData, createError, createValidationError } from '$utils/error';
 	import { validateCellId } from '$utils/utils';
 	import { loadingState } from '$lib/state/loadingState.svelte';
@@ -40,7 +45,6 @@
 	let dimensions = $state<HeatmapDimensions | null>(null);
 	let histogram = $state<Histogram | null>(null);
 	// Selected cell's histogram, mobile only — see the gated effect below.
-	let cellHistogram = $state<Histogram | null>(null);
 	let clientErrors = $state<AppError[]>([]);
 
 	const isMobile = createMediaQuery(MOBILE_QUERY);
@@ -185,7 +189,7 @@
 		tick().then(() => {
 			// Validate the deep-linked cell against the now-available dimensions (this used
 			// to be done in the loader, but dimensions arrive client-side now).
-			if (data.cellParam && dimensions) {
+			if (data.cellParam && dimensions && !placePanelOpen) {
 				const validation = validateCellId(data.cellParam, dimensions);
 				if (validation.isValid) {
 					const bounds = getCellBoundsFromCellId(data.cellParam, dimensions);
@@ -224,14 +228,9 @@
 	// Fetch heatmap + histogram on the client, re-fetching when the filters change.
 	// One URL definition feeds both the <head> preloads and the fetches, so the
 	// browser's preload always matches (a differing URL would fetch twice).
-	const filterQs = $derived.by(() => {
-		if (filterQuery) {
-			return `?${filterQuery}`;
-		}
-		return '';
-	});
-	const heatmapUrl = $derived(`/api/heatmaps${filterQs}`);
-	const histogramUrl = $derived(`/api/histogram${filterQs}`);
+	const filterParams = $derived(new URLSearchParams(filterQuery));
+	const heatmapUrl = $derived(apiUrl('/api/heatmaps', filterParams));
+	const histogramUrl = $derived(apiUrl('/api/histogram', filterParams));
 
 	$effect(() => {
 		loadingState.startLoading();
@@ -271,74 +270,67 @@
 		);
 	});
 
-	// Nulled up front: a cell switch must never show the previous cell's bars.
+	// The timeline's scope: the whole city, or the panel subject. The scope owns the
+	// subject series and the switch; the effects below only fetch and hand results in.
+	const timelineScope = createTimelineScope(() => {
+		let placeTitle: string | null = null;
+		if (data.selectedPlace) {
+			placeTitle = formatPlaceTitle(data.selectedPlace);
+		}
+		return { isMobile: isMobile.matches, cellModalOpen: showCellModal, placePanelOpen, placeTitle };
+	});
+
+	// The selected cell's series: a request per cell, cleared up front so a cell switch
+	// never shows the previous cell's bars.
 	$effect(() => {
 		const cellBounds = selectedCellBounds;
 		const filterQs = filterQuery;
-
-		cellHistogram = null;
 		if (!cellBounds) {
+			timelineScope.clearCell();
 			return;
 		}
-
-		let qs = '';
-		if (filterQs) {
-			qs = `${filterQs}&`;
-		}
-		const boundsQs = `minLon=${cellBounds.minLon}&maxLon=${cellBounds.maxLon}&minLat=${cellBounds.minLat}&maxLat=${cellBounds.maxLat}`;
+		const params = new URLSearchParams(filterQs);
+		params.set('minLon', String(cellBounds.minLon));
+		params.set('maxLon', String(cellBounds.maxLon));
+		params.set('minLat', String(cellBounds.minLat));
+		params.set('maxLat', String(cellBounds.maxLat));
+		const request = timelineScope.cellRequest();
 		return fetchJson<Histogram>(
-			`/api/histogram?${qs}${boundsQs}`,
-			(res) => {
-				cellHistogram = res;
-			},
+			apiUrl('/api/histogram', params),
+			request.loaded,
 			() => {
 				// silent by design: the timeline degrades to the city-wide histogram
+			},
+			() => {
+				request.settled();
+				timelineScope.requestSettled();
 			}
 		);
 	});
 
 	// The open place panel's series: features in the place's cells per bin.
-	let placeHistogram = $state<Histogram | null>(null);
 	$effect(() => {
 		const open = placePanelOpen;
 		const place = data.selectedPlace;
 		const filterQs = filterQuery;
-
-		placeHistogram = null;
 		if (!open || !place) {
+			timelineScope.clearPlace();
 			return;
 		}
-		let qs = '';
-		if (filterQs) {
-			qs = `${filterQs}&`;
-		}
+		const params = new URLSearchParams(filterQs);
+		params.set('placeId', place.placeId);
+		const request = timelineScope.placeRequest();
 		return fetchJson<Histogram>(
-			`/api/histogram?${qs}placeId=${encodeURIComponent(place.placeId)}`,
-			(res) => {
-				placeHistogram = res;
-			},
+			apiUrl('/api/histogram', params),
+			request.loaded,
 			() => {
 				// silent by design: the timeline degrades to the city-wide histogram
+			},
+			() => {
+				request.settled();
+				timelineScope.requestSettled();
 			}
 		);
-	});
-
-	// The panel subject's series, overlaid on the timeline in red; on mobile it
-	// only accompanies the open panel.
-	const localHistogram = $derived.by(() => {
-		if (placePanelOpen) {
-			if (!placeHistogram || placeHistogram.bins.length === 0) {
-				return null;
-			}
-			return placeHistogram;
-		}
-		if (!cellHistogram || cellHistogram.bins.length === 0) {
-			return null;
-		}
-		if (isMobile.matches && !showCellModal) {
-			return null;
-		}
-		return cellHistogram;
 	});
 
 	// A filter change reloads the page data (new errorData); drop the previous load's
@@ -355,9 +347,6 @@
 	// Handle cell selection from map; selecting a cell takes over the panel from
 	// the place view, but never clears the place filter itself.
 	function handleCellClick(cellId: string | null) {
-		if (cellId) {
-			handleClosePlacePanel();
-		}
 		if (cellId && dimensions) {
 			// Calculate bounds on-demand from dimensions
 			const bounds = getCellBoundsFromCellId(cellId, dimensions);
@@ -369,44 +358,43 @@
 		} else {
 			mapSelection.selectCell(null);
 		}
+		if (cellId && placePanelOpen) {
+			setPlacePanel(false);
+		}
 	}
 
 	function handleFeaturesPanelClose() {
 		if (placePanelOpen) {
-			handleClosePlacePanel();
+			setPlacePanel(false);
 			return;
 		}
 		mapSelection.clearErrors();
 		mapSelection.selectCell(null);
 	}
 
-	// Place panel: the features panel showing a searched place's cell set. Open
-	// state is client-owned and mirrored to the URL like the cell selection.
-	let placePanelOpen = $state(untrack(() => data.placePanelOpen ?? false));
+	// Place panel: the features panel showing a searched place's cell set. The URL
+	// flag is its only state, read by the loader; a search pick, the chip and the
+	// panel's close all navigate to set or clear it, like any other filter change.
+	const placePanelOpen = $derived(data.placePanelOpen ?? false);
 
-	function handleOpenPlacePanel() {
-		mapSelection.selectCell(null);
-		placePanelOpen = true;
-		mapSelection.updateUrlParam('placePanel', '1');
-	}
-
-	function handleClosePlacePanel() {
-		placePanelOpen = false;
-		mapSelection.updateUrlParam('placePanel', null);
+	function setPlacePanel(open: boolean) {
+		navigateParams((p) => {
+			if (open) {
+				p.set('placePanel', '1');
+			} else {
+				p.delete('placePanel');
+			}
+		});
 	}
 
 	function handleTogglePlacePanel() {
-		if (placePanelOpen) {
-			handleClosePlacePanel();
-			return;
-		}
-		handleOpenPlacePanel();
+		setPlacePanel(!placePanelOpen);
 	}
 
-	// clearing the place filter also closes its panel
+	// an open place panel takes the panel from the cell
 	$effect(() => {
-		if (!data.selectedPlace && placePanelOpen) {
-			placePanelOpen = false;
+		if (placePanelOpen) {
+			untrack(() => mapSelection.selectCell(null));
 		}
 	});
 
@@ -431,6 +419,18 @@
 			return true;
 		}
 		return showCellModal;
+	});
+
+	// what the timeline shows, for the empty panel's hint: the selection's series,
+	// else the city-wide one where the switch exists to leave it
+	const timelineView = $derived.by(() => {
+		if (timelineScope.histogram !== null) {
+			return 'local' as const;
+		}
+		if (timelineScope.onToggle !== undefined) {
+			return 'cityWide' as const;
+		}
+		return undefined;
 	});
 
 	// The period active when the panel's subject was picked — the mobile minimap
@@ -474,7 +474,7 @@
 		<NavContainer bind:isExpanded={navExpanded} class="absolute top-0 left-0 z-30">
 			{#snippet header()}
 				<Nav class="p-3">
-					<NavItem href="/about" label="Over" />
+					<NavItem href={resolve('/about')} label="Over" />
 				</Nav>
 			{/snippet}
 			<FilterPanel
@@ -508,6 +508,8 @@
 			allDatasets={datasetLabels}
 			selectedTags={currentTags}
 			tagOperator={currentTagOperator as 'AND' | 'OR'}
+			selectedPlace={data.selectedPlace}
+			searchQuery={activeSearchQuery}
 			class="absolute top-3 left-3 max-w-[calc(100%-1.5rem)]"
 		/>
 	{/if}
@@ -538,6 +540,7 @@
 						onSortChange={handleSortChange}
 						onShuffle={handleShuffle}
 						onClose={handleFeaturesPanelClose}
+						{timelineView}
 					/>
 				</div>
 			</div>
@@ -548,7 +551,12 @@
 		<TimePeriodSelector
 			period={currentPeriod}
 			{histogram}
-			{localHistogram}
+			localHistogram={timelineScope.histogram}
+			markerHistogram={timelineScope.subjectSeries}
+			localLabel={timelineScope.label}
+			onToggleLocal={timelineScope.onToggle}
+			localToggleOn={timelineScope.switchOn}
+			localAvailable={timelineScope.available}
 			onPeriodChange={handlePeriodChange}
 			class="z-40 bg-atm-sand border-t border-atm-sand-border"
 		/>

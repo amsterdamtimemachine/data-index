@@ -54,8 +54,8 @@ export interface PlaceInsert {
   // place itself (e.g. an Adamlink street backfilled from NWB). Left undefined otherwise.
   geometrySource?: PlaceSource | null;
   geometryUrl?: string | null;
-  // Period this geometry was the city's division — set only for neighbourhood/district.
-  // Left undefined for address/street. Dates as 'YYYY-MM-DD'.
+  // The place's period: a division's validity for neighbourhood/district, the street's
+  // existence for Adamlink streets. Left undefined for addresses. Dates as 'YYYY-MM-DD'.
   since?: string | null;
   until?: string | null;
 }

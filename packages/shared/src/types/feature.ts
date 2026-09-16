@@ -69,7 +69,8 @@ export const PLACE_PROVIDERS: Record<PlaceSource, { label: string; url: string }
  */
 export type FeaturesArea =
   | { kind: 'bounds'; bounds: HeatmapCellBounds }
-  | { kind: 'place'; placeId: string };
+  // the display cells the place lies in, at the grid width the map renders (cols)
+  | { kind: 'place'; placeId: string; cols?: number };
 
 export interface FeaturesQuery {
   area: FeaturesArea;

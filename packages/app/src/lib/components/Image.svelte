@@ -9,6 +9,8 @@
 		alt?: string; // Standard img alt prop
 		class?: string;
 		loading?: 'lazy' | 'eager';
+		// in running text: the image alone, one line of text high, no figure or caption
+		inline?: boolean;
 	}
 
 	let {
@@ -18,7 +20,8 @@
 		text,
 		alt,
 		class: className,
-		loading = 'lazy'
+		loading = 'lazy',
+		inline = false
 	}: Props = $props();
 
 	// Use href from svelte-markdown if available, otherwise use src
@@ -27,21 +30,26 @@
 	const imageAlt = $derived(text ?? alt ?? '');
 
 	const baseClasses = 'h-auto rounded-md shadow-[0_0_20px_0_rgba(0,0,0,0.15)]';
+	const inlineClasses = 'inline-block align-middle h-8 w-auto mx-1';
 	const figureClasses = 'mb-6 flex flex-col items-center';
 	const captionClasses = 'text-base text-gray-600 mt-2 text-center italic';
 </script>
 
-<figure class={mergeCss(figureClasses, className)}>
-	<img
-		src={imageSrc}
-		alt={imageAlt}
-		{title}
-		{loading}
-		class={baseClasses}
-	/>
-	{#if imageAlt}
-		<figcaption class={captionClasses}>
-			{imageAlt}
-		</figcaption>
-	{/if}
-</figure>
+{#if inline}
+	<img src={imageSrc} alt={imageAlt} {title} {loading} class={mergeCss(`${baseClasses} ${inlineClasses}`, className)} />
+{:else}
+	<figure class={mergeCss(figureClasses, className)}>
+		<img
+			src={imageSrc}
+			alt={imageAlt}
+			{title}
+			{loading}
+			class={baseClasses}
+		/>
+		{#if imageAlt}
+			<figcaption class={captionClasses}>
+				{imageAlt}
+			</figcaption>
+		{/if}
+	</figure>
+{/if}

@@ -1,15 +1,8 @@
 // src/routes/api/places/+server.ts
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { DISPLAY_GRID_DEFAULT_COLS, DISPLAY_GRID_MIN_COLS, DISPLAY_GRID_MAX_COLS } from '@atm/shared';
 import { searchPlaces, getPlaceById } from '@atm/db/queries';
-
-function parseGridParam(value: string | null, defaultVal: number): number {
-	if (value === null) return defaultVal;
-	const parsed = parseInt(value, 10);
-	if (isNaN(parsed)) return defaultVal;
-	return Math.min(Math.max(parsed, DISPLAY_GRID_MIN_COLS), DISPLAY_GRID_MAX_COLS);
-}
+import { parseGridCols } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -17,7 +10,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		const id = url.searchParams.get('id');
 		// Same display resolution the heatmap renders at, so returned cell indices
 		// land exactly on heatmap cells.
-		const cols = parseGridParam(url.searchParams.get('cols'), DISPLAY_GRID_DEFAULT_COLS);
+		const cols = parseGridCols(url);
 		const limit = parseInt(url.searchParams.get('limit') || '10', 10) || 10;
 
 		if (id) {

@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { mergeCss } from '$utils/utils';
-	import { translateAll } from '$utils/translations';
+	import { translate, translateAll } from '$utils/translations';
+	import { formatPlaceTitle } from '$utils/format';
 	import Tag from './Tag.svelte';
-	import type { RecordType } from '@atm/shared/types';
+	import type { RecordType, PlaceSearchMatch } from '@atm/shared/types';
 
 	interface Props {
 		selectedRecordTypes: RecordType[];
@@ -13,6 +14,10 @@
 		allDatasets: string[];
 		selectedTags: string[];
 		tagOperator?: 'AND' | 'OR';
+		// the selected place, named as the chip names it
+		selectedPlace?: PlaceSearchMatch | null;
+		// the applied search term; absent while the search is paused or empty
+		searchQuery?: string;
 		class?: string;
 	}
 
@@ -25,6 +30,8 @@
 		allDatasets,
 		selectedTags,
 		tagOperator = 'OR',
+		selectedPlace = null,
+		searchQuery = undefined,
 		class: className
 	}: Props = $props();
 
@@ -97,6 +104,14 @@
 					<span>{tagOperator === 'AND' ? 'en' : 'of'}</span>
 				{/if}
 			{/each}
+		{/if}
+		{#if selectedPlace}
+			<span>{translate('statusInCellsOf')}</span>
+			<Tag variant="selected-outline">{formatPlaceTitle(selectedPlace)}</Tag>
+		{/if}
+		{#if searchQuery}
+			<span>{translate('statusWithSearch')}</span>
+			<Tag variant="selected-outline">{searchQuery}</Tag>
 		{/if}
 	</div>
 </div>

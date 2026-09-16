@@ -10,6 +10,7 @@ import { createPageErrorData, createError, createValidationError, createPeriodNo
 import { translateAll } from '$utils/translations';
 import type { UiSortMode } from '$components/FeaturesSortSelect.svelte';
 import { parsePlaceSelection, parsePlacePanelFlag, parseSortSelection, parseSearchQuery } from '$utils/page-params';
+import { apiUrl } from '$utils/api';
 
 // Helper functions for period validation
 function isValidPeriodFormat(period: string): boolean {
@@ -166,11 +167,11 @@ export const load: PageLoad = async ({ url, parent, fetch }) => {
 	if (placeSelection.placeId) {
 		let restoreFailed = false;
 		try {
-			let nameQs = '';
+			const params = new URLSearchParams({ id: placeSelection.placeId });
 			if (placeSelection.nameId) {
-				nameQs = `&nameId=${encodeURIComponent(placeSelection.nameId)}`;
+				params.set('nameId', placeSelection.nameId);
 			}
-			const res = await fetch(`/api/places?id=${encodeURIComponent(placeSelection.placeId)}${nameQs}`);
+			const res = await fetch(apiUrl('/api/places', params));
 			if (res.ok) {
 				const placeData = await res.json();
 				selectedPlace = placeData.matches[0] || null;

@@ -2,6 +2,7 @@ import type { LayoutLoad } from './$types';
 import type { VisualizationMetadata } from '@atm/shared/types';
 import type { AppError } from '$types/error';
 import { createError } from '$utils/error';
+import { apiUrl } from '$utils/api';
 
 // No `url` here — that's the point. Without a dependency that changes on filter
 // navigations, SvelteKit runs this once and reuses the result across them (the page
@@ -11,7 +12,7 @@ export const load: LayoutLoad = async ({ fetch }) => {
 	let metadata: VisualizationMetadata | null = null;
 
 	try {
-		const response = await fetch('/api/metadata');
+		const response = await fetch(apiUrl('/api/metadata'));
 		if (!response.ok) {
 			metadataErrors.push(
 				createError('error', 'API Request Failed', `Failed to fetch metadata: HTTP ${response.status}`, {

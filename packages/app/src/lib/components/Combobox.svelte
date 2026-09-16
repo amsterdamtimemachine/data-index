@@ -60,7 +60,29 @@
 		return options[target].value;
 	}
 
+	// the list starts at the input's left edge and is at least as wide as it;
+	// beyond that its rows size it, kept a page margin away from the viewport edge
 	const combobox = new MeltCombobox<T>({
+		sameWidth: false,
+		floatingConfig: {
+			shift: { padding: 12 },
+			computePosition: {
+				placement: 'bottom-start',
+				middleware: [
+					{
+						name: 'minWidthOfInput',
+						fn: ({ rects, elements }) => {
+							const minWidth = `${rects.reference.width}px`;
+							if (elements.floating.style.minWidth === minWidth) {
+								return {};
+							}
+							elements.floating.style.minWidth = minWidth;
+							return { reset: { rects: true } };
+						}
+					}
+				]
+			}
+		},
 		onNavigate: navigate,
 		onValueChange: (value) => {
 			if (!value) {
@@ -106,7 +128,7 @@
 	{placeholder}
 	aria-label={ariaLabel}
 	class={mergeCss(
-		'h-[32px] w-full px-3 bg-atm-sand-darkish rounded border border-atm-gold border-[1px] text-sm placeholder:text-gray-500',
+		'h-[32px] w-full px-3 bg-atm-sand-darkish rounded border border-atm-gold border-[1px] text-base placeholder:text-gray-500',
 		className
 	)}
 />
@@ -114,16 +136,16 @@
 <!-- m-0 p-0 inset-auto: reset UA popover styles -->
 <div
 	{...combobox.content}
-	class="z-50 m-0 p-0 inset-auto bg-atm-sand border border-atm-sand-border rounded-sm shadow-md overflow-hidden divide-y divide-atm-gold {options.length === 0 ? 'hidden' : ''}"
+	class="z-50 m-0 p-0 inset-auto w-max max-w-[min(64rem,calc(100vw-1.5rem))] bg-atm-sand border border-atm-sand-border rounded-sm shadow-md overflow-hidden divide-y divide-atm-gold {options.length === 0 ? 'hidden' : ''}"
 >
 	{#each options as option (option.value)}
 		<div
 			{...combobox.getOption(option.value, option.label)}
-			class="px-3 py-1.5 text-sm cursor-pointer flex items-baseline justify-between gap-3 data-[highlighted]:bg-atm-sand-dark aria-selected:bg-atm-gold"
+			class="px-3 py-1.5 text-base text-gray-500 cursor-pointer data-[highlighted]:bg-atm-sand-dark aria-selected:bg-atm-gold"
 		>
-			<span>{option.label}</span>
+			<span class="text-black">{option.label}</span>
 			{#if option.detail}
-				<span class="text-xs text-gray-600">{option.detail}</span>
+				<span> · {option.detail}</span>
 			{/if}
 		</div>
 	{/each}
