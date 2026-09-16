@@ -6,7 +6,7 @@
  */
 import { error } from '@sveltejs/kit';
 import type { RecordType, PlaceType, TagOperator, MatchFilters } from '@atm/shared/types';
-import { MAX_FILTER_ITEMS } from '@atm/shared';
+import { MAX_FILTER_ITEMS, DISPLAY_GRID_DEFAULT_COLS, DISPLAY_GRID_MIN_COLS, DISPLAY_GRID_MAX_COLS } from '@atm/shared';
 
 /**
  * Parse a comma-separated query param into a trimmed string[], or undefined.
@@ -120,4 +120,13 @@ export function parseBounds(url: URL): Bounds | undefined {
 		});
 	}
 	return bounds;
+}
+
+/** Display grid width (`cols`), clamped; the default when absent or malformed. */
+export function parseGridCols(url: URL): number {
+	const value = url.searchParams.get('cols');
+	if (value === null) return DISPLAY_GRID_DEFAULT_COLS;
+	const parsed = parseInt(value, 10);
+	if (isNaN(parsed)) return DISPLAY_GRID_DEFAULT_COLS;
+	return Math.min(Math.max(parsed, DISPLAY_GRID_MIN_COLS), DISPLAY_GRID_MAX_COLS);
 }

@@ -1,6 +1,6 @@
 /**
  * Feature text search (dutch FTS over labels) and its bitmap integration:
- * websearch semantics (stemming, exclusion, stopwords), label-only scope,
+ * websearch semantics (stemming, phrase, OR, exclusion, stopwords), label-only scope,
  * heatmap/histogram counts intersected with the search set, composition with
  * category filters, and the bestMatch sort lane. The cross-validation test pins
  * the surrogate mapping end to end: bitmap-intersected counts must equal a live
@@ -90,6 +90,18 @@ describe('feature text search', () => {
   test('websearch exclusion: -amsterdam drops the Amsterdam verkooping', async () => {
     const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkooping -amsterdam' });
     expect(hist.totalFeatures).toBe(1); // F1
+  });
+
+  test('websearch phrase: quoted words must be adjacent and in order', async () => {
+    const inOrder = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: '"nieuwe woningen"' });
+    expect(inOrder.totalFeatures).toBe(1); // F2
+    const reversed = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: '"woningen nieuwe"' });
+    expect(reversed.totalFeatures).toBe(0);
+  });
+
+  test('websearch OR: either term matches, still labels only', async () => {
+    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkooping OR zeedijk' });
+    expect(hist.totalFeatures).toBe(3); // F1, F4 (stemmed), F2; F3 has zeedijk only in its description
   });
 
   test('a stopword-only query matches nothing', async () => {

@@ -4,14 +4,16 @@
 	re-runs the loader and re-fetches the map data.
 -->
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { asset } from '$app/paths';
 	import type { PlaceSearchMatch, VisualizationMetadata } from '@atm/shared/types';
 	import type { FilterState } from '$types/filters';
 	import { translate, translateAll, reverseTranslateAll } from '$utils/translations';
+	import { navigateParams, withoutPlace } from '$utils/navigate';
 	import { createTagCounts } from '$lib/state/tag-counts.svelte';
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
 	import Heading from './Heading.svelte';
 	import Tooltip from './Tooltip.svelte';
+	import TextWithSlots from './TextWithSlots.svelte';
 	import ToggleGroup from './ToggleGroup.svelte';
 	import Tag from './Tag.svelte';
 	import FilterSection from './FilterSection.svelte';
@@ -112,16 +114,10 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		}
 	}
 
-	function navigate(mutate: (params: URLSearchParams) => void) {
-		const url = new URL(window.location.href);
-		mutate(url.searchParams);
-		goto(url.pathname + url.search);
-	}
-
 	function handleRecordTypeChange(selected: string[] | string) {
 		const dutch = Array.isArray(selected) ? selected : [selected];
 		const english = reverseTranslateAll(dutch);
-		navigate((p) => {
+		navigateParams((p) => {
 			if (english.length > 0) p.set('recordTypes', english.join(','));
 			else p.delete('recordTypes');
 		});
@@ -131,7 +127,7 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		const labels = Array.isArray(selected) ? selected : [selected];
 		const labelToId = new Map(datasets.map((s) => [s.label, s.id]));
 		const ids = labels.map((label) => labelToId.get(label) || label);
-		navigate((p) => {
+		navigateParams((p) => {
 			if (ids.length > 0) p.set('datasets', ids.join(','));
 			else p.delete('datasets');
 		});
@@ -140,7 +136,7 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 	function handlePlaceTypeChange(selected: string[] | string) {
 		const dutch = Array.isArray(selected) ? selected : [selected];
 		const raw = reverseTranslateAll(dutch);
-		navigate((p) => {
+		navigateParams((p) => {
 			if (raw.length > 0) p.set('placeTypes', raw.join(','));
 			else p.delete('placeTypes');
 		});
@@ -149,7 +145,7 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 	function handleTagsChange(selected: string | string[]) {
 		const dutch = Array.isArray(selected) ? selected : [selected];
 		const ids = reverseTranslateAll(dutch);
-		navigate((p) => {
+		navigateParams((p) => {
 			if (ids.length > 0) p.set('tags', ids.join(','));
 			else p.delete('tags');
 			dropIdleBestMatch(p);
@@ -157,38 +153,38 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 	}
 
 	function handleTagsClear() {
-		navigate((p) => {
+		navigateParams((p) => {
 			p.delete('tags');
 			dropIdleBestMatch(p);
 		});
 	}
 
+	// a picked place opens its panel at once; the cell gives way to it
 	function handlePlaceSelect(match: PlaceSearchMatch) {
-		navigate((p) => {
+		navigateParams((p) => {
 			p.set('place', match.placeId);
 			if (match.matchedNameId) {
 				p.set('name', match.matchedNameId);
 			} else {
 				p.delete('name');
 			}
+			p.set('placePanel', '1');
+			p.delete('cell');
 		});
 	}
 
 	function handlePlaceClear() {
-		navigate((p) => {
-			p.delete('place');
-			p.delete('name');
-		});
+		navigateParams(withoutPlace);
 	}
 
 	function handleSearchApply(q: string) {
-		navigate((p) => {
+		navigateParams((p) => {
 			p.set('q', q);
 		});
 	}
 
 	function handleSearchClear() {
-		navigate((p) => {
+		navigateParams((p) => {
 			p.delete('q');
 			dropIdleBestMatch(p);
 		});
@@ -196,7 +192,7 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 
 	// The selection survives an operator change; the counts and the map answer for it.
 	function handleTagOperatorChange(operator: 'AND' | 'OR') {
-		navigate((p) => {
+		navigateParams((p) => {
 			p.set('tagOperator', operator);
 		});
 	}
@@ -209,11 +205,15 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		<div class="mb-4">
 			<div class="flex mb-2">
 				<Heading level={3} class="pr-2">Plek</Heading>
-				<Tooltip
-					icon={QuestionMark}
-					text="Zoek op huidige of historische plaatsnamen. De kaart markeert de cellen van de gevonden plek."
-					placement="bottom"
-				/>
+				<Tooltip icon={QuestionMark} placement="bottom">
+					<TextWithSlots text={translate('placeSearchTooltip')}>
+						{#snippet children(slot)}
+							{#if slot === 'border'}
+								<img src={asset('/glyphs/PlaceBorder.svg')} alt="" width="24" height="24" class="inline align-middle mx-1" />
+							{/if}
+						{/snippet}
+					</TextWithSlots>
+				</Tooltip>
 			</div>
 			<PlaceSearchInput onSelect={handlePlaceSelect} {selectedPlace} />
 			{#if selectedPlace}
@@ -226,11 +226,7 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		<div class="mb-4">
 			<div class="flex mb-2">
 				<Heading level={3} class="pr-2">Zoekterm</Heading>
-				<Tooltip
-					icon={QuestionMark}
-					text={'Doorzoek de titels van de hele collectie; de kaart en tijdlijn tonen alleen de gevonden features. Gebruik "aanhalingstekens" voor een exacte frase, OR voor alternatieven en -woord om uit te sluiten.'}
-					placement="bottom"
-				/>
+				<Tooltip icon={QuestionMark} placement="bottom">{translate('searchTooltip')}</Tooltip>
 			</div>
 			<FeatureSearchInput onApply={handleSearchApply} filterQuery={activeParams} />
 			{#if currentSearchQuery}
@@ -271,11 +267,9 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		<div class="mb-4">
 			<div class="flex mb-2">
 				<Heading level={3} class="pr-2">{translate('topics')}</Heading>
-				<Tooltip
-					icon={QuestionMark}
-					text="Onderwerpen zijn automatisch toegekend door beeldclassificatie, zonder handmatige correctie, en voorlopig alleen aan afbeeldingen. Een grijs onderwerp heeft geen resultaten binnen de andere filters. Minimaal één: resultaten met minstens één gekozen onderwerp. Alle: alleen resultaten met alle gekozen onderwerpen."
-					placement="bottom"
-				/>
+				<Tooltip icon={QuestionMark} placement="bottom">
+					Onderwerpen zijn automatisch toegekend door beeldclassificatie, zonder handmatige correctie, en voorlopig alleen aan afbeeldingen. Een grijs onderwerp heeft geen resultaten binnen de andere filters. Minimaal één: resultaten met minstens één gekozen onderwerp. Alle: alleen resultaten met alle gekozen onderwerpen.
+				</Tooltip>
 			</div>
 			<TagOperatorSwitch
 				operator={currentTagOperator}

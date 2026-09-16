@@ -2,7 +2,7 @@
 	import { mergeCss } from '$utils/utils';
 	import { translate, translateAll } from '$utils/translations';
 	import { selectsAll } from '$utils/filters';
-	import { formatPlaceName } from '$utils/format';
+	import { formatPlaceTitle } from '$utils/format';
 	import Tag from './Tag.svelte';
 	import type { FiltersStatus } from '$types/filters';
 
@@ -74,11 +74,11 @@
 			{/if}
 		{/each}
 		{#if selectedPlace}
-			<span>bij</span>
-			<Tag variant="selected-outline">{formatPlaceName(selectedPlace)}</Tag>
+			<span>{translate('statusInCellsOf')}</span>
+			<Tag variant="selected-outline">{formatPlaceTitle(selectedPlace)}</Tag>
 		{/if}
 		{#if searchQuery}
-			<span>met</span>
+			<span>{translate('statusWithSearch')}</span>
 			<Tag variant="selected-outline">{searchQuery}</Tag>
 		{/if}
 		{#if selectedTags.length > 0}

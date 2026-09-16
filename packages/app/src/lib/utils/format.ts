@@ -1,4 +1,5 @@
 import type { PlaceSearchMatch } from '@atm/shared/types';
+import { translate } from './translations';
 
 export function formatTimePeriod(per: [number, number]): string {
 	const [start, end] = per;
@@ -36,9 +37,29 @@ export function formatDatasetTitle(title: string): string {
 }
 
 /**
- * Era label for a place search match: "1850–1909", "tot 1850", "vanaf 1921", or
- * '' when the sources record no window. The matched name's window wins over the
- * geometry's.
+ * A place as the UI names it: the matched (possibly historical) name, else the current
+ * one, else the id — followed by "(nu <current>)" when the shown name is an old one.
+ */
+export function formatPlaceTitle(match: PlaceSearchMatch): string {
+	let shown = match.matchedName;
+	if (!shown && match.name) {
+		shown = match.name;
+	}
+	if (!shown) {
+		shown = match.placeId;
+	}
+	if (match.name && match.name !== shown) {
+		return `${shown} (${translate('nowKnownAs')} ${match.name})`;
+	}
+	return shown;
+}
+
+/**
+ * Era label for a place search match: the period of the name the row shows. A match
+ * on the current name carries the place's own window (a street's existence, a
+ * division's years in force); a match on a historical name row carries that row's
+ * window, so an undated variant carries none. "1850 tot 1909", "in 1853" (both ends
+ * in one year), "tot 1850", "vanaf 1921", or '' without a window.
  */
 /** The name a place is shown under: the matched (possibly historical) name, else the current one, else the id. */
 export function formatPlaceName(match: PlaceSearchMatch): string {
@@ -52,22 +73,27 @@ export function formatPlaceName(match: PlaceSearchMatch): string {
 }
 
 export function formatPlaceWindow(match: PlaceSearchMatch): string {
-	let window = match.matchedWindow;
-	if (!window) {
-		window = match.geometryWindow;
+	let window = match.geometryWindow;
+	if (match.matchedNameId) {
+		window = match.matchedWindow;
 	}
 	if (!window) {
 		return '';
 	}
 	const [since, until] = window;
 	if (since && until) {
-		return `${since.slice(0, 4)}–${until.slice(0, 4)}`;
+		const sinceYear = since.slice(0, 4);
+		const untilYear = until.slice(0, 4);
+		if (sinceYear === untilYear) {
+			return `${translate('windowIn')} ${sinceYear}`;
+		}
+		return `${sinceYear} ${translate('windowUntil')} ${untilYear}`;
 	}
 	if (until) {
-		return `tot ${until.slice(0, 4)}`;
+		return `${translate('windowUntil')} ${until.slice(0, 4)}`;
 	}
 	if (since) {
-		return `vanaf ${since.slice(0, 4)}`;
+		return `${translate('windowSince')} ${since.slice(0, 4)}`;
 	}
 	return '';
 }

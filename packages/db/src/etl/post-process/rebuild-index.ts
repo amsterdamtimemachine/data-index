@@ -135,7 +135,8 @@ export async function rebuildIndex() {
   // Canonicalise stored names, adamlink only: its name lists record an old name
   // on the place row while the name in force lives as an open-ended history row
   // (verified: every dead adamlink name carries an until). Other sources may use
-  // an open until to mean "end unknown", so they are left alone. The old name is
+  // an open until to mean "end unknown", so they are left alone. A row with no
+  // since is a label without a period, never a current name. The old name is
   // never lost — it exists as its own (dated) history row.
   console.log('\nCanonicalising place names...');
   const nameResult = await db.execute(sql`
@@ -144,8 +145,8 @@ export async function rebuildIndex() {
     FROM (
       SELECT DISTINCT ON (place_id) place_id, name
       FROM place_historical_name
-      WHERE until IS NULL AND name IS NOT NULL
-      ORDER BY place_id, since DESC NULLS LAST
+      WHERE until IS NULL AND since IS NOT NULL AND name IS NOT NULL
+      ORDER BY place_id, since DESC
     ) n
     WHERE p.id = n.place_id AND p.name IS DISTINCT FROM n.name
       AND p.source = 'adamlink'
@@ -158,7 +159,7 @@ export async function rebuildIndex() {
   const contradictions = await db.execute<ContradictionRow>(sql`
     SELECT COUNT(*) AS n FROM (
       SELECT place_id FROM place_historical_name
-      WHERE until IS NULL AND name IS NOT NULL
+      WHERE until IS NULL AND since IS NOT NULL AND name IS NOT NULL
       GROUP BY place_id HAVING COUNT(DISTINCT name) > 1
     ) multi
   `);

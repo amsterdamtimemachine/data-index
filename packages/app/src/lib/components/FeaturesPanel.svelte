@@ -1,5 +1,10 @@
 <script lang="ts">
+	import { translate } from '$utils/translations';
+	import { asset } from '$app/paths';
 	import FeaturesGrid from '$components/FeaturesGrid.svelte';
+	import Image from '$components/Image.svelte';
+	import ButtonIllustration from '$components/ButtonIllustration.svelte';
+	import TextWithSlots from '$components/TextWithSlots.svelte';
 	import FeaturesPanelHeader from '$components/FeaturesPanelHeader.svelte';
 	import ErrorHandler from '$components/ErrorHandler.svelte';
 	import { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
@@ -22,6 +27,9 @@
 		sampleSeed?: string;
 		onSortChange?: (mode: UiSortMode) => void;
 		onShuffle?: () => void;
+		// what the timeline shows, when an empty panel can point the user at it: the
+		// city-wide series with the switch (desktop), or the selection's own series
+		timelineView?: 'cityWide' | 'local';
 	}
 
 	let {
@@ -37,7 +45,8 @@
 		sortMode = 'sample',
 		sampleSeed,
 		onSortChange,
-		onShuffle
+		onShuffle,
+		timelineView = undefined
 	}: Props = $props();
 
 	const panelFeatures = createPanelFeatures(() => ({
@@ -82,6 +91,30 @@
 	{#if panelFeatures.features.length > 0}
 		<FeaturesGrid features={panelFeatures.features} columns={gridColumns} />
 	{:else if !panelFeatures.initialLoading && !panelFeatures.loading}
-		<div class="text-base text-gray-500 p-4">No features found for this cell and period</div>
+		<p class="text-base text-black p-4 leading-loose">
+			<span class="font-bold">{translate('noFeaturesForSelection')}</span>
+			{#if timelineView === 'cityWide'}
+				<TextWithSlots text={translate('emptyPanelDotHint')}>
+					{#snippet children(slot)}
+						{#if slot === 'picture'}
+							<Image src={asset('/images/red-dot-timeline-detail.png')} alt={translate('redDotTimelineAlt')} inline />
+						{:else if slot === 'button'}
+							<ButtonIllustration glyph="/glyphs/ToggleLocalTimeline.svg" />
+						{/if}
+					{/snippet}
+				</TextWithSlots>
+			{:else if timelineView === 'local'}
+				<TextWithSlots text={translate('emptyPanelBarHint')}>
+					{#snippet children(slot)}
+						{#if slot === 'picture'}
+							<Image src={asset('/images/local-timeline-detail.png')} alt={translate('localTimelineAlt')} inline />
+						{/if}
+					{/snippet}
+				</TextWithSlots>
+			{/if}
+			{#if timelineView}
+				{translate('emptyPanelOtherCell')}
+			{/if}
+		</p>
 	{/if}
 </div>

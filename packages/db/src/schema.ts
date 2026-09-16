@@ -73,8 +73,9 @@ export const placeGeometry = pgTable('place_geometry', {
   // e.g. NWB backfilling an Adamlink street that has no line. null = same provider as the place.
   source: text('source').$type<PlaceSource>().references(() => organisations.id),
   url: text('url'),                               // link to the geometry's source record
-  // Period this geometry was the city's division — set ONLY for neighbourhood/district
-  // (null for address/street). until null = open/current.
+  // The period the place existed in this shape: a division's validity for
+  // neighbourhood/district, the street's existence for Adamlink streets; null for
+  // addresses. until null = open/current.
   since: date('since'),
   until: date('until')
 }, (table) => [
@@ -82,7 +83,11 @@ export const placeGeometry = pgTable('place_geometry', {
 ]);
 
 // ============================================================================
-// PLACE_HISTORICAL_NAME - Dated past names for places (addresses, streets)
+// PLACE_HISTORICAL_NAME - Past names for places (addresses, streets)
+// A row with a since and/or until is an observation: the place was called this then
+// (until null = still is). A row with neither is a label (an Adamlink alias, spelling
+// variant, abbreviation): findable by the place search, but no reader that needs a
+// period (resolution, canonicalisation) considers it.
 // ============================================================================
 export const placeHistoricalName = pgTable('place_historical_name', {
   id: text('id').primaryKey(),                    // adamlink URI "https://adamlink.nl/geo/address/A1"

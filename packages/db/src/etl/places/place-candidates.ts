@@ -24,10 +24,6 @@ export const GRANULARITIES: PlaceType[] = ['address', 'street', 'neighbourhood',
 // ERA_CUTOFF (historical↔current address cut) and CURRENT_ANCHOR (present-day reference
 // for current-name scoring) are env-configurable via @atm/shared; re-exported here.
 export { ERA_CUTOFF, CURRENT_ANCHOR };
-// Defensive sentinel gap: a both-open historical name (since AND until null) scores
-// larger than any real gap, so it never wins unconditionally (spec req 11). Not a knob —
-// any large value works; kept a literal so it can't be misconfigured to a small one.
-export const BOTH_OPEN_GAP_DAYS = 100_000_000;
 
 // Proximity caps (metres, RD/28992) — env-configurable via @atm/shared (defaults 30/50);
 // re-exported here. Areas match by containment, so they have no radius.
@@ -63,11 +59,10 @@ const overlapDays = (start: string, end: string) =>
               - GREATEST(${start}::date, COALESCE(since, '-infinity'::date)))::int`;
 
 // Gap from the feature range to a name observation: 0 on overlap, else days to the
-// nearest window end. Current names (no window) anchor at CURRENT_ANCHOR; a both-open
-// historical row gets the defensive sentinel so it never wins unconditionally (req 11).
+// nearest window end. Current names (no window) anchor at CURRENT_ANCHOR. Historical
+// rows without any period are labels, not observations, and never reach here.
 const nameGapDays = (start: string, end: string) => sql`CASE
   WHEN via = 'current' THEN GREATEST(${start}::date - ${CURRENT_ANCHOR}::date, ${CURRENT_ANCHOR}::date - ${end}::date, 0)
-  WHEN since IS NULL AND until IS NULL THEN ${BOTH_OPEN_GAP_DAYS}
   ELSE GREATEST(since - ${end}::date, ${start}::date - (until - 1), 0)
 END`;
 
@@ -122,7 +117,8 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
   }));
 }
 
-// ── NAME signal: match current + dated historical names; nearest-by-overlap wins ──
+// ── NAME signal: match current + dated historical names; nearest-by-overlap wins.
+// An undated historical row is a label (an alias), not an observation: skipped. ──
 // gap = 0 if the feature range [start,end] overlaps the name window [since,until) — until
 // is EXCLUSIVE, matching place_geometry (a rename's until = successor's since is a clean
 // handoff). Else the days to the nearest end (GREATEST skips NULL open ends automatically).
@@ -138,6 +134,7 @@ export async function getCandidatesByName(name: string, start: string, end: stri
       SELECT p.id, hn.name, p.type, p.source, 'historical' AS via, hn.since, hn.until
       FROM place_historical_name hn JOIN place p ON p.id = hn.place_id
       WHERE LOWER(hn.name) = LOWER(${name})
+        AND (hn.since IS NOT NULL OR hn.until IS NOT NULL)
     ),
     scored AS (
       SELECT id, name, type, source, via,

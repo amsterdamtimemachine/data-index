@@ -1,0 +1,36 @@
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix schema: <http://schema.org/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sem: <http://semanticweb.cs.vu.nl/2009/11/sem/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# A square with a dated current name, its preferred label repeated as an undated
+# variant, and undated aliases including one old name and a duplicate in another case.
+<https://adamlink.nl/geo/street/SA1>
+    skos:prefLabel "Jonas Daniël Meijerplein" ;
+    sem:hasEarliestBeginTimeStamp "1873"^^xsd:gYear ;
+    schema:name [ rdfs:label "Jonas Daniël Meijerplein" ; sem:hasEarliestBeginTimeStamp "1873"^^xsd:gYear ],
+                [ rdfs:label "Jonas Daniël Meijerplein" ],
+                [ rdfs:label "Deventer Houtmarkt" ],
+                [ rdfs:label "Houtmarkt" ],
+                [ rdfs:label "houtmarkt" ] ;
+    geo:hasGeometry _:ga1 .
+_:ga1 geo:asWKT "LINESTRING(4.904 52.3675, 4.905 52.368)" .
+
+# The medieval street of the same name, with a closed dated name.
+<https://adamlink.nl/geo/street/SA2>
+    skos:prefLabel "Deventer Houtmarkt" ;
+    sem:hasEarliestBeginTimeStamp "1380"^^xsd:gYear ;
+    sem:hasLatestEndTimeStamp "1663"^^xsd:gYear ;
+    schema:name [ rdfs:label "Deventer Houtmarkt" ; sem:hasEarliestBeginTimeStamp "1380"^^xsd:gYear ; sem:hasEarliestEndTimeStamp "1663"^^xsd:gYear ] ;
+    geo:hasGeometry _:ga2 .
+_:ga2 geo:asWKT "LINESTRING(4.890 52.3715, 4.8898 52.3705)" .
+
+# A street whose only open-ended names are aliases: canonicalisation must not rename it.
+<https://adamlink.nl/geo/street/SA3>
+    skos:prefLabel "Kerkweg" ;
+    schema:name [ rdfs:label "Kerkstraat" ; sem:hasEarliestBeginTimeStamp "1800"^^xsd:gYear ; sem:hasEarliestEndTimeStamp "1900"^^xsd:gYear ],
+                [ rdfs:label "Kerkwegh" ] ;
+    geo:hasGeometry _:ga3 .
+_:ga3 geo:asWKT "LINESTRING(4.895 52.365, 4.896 52.3655)" .

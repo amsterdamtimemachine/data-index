@@ -1,8 +1,9 @@
 /**
  * Import street data from the Adamlink straten TTL.
  *
- * Creates one place per street that carries geometry (its current line) plus
- * place_historical_name entries for dated name variants. Streets WITHOUT geometry are
+ * Creates one place per street that carries geometry (its current line, with the
+ * street's existence dates as its window) plus place_historical_name entries for its
+ * name variants. Streets WITHOUT geometry are
  * skipped here — the `nwb-streets` source backfills the ones that have a bagOrl crosswalk,
  * reusing the same parser so their names come through identically.
  *
@@ -11,7 +12,7 @@
 import { readFileSync } from 'fs';
 import { Parser } from 'n3';
 import { insertPlaces, createNameWriter } from '../writers/place-writer';
-import { parseAdamlinkStreets, insertStreetNames } from './adamlink-streets';
+import { parseAdamlinkStreets, insertStreetNames, streetWindow } from './adamlink-streets';
 
 const BATCH_SIZE = 100;
 
@@ -37,7 +38,7 @@ export async function ingest(filePath: string) {
 
   // Insert place rows (geometry transformed from WGS84 to RD).
   const placeCount = await insertPlaces(
-    streets.map(s => ({ id: s.uri, type: 'street', label: s.prefLabel, source: 'adamlink', url: s.uri, wkt: s.wkt! })),
+    streets.map(s => ({ id: s.uri, type: 'street', label: s.prefLabel, source: 'adamlink', url: s.uri, wkt: s.wkt!, ...streetWindow(s) })),
     { sourceSrid: 4326, onConflict: 'replaceAll' }
   );
   console.log(`  ${placeCount} street places created`);
