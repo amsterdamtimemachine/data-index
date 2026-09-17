@@ -2,7 +2,9 @@
 import { loadingState } from '$lib/state/loadingState.svelte';
 import { createError, createPageErrorData } from '$utils/error';
 import { untrack } from 'svelte';
-import type { FeatureResult, RecordType, PlaceSearchMatch } from '@atm/shared/types';
+import type { FeatureResult, PlaceSearchMatch } from '@atm/shared/types';
+import type { FilterState } from '$types/filters';
+import { filterParams } from '$utils/filters';
 import type { UiSortMode } from '$components/FeaturesSortSelect.svelte';
 import type { AppError } from '$types/error';
 import { apiUrl } from '$utils/api';
@@ -22,14 +24,8 @@ export type PanelSubject =
 export type PanelFeaturesQuery = {
 	subject: PanelSubject;
 	period: string;
-	recordTypes: RecordType[];
-	placeTypes: string[];
-	datasets: string[];
-	tags: string[];
-	tagOperator: 'AND' | 'OR';
-	// text-search filter: the panel lists only matching features, so its counts
-	// agree with a search-filtered heatmap
-	searchQuery?: string;
+	// the applied filters (search term included), so the list agrees with the heatmap
+	filters: FilterState;
 	sortMode: UiSortMode;
 	sampleSeed?: string;
 };
@@ -108,24 +104,10 @@ export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 				...subjectParams(query.subject),
 				page: page.toString(),
 				timeSlice: query.period,
-				tagOperator: query.tagOperator,
 				...sortParams(query)
 			});
-
-			if (query.recordTypes.length > 0) {
-				params.set('recordTypes', query.recordTypes.join(','));
-			}
-			if (query.placeTypes.length > 0) {
-				params.set('placeTypes', query.placeTypes.join(','));
-			}
-			if (query.datasets.length > 0) {
-				params.set('datasets', query.datasets.join(','));
-			}
-			if (query.tags.length > 0) {
-				params.set('tags', query.tags.join(','));
-			}
-			if (query.searchQuery) {
-				params.set('q', query.searchQuery);
+			for (const [name, value] of filterParams(query.filters)) {
+				params.set(name, value);
 			}
 
 			const response = await fetch(apiUrl('/api/features', params));

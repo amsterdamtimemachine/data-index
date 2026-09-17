@@ -1,72 +1,49 @@
 <script lang="ts">
 	import { mergeCss } from '$utils/utils';
 	import { translate, translateAll } from '$utils/translations';
+	import { selectsAll } from '$utils/filters';
 	import { formatPlaceTitle } from '$utils/format';
 	import Tag from './Tag.svelte';
-	import type { RecordType, PlaceSearchMatch } from '@atm/shared/types';
+	import type { FiltersStatus } from '$types/filters';
 
 	interface Props {
-		selectedRecordTypes: RecordType[];
-		allRecordTypes: RecordType[];
-		selectedPlaceTypes?: string[];
-		allPlaceTypes?: string[];
-		selectedDatasets: string[];
-		allDatasets: string[];
-		selectedTags: string[];
-		tagOperator?: 'AND' | 'OR';
-		// the selected place, named as the chip names it
-		selectedPlace?: PlaceSearchMatch | null;
-		// the applied search term; absent while the search is paused or empty
-		searchQuery?: string;
+		// everything the line describes, with a paused search term already left out
+		status: FiltersStatus;
 		class?: string;
 	}
 
-	let {
-		selectedRecordTypes,
-		allRecordTypes,
-		selectedPlaceTypes = [],
-		allPlaceTypes = [],
-		selectedDatasets,
-		allDatasets,
-		selectedTags,
-		tagOperator = 'OR',
-		selectedPlace = null,
-		searchQuery = undefined,
-		class: className
-	}: Props = $props();
+	let { status, class: className }: Props = $props();
 
-	const hasAllTypes = $derived(
-		selectedRecordTypes.length === 0 ||
-			(selectedRecordTypes.length === allRecordTypes.length &&
-				allRecordTypes.every((type) => selectedRecordTypes.includes(type)))
-	);
+	const filters = $derived(status.filters);
+	const selectedPlace = $derived(status.place);
+	const allRecordTypes = $derived(status.metadata?.recordTypes ?? []);
+	const allPlaceTypes = $derived(status.metadata?.placeTypes ?? []);
+	const allDatasets = $derived(status.metadata?.datasets ?? []);
 
-	const hasAllPlaceTypes = $derived(
-		selectedPlaceTypes.length === 0 ||
-			(selectedPlaceTypes.length === allPlaceTypes.length &&
-				allPlaceTypes.every((pt) => selectedPlaceTypes.includes(pt)))
-	);
-
-	const hasAllDatasets = $derived(
-		selectedDatasets.length === 0 ||
-			(selectedDatasets.length === allDatasets.length &&
-				allDatasets.every((ds) => selectedDatasets.includes(ds)))
-	);
-
-	const displayedRecordTypes = $derived(
-		translateAll(hasAllTypes ? allRecordTypes : selectedRecordTypes)
-	);
-
+	// a category that selects everything reads as everything, not as a list of picks
+	const displayedRecordTypes = $derived.by(() => {
+		if (selectsAll(filters.recordTypes, allRecordTypes)) {
+			return translateAll(allRecordTypes);
+		}
+		return translateAll(filters.recordTypes);
+	});
 	const displayedPlaceTypes = $derived.by(() => {
-		if (hasAllPlaceTypes) {
+		if (selectsAll(filters.placeTypes, allPlaceTypes)) {
 			return translateAll(allPlaceTypes);
 		}
-		return translateAll(selectedPlaceTypes);
+		return translateAll(filters.placeTypes);
 	});
-
-	const displayedDatasets = $derived(
-		hasAllDatasets ? allDatasets : selectedDatasets
-	);
+	const displayedDatasets = $derived.by(() => {
+		const label = new Map(allDatasets.map((d) => [d.id, d.label]));
+		let ids = filters.datasets;
+		if (selectsAll(filters.datasets, allDatasets.map((d) => d.id))) {
+			ids = allDatasets.map((d) => d.id);
+		}
+		return ids.map((id) => label.get(id) || id);
+	});
+	const searchQuery = $derived(filters.searchQuery);
+	const selectedTags = $derived(filters.tags);
+	const tagOperator = $derived(filters.tagOperator);
 </script>
 
 <div
@@ -96,15 +73,6 @@
 				<span>en</span>
 			{/if}
 		{/each}
-		{#if selectedTags.length > 0}
-			<span>{tagOperator === 'AND' ? 'en' : 'of'}</span>
-			{#each selectedTags as tag, index}
-				<Tag variant="selected">{tag}</Tag>
-				{#if index < selectedTags.length - 1}
-					<span>{tagOperator === 'AND' ? 'en' : 'of'}</span>
-				{/if}
-			{/each}
-		{/if}
 		{#if selectedPlace}
 			<span>{translate('statusInCellsOf')}</span>
 			<Tag variant="selected-outline">{formatPlaceTitle(selectedPlace)}</Tag>
@@ -112,6 +80,15 @@
 		{#if searchQuery}
 			<span>{translate('statusWithSearch')}</span>
 			<Tag variant="selected-outline">{searchQuery}</Tag>
+		{/if}
+		{#if selectedTags.length > 0}
+			<span>over</span>
+			{#each selectedTags as tag, index}
+				<Tag variant="selected-outline">{translate(tag)}</Tag>
+				{#if index < selectedTags.length - 1}
+					<span>{tagOperator === 'AND' ? 'en' : 'of'}</span>
+				{/if}
+			{/each}
 		{/if}
 	</div>
 </div>

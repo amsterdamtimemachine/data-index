@@ -2,24 +2,22 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getAvailableTags } from '@atm/db';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes } from '$lib/server/query-params';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseSearchQuery } from '$lib/server/query-params';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
 		const recordTypes = parseRecordTypes(url);
 		const datasetIds = parseDatasets(url);
 		const placeTypes = parsePlaceTypes(url);
+		// Optional: count within a text search, so the panel's counts match its results.
+		const searchQuery = parseSearchQuery(url);
 
-		console.log(`Available tags API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}`);
+		console.log(`Available tags API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, q: ${searchQuery || 'none'}`);
 
-		// Get available tags from database
-		const result = await getAvailableTags(recordTypes, datasetIds, placeTypes);
+		const result = await getAvailableTags(recordTypes, datasetIds, placeTypes, searchQuery);
 
-		const tagCount = result.tags.length;
-		const totalFeatures = result.tags.reduce((sum, tag) => sum + tag.totalFeatures, 0);
-		console.log(
-			`Available tags API success - ${tagCount} tags with ${totalFeatures} total features`
-		);
+		const nonEmpty = result.tags.filter((tag) => tag.count > 0).length;
+		console.log(`Available tags API success - ${result.tags.length} tags, ${nonEmpty} with features`);
 
 		// Set appropriate cache headers
 		const headers = {

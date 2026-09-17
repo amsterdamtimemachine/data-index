@@ -9,18 +9,15 @@
 	import ErrorHandler from '$components/ErrorHandler.svelte';
 	import { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
 	import { createPanelFeatures, type PanelSubject } from '$lib/state/panel-features.svelte';
-	import type { HeatmapTimeline, HeatmapDimensions, RecordType } from '@atm/shared/types';
+	import type { HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
+	import type { FilterState } from '$types/filters';
 
 	interface Props {
 		subject: PanelSubject;
 		placeCells?: number[];
 		period: string;
-		recordTypes: RecordType[];
-		placeTypes?: string[];
-		datasets: string[];
-		tags: string[];
-		tagOperator?: 'AND' | 'OR';
-		searchQuery?: string;
+		// the applied filters, so the list agrees with the heatmap
+		filters: FilterState;
 		onClose?: () => void;
 		timeline?: HeatmapTimeline;
 		dimensions?: HeatmapDimensions;
@@ -39,12 +36,7 @@
 		subject,
 		placeCells = undefined,
 		period,
-		recordTypes,
-		placeTypes = [],
-		datasets,
-		tags,
-		tagOperator = 'OR',
-		searchQuery = undefined,
+		filters,
 		onClose,
 		timeline,
 		dimensions,
@@ -60,12 +52,7 @@
 	const panelFeatures = createPanelFeatures(() => ({
 		subject,
 		period,
-		recordTypes,
-		placeTypes,
-		datasets,
-		tags,
-		tagOperator,
-		searchQuery,
+		filters,
 		sortMode,
 		sampleSeed
 	}));
@@ -90,7 +77,7 @@
 	{sortMode}
 	{onSortChange}
 	{onShuffle}
-	searchActive={!!searchQuery}
+	matchActive={!!filters.searchQuery || filters.tags.length > 0}
 	totalCount={panelFeatures.totalCount}
 	currentPage={panelFeatures.currentPage}
 	pageSize={panelFeatures.pageSize}

@@ -1,5 +1,6 @@
 /** Reactive fetcher for the text-search preview count. */
 import debounce from 'lodash.debounce';
+import { apiUrl } from '$utils/api';
 
 const DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 2;
@@ -15,7 +16,7 @@ export function createSearchCount() {
 			// ride on the current filters so the preview matches what apply will show
 			const params = new URLSearchParams(filterQuery);
 			params.set('q', q);
-			const response = await fetch(`/api/histogram?${params}`);
+			const response = await fetch(apiUrl('/api/histogram', params));
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}`);
 			}

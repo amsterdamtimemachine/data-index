@@ -38,21 +38,31 @@
 	});
 
 	const baseClasses =
-		'h-[32px] w-[32px] flex justify-center items-center bg-atm-sand-darkish rounded border border-atm-gold border-[1px] hover:bg-atm-sand-dark disabled:opacity-50 disabled:cursor-not-allowed text-sm';
-	const paddingClasses = $derived(Icon ? 'p-1' : 'px-3 py-2');
+		'h-[32px] flex justify-center items-center bg-atm-sand-darkish rounded border border-atm-gold border-[1px] hover:bg-atm-sand-dark disabled:opacity-50 disabled:cursor-not-allowed text-sm';
+	// icon-only and label-only stay a 32px square; a glyph with a label sizes to its text
+	const shapeClasses = $derived.by(() => {
+		if (Icon && children) {
+			return 'px-2 gap-1';
+		}
+		if (Icon) {
+			return 'w-[32px] p-1';
+		}
+		return 'w-[32px] px-3 py-2';
+	});
 </script>
 
 {#if meltAction}
 	<button
 		{onclick}
 		{disabled}
-		class={mergeCss(`${baseClasses} ${paddingClasses}`, className)}
+		class={mergeCss(`${baseClasses} ${shapeClasses}`, className)}
 		aria-label={ariaLabel}
 		use:melt={meltAction}
 	>
 		{#if Icon}
 			<Icon {...iconProps} />
-		{:else if children}
+		{/if}
+		{#if children}
 			{@render children()}
 		{/if}
 	</button>
@@ -60,12 +70,13 @@
 	<button
 		{onclick}
 		{disabled}
-		class={mergeCss(`${baseClasses} ${paddingClasses}`, className)}
+		class={mergeCss(`${baseClasses} ${shapeClasses}`, className)}
 		aria-label={ariaLabel}
 	>
 		{#if Icon}
 			<Icon {...iconProps} />
-		{:else if children}
+		{/if}
+		{#if children}
 			{@render children()}
 		{/if}
 	</button>

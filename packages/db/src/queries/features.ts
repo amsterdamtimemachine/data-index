@@ -15,7 +15,7 @@ import { computeTimeSlices } from './time-slices';
 import { getRecordTypes } from './record-types';
 import { getGridConfig } from './grid-config';
 import { featureYearOverlap } from './time-filter';
-import { featureIdsWithAllTags, featureIdsWithAnyTag } from './filters';
+import { tagMatch, tagMatchCount } from './tag-filter';
 import { UnknownTimeSliceError } from './errors';
 import { cellRangeCondition, placeCellsCondition, displayGrid, displayCellBaseRange } from './cell-features';
 import { searchMatch, searchRank } from './feature-search';
@@ -160,6 +160,18 @@ function singleRotationCte(laneKey: SQL): SQL {
 
 const INTERLEAVED_ORDER = sql`type_rank, record_type, id`;
 
+/**
+ * The sample lane key: a seeded shuffle, weighted by the tag selection. Each feature
+ * draws u in (0, 1] from its id and the seed, and is ordered by -ln(u) / w with
+ * w = 2^tag_matches (weighted sampling without replacement): a feature carrying one
+ * more of the selected tags is twice as likely to precede another, never certain to.
+ * With no tags selected every w is 1 and this is a plain uniform shuffle.
+ */
+function sampleKey(seed: string): SQL {
+  const u = sql`((('x' || substr(md5(id::text || ${seed}), 1, 7))::bit(28)::int + 1) / 268435456.0)`;
+  return sql`-ln(${u}) / power(2, tag_matches)`;
+}
+
 function sortPlan(
   sort: FeaturesSortField,
   sortDirection: SortDirection,
@@ -167,7 +179,7 @@ function sortPlan(
 ): { rankedCte: SQL; orderBy: SQL } {
   if (sort === 'sample') {
     return {
-      rankedCte: doubleRotationCte(sql`md5(id::text || ${seed})`),
+      rankedCte: doubleRotationCte(sampleKey(seed)),
       orderBy: INTERLEAVED_ORDER
     };
   }
@@ -195,11 +207,11 @@ function sortPlan(
     return { rankedCte: sql`ranked AS (SELECT * FROM filtered)`, orderBy };
   }
   if (sort === 'bestMatch') {
-    // flat search-result order on ts_rank; without a searchQuery every score is 0
-    // and this degrades to date order
-    let orderBy = sql`match_score DESC, start_date DESC NULLS LAST, id`;
+    // flat match-quality order: selected tags carried, then ts_rank against the
+    // search term; without either every key is 0 and this degrades to date order
+    let orderBy = sql`tag_matches DESC, match_score DESC, start_date DESC NULLS LAST, id`;
     if (sortDirection === 'asc') {
-      orderBy = sql`match_score ASC, start_date ASC NULLS LAST, id`;
+      orderBy = sql`tag_matches ASC, match_score ASC, start_date ASC NULLS LAST, id`;
     }
     return { rankedCte: sql`ranked AS (SELECT * FROM filtered)`, orderBy };
   }
@@ -251,20 +263,6 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   // Calculate offset
   const offset = (page - 1) * pageSize;
 
-  // Get feature IDs matching tag filter (if any)
-  let tagFilteredIds: string[] | null = null;
-  if (tagFilters && tagFilters.length > 0) {
-    const tagResult = await db.execute<{ feature_id: string }>(
-      tagOperator === 'AND' ? featureIdsWithAllTags(tagFilters) : featureIdsWithAnyTag(tagFilters)
-    );
-    tagFilteredIds = tagResult.rows.map(r => r.feature_id);
-
-    // Early return if no features match tag filter
-    if (tagFilteredIds.length === 0) {
-      return { data: [], total: 0, page, pageSize, totalPages: 0 };
-    }
-  }
-
   // Resolve the area to one population predicate; everything below is agnostic
   // of which kind it was.
   let areaCondition: SQL;
@@ -290,9 +288,16 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     ? featureYearOverlap(sql`f.start_date`, sql`f.end_date`, dateRange.startYear, dateRange.endYear)
     : sql`TRUE`;
 
-  const tagCondition = tagFilteredIds
-    ? sql`f.id IN ${tagFilteredIds}`
-    : sql`TRUE`;
+  let tagCondition: SQL = sql`TRUE`;
+  // selected tags the feature carries; weights the sample sort
+  let tagMatchesExpr: SQL = sql`0`;
+  // a card's tags list the selected ones first, so the collapsed card never hides them
+  let tagOrderExpr: SQL = sql`ft.tag_id`;
+  if (tagFilters && tagFilters.length > 0) {
+    tagCondition = tagMatch(sql`f.id`, tagFilters, tagOperator);
+    tagMatchesExpr = tagMatchCount(sql`f.id`, tagFilters);
+    tagOrderExpr = sql`(ft.tag_id IN ${tagFilters}) DESC, ft.tag_id`;
+  }
 
   let searchCondition: SQL = sql`TRUE`;
   let matchScoreExpr: SQL = sql`0::float`;
@@ -350,6 +355,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         (COALESCE(pg.spatial_frequency::float, 0) / ${maxSpatial}
          + COALESCE(f.temporal_frequency::float, 0) / ${maxTemporal}) as relevance_score,
         ${matchScoreExpr} as match_score,
+        ${tagMatchesExpr} as tag_matches,
         p.type as place_type,
         p.id as place_id,
         fp.relation_id
@@ -403,14 +409,12 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       po.url as place_provider_url,
       go.label as geometry_provider_label,
       pg.url as geometry_url,
-      COALESCE(
-        ARRAY(
-          SELECT t.label
-          FROM feature_tags ft
-          JOIN tags t ON ft.tag_id = t.id
-          WHERE ft.feature_id = page.id
-        ),
-        ARRAY[]::text[]
+      ARRAY(
+        SELECT ft.tag_id
+        FROM feature_tags ft
+        WHERE ft.feature_id = page.id
+        GROUP BY ft.tag_id
+        ORDER BY ${tagOrderExpr}
       ) as tags
     FROM page
     JOIN features f ON f.id = page.id

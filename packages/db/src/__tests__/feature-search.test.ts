@@ -78,34 +78,34 @@ describe('feature text search', () => {
   });
 
   test('stemming unifies inflections: verkooping matches Verkoopingen', async () => {
-    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, 'verkooping');
+    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkooping' });
     expect(hist.totalFeatures).toBe(2); // F1 + F4, not F3 (description is out of scope)
   });
 
   test('search is label-only: a term present only in a description does not match', async () => {
-    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, 'zeedijk');
+    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'zeedijk' });
     expect(hist.totalFeatures).toBe(1); // F2 only, F3 excluded
   });
 
   test('websearch exclusion: -amsterdam drops the Amsterdam verkooping', async () => {
-    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, 'verkooping -amsterdam');
+    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkooping -amsterdam' });
     expect(hist.totalFeatures).toBe(1); // F1
   });
 
   test('websearch phrase: quoted words must be adjacent and in order', async () => {
-    const inOrder = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, '"nieuwe woningen"');
+    const inOrder = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: '"nieuwe woningen"' });
     expect(inOrder.totalFeatures).toBe(1); // F2
-    const reversed = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, '"woningen nieuwe"');
+    const reversed = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: '"woningen nieuwe"' });
     expect(reversed.totalFeatures).toBe(0);
   });
 
   test('websearch OR: either term matches, still labels only', async () => {
-    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, 'verkooping OR zeedijk');
+    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkooping OR zeedijk' });
     expect(hist.totalFeatures).toBe(3); // F1, F4 (stemmed), F2; F3 has zeedijk only in its description
   });
 
   test('a stopword-only query matches nothing', async () => {
-    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, 'de van het');
+    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'de van het' });
     expect(hist.totalFeatures).toBe(0);
     for (const bin of hist.bins) {
       expect(bin.count).toBe(0);
@@ -113,7 +113,7 @@ describe('feature text search', () => {
   });
 
   test('histogram bins carry only matching features, in their bins', async () => {
-    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, 'verkooping');
+    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkooping' });
     const byYear = new Map(hist.bins.map(b => [b.timeSlice.startYear, b.count]));
     expect(byYear.get(1900)).toBe(2); // F1 + F4
     expect(byYear.get(1950) ?? 0).toBe(0); // F2/F3 don't match
@@ -121,13 +121,13 @@ describe('feature text search', () => {
 
   test('heatmap timeline counts are intersected with the search set', async () => {
     const unfiltered = await getHeatmapTimeline({ cols: 50 }, undefined, undefined, undefined, 50);
-    const filtered = await getHeatmapTimeline({ cols: 50 }, undefined, undefined, undefined, 50, 'zeedijk');
+    const filtered = await getHeatmapTimeline({ cols: 50 }, undefined, undefined, undefined, 50, { searchQuery: 'zeedijk' });
     expect(timelineSum(unfiltered.timeline)).toBe(4);
     expect(timelineSum(filtered.timeline)).toBe(1); // F2's cell only
   });
 
   test('no matches yields an empty (all-sparse) heatmap timeline', async () => {
-    const res = await getHeatmapTimeline({ cols: 50 }, undefined, undefined, undefined, 50, 'xyzonzin');
+    const res = await getHeatmapTimeline({ cols: 50 }, undefined, undefined, undefined, 50, { searchQuery: 'xyzonzin' });
     expect(timelineSum(res.timeline)).toBe(0);
     for (const heatmap of Object.values(res.timeline)) {
       expect(heatmap.indices.length).toBe(0);
@@ -135,12 +135,12 @@ describe('feature text search', () => {
   });
 
   test('search composes with category filters', async () => {
-    const hist = await getHistogram(['image'], undefined, undefined, 50, undefined, undefined, 'verkooping');
+    const hist = await getHistogram(['image'], undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkooping' });
     expect(hist.totalFeatures).toBe(1); // F4 is text, filtered out
   });
 
   test('cross-validation: bitmap-intersected count equals a live DISTINCT count', async () => {
-    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, 'verkooping');
+    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkooping' });
     const live = await db.execute<{ n: string }>(sql`
       SELECT COUNT(DISTINCT f.id) AS n
       FROM features f

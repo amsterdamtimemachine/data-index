@@ -1,0 +1,7 @@
+{"id": "k1", "tags": ["bridge_canal", "birds_eye_view"], "scores": {"bridge_canal": -1.0, "birds_eye_view": -2.0}}
+{"id": "k2", "tags": ["bridge_canal"], "scores": {"bridge_canal": -1.5}}
+{"id": "k3", "tags": [], "scores": {"bridge_canal": -9.0}}
+{"id": "k9", "tags": ["maps"]}
+
+{"id": "k1", "tags": ["bridge_canal", "birds_eye_view"]}
+{"broken": true}

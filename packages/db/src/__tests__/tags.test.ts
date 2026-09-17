@@ -1,31 +1,53 @@
 /**
- * Tag query coverage (previously untested): availability counts + record types,
- * AND-combination discovery, and incremental combination validation. Also exercises
- * the recordTypes / placeTypes filters these share with the rest of the API.
+ * Tag filtering on the bitmap path: per-tag counts under the category filters and
+ * a search term, heatmap/histogram counts intersected with OR / AND tag sets, an
+ * unknown tag matching nothing, composition with the search bitmap, and the
+ * feature list's per-row tag predicate. The cross-validation test pins the
+ * precomputed bitmaps to a live count over feature_tags.
  *
- * Fixture (4 features, 3 tags):
- *   F1 image  @address       → Nature, Water
- *   F2 image  @address       → Nature, Transport
- *   F3 text   @street        → Water
- *   F4 person @neighbourhood → Transport
+ * Fixture (4 features, 3 tags, two taggers):
+ *   F1 image  @address       → nature, water
+ *   F2 image  @address       → nature, transport
+ *   F3 text   @street        → water
+ *   F4 person @neighbourhood → transport   (also water from a second tagger)
  */
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
+import type { Heatmap } from '@atm/shared';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
 import { upsertSource } from '../etl/writers/feature-writer';
-import { getAvailableTags, getTagCombinations, validateTagCombination } from '../queries/tags';
+import { rebuildIndex } from '../etl/post-process/rebuild-index';
+import { getAvailableTags } from '../queries/tags';
+import { getHistogram } from '../queries/histogram';
+import { getHeatmapTimeline } from '../queries/heatmap';
+import { getFeatures } from '../queries/features';
+import { getGridConfig } from '../queries/grid-config';
 
 const F1 = '55555555-5555-5555-5555-555555555501';
 const F2 = '55555555-5555-5555-5555-555555555502';
 const F3 = '55555555-5555-5555-5555-555555555503';
 const F4 = '55555555-5555-5555-5555-555555555504';
 
-/** name → stats, so assertions don't depend on the (tie-broken) sort order. */
-function byName<T extends { name: string }>(tags: T[]): Map<string, T> {
-  return new Map(tags.map(t => [t.name, t]));
+function counts(tags: { id: string; count: number }[]): Record<string, number> {
+  return Object.fromEntries(tags.map(t => [t.id, t.count]));
 }
 
-describe('tag queries', () => {
+function timelineSum(timeline: Record<string, Heatmap>): number {
+  let sum = 0;
+  for (const heatmap of Object.values(timeline)) {
+    for (const count of heatmap.counts) {
+      sum += count;
+    }
+  }
+  return sum;
+}
+
+async function fullBounds() {
+  const cfg = await getGridConfig();
+  return { minLon: cfg.minLon, maxLon: cfg.maxLon, minLat: cfg.minLat, maxLat: cfg.maxLat };
+}
+
+describe('tag filtering', () => {
   beforeAll(async () => {
     await setupTestDb();
     await cleanTestDb();
@@ -49,10 +71,10 @@ describe('tag queries', () => {
     `);
     await db.execute(sql`
       INSERT INTO features (id, record_type, label, start_date, end_date, dataset_id) VALUES
-        (${F1}, 'image',  'F1', '1950-01-01', '1950-12-31', 'tg-ds'),
-        (${F2}, 'image',  'F2', '1950-01-01', '1950-12-31', 'tg-ds'),
-        (${F3}, 'text',   'F3', '1950-01-01', '1950-12-31', 'tg-ds'),
-        (${F4}, 'person', 'F4', '1950-01-01', '1950-12-31', 'tg-ds')
+        (${F1}, 'image',  'Eerste foto',  '1950-01-01', '1950-12-31', 'tg-ds'),
+        (${F2}, 'image',  'Tweede foto',  '1950-01-01', '1950-12-31', 'tg-ds'),
+        (${F3}, 'text',   'Eerste tekst', '1950-01-01', '1950-12-31', 'tg-ds'),
+        (${F4}, 'person', 'Persoon',      '1950-01-01', '1950-12-31', 'tg-ds')
     `);
     await db.execute(sql`
       INSERT INTO feature_to_place (feature_id, place_id, relation_id) VALUES
@@ -61,14 +83,17 @@ describe('tag queries', () => {
         (${F3}, 'tp-street', 'isAbout'),
         (${F4}, 'tp-nbhd',   'isAbout')
     `);
-    await db.execute(sql`INSERT INTO tags (id, label) VALUES ('nature','Nature'), ('transport','Transport'), ('water','Water')`);
+    await db.execute(sql`INSERT INTO tags (id, label) VALUES ('nature','nature'), ('transport','transport'), ('water','water')`);
     await db.execute(sql`
-      INSERT INTO feature_tags (feature_id, tag_id) VALUES
-        (${F1}, 'nature'), (${F1}, 'water'),
-        (${F2}, 'nature'), (${F2}, 'transport'),
-        (${F3}, 'water'),
-        (${F4}, 'transport')
+      INSERT INTO feature_tags (feature_id, tag_id, source) VALUES
+        (${F1}, 'nature', 'a'), (${F1}, 'water', 'a'),
+        (${F2}, 'nature', 'a'), (${F2}, 'transport', 'a'),
+        (${F3}, 'water', 'a'),
+        (${F4}, 'transport', 'a'),
+        (${F4}, 'water', 'b')
     `);
+
+    await rebuildIndex();
   });
 
   afterAll(async () => {
@@ -76,53 +101,137 @@ describe('tag queries', () => {
     await teardownTestDb();
   });
 
-  test('getAvailableTags returns per-tag feature counts and record types', async () => {
+  test('getAvailableTags counts every tag, unioned over taggers, most common first', async () => {
     const { tags } = await getAvailableTags();
-    const m = byName(tags);
-    expect(m.size).toBe(3);
-    expect(m.get('Nature')?.totalFeatures).toBe(2);
-    expect(m.get('Transport')?.totalFeatures).toBe(2);
-    expect(m.get('Water')?.totalFeatures).toBe(2);
-    expect(new Set(m.get('Nature')?.recordTypes)).toEqual(new Set(['image']));
-    expect(new Set(m.get('Transport')?.recordTypes)).toEqual(new Set(['image', 'person']));
-    expect(new Set(m.get('Water')?.recordTypes)).toEqual(new Set(['image', 'text']));
+    expect(tags.map(t => t.id)).toEqual(['water', 'nature', 'transport']);
+    expect(counts(tags)).toEqual({ water: 3, nature: 2, transport: 2 });
   });
 
-  test('getAvailableTags honours the recordTypes filter', async () => {
-    const { tags } = await getAvailableTags(['text']);
-    const m = byName(tags);
-    expect(m.size).toBe(1); // only F3 (text) carries a tag
-    expect(m.get('Water')?.totalFeatures).toBe(1);
+  test('getAvailableTags honours the category filters and keeps zero-count tags', async () => {
+    expect(counts((await getAvailableTags(['text'])).tags)).toEqual({ water: 1, nature: 0, transport: 0 });
+    expect(counts((await getAvailableTags(undefined, undefined, ['street'])).tags)).toEqual({ water: 1, nature: 0, transport: 0 });
   });
 
-  test('getAvailableTags honours the placeTypes filter', async () => {
-    const { tags } = await getAvailableTags(undefined, undefined, ['street']);
-    const m = byName(tags);
-    expect(m.size).toBe(1); // only F3 sits on a street
-    expect(m.get('Water')?.totalFeatures).toBe(1);
+  test('getAvailableTags counts within a search term', async () => {
+    expect(counts((await getAvailableTags(undefined, undefined, undefined, 'eerste')).tags))
+      .toEqual({ water: 2, nature: 1, transport: 0 }); // F1 + F3
   });
 
-  test('getTagCombinations finds tags co-occurring with the selection (AND logic)', async () => {
-    const { availableTags } = await getTagCombinations(undefined, undefined, undefined, ['Nature']);
-    const m = byName(availableTags);
-    // Features with Nature = F1, F2 → their other tags are Water (F1) and Transport (F2), once each.
-    expect(m.size).toBe(2);
-    expect(m.get('Water')?.totalFeatures).toBe(1);
-    expect(m.get('Transport')?.totalFeatures).toBe(1);
-    expect(m.has('Nature')).toBe(false); // the selected tag isn't offered back
+  test('histogram total: OR unions the tag sets', async () => {
+    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { tags: ['nature', 'transport'], tagOperator: 'OR' });
+    expect(hist.totalFeatures).toBe(3); // F1, F2, F4
   });
 
-  test('validateTagCombination flags a pair with no shared feature', async () => {
-    // No feature carries both Water and Transport.
-    const r = await validateTagCombination(undefined, undefined, undefined, ['Water', 'Transport']);
-    expect(r.validTags).toEqual(['Water']);
-    expect(r.invalidTags).toEqual(['Transport']);
+  test('histogram total: AND intersects them', async () => {
+    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { tags: ['nature', 'water'], tagOperator: 'AND' });
+    expect(hist.totalFeatures).toBe(1); // F1
   });
 
-  test('validateTagCombination accepts a pair that shares a feature', async () => {
-    // F1 carries both Nature and Water.
-    const r = await validateTagCombination(undefined, undefined, undefined, ['Nature', 'Water']);
-    expect(new Set(r.validTags)).toEqual(new Set(['Nature', 'Water']));
-    expect(r.invalidTags).toEqual([]);
+  test('tagOperator defaults to OR', async () => {
+    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { tags: ['nature', 'water'] });
+    expect(hist.totalFeatures).toBe(4);
+  });
+
+  test('an unknown tag matches nothing, alone and inside an AND', async () => {
+    const alone = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { tags: ['nope'] });
+    expect(alone.totalFeatures).toBe(0);
+    for (const bin of alone.bins) {
+      expect(bin.count).toBe(0);
+    }
+    const anded = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { tags: ['water', 'nope'], tagOperator: 'AND' });
+    expect(anded.totalFeatures).toBe(0);
+  });
+
+  test('tags compose with the category filters and the search term', async () => {
+    const images = await getHistogram(['image'], undefined, undefined, 50, undefined, undefined, { tags: ['water'] });
+    expect(images.totalFeatures).toBe(1); // F1 (F3 is text, F4 a person)
+    const searched = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'foto', tags: ['water'] });
+    expect(searched.totalFeatures).toBe(1); // F1 (F3 has water but is a tekst)
+    const none = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'persoon', tags: ['nature'] });
+    expect(none.totalFeatures).toBe(0);
+  });
+
+  test('heatmap timeline counts are intersected with the tag set', async () => {
+    const unfiltered = await getHeatmapTimeline({ cols: 50 }, undefined, undefined, undefined, 50);
+    const filtered = await getHeatmapTimeline({ cols: 50 }, undefined, undefined, undefined, 50, { tags: ['transport'] });
+    expect(timelineSum(unfiltered.timeline)).toBeGreaterThanOrEqual(4);
+    // transport = F4's polygon cells (the person features) plus F2 alone in the
+    // address cell it shares with F1
+    const persons = await getHeatmapTimeline({ cols: 50 }, ['person'], undefined, undefined, 50);
+    expect(timelineSum(filtered.timeline)).toBe(timelineSum(persons.timeline) + 1);
+    const none = await getHeatmapTimeline({ cols: 50 }, undefined, undefined, undefined, 50, { tags: ['nope'] });
+    expect(timelineSum(none.timeline)).toBe(0);
+  });
+
+  test('the feature list applies the same tag sets and returns tag ids', async () => {
+    const area = { kind: 'bounds' as const, bounds: await fullBounds() };
+    const anded = await getFeatures({ area, tags: ['nature', 'water'], tagOperator: 'AND' });
+    expect(anded.total).toBe(1);
+    expect(anded.data[0].id).toBe(F1);
+    expect(anded.data[0].tags).toEqual(['nature', 'water']);
+
+    const ored = await getFeatures({ area, tags: ['nature', 'water'], tagOperator: 'OR' });
+    expect(ored.total).toBe(4);
+
+    const none = await getFeatures({ area, tags: ['nope'] });
+    expect(none.total).toBe(0);
+    expect(none.data).toEqual([]);
+  });
+
+  test('bestMatch ranks by selected tags carried, then by the search term', async () => {
+    const area = { kind: 'bounds' as const, bounds: await fullBounds() };
+    const byTags = await getFeatures({ area, tags: ['nature', 'water'], tagOperator: 'OR', sort: 'bestMatch' });
+    expect(byTags.total).toBe(4);
+    expect(byTags.data[0].id).toBe(F1); // both tags; the others carry one
+    const both = await getFeatures({ area, searchQuery: 'foto', tags: ['water', 'transport'], tagOperator: 'OR', sort: 'bestMatch' });
+    expect(both.data.map(f => f.id)).toEqual([F1, F2]); // one tag each, so ts_rank decides: identical here, then the earliest id
+    const asc = await getFeatures({ area, tags: ['nature', 'water'], tagOperator: 'OR', sort: 'bestMatch', sortDirection: 'asc' });
+    expect(asc.data[asc.data.length - 1].id).toBe(F1);
+  });
+
+  test('a card lists the selected tags first, then the rest alphabetically', async () => {
+    const area = { kind: 'bounds' as const, bounds: await fullBounds() };
+    // F2 carries nature + transport: alphabetical puts nature first
+    const unselected = await getFeatures({ area, recordTypes: ['image'], sort: 'date' });
+    expect(unselected.data.find(f => f.id === F2)?.tags).toEqual(['nature', 'transport']);
+    // selecting transport moves it to the front
+    const selected = await getFeatures({ area, tags: ['transport', 'water'], tagOperator: 'OR', sort: 'date' });
+    expect(selected.data.find(f => f.id === F2)?.tags).toEqual(['transport', 'nature']);
+    expect(selected.data.find(f => f.id === F1)?.tags).toEqual(['water', 'nature']);
+  });
+
+  test('the sample sort favours features carrying more of the selected tags, without fixing the order', async () => {
+    // image lane: F1 carries both selected tags (weight 4), F2 one (weight 2), so F1
+    // leads two runs in three. Fixed seeds keep the count deterministic.
+    const area = { kind: 'bounds' as const, bounds: await fullBounds() };
+    const seeds = Array.from({ length: 150 }, (_, i) => `seed-${i}`);
+    let f1First = 0;
+    for (const seed of seeds) {
+      const res = await getFeatures({ area, recordTypes: ['image'], tags: ['nature', 'water'], tagOperator: 'OR', sort: 'sample', seed });
+      expect(res.data.map(f => f.id).sort()).toEqual([F1, F2].sort());
+      if (res.data[0].id === F1) {
+        f1First++;
+      }
+    }
+    // expectation 100 of 150; an unweighted shuffle would sit near 75
+    expect(f1First).toBeGreaterThan(87);
+    expect(f1First).toBeLessThan(113);
+
+    const again = await getFeatures({ area, recordTypes: ['image'], tags: ['nature', 'water'], tagOperator: 'OR', sort: 'sample', seed: 'seed-3' });
+    const before = await getFeatures({ area, recordTypes: ['image'], tags: ['nature', 'water'], tagOperator: 'OR', sort: 'sample', seed: 'seed-3' });
+    expect(again.data.map(f => f.id)).toEqual(before.data.map(f => f.id));
+  });
+
+  test('cross-validation: bitmap-intersected count equals a live DISTINCT count', async () => {
+    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { tags: ['water', 'transport'], tagOperator: 'AND' });
+    const live = await db.execute<{ n: string }>(sql`
+      SELECT COUNT(*) AS n FROM (
+        SELECT ft.feature_id FROM feature_tags ft
+        WHERE ft.tag_id IN ('water', 'transport')
+        GROUP BY ft.feature_id HAVING COUNT(DISTINCT ft.tag_id) = 2
+      ) both_tags
+    `);
+    expect(hist.totalFeatures).toBe(parseInt(live.rows[0].n));
+    expect(hist.totalFeatures).toBe(1); // F4 via the two taggers
   });
 });

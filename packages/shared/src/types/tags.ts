@@ -1,43 +1,10 @@
-import type { RecordType } from './feature';
-
-/**
- * Tag with aggregated statistics
- */
-export interface TagStats {
-  name: string;
-  totalFeatures: number;
-  recordTypes: RecordType[];
+/** A tag and how many features carry it under the current filters. */
+export interface TagCount {
+  id: string;
+  count: number;
 }
 
-/**
- * Simple tag stats (without recordTypes breakdown)
- */
-export interface SimpleTagStats {
-  name: string;
-  totalFeatures: number;
-}
-
-/**
- * Available tags response
- */
+/** /api/available-tags: every tag in the index, counted under the request's filters. */
 export interface AvailableTags {
-  tags: TagStats[];
-  recordTypes: RecordType[];
-}
-
-/**
- * Tag combinations response
- */
-export interface TagCombinations {
-  availableTags: SimpleTagStats[];
-  currentSelection: string[];
-  recordTypes: RecordType[];
-}
-
-/**
- * Tag validation result
- */
-export interface TagValidation {
-  validTags: string[];
-  invalidTags: string[];
+  tags: TagCount[];
 }

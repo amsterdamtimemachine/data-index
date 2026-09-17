@@ -61,6 +61,17 @@ export function formatPlaceTitle(match: PlaceSearchMatch): string {
  * window, so an undated variant carries none. "1850 tot 1909", "in 1853" (both ends
  * in one year), "tot 1850", "vanaf 1921", or '' without a window.
  */
+/** The name a place is shown under: the matched (possibly historical) name, else the current one, else the id. */
+export function formatPlaceName(match: PlaceSearchMatch): string {
+	if (match.matchedName) {
+		return match.matchedName;
+	}
+	if (match.name) {
+		return match.name;
+	}
+	return match.placeId;
+}
+
 export function formatPlaceWindow(match: PlaceSearchMatch): string {
 	let window = match.geometryWindow;
 	if (match.matchedNameId) {
