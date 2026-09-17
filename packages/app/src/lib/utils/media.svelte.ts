@@ -29,3 +29,32 @@ export function createMediaQuery(query: string): { readonly matches: boolean } {
 		}
 	};
 }
+
+/**
+ * An element's rendered width in pixels, kept current by a ResizeObserver. The
+ * getter is read reactively, so a bound element that appears later is picked up.
+ * SSR renders as 0 until hydration.
+ */
+export function createElementWidth(getElement: () => HTMLElement | undefined): { readonly px: number } {
+	let px = $state(0);
+
+	$effect(() => {
+		const element = getElement();
+		if (!element) {
+			px = 0;
+			return;
+		}
+		px = element.offsetWidth;
+		const observer = new ResizeObserver(() => {
+			px = element.offsetWidth;
+		});
+		observer.observe(element);
+		return () => observer.disconnect();
+	});
+
+	return {
+		get px() {
+			return px;
+		}
+	};
+}

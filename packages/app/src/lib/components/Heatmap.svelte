@@ -1,6 +1,6 @@
 <script lang="ts">
 	import 'maplibre-gl/dist/maplibre-gl.css';
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 	import { env } from '$env/dynamic/public';
 	// v6 is ESM-only with no default export — namespace import for maplibre.Map / .StyleSpecification.
 	import * as maplibre from 'maplibre-gl';
@@ -73,6 +73,9 @@
 		selectedCellId: string | null;
 		// display-cell indices of the selected place (the gold outline)
 		placeCells?: number[];
+		// screen space the nav and the panel cover: the camera centres and fits within
+		// the strip between them, and eases there when the padding changes
+		padding?: { left: number; right: number };
 		// the place is the panel's active subject: add the red selection outline
 		placeSelected?: boolean;
 		mapStyle?: MapStyle;
@@ -118,6 +121,7 @@
 		dimensions,
 		selectedCellId = null,
 		placeCells = undefined,
+		padding = { left: 0, right: 0 },
 		placeSelected = false,
 		class: className,
 		mapStyle = defaultMapStyle,
@@ -166,6 +170,111 @@
 	$effect(() => {
 		if (!isMapLoaded || !map || !dimensions) return;
 		applyActiveCells();
+	});
+
+	// The camera's motions: 520ms, and never a zoom change.
+	const EASE_MS = 520;
+	const REVEAL_MARGIN_PX = 24;
+
+	type PixelBox = { minX: number; maxX: number; minY: number; maxY: number };
+
+	// the panel's subject as cells: the open place's, else the selected cell
+	function subjectCells(): CellGeometry[] {
+		if (placeSelected && placeCells) {
+			return placeCells.map((idx) => cellGeometries[idx]).filter((cell) => cell !== undefined);
+		}
+		if (selectedCellId) {
+			const cell = cellById.get(selectedCellId);
+			if (cell) {
+				return [cell];
+			}
+		}
+		return [];
+	}
+
+	// screen box of the cells, shifted by what a pending padding change will move them
+	function projectCells(cells: CellGeometry[], shiftX: number): PixelBox | null {
+		if (!map || cells.length === 0) return null;
+		const box = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+		for (const cell of cells) {
+			for (const [lon, lat] of cell.coordinates[0]) {
+				const p = map.project([lon, lat]);
+				box.minX = Math.min(box.minX, p.x + shiftX);
+				box.maxX = Math.max(box.maxX, p.x + shiftX);
+				box.minY = Math.min(box.minY, p.y);
+				box.maxY = Math.max(box.maxY, p.y);
+			}
+		}
+		return box;
+	}
+
+	// pixels to pan so a span clears its edges; a span too large to fit is centred
+	function axisOverflow(min: number, max: number, lo: number, hi: number): number {
+		if (max - min > hi - lo) {
+			return (min + max) / 2 - (lo + hi) / 2;
+		}
+		if (min < lo) {
+			return min - lo;
+		}
+		if (max > hi) {
+			return max - hi;
+		}
+		return 0;
+	}
+
+	// pixels to pan so the box lies in the strip between the paddings and the edges
+	function overflow(box: PixelBox, pad: { left: number; right: number }): [number, number] {
+		const container = map!.getContainer();
+		const dx = axisOverflow(box.minX, box.maxX, pad.left + REVEAL_MARGIN_PX, container.clientWidth - pad.right - REVEAL_MARGIN_PX);
+		const dy = axisOverflow(box.minY, box.maxY, REVEAL_MARGIN_PX, container.clientHeight - REVEAL_MARGIN_PX);
+		return [Math.round(dx), Math.round(dy)];
+	}
+
+	// Padding changes when the nav or the panel opens or closes: one motion eases the
+	// camera to the new padding and, in the same move, pans the subject into the new
+	// strip. Before the first render the padding is set without motion.
+	$effect(() => {
+		const target = { top: 0, bottom: 0, left: padding.left, right: padding.right };
+		if (!map) return;
+		const applied = map.getPadding();
+		const current = { left: applied.left ?? 0, right: applied.right ?? 0 };
+		if (current.left === target.left && current.right === target.right) return;
+		if (!isMapLoaded) {
+			map.jumpTo({ padding: target });
+			return;
+		}
+		const options: maplibre.EaseToOptions = { padding: target, duration: EASE_MS };
+		// the padding alone shifts the content by half its change
+		const shiftX = ((target.left - current.left) - (target.right - current.right)) / 2;
+		const box = untrack(() => projectCells(subjectCells(), shiftX));
+		if (box) {
+			const [dx, dy] = overflow(box, target);
+			if (dx !== 0 || dy !== 0) {
+				const centre = map.project(map.getCenter());
+				options.center = map.unproject([centre.x + dx, centre.y + dy]);
+			}
+		}
+		map.easeTo(options);
+	});
+
+	// A new subject pans into view, just far enough; while a motion runs it waits for
+	// the end, so two motions never interrupt each other.
+	function revealSubject(): void {
+		if (!map || !isMapLoaded) return;
+		if (map.isMoving()) {
+			map.once('moveend', revealSubject);
+			return;
+		}
+		const box = projectCells(subjectCells(), 0);
+		if (!box) return;
+		const [dx, dy] = overflow(box, untrack(() => padding));
+		if (dx === 0 && dy === 0) return;
+		map.panBy([dx, dy], { duration: EASE_MS });
+	}
+
+	$effect(() => {
+		if (!isMapLoaded) return;
+		revealSubject();
 	});
 
 	// The red selection outline follows whether the place is the active subject

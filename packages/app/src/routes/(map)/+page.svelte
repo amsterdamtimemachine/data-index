@@ -13,7 +13,7 @@
 	import { validateCellId } from '$utils/utils';
 	import { loadingState } from '$lib/state/loadingState.svelte';
 	import { fetchJson } from '$utils/fetchJson';
-	import { createMediaQuery, MOBILE_QUERY, MOBILE_MAX_WIDTH } from '$utils/media.svelte';
+	import { createMediaQuery, createElementWidth, MOBILE_QUERY, MOBILE_MAX_WIDTH } from '$utils/media.svelte';
 	import FeaturesPanelResizeHandle, {
 		panelWidthCss,
 		type PanelCols
@@ -129,6 +129,36 @@
 
 	// Navigation state
 	let navExpanded = $state(true);
+
+	// The map's camera padding: the nav on the left, the panel on the right, so the
+	// visible strip between them is what the camera centres on. Both are measured
+	// from their elements. The panel's width is taken when it opens; a resize while
+	// open must not move the map.
+	let navElement = $state<HTMLDivElement>();
+	let panelElement = $state<HTMLDivElement>();
+	const navWidth = createElementWidth(() => navElement);
+	let panelPadding = $state(0);
+	$effect(() => {
+		const open = showPanel && !isMobile.matches;
+		const element = panelElement;
+		untrack(() => {
+			if (open && element) {
+				panelPadding = element.offsetWidth;
+			} else {
+				panelPadding = 0;
+			}
+		});
+	});
+	const mapPadding = $derived.by(() => {
+		if (isMobile.matches) {
+			return { left: 0, right: 0 };
+		}
+		let left = 0;
+		if (navExpanded) {
+			left = navWidth.px;
+		}
+		return { left, right: panelPadding };
+	});
 
 	let allErrors = $derived.by(() => {
 		const serverErrors = data.errorData?.errors || [];
@@ -457,11 +487,12 @@
 				{selectedCellId}
 				placeCells={data.selectedPlace?.cells}
 				placeSelected={placePanelOpen}
+				padding={mapPadding}
 				{handleCellClick}
 			/>
 		{/if}
 
-		<NavContainer bind:isExpanded={navExpanded} class="absolute top-0 left-0 z-30">
+		<NavContainer bind:isExpanded={navExpanded} bind:element={navElement} class="absolute top-0 left-0 z-30">
 			{#snippet header()}
 				<Nav class="p-3">
 					<NavItem href={resolve('/about')} label="Over" />
@@ -486,6 +517,7 @@
 
 		{#if showPanel && panelSubject}
 			<div
+				bind:this={panelElement}
 				class="z-30 absolute top-0 right-0 w-full h-full bg-atm-sand overflow-hidden border-l border-solid border-atm-sand-border shadow-[-5px_0px_20px_5px_rgba(0,0,0,0.07)]"
 				style:width={panelWidth}
 			>
