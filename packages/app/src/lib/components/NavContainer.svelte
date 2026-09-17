@@ -44,7 +44,10 @@
 	id="table-of-contents-container"
 	bind:this={element}
 	class={mergeCss(
-		'absolute left-0 top-0 w-[var(--nav-width)] h-full border-r border-atm-sand-border bg-atm-sand-dark shadow-[5px_0px_20px_5px_rgba(0,0,0,0.07)]',
+		'absolute left-0 top-0 h-full border-r border-atm-sand-border bg-atm-sand-dark shadow-[5px_0px_20px_5px_rgba(0,0,0,0.07)]',
+		// width: on mobile two thirds of what is left beside the 32px toggle button below,
+		// which sits outside the container; fixed widths from the md breakpoint up
+		'w-[calc((100vw-32px)*0.66)] md:w-[250px] xl:w-[290px] 2xl:w-[400px]',
 		className
 	)}
 	style="transform: translateX({$navPosition}%);"
