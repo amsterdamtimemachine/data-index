@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { mergeCss } from '$utils/utils';
+	import { translate } from '$utils/translations';
 	type Props = {
 		thumbnail: string;
 		alt?: string;
@@ -9,6 +11,12 @@
 	let { thumbnail, alt, expanded = false, onExpand }: Props = $props();
 
 	let imageError = $state(false);
+	const errorHeight = $derived.by(() => {
+		if (expanded) {
+			return 'h-64';
+		}
+		return 'h-32';
+	});
 	let imageLoading = $state(true);
 
 	const handleImageLoad = () => {
@@ -23,15 +31,8 @@
 
 <div class="flex-1">
 	{#if imageError}
-		<div
-			class="w-full {expanded
-				? 'h-64'
-				: 'h-32'} bg-gray-100 flex items-center justify-center text-gray-500 text-sm"
-		>
-			<div class="text-center">
-				<div class="mb-1">🖼️</div>
-				<div>Image unavailable</div>
-			</div>
+		<div class={mergeCss('w-full flex items-center justify-center text-base text-black', errorHeight)}>
+			{translate('imageUnavailable')}
 		</div>
 	{:else if expanded}
 		<div class="relative w-full border-y border-atm-sand-border">

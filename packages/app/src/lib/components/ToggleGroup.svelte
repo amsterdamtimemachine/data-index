@@ -23,6 +23,7 @@
 -->
 <script lang="ts">
 	import { createToggleGroup, melt } from '@melt-ui/svelte';
+	import { get } from 'svelte/store';
 	import Check from 'phosphor-svelte/lib/Check';
 	import { mergeCss } from '$utils/utils';
 	import type { Snippet } from 'svelte';
@@ -56,6 +57,10 @@
 
 	let sortedItems = $derived([...items].sort());
 
+	// true while a prop change is being pushed into the store, so it is not re-emitted
+	// as a user change
+	let syncing = false;
+
 	// Props seed the builder's initial config; the live state is the $value store below.
 	const {
 		elements: { root, item },
@@ -75,11 +80,37 @@
 			}
 
 			// Valid change - proceed normally
-			if (onItemSelected && next !== undefined) {
+			if (!syncing && onItemSelected && next !== undefined) {
 				onItemSelected(next);
 			}
 			return next;
 		}
+	});
+
+	function selectionFromProps(): string | string[] | undefined {
+		if (type === 'single') {
+			return selectedItems[0];
+		}
+		return selectedItems;
+	}
+
+	function sameSelection(a: string | string[] | undefined, b: string | string[] | undefined): boolean {
+		if (Array.isArray(a) && Array.isArray(b)) {
+			return a.length === b.length && a.every((v) => b.includes(v));
+		}
+		return a === b;
+	}
+
+	// A selection that changes from outside (a cleared URL, a back navigation) reaches
+	// the store here; the builder only ever sees its seed and the user's own clicks.
+	$effect(() => {
+		const next = selectionFromProps();
+		if (sameSelection(get(value), next)) {
+			return;
+		}
+		syncing = true;
+		value.set(next);
+		syncing = false;
 	});
 
 	function isSelected(itemValue: string): boolean {

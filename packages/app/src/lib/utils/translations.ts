@@ -62,6 +62,7 @@ const TRANSLATIONS: Record<string, string> = {
 	cellsOf: 'Cellen van',
 	cellOf: 'Cel van',
 	clearPlaceFilter: 'Verwijder plekfilter',
+	imageUnavailable: 'Afbeelding niet beschikbaar',
 	noFeaturesForSelection: 'Geen features gevonden voor deze selectie en periode.',
 	// the empty panel's hints; {picture} and {button} stand for the inline elements
 	emptyPanelDotHint: 'Een rode stip op de tijdlijn {picture} laat zien in welke periodes de selectie wel data heeft. Klik op {button} rechtsonder om de tijdlijn van de selectie te tonen.',
