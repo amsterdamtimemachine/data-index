@@ -1,11 +1,14 @@
 /**
  * The timeline's scope: the whole city, or the panel subject (a cell or a place).
- * Owns the subject series, their loading state and the desktop switch between the
- * two; the page only fetches and hands results in.
+ * Owns the subject series, their fetching and loading state, and the desktop switch
+ * between the two; the page only describes the subject.
  */
-import type { Histogram } from '@atm/shared/types';
+import type { Histogram, HeatmapCellBounds } from '@atm/shared/types';
 import { translate } from '$utils/translations';
+import { apiUrl } from '$utils/api';
+import { fetchJson } from '$utils/fetchJson';
 
+// read lazily, so an effect tracks only the fields it uses
 export type TimelineScopeInputs = {
 	isMobile: boolean;
 	// mobile: the open cell modal or place panel is the switch
@@ -13,7 +16,14 @@ export type TimelineScopeInputs = {
 	placePanelOpen: boolean;
 	// the open place, named as the panel names it; null without one
 	placeTitle: string | null;
+	// the subjects' series are fetched from these: the selected cell's bounds, the
+	// open place's id, and the filter params every fetch inherits
+	cellBounds: HeatmapCellBounds | null;
+	placeId: string | null;
+	params: string;
 };
+
+export type Fetcher = typeof fetchJson;
 
 // the band while a subject's series loads: no bars, no fallback to the city-wide one
 const EMPTY_HISTOGRAM: Histogram = { bins: [], maxCount: 0, timeRange: { start: '', end: '' }, totalFeatures: 0 };
@@ -62,7 +72,7 @@ function createSubjectSeries() {
 	};
 }
 
-export function createTimelineScope(getInputs: () => TimelineScopeInputs) {
+export function createTimelineScope(inputs: TimelineScopeInputs, fetcher: Fetcher = fetchJson) {
 	const cell = createSubjectSeries();
 	const place = createSubjectSeries();
 	// the desktop switch; off by default, so selecting never flips the view by itself
@@ -70,7 +80,7 @@ export function createTimelineScope(getInputs: () => TimelineScopeInputs) {
 
 	// the subject's series: the open place's, else the cell's
 	const series = $derived.by(() => {
-		if (getInputs().placePanelOpen) {
+		if (inputs.placePanelOpen) {
 			return place.series;
 		}
 		return cell.series;
@@ -79,7 +89,6 @@ export function createTimelineScope(getInputs: () => TimelineScopeInputs) {
 	const available = $derived(series !== null || pending);
 
 	const showsLocal = $derived.by(() => {
-		const inputs = getInputs();
 		if (inputs.isMobile) {
 			return inputs.cellModalOpen || inputs.placePanelOpen;
 		}
@@ -101,7 +110,6 @@ export function createTimelineScope(getInputs: () => TimelineScopeInputs) {
 	});
 
 	const label = $derived.by(() => {
-		const inputs = getInputs();
 		if (inputs.placePanelOpen && inputs.placeTitle) {
 			return `${translate('timelineOf')} ${inputs.placeTitle}`;
 		}
@@ -118,6 +126,48 @@ export function createTimelineScope(getInputs: () => TimelineScopeInputs) {
 			switchOn = false;
 		}
 	}
+
+	// one request per subject, its series cleared up front so a switch never shows
+	// the previous subject's bars; a failed request silently leaves the city-wide view
+	function fetchSeries(subject: ReturnType<typeof createSubjectSeries>, query: URLSearchParams) {
+		const request = subject.request();
+		return fetcher<Histogram>(
+			apiUrl('/api/histogram', query),
+			request.loaded,
+			() => {},
+			() => {
+				request.settled();
+				resetIfIdle();
+			}
+		);
+	}
+
+	$effect(() => {
+		const bounds = inputs.cellBounds;
+		const query = new URLSearchParams(inputs.params);
+		if (!bounds) {
+			cell.clear();
+			resetIfIdle();
+			return;
+		}
+		query.set('minLon', String(bounds.minLon));
+		query.set('maxLon', String(bounds.maxLon));
+		query.set('minLat', String(bounds.minLat));
+		query.set('maxLat', String(bounds.maxLat));
+		return fetchSeries(cell, query);
+	});
+
+	$effect(() => {
+		const placeId = inputs.placeId;
+		const query = new URLSearchParams(inputs.params);
+		if (!placeId) {
+			place.clear();
+			resetIfIdle();
+			return;
+		}
+		query.set('placeId', placeId);
+		return fetchSeries(place, query);
+	});
 
 	return {
 		get histogram() {
@@ -138,28 +188,10 @@ export function createTimelineScope(getInputs: () => TimelineScopeInputs) {
 		},
 		/** the switch handler for the timeline; absent on mobile, where the modal decides */
 		get onToggle() {
-			if (getInputs().isMobile) {
+			if (inputs.isMobile) {
 				return undefined;
 			}
 			return toggle;
-		},
-		cellRequest() {
-			return cell.request();
-		},
-		clearCell() {
-			cell.clear();
-			resetIfIdle();
-		},
-		placeRequest() {
-			return place.request();
-		},
-		clearPlace() {
-			place.clear();
-			resetIfIdle();
-		},
-		/** call when a request settles; without a series left, the scope resets too */
-		requestSettled() {
-			resetIfIdle();
 		}
 	};
 }

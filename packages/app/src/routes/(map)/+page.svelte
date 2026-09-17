@@ -1,7 +1,6 @@
 <!-- (map)/+page.svelte -->
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { apiUrl } from '$utils/api';
 	import { filterParams } from '$utils/filters';
 	import { formatPlaceTitle } from '$utils/format';
 	import { tick, untrack } from 'svelte';
@@ -9,10 +8,11 @@
 	import { navigateParams } from '$utils/navigate';
 	import { createMapSelection } from '$state/map-selection.svelte';
 	import { createTimelineScope } from '$state/timeline-scope.svelte';
-	import { createPageErrorData, createError, createValidationError } from '$utils/error';
+	import { createMapData } from '$state/map-data.svelte';
+	import { createMapPadding } from '$state/map-padding.svelte';
+	import { createSearchPause } from '$state/search-pause.svelte';
+	import { createPageErrorData, createValidationError } from '$utils/error';
 	import { validateCellId } from '$utils/utils';
-	import { loadingState } from '$lib/state/loadingState.svelte';
-	import { fetchJson } from '$utils/fetchJson';
 	import { createMediaQuery, MOBILE_QUERY, MOBILE_MAX_WIDTH } from '$utils/media.svelte';
 	import FeaturesPanelResizeHandle, {
 		panelWidthCss,
@@ -30,7 +30,7 @@
 	import Nav from '$components/Nav.svelte';
 	import NavItem from '$components/NavItem.svelte';
 	import type { PageData } from './$types';
-	import type { Histogram, HeatmapTimeline, HeatmapDimensions, HeatmapResponse } from '@atm/shared/types';
+	import type { HeatmapTimeline } from '@atm/shared/types';
 	import type { PanelSubject } from '$lib/state/panel-features.svelte';
 	import type { AppError } from '$types/error';
 	import { env } from '$env/dynamic/public';
@@ -39,41 +39,37 @@
 
 	let { data }: { data: PageData } = $props();
 
-	// Heatmap and histogram are fetched client-side (see the effects below) rather than
-	// in the loader, so the page shell renders without waiting on them. They start null
-	// and populate when the fetch resolves; the template already guards on them.
-	let heatmapTimeline = $state<HeatmapTimeline | null>(null);
-	let dimensions = $state<HeatmapDimensions | null>(null);
-	let histogram = $state<Histogram | null>(null);
-	// Selected cell's histogram, mobile only — see the gated effect below.
-	let clientErrors = $state<AppError[]>([]);
+	// validation errors this page raises (a stale period or cell in the URL)
+	let pageErrors = $state<AppError[]>([]);
 
 	const isMobile = createMediaQuery(MOBILE_QUERY);
 
-	// Pausing the text search is view state, not part of the address: the chip
-	// keeps the term, every fetch drops it. Remembering the paused term means a
-	// new or cleared term un-pauses by itself, while other filter changes keep it.
-	let pausedTerm = $state<string | null>(null);
 	const filters = $derived(data.filters);
-	const searchPaused = $derived(pausedTerm !== null && pausedTerm === filters.searchQuery);
-	// what the fetches, the panel and the collapsed line see: the URL's filters minus a paused term
-	const activeFilters = $derived.by(() => {
-		if (!searchPaused) {
-			return filters;
-		}
-		return { ...filters, searchQuery: null };
-	});
+	// a paused search term stays in the chip but leaves every fetch
+	const search = createSearchPause(() => filters);
+	const searchPaused = $derived(search.paused);
+	const activeFilters = $derived(search.activeFilters);
+	const activeParams = $derived(filterParams(activeFilters, data.metadata));
 
 	// the collapsed filters line, in one piece
 	const filtersStatus = $derived({ filters: activeFilters, metadata: data.metadata, place: data.selectedPlace });
 
-	function handleToggleSearch() {
-		if (searchPaused) {
-			pausedTerm = null;
-		} else {
-			pausedTerm = filters.searchQuery;
-		}
-	}
+	// The city-wide heatmap and histogram, refetched when the filters change; the
+	// first heatmap runs the one-time setup below.
+	const mapData = createMapData(
+		{
+			get params() {
+				return activeParams;
+			},
+			get recordTypes() {
+				return filters.recordTypes;
+			}
+		},
+		initializeFromHeatmap
+	);
+	const heatmapTimeline = $derived(mapData.timeline);
+	const dimensions = $derived(mapData.dimensions);
+	const histogram = $derived(mapData.histogram);
 
 	// Page-owned so the chosen size survives the panel's open/close cycles.
 	let panelCols = $state<PanelCols>(3);
@@ -130,10 +126,31 @@
 	// Navigation state
 	let navExpanded = $state(true);
 
+	// the map's camera keeps the strip between the nav and the panel in view
+	let navElement = $state<HTMLDivElement>();
+	let panelElement = $state<HTMLDivElement>();
+	const mapPadding = createMapPadding({
+		get navElement() {
+			return navElement;
+		},
+		get panelElement() {
+			return panelElement;
+		},
+		get navExpanded() {
+			return navExpanded;
+		},
+		get panelOpen() {
+			return showPanel;
+		},
+		get isMobile() {
+			return isMobile.matches;
+		}
+	});
+
 	let allErrors = $derived.by(() => {
 		const serverErrors = data.errorData?.errors || [];
 		const controllerErrors = mapSelection.errors || [];
-		return createPageErrorData([...serverErrors, ...clientErrors, ...controllerErrors]);
+		return createPageErrorData([...serverErrors, ...pageErrors, ...mapData.errors, ...controllerErrors]);
 	});
 
 	let currentHeatmap = $derived(
@@ -161,8 +178,8 @@
 			if (heatmapTimeline[validatedPeriod]) {
 				initialPeriod = validatedPeriod;
 			} else {
-				clientErrors = [
-					...clientErrors,
+				pageErrors = [
+					...pageErrors,
 					createValidationError(
 						'period',
 						validatedPeriod,
@@ -182,8 +199,8 @@
 					const bounds = getCellBoundsFromCellId(data.cellParam, dimensions);
 					if (bounds) mapSelection.selectCell(data.cellParam, bounds);
 				} else {
-					clientErrors = [
-						...clientErrors,
+					pageErrors = [
+						...pageErrors,
 						createValidationError('cell', data.cellParam, validation.error || `Cell "${data.cellParam}" not found. Please select a valid cell from the map.`)
 					];
 				}
@@ -215,118 +232,43 @@
 		});
 	}
 
-	// Fetch heatmap + histogram on the client, re-fetching when the filters change.
-	// One URL definition feeds both the <head> preloads and the fetches, so the
-	// browser's preload always matches (a differing URL would fetch twice).
-	const activeParams = $derived(filterParams(activeFilters, data.metadata));
-	const heatmapUrl = $derived(apiUrl('/api/heatmaps', activeParams));
-	const histogramUrl = $derived(apiUrl('/api/histogram', activeParams));
-
-	$effect(() => {
-		loadingState.startLoading();
-		return fetchJson<HeatmapResponse>(
-			heatmapUrl,
-			(res) => {
-				heatmapTimeline = res.timeline;
-				dimensions = res.dimensions;
-				initializeFromHeatmap();
-			},
-			() => {
-				clientErrors = [
-					...clientErrors,
-					createError('warning', 'Heatmap Load Error', 'Could not load heatmap. Spatial visualization may be limited.', {
-						recordTypes: filters.recordTypes
-					})
-				];
-			},
-			() => loadingState.stopLoading()
-		);
-	});
-
-	$effect(() => {
-		return fetchJson<Histogram>(
-			histogramUrl,
-			(res) => {
-				histogram = res;
-			},
-			() => {
-				clientErrors = [
-					...clientErrors,
-					createError('warning', 'Histogram Load Error', 'Could not load histogram. Temporal data may be limited.', {
-						recordTypes: filters.recordTypes
-					})
-				];
+	// The timeline's scope: the whole city, or the panel subject. It fetches the
+	// subject's series itself from what the page describes here.
+	const timelineScope = createTimelineScope({
+		get isMobile() {
+			return isMobile.matches;
+		},
+		get cellModalOpen() {
+			return showCellModal;
+		},
+		get placePanelOpen() {
+			return placePanelOpen;
+		},
+		get placeTitle() {
+			if (data.selectedPlace) {
+				return formatPlaceTitle(data.selectedPlace);
 			}
-		);
-	});
-
-	// The timeline's scope: the whole city, or the panel subject. The scope owns the
-	// subject series and the switch; the effects below only fetch and hand results in.
-	const timelineScope = createTimelineScope(() => {
-		let placeTitle: string | null = null;
-		if (data.selectedPlace) {
-			placeTitle = formatPlaceTitle(data.selectedPlace);
-		}
-		return { isMobile: isMobile.matches, cellModalOpen: showCellModal, placePanelOpen, placeTitle };
-	});
-
-	// The selected cell's series: a request per cell, cleared up front so a cell switch
-	// never shows the previous cell's bars.
-	$effect(() => {
-		const cellBounds = selectedCellBounds;
-		const base = activeParams.toString();
-		if (!cellBounds) {
-			timelineScope.clearCell();
-			return;
-		}
-		const params = new URLSearchParams(base);
-		params.set('minLon', String(cellBounds.minLon));
-		params.set('maxLon', String(cellBounds.maxLon));
-		params.set('minLat', String(cellBounds.minLat));
-		params.set('maxLat', String(cellBounds.maxLat));
-		const request = timelineScope.cellRequest();
-		return fetchJson<Histogram>(
-			apiUrl('/api/histogram', params),
-			request.loaded,
-			() => {
-				// silent by design: the timeline degrades to the city-wide histogram
-			},
-			() => {
-				request.settled();
-				timelineScope.requestSettled();
+			return null;
+		},
+		get cellBounds() {
+			return selectedCellBounds;
+		},
+		get placeId() {
+			if (placePanelOpen && data.selectedPlace) {
+				return data.selectedPlace.placeId;
 			}
-		);
-	});
-
-	// The open place panel's series: features in the place's cells per bin.
-	$effect(() => {
-		const open = placePanelOpen;
-		const place = data.selectedPlace;
-		const base = activeParams.toString();
-		if (!open || !place) {
-			timelineScope.clearPlace();
-			return;
+			return null;
+		},
+		get params() {
+			return activeParams.toString();
 		}
-		const params = new URLSearchParams(base);
-		params.set('placeId', place.placeId);
-		const request = timelineScope.placeRequest();
-		return fetchJson<Histogram>(
-			apiUrl('/api/histogram', params),
-			request.loaded,
-			() => {
-				// silent by design: the timeline degrades to the city-wide histogram
-			},
-			() => {
-				request.settled();
-				timelineScope.requestSettled();
-			}
-		);
 	});
 
 	// A filter change reloads the page data (new errorData); drop the previous load's
 	// client-side errors so they don't accumulate across navigations.
 	afterNavigate(() => {
-		clientErrors = [];
+		pageErrors = [];
+		mapData.clearErrors();
 	});
 
 	function handlePeriodChange(period: string) {
@@ -440,8 +382,8 @@
 <!-- Preloaded from the SSR head: the map data downloads alongside the app bundle
      instead of after hydration. crossorigin matches fetch()'s cors/same-origin mode. -->
 <svelte:head>
-	<link rel="preload" as="fetch" href={heatmapUrl} crossorigin="anonymous" />
-	<link rel="preload" as="fetch" href={histogramUrl} crossorigin="anonymous" />
+	<link rel="preload" as="fetch" href={mapData.heatmapUrl} crossorigin="anonymous" />
+	<link rel="preload" as="fetch" href={mapData.histogramUrl} crossorigin="anonymous" />
 </svelte:head>
 
 <ErrorHandler errorData={allErrors} />
@@ -457,11 +399,12 @@
 				{selectedCellId}
 				placeCells={data.selectedPlace?.cells}
 				placeSelected={placePanelOpen}
+				padding={mapPadding.padding}
 				{handleCellClick}
 			/>
 		{/if}
 
-		<NavContainer bind:isExpanded={navExpanded} class="absolute top-0 left-0 z-30">
+		<NavContainer bind:isExpanded={navExpanded} bind:element={navElement} class="absolute top-0 left-0 z-30">
 			{#snippet header()}
 				<Nav class="p-3">
 					<NavItem href={resolve('/about')} label="Over" />
@@ -475,7 +418,7 @@
 				onTogglePlacePanel={handleTogglePlacePanel}
 				{placePanelOpen}
 				{searchPaused}
-				onToggleSearch={handleToggleSearch}
+				onToggleSearch={search.toggle}
 			/>
 		</NavContainer>
 
@@ -486,6 +429,7 @@
 
 		{#if showPanel && panelSubject}
 			<div
+				bind:this={panelElement}
 				class="z-30 absolute top-0 right-0 w-full h-full bg-atm-sand overflow-hidden border-l border-solid border-atm-sand-border shadow-[-5px_0px_20px_5px_rgba(0,0,0,0.07)]"
 				style:width={panelWidth}
 			>
