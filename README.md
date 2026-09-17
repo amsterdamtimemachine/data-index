@@ -271,12 +271,13 @@ Lower scores mean features more unique to the time and place.
 
 ### Feature sorting
 
-The cell view sorts features in one of six modes. All modes are deterministic.
+The cell view sorts features in one of seven modes. All modes are deterministic.
 
-- **Sample** (default, in the UI and the API). A fair cross-section of the cell. Record types take turns in the list. Within each type, datasets take turns. Order inside a dataset comes from a seeded shuffle (`md5(id || seed)`). In the UI the seed defaults to the cell id. The shuffle button sets a `sampleSeed` URL parameter, so a shared link reproduces the exact order. One seed produces one global order, which keeps pagination consistent across pages.
+- **Sample** (default, in the UI and the API). A fair cross-section of the cell. Record types take turns in the list. Within each type, datasets take turns. Order inside a dataset comes from a seeded shuffle (`md5(id || seed)`). In the UI the seed defaults to the cell id. The shuffle button sets a `sampleSeed` URL parameter, so a shared link reproduces the exact order. One seed produces one global order, which keeps pagination consistent across pages. With topics selected, the shuffle is weighted: a feature matching more of the selected tags draws a better place, with weight 2 to the power of its matches, so richer matches drift up without fixing the order.
 - **Spatial** ("Precies gelokaliseerd" in the UI). The same type and dataset rotation, but each dataset's items are ordered by `spatial_frequency`. Items tied to the smallest place come first.
 - **Temporal** ("Precies gedateerd" in the UI). The same rotation, ordered by date range length (`end_date - start_date`). Items with the tightest dating come first: a single day before a month, a month before a year.
 - **Relevance** ("Relevantie" in the UI). The blended `relevance_score` above, with the record type rotation. Features most unique to the time and place come first.
+- **Beste match**. Offered while a search term or topics are active. Ranks by the number of selected tags a feature matches first, then by how well its title matches the search term (`ts_rank`), with the record type rotation. A URL carrying `sort=bestMatch` keeps it until neither a term nor tags remain.
 - **Oldest / newest**. Plain chronological order on `start_date`. No rotation. An explicit date sort returns true chronology, even when that puts several items of one type in a row.
 
 `/api/features` accepts `sort` (`sample` / `relevance` / `spatialFrequency` / `datePrecision` / `date` / `bestMatch`), `sortDirection`, and `seed`. `sort` defaults to `sample`. `seed` is optional: without one the sample order is fixed and reproducible, and every request without a seed gets the same order. With a tag selection, the sample shuffle is weighted: a feature carrying one more of the selected tags is twice as likely to come earlier, so richer matches drift up without fixing the order. `bestMatch` orders by match quality: the number of selected `tags` a feature carries first, then its rank against the `q` text search; it is only meaningful together with at least one of them.
@@ -401,7 +402,7 @@ Optional: `description`, `content_url` (media), `entity` (schema.org JSONB), `ur
 
 ### Adding a dataset
 
-A dataset is a subclass of `Ingestor` (`packages/db/src/etl/sources/ingestor.ts`) that declares its organisation/dataset metadata, a `transform` mapping each source row to a feature, and a `PLACE_EXTRACTION_METHODS` cascade — the ordered signals used to resolve each feature to a place, tried in turn until one resolves (else the feature is skipped and tallied by reason). Three signals are available:
+A dataset is a subclass of `Ingestor` (`packages/db/src/etl/ingest/ingestor.ts`) that declares its organisation/dataset metadata, a `transform` mapping each source row to a feature, and a `PLACE_EXTRACTION_METHODS` cascade — the ordered signals used to resolve each feature to a place, tried in turn until one resolves (else the feature is skipped and tallied by reason). Three signals are available:
 
 - `WKT` — a coordinate, matched to the nearest era-appropriate place within a distance cap (see [Dates resolution](#dates-resolution))
 - `TEXT` — a free-text field, scanned for known place names
