@@ -1,4 +1,4 @@
-import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, MovieEntity, VenueEntity, RecordType } from "@atm/shared";
+import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, MovieEntity, VenueKind, VENUE_KINDS, VENUE_KIND_FALLBACK, RecordType } from "@atm/shared";
 import { formatDateRange } from "../util/dates";
 import { Draft } from "./ingestor";
 
@@ -103,14 +103,13 @@ export class ScreeningEventEntityFactory extends EntityFactory<ScreeningEventEnt
         };
     }
 }
-// the export names the venue's Schema.org type; anything else is a hall of unknown kind
-const VENUE_TYPES: VenueEntity['type'][] = ['MovieTheater', 'PerformingArtsTheater', 'EventVenue'];
-function venueType(named: string | undefined): VenueEntity['type'] {
-    const known = VENUE_TYPES.find((t) => t === named);
+// the export names the venue's Schema.org type; anything else is the catch-all kind
+function venueType(named: string | undefined): VenueKind {
+    const known = VENUE_KINDS.find((t) => t === named);
     if (known) {
         return known;
     }
-    return 'EventVenue';
+    return VENUE_KIND_FALLBACK;
 }
 
 const FACTORY_MAP: Record<RecordType, (new () => EntityFactory<EntityBase>) | null> = {

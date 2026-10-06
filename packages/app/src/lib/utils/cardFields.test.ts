@@ -34,9 +34,9 @@ const series: EventSeriesEntity = {
 describe('groupMemberRows', () => {
 	test('a programme is its linked date beside its first film, the rest of the bill under it', () => {
 		expect(groupMemberRows([programme])).toEqual([
-			{ label: '5 januari', labelHref: programme.url, value: 'Skippy (1931)', href: 'https://cinemacontext.nl/id/F1', literalLabel: true },
-			{ label: '', value: 'Reis naar de maan, De', href: undefined, literalLabel: true },
-			{ label: '', value: 'Dumas, humorist', literalLabel: true, muted: true }
+			{ label: '5 januari', labelHref: programme.url, value: 'Skippy (1931)', href: 'https://cinemacontext.nl/id/F1' },
+			{ label: '', value: 'Reis naar de maan, De', href: undefined },
+			{ label: '', value: 'Dumas, humorist', muted: true }
 		]);
 	});
 
@@ -46,22 +46,37 @@ describe('groupMemberRows', () => {
 			url: undefined,
 			entity: { ...programme.entity!, type: 'ScreeningEvent', startDate: '1907-05', workPresented: [], performer: undefined } as GroupFeature['entity']
 		};
-		expect(groupMemberRows([bare])).toEqual([{ label: 'mei', labelHref: undefined, value: '', literalLabel: true }]);
+		expect(groupMemberRows([bare])).toEqual([{ label: 'mei', labelHref: undefined, value: '' }]);
 	});
 });
 
 describe('EventSeries fields', () => {
-	test('the collapsed card shows the venue under its kind, linked, then the period count', () => {
+	test('the collapsed card shows the venue under its kind, linked, then what it holds over the period', () => {
 		expect(seriesMemberCount(series)).toBe(4);
 		expect(resolveCardFields(series, false)).toEqual([
-			{ label: 'MovieTheater', value: 'Rialto', href: 'https://cinemacontext.nl/id/B1' },
-			{ label: 'screenings', value: '4', href: undefined }
+			{ label: 'Bioscoop', value: 'Rialto', href: 'https://cinemacontext.nl/id/B1' },
+			{ label: 'Vertoningen', value: '4' }
 		]);
 	});
 
-	test('a venue of the catch-all kind is labelled as a venue', () => {
-		const hall: EventSeriesEntity = { ...series, location: { type: 'EventVenue', name: 'Carr', identifier: 'B2' } };
-		expect(resolveCardFields(hall, false)[0]).toEqual({ label: 'venue', value: 'Carr', href: undefined });
+	test('the words follow the venue kind: a theatre holds performances, the catch-all events', () => {
+		const theatre: EventSeriesEntity = { ...series, location: { type: 'PerformingArtsTheater', name: 'Carré', identifier: 'B2' } };
+		expect(resolveCardFields(theatre, false)).toEqual([
+			{ label: 'Theater', value: 'Carré', href: undefined },
+			{ label: 'Voorstellingen', value: '4' }
+		]);
+		const hall: EventSeriesEntity = { ...series, location: { type: 'EventVenue', name: 'Carr', identifier: 'B3' } };
+		expect(resolveCardFields(hall, false)).toEqual([
+			{ label: 'Locatie', value: 'Carr', href: undefined },
+			{ label: 'Evenementen', value: '4' }
+		]);
+	});
+
+	test('labels reach the list as text', () => {
+		expect(resolveCardFields({ type: 'Person', name: 'x', birthDate: '1900-01-01' }, false)).toEqual([
+			{ label: 'Geboren', value: '01. 01. 1900', href: undefined },
+			{ label: 'Overleden', value: 'Onbekend', href: undefined }
+		]);
 	});
 });
 

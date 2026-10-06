@@ -8,6 +8,7 @@ import { apiUrl } from '$utils/api';
 import { loadingState } from '$lib/state/loadingState.svelte';
 import { addToast } from '$state/toaster.svelte';
 import { translate } from '$utils/translations';
+import { yearWindow } from '$utils/format';
 
 let selectedFeature = $state<FeatureResult | null>(null);
 let selectedYear = $state<number | null>(null);
@@ -38,11 +39,12 @@ async function loadYear(feature: FeatureResult, year: number) {
 	yearLoading = true;
 	loadingState.startLoading();
 	try {
+		const window = yearWindow(year);
 		const params = new URLSearchParams({
 			dataset: feature.datasetId,
 			groupKey: feature.groupKey,
-			start: `${year}-01-01`,
-			end: `${year}-12-31`
+			start: window.start,
+			end: window.end
 		});
 		const response = await fetch(apiUrl('/api/features/group', params));
 		if (!response.ok) {

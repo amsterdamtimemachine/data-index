@@ -66,8 +66,13 @@ export interface MovieEntity {
  * a theatre a PerformingArtsTheater, a hall, club premises or an unknown kind an
  * EventVenue. additionalType keeps the source's own wording.
  */
+export const VENUE_KINDS = ['MovieTheater', 'PerformingArtsTheater', 'EventVenue'] as const;
+export type VenueKind = (typeof VENUE_KINDS)[number];
+// a hall, club premises or an unknown kind
+export const VENUE_KIND_FALLBACK: VenueKind = 'EventVenue';
+
 export interface VenueEntity {
-  type: "MovieTheater" | "PerformingArtsTheater" | "EventVenue";
+  type: VenueKind;
   name: string;
   identifier: string;
   additionalType?: string;

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { FieldRow } from '$utils/cardFields';
-	import { translate } from '$utils/translations';
 	import Link from './Link.svelte';
 
 	type Props = {
@@ -9,13 +8,6 @@
 	};
 
 	let { fields, class: className }: Props = $props();
-
-	function labelText(field: FieldRow): string {
-		if (field.literalLabel) {
-			return field.label;
-		}
-		return translate(field.label);
-	}
 </script>
 
 {#if fields.length}
@@ -23,9 +15,9 @@
 		{#each fields as field}
 			<dt class="text-gray-500">
 				{#if field.labelHref}
-					<Link href={field.labelHref} target="_blank" rel="noopener noreferrer" class="text-gray-500">{labelText(field)}</Link>
+					<Link href={field.labelHref} target="_blank" rel="noopener noreferrer" class="text-gray-500">{field.label}</Link>
 				{:else}
-					{labelText(field)}
+					{field.label}
 				{/if}
 			</dt>
 			<dd class:text-gray-500={field.muted}>

@@ -100,9 +100,12 @@ const TRANSLATIONS: Record<string, string> = {
 	featureMany: 'features',
 	showing: 'Toont',
 	// a group card's count rows and its failed year load
-	screenings: 'Vertoningen',
 	venue: 'Locatie',
-	screeningsIn: 'vertoningen in',
+	// what a venue's series holds, by its kind
+	screenings: 'Vertoningen',
+	performances: 'Voorstellingen',
+	events: 'Evenementen',
+	inYear: 'in',
 	groupYearFailedTitle: 'Programma niet geladen',
 	groupYearFailed: 'Het programma van dit jaar kon niet worden geladen.',
 	inSelection: 'in de selectie',

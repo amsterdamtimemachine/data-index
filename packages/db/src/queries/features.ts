@@ -243,10 +243,13 @@ function groupEntity(row: FeatureRow): Entity | undefined {
     return row.entity || undefined;
   }
   const member = row.entity as ScreeningEventEntity | null;
+  if (!member?.location) {
+    throw new Error(`group ${row.group_key} of ${row.dataset_id}: representative ${row.id} has no location`);
+  }
   return {
     type: 'EventSeries',
     name: row.label,
-    location: member?.location ?? { type: 'EventVenue', name: row.label, identifier: row.group_key },
+    location: member.location,
     startDate: row.start_date ?? '',
     endDate: row.end_date ?? '',
     years: row.group_years ?? [],

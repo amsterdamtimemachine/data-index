@@ -55,6 +55,11 @@ export function formatDateInYear(date: string): string {
 	return `${parseInt(day, 10)} ${monthName}`;
 }
 
+/** A year as an inclusive date window, the shape the date-windowed APIs take. */
+export function yearWindow(year: number): { start: string; end: string } {
+	return { start: `${year}-01-01`, end: `${year}-12-31` };
+}
+
 export function formatDatasetTitle(title: string): string {
 	return title
 		.replace(/_/g, ' ')

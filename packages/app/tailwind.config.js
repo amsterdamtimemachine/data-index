@@ -3,6 +3,13 @@ export default {
 	content: ['./src/**/*.{html,js,svelte,ts}'],
 	theme: {
 		extend: {
+			boxShadow: {
+				// a fixed block casting over content that scrolls beneath it
+				panel: '0px 5px 20px 5px rgba(0,0,0,0.07)',
+				// the two edges of a scrolling region, each cast one way
+				'edge-down': '0px 3px 6px -2px rgba(0,0,0,0.12)',
+				'edge-up': '0px -3px 6px -2px rgba(0,0,0,0.12)'
+			},
 			colors: {
 				'link': '#6D5026',
 				'link-hover': '#78481e',

@@ -115,7 +115,7 @@
 
 <div
 	data-layout={headerLayout}
-	class="panel-header sticky min-h-[50px] p-3 md:p-4 top-0 z-10 bg-atm-sand border-b border-atm-sand-border shadow-[0px_5px_20px_5px_rgba(0,0,0,0.07)]
+	class="panel-header sticky min-h-[50px] p-3 md:p-4 top-0 z-10 bg-atm-sand border-b border-atm-sand-border shadow-panel
 	       grid items-center gap-x-3 gap-y-2"
 >
 	{#if timeline && dimensions}

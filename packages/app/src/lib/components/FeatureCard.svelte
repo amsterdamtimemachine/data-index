@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { FeatureResult, GroupFeature } from '@atm/shared/types';
 	import { translate, translateAll } from '$utils/translations';
-	import { resolveCardFields, dataSourceFields, groupMemberRows } from '$utils/cardFields';
+	import { resolveCardFields, dataSourceFields, groupMemberRows, venueEventKey } from '$utils/cardFields';
 	import { featureViewerState } from '$lib/state/featureState.svelte';
 	import FeatureCardHeader from '$components/FeatureCardHeader.svelte';
 	import FeatureCardImage from '$components/FeatureCardImage.svelte';
@@ -66,8 +66,16 @@
 	// a short shadow on the two edges that face the scrolling programme: cast down
 	// from the count line, up from the fields block; the negative spread keeps each
 	// to its one side
-	const SHADOW_DOWN = 'shadow-[0px_3px_6px_-2px_rgba(0,0,0,0.12)]';
-	const SHADOW_UP = 'shadow-[0px_-3px_6px_-2px_rgba(0,0,0,0.12)]';
+	const SHADOW_DOWN = 'shadow-edge-down';
+	const SHADOW_UP = 'shadow-edge-up';
+
+	// what the series holds, by its venue's kind: vertoningen, voorstellingen, evenementen
+	const eventWord = $derived.by(() => {
+		if (!series) {
+			return '';
+		}
+		return translate(venueEventKey(series.location.type)).toLowerCase();
+	});
 	const entityFieldsClasses = $derived.by(() => {
 		if (!expanded) {
 			return 'mt-1';
@@ -177,14 +185,14 @@
 			</div>
 			{#if hoverCapable.matches && hoveredYear}
 				<DataTooltip x={hoveredYear.x} y={hoveredYear.y}>
-					<div class="font-medium">{hoveredYear.count} {translate('screenings').toLowerCase()}</div>
+					<div class="font-medium">{hoveredYear.count} {eventWord}</div>
 				</DataTooltip>
 			{/if}
 			{#if yearCount > 0}
 				<div class="px-2 py-2 shrink-0 relative z-10 bg-atm-sand {SHADOW_DOWN}">
 					<FeaturesCount count={yearCount}>
 						{#snippet children(shown)}
-							{shown} {translate('screeningsIn')} {groupYear}
+							{shown} {eventWord} {translate('inYear')} {groupYear}
 						{/snippet}
 					</FeaturesCount>
 				</div>

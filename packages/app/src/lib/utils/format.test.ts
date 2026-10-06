@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { PlaceSearchMatch } from '@atm/shared/types';
-import { formatPlaceWindow, formatPlaceName, formatPlaceTitle, formatPartialDate, formatDateInYear } from './format';
+import { formatPlaceWindow, formatPlaceName, formatPlaceTitle, formatPartialDate, formatDateInYear, yearWindow } from './format';
 
 function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 	return {
@@ -95,5 +95,11 @@ describe('formatDateInYear', () => {
 		expect(formatDateInYear('1934-01-05')).toBe('5 januari');
 		expect(formatDateInYear('1907-05')).toBe('mei');
 		expect(formatDateInYear('1928')).toBe('');
+	});
+});
+
+describe('yearWindow', () => {
+	test('a year is its first and last day', () => {
+		expect(yearWindow(1934)).toEqual({ start: '1934-01-01', end: '1934-12-31' });
 	});
 });

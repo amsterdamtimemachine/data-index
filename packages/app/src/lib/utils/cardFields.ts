@@ -1,24 +1,36 @@
-import type { Entity, PersonEntity, MediaObjectEntity, ScreeningEventEntity, EventSeriesEntity, VenueEntity, GroupFeature, FeatureResult } from '@atm/shared/types';
+import type { Entity, PersonEntity, MediaObjectEntity, ScreeningEventEntity, EventSeriesEntity, VenueKind, GroupFeature, FeatureResult } from '@atm/shared/types';
+import { VENUE_KIND_FALLBACK } from '@atm/shared';
 import { formatDate, formatDateRange, formatPartialDate, formatDateInYear, formatDatasetTitle } from './format';
 import { translate } from './translations';
 
 /**
- * One label:value row on a card. `href` turns the value into a link, `labelHref` the
- * label. The label is a translate() key unless `literalLabel` says it is text already.
- * `muted` grays the value.
+ * One label:value row on a card, as text ready to print. `href` turns the value into
+ * a link, `labelHref` the label; `muted` grays the value.
  */
-export type FieldRow = { label: string; value: string; href?: string; labelHref?: string; literalLabel?: boolean; muted?: boolean };
+export type FieldRow = { label: string; value: string; href?: string; labelHref?: string; muted?: boolean };
 
 const isPerson = (e: Entity): e is PersonEntity => e.type === 'Person';
 const isMedia = (e: Entity): e is MediaObjectEntity => e.type === 'MediaObject';
 const isScreening = (e: Entity): e is ScreeningEventEntity => e.type === 'ScreeningEvent';
 const isSeries = (e: Entity): e is EventSeriesEntity => e.type === 'EventSeries';
 
-function venueLabel(venue: VenueEntity): string {
-	if (venue.type === 'EventVenue') {
+/** The translate() key naming a venue of this kind: "Bioscoop", or "Locatie" for the catch-all. */
+function venueKindKey(kind: VenueKind): string {
+	if (kind === VENUE_KIND_FALLBACK) {
 		return 'venue';
 	}
-	return venue.type;
+	return kind;
+}
+
+/** The translate() key for what a venue of this kind holds: screenings, performances, events. */
+export function venueEventKey(kind: VenueKind): string {
+	if (kind === 'MovieTheater') {
+		return 'screenings';
+	}
+	if (kind === 'PerformingArtsTheater') {
+		return 'performances';
+	}
+	return 'events';
 }
 
 /** A group's members over the period: the sum of its years. */
@@ -34,6 +46,7 @@ const withPlace = (date?: string, place?: string) =>
 	date ? `${formatDate(date)}${place ? `, ${place}` : ''}` : translate('unknown');
 
 type CardFieldSpec = {
+	// a translate() key
 	label: string;
 	// formatted value; null hides the row
 	value: (entity: Entity) => string | null;
@@ -66,9 +79,9 @@ const CARD_FIELDS: Partial<Record<Entity['type'], CardFieldSpec[]>> = {
 		{ label: 'citation', value: (e) => (isScreening(e) && e.citation ? e.citation.join(', ') : null) },
 	],
 	EventSeries: [
-		// the venue, labelled by its kind from the data ("Bioscoop Passage"); the catch-all kind reads as venue
-		{ label: 'venue', value: () => null, summary: true, rows: (e) => (isSeries(e) ? [{ label: venueLabel(e.location), value: e.location.name, href: e.location.url }] : []) },
-		{ label: 'screenings', value: (e) => (isSeries(e) ? String(seriesMemberCount(e)) : null), summary: true },
+		// the venue under its kind ("Bioscoop Passage"), then what it holds, counted over the period
+		{ label: 'venue', value: () => null, summary: true, rows: (e) => (isSeries(e) ? [{ label: translate(venueKindKey(e.location.type)), value: e.location.name, href: e.location.url }] : []) },
+		{ label: 'screenings', value: () => null, summary: true, rows: (e) => (isSeries(e) ? [{ label: translate(venueEventKey(e.location.type)), value: String(seriesMemberCount(e)) }] : []) },
 	],
 };
 
@@ -85,7 +98,7 @@ export function resolveCardFields(entity: Entity, expanded: boolean): FieldRow[]
 		const value = spec.value(entity);
 		if (value == null) continue;
 		const href = spec.href ? spec.href(entity) : undefined;
-		fields.push({ label: spec.label, value, href });
+		fields.push({ label: translate(spec.label), value, href });
 	}
 	return fields;
 }
@@ -116,14 +129,14 @@ export function groupMemberRows(members: GroupFeature[]): FieldRow[] {
 		if (entity && isScreening(entity)) {
 			date = formatDateInYear(entity.startDate);
 			for (const film of entity.workPresented) {
-				bill.push({ label: '', value: film.name, href: film.url, literalLabel: true });
+				bill.push({ label: '', value: film.name, href: film.url });
 			}
 			if (entity.performer) {
-				bill.push({ label: '', value: entity.performer, literalLabel: true, muted: true });
+				bill.push({ label: '', value: entity.performer, muted: true });
 			}
 		}
 		if (bill.length === 0) {
-			bill.push({ label: '', value: '', literalLabel: true });
+			bill.push({ label: '', value: '' });
 		}
 		bill[0] = { ...bill[0], label: date, labelHref: member.url };
 		rows.push(...bill);
@@ -136,19 +149,19 @@ export function dataSourceFields(feature: FeatureResult, expanded: boolean): Fie
 	if (!expanded) return [];
 	const rows: FieldRow[] = [];
 	if (feature.organisationLabel) {
-		rows.push({ label: 'dataProvider', value: feature.organisationLabel, href: feature.organisationUrl });
+		rows.push({ label: translate('dataProvider'), value: feature.organisationLabel, href: feature.organisationUrl });
 	}
 	// Skip the dataset row when it just repeats the provider (e.g. Joods Monument).
 	if (feature.datasetLabel && feature.datasetLabel !== feature.organisationLabel) {
-		rows.push({ label: 'dataset', value: formatDatasetTitle(feature.datasetLabel), href: feature.datasetUrl });
+		rows.push({ label: translate('dataset'), value: formatDatasetTitle(feature.datasetLabel), href: feature.datasetUrl });
 	}
 	if (feature.placeProviderLabel && feature.placeProviderUrl) {
-		rows.push({ label: 'placeDataProvider', value: feature.placeProviderLabel, href: feature.placeProviderUrl });
+		rows.push({ label: translate('placeDataProvider'), value: feature.placeProviderLabel, href: feature.placeProviderUrl });
 	}
 	// Only set when the geometry came from a different provider than the place
 	// (e.g. an Adamlink street whose line was backfilled from NWB).
 	if (feature.geometryProviderLabel) {
-		rows.push({ label: 'geometrySource', value: feature.geometryProviderLabel, href: feature.geometryUrl });
+		rows.push({ label: translate('geometrySource'), value: feature.geometryProviderLabel, href: feature.geometryUrl });
 	}
 	return rows;
 }
