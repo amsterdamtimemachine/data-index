@@ -1,4 +1,4 @@
-import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, MovieEntity, VenueKind, VENUE_KINDS, VENUE_KIND_FALLBACK, RecordType } from "@atm/shared";
+import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, MovieEntity, ManuscriptEntity, MentionEntity, VenueKind, VENUE_KINDS, VENUE_KIND_FALLBACK, RecordType } from "@atm/shared";
 import { formatDateRange } from "../util/dates";
 import { Draft } from "./ingestor";
 
@@ -112,12 +112,46 @@ function venueType(named: string | undefined): VenueKind {
     return VENUE_KIND_FALLBACK;
 }
 
+// the source row's shape, as the amsterdam-diaries source reads it
+type DiaryRef = { name?: string; url?: string; coverage?: string };
+type DiaryAuthor = { name?: string; url?: string };
+
+export class ManuscriptEntityFactory extends EntityFactory<ManuscriptEntity> {
+    create(feature: Draft, data: Map<string, unknown>): ManuscriptEntity {
+        const diary = (data.get('diary') ?? {}) as DiaryRef;
+        const author = (data.get('author') ?? {}) as DiaryAuthor;
+        const mentions = (data.get('mentions') ?? []) as MentionEntity[];
+        const name = data.get('name');
+        const date = data.get('date');
+        const text = data.get('text');
+
+        return {
+            type: 'Manuscript',
+            id: feature.id,
+            name: typeof name === 'string' && name ? name : feature.label,
+            ...(typeof date === 'string' && date && { dateCreated: date }),
+            text: typeof text === 'string' ? text : '',
+            ...(author.name && { author: { type: 'Person' as const, name: author.name, ...(author.url && { url: author.url }) } }),
+            ...(diary.name && {
+                isPartOf: {
+                    type: 'Book' as const,
+                    name: diary.name,
+                    ...(diary.url && { url: diary.url }),
+                    ...(diary.coverage && { temporalCoverage: diary.coverage }),
+                },
+            }),
+            mentions: mentions.map((m) => ({ type: m.type, name: m.name, ...(m.url && { url: m.url }) })),
+        };
+    }
+}
+
 const FACTORY_MAP: Record<RecordType, (new () => EntityFactory<EntityBase>) | null> = {
   image: MediaObjectEntityFactory,
   text: CreativeWorkEntityFactory,
   person: PersonEntityFactory,
-  // events have no default shape: each event source names its own factory (see Ingestor.entityFactory)
+  // events and stories have no default shape: each such source names its own factory (see Ingestor.entityFactory)
   event: null,
+  story: null,
   unknown: null,
 };
 

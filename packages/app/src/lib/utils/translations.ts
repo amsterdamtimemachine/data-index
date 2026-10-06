@@ -8,6 +8,7 @@ const TRANSLATIONS: Record<string, string> = {
 	person: 'Persoon',
 	text: 'Tekst',
 	event: 'Evenement',
+	story: 'Verhaal',
 
 	// Place types
 	address: 'Adres',
@@ -35,6 +36,7 @@ const TRANSLATIONS: Record<string, string> = {
 	// Relations
 	isAbout: 'Gaat over',
 	location: 'Gevestigd op',
+	mentions: 'Noemt',
 
 	// venue kinds (Schema.org types of an event's location)
 	MovieTheater: 'Bioscoop',
@@ -101,6 +103,11 @@ const TRANSLATIONS: Record<string, string> = {
 	showing: 'Toont',
 	// a group card's count rows and its failed year load
 	venue: 'Locatie',
+	// a story's rows
+	diary: 'Dagboek',
+	archive: 'Archief',
+	persons: 'Personen',
+	places: 'Plaatsen',
 	// what a venue's series holds, by its kind
 	screenings: 'Vertoningen',
 	performances: 'Voorstellingen',

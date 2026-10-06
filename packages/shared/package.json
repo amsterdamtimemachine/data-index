@@ -10,8 +10,12 @@
       "import": "./dist/index.js"
     },
     "./types": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.js"
+    },
+    "./vocab": {
+      "types": "./dist/vocab/index.d.ts",
+      "import": "./dist/vocab/index.js"
     }
   },
   "scripts": {

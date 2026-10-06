@@ -28,6 +28,15 @@
 	// Get current selected feature
 	let selectedFeature = $derived(featureViewerState.selectedFeature);
 
+	// the card's width: a picture gets the room, anything read gets a reading measure,
+	// about 75 characters a line; a phone gets the full width either way
+	const widthClasses = $derived.by(() => {
+		if (selectedFeature?.entity?.type === 'MediaObject') {
+			return 'w-[90vw] max-w-4xl';
+		}
+		return 'w-[90vw] max-w-[600px]';
+	});
+
 	// Open dialog when feature is selected
 	$effect(() => {
 		if (featureViewerState.selectedFeature) {
@@ -65,7 +74,7 @@
 				<!-- Modal Content -->
 				<div
 					use:melt={$content}
-					class="pointer-events-auto w-[90vw] max-w-4xl max-h-full bg-white rounded-sm
+					class="pointer-events-auto {widthClasses} max-h-full bg-white rounded-sm
 					       shadow-xl overflow-hidden flex flex-col"
 					transition:fade={{ duration: 100 }}
 				>

@@ -13,7 +13,8 @@
 </script>
 
 {#if expanded}
-	<div class="">
+	<!-- a reading measure: about 75 characters a line on desktop, the full width on a phone -->
+	<div class="max-w-[600px]">
 		<p class="p-2 text-gray-700 leading-relaxed whitespace-pre-wrap">
 			{text}
 		</p>

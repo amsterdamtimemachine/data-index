@@ -55,6 +55,20 @@ export function formatDateInYear(date: string): string {
 	return `${parseInt(day, 10)} ${monthName}`;
 }
 
+/**
+ * A transcription's lines as prose: a word broken over two lines with a hyphen is
+ * rejoined, a blank line stays a paragraph break, every other line break becomes a
+ * space. The stored text keeps the page's lines; this is how the card reads it.
+ */
+export function foldLines(text: string): string {
+	return text
+		.replace(/-\n(?!\n)/g, '')
+		.replace(/\n{2,}/g, '\u0000')
+		.replace(/\n/g, ' ')
+		.replace(/\u0000/g, '\n\n')
+		.trim();
+}
+
 /** A year as an inclusive date window, the shape the date-windowed APIs take. */
 export function yearWindow(year: number): { start: string; end: string } {
 	return { start: `${year}-01-01`, end: `${year}-12-31` };

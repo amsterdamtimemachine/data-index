@@ -180,7 +180,7 @@ erDiagram
         date end_date  "e.g. 1948-09-30 (histogram placement)"
         text dataset_id FK "e.g. stadsarchief-beeldbank"
         integer temporal_frequency  "e.g. 2 # base time bins spanned"
-        jsonb entity  "e.g. Person | CreativeWork | MediaObject | ScreeningEvent"
+        jsonb entity  "e.g. Person | CreativeWork | MediaObject | ScreeningEvent | Manuscript"
         integer feature_int_id  "identity # the surrogate the bitmaps store"
         integer group_int_id  "the group's smallest feature_int_id # rebuilt by rebuild-index"
         tsvector label_tsv  "generated from label # dutch FTS"
@@ -209,7 +209,7 @@ erDiagram
 - **place_geometry**: A place's geometry (RD / EPSG:28992) and the period it was valid (1:1 with place)
 - **place_historical_name**: Dated past names linked to places (addresses, streets), used to show what a location was called at a given time. Undated Adamlink name variants (spelling variants, abbreviations, old names without a date) are kept too, as rows without a `since` or `until`: a row with a period is an observation of what the place was called then, a row without one is a label. The place search finds labels and shows the current name in brackets after them, while feature-to-place resolution and name canonicalisation consider dated rows only
 - **tags**: Classifier vocabulary, keyed by the classifier's own labels (e.g. `bridge_canal`); the app shows them in Dutch by id. Assigned to features through `feature_tags`, one row per feature, tag and tagger run (`source`). For now only images carry tags
-- **features**: Images, texts, persons and events linked to places and displayed in the UI. `group_key` ties features of one dataset together (a cinema's programmes carry the venue's permanent id); null for datasets without such a grouping
+- **features**: Images, texts, persons, events and stories linked to places and displayed in the UI. `group_key` ties features of one dataset together (a cinema's programmes carry the venue's permanent id); null for datasets without such a grouping
 - **relation** / **feature_to_place**: How a feature relates to a place, one row per link. Each source names its relation: an article or an image `isAbout` an address, a cinema's programme has its `location` there, a Joods Monument person `hadLastLivingLocation`. The card words the relation before the place name through the app's translation map
 - **place_cells**: Pre-computed spatial grid that powers the heatmap. Each place is mapped to the 100m cells its geometry covers (one cell for a point, many for a street or neighbourhood). Features inherit cell coverage through their place link, cell assignments are stored once per place rather than duplicated per feature.
 - **cell_features**: Which features occupy each cell, base time bin and category — the cell-major counterpart of `place_cells`, written by `rebuild-index`. It materialises the `features → feature_to_place → place → place_cells` hop plus the time bin, so the heatmap and histogram read one table instead of re-running that join per request. Each bucket holds its feature set as a **roaring bitmap** rather than a count: merging buckets is then a set union, which de-duplicates a feature spanning several cells or place types, so base cells can be rolled up into *any* display grid and still yield an exact distinct count. The bitmap stores `features.feature_int_id`, a dense integer surrogate (roaringbitmap holds int4; `features.id` is a 128-bit uuid), so an external id set built on the same column — text-search matches, a tag's `tag_features` bitmap — can be intersected with the buckets. A grouped feature stores its `group_int_id` instead, the group's smallest member id, so a group is one entry in every bitmap and one count everywhere.
@@ -362,6 +362,7 @@ Ingestion reads files from a local data directory; how you obtain each differs b
   Splitting fetch from ingest keeps ingestion offline and reproducible and pins each PDOK snapshot as an inspectable file; re-run a fetch to refresh it.
 - **Feature datasets (Beeldbank, Joods Monument, Delpher)** — currently private derivatives of mostly-public source collections, so they are not publicly distributable.
 - **Classifier tags (optional)** — the output of a tagger run over an ingested dataset, as JSONL with one row per record: `{"id": <the dataset's natural key>, "tags": ["<tag id>", ...]}`. The id must be the same natural key the dataset's ingestor derives feature ids from (for Beeldbank the record's identifier, not its image URL); if the classifier emits another key, convert the file first. One file per run, ingested with that run's id as `--tagger`.
+- **Amsterdam Diaries entries** — exported from the Amsterdam Diaries Time Machine dump (Zenodo) with a script kept next to the dump (`export_amsterdam_diaries.py`), as JSONL with one line per entry and Amsterdam place it mentions: the entry's ark, date, transcription, diary, author, the identified mentions, and the place with its Adamlink or Wikidata id and a point. Mentions of areas (the city, a district, a water) stay on the card but get no point, since the dump's coordinate is a centroid.
 - **Cinema Context programmes** — exported from the Cinema Context database dump with a script kept next to the dump (`export_cinema_context.py`, in the data project), as JSONL with one programme per line: its permanent id, date, title, venue with address and coordinates, the bill and the newspaper sources. Amsterdam only by default.
 
 All files land in the data directory; the ingestion steps below read them.
@@ -599,6 +600,7 @@ etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
 etl -s cinema-context -f /data/cinema-context.jsonl
+etl -s amsterdam-diaries -f /data/amsterdam-diaries.jsonl
 # optional: classifier tags, one file per dataset keyed by that dataset's natural keys (remap_tags_to_feature_keys.py, beside the data), one tagger id per run
 etl -s tags -f /data/beeldbank-tags.jsonl --tagger meeting-demo-complete --dataset beeldbank
 etl -s tags -f /data/delpher-tags.jsonl   --tagger meeting-demo-complete --dataset delpher
@@ -656,6 +658,7 @@ etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
 etl -s cinema-context -f /data/cinema-context.jsonl
+etl -s amsterdam-diaries -f /data/amsterdam-diaries.jsonl
 etl -s tags -f /data/siglip2-baseline-v1.natural-key.jsonl --tagger siglip2-baseline-v1 --dataset beeldbank   # optional: classifier tags, keyed by natural keys
 $DC run --rm app bun run db:rebuild-index
 

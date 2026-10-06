@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { PlaceSearchMatch } from '@atm/shared/types';
-import { formatPlaceWindow, formatPlaceName, formatPlaceTitle, formatPartialDate, formatDateInYear, yearWindow } from './format';
+import { formatPlaceWindow, formatPlaceName, formatPlaceTitle, formatPartialDate, formatDateInYear, yearWindow, foldLines } from './format';
 
 function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 	return {
@@ -101,5 +101,15 @@ describe('formatDateInYear', () => {
 describe('yearWindow', () => {
 	test('a year is its first and last day', () => {
 		expect(yearWindow(1934)).toEqual({ start: '1934-01-01', end: '1934-12-31' });
+	});
+});
+
+describe('foldLines', () => {
+	test('rejoins hyphenated words and turns line breaks into spaces', () => {
+		expect(foldLines('Om 11 uur gaan de cursisten gezame-\nlijk materiaal maken.\nZe komen aldoor.\n')).toBe('Om 11 uur gaan de cursisten gezamelijk materiaal maken. Ze komen aldoor.');
+	});
+
+	test('a blank line stays a paragraph break', () => {
+		expect(foldLines('1940.\nEen Woord Tot de Jongeren\n\n"Ik wens hen te wijzen\nop de grote verantwoorde-\nlijkheid.')).toBe('1940. Een Woord Tot de Jongeren\n\n"Ik wens hen te wijzen op de grote verantwoordelijkheid.');
 	});
 });

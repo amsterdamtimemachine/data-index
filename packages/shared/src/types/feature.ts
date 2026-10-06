@@ -1,6 +1,8 @@
 import type { HeatmapCellBounds } from './heatmap';
+import type { VenueKind } from '../vocab/venues';
+export type { VenueKind } from '../vocab/venues';
 
-export type RecordType = 'image' | 'text' | 'person' | 'event' | 'unknown';
+export type RecordType = 'image' | 'text' | 'person' | 'event' | 'story' | 'unknown';
 
 // 'sample' and 'spatialFrequency' interleave record types and datasets (double
 // rotation); 'date' is flat chronology; 'relevance' is the legacy blended score
@@ -26,7 +28,7 @@ export interface MatchFilters {
  */
 export interface EntityBase {
   id?: string;
-  type: "Person" | "CreativeWork" | "MediaObject" | "ScreeningEvent" | "EventSeries";
+  type: "Person" | "CreativeWork" | "MediaObject" | "ScreeningEvent" | "EventSeries" | "Manuscript";
   name: string;
 }
 
@@ -66,11 +68,6 @@ export interface MovieEntity {
  * a theatre a PerformingArtsTheater, a hall, club premises or an unknown kind an
  * EventVenue. additionalType keeps the source's own wording.
  */
-export const VENUE_KINDS = ['MovieTheater', 'PerformingArtsTheater', 'EventVenue'] as const;
-export type VenueKind = (typeof VENUE_KINDS)[number];
-// a hall, club premises or an unknown kind
-export const VENUE_KIND_FALLBACK: VenueKind = 'EventVenue';
-
 export interface VenueEntity {
   type: VenueKind;
   name: string;
@@ -109,8 +106,40 @@ export interface EventSeriesEntity extends EntityBase {
   years: Array<{ year: number; count: number }>;
 }
 
+/** A thing a work refers to, as the annotators identified it, with its page at the source that identifies it. */
+export interface MentionEntity {
+  type: "Place" | "Person" | "Organization";
+  name: string;
+  url?: string;
+}
+
+/** The diary an entry belongs to, with its page at the holding archive. */
+export interface BookEntity {
+  type: "Book";
+  name: string;
+  url?: string;
+  // the years the diary covers, as the source words it ("1940/1945")
+  temporalCoverage?: string;
+  holdingArchive?: string;
+}
+
+/**
+ * One diary entry: a dated piece of writing with its full transcription, its diary
+ * and author, and everything the annotators identified in it. The places among the
+ * mentions are also the feature's place links; the list keeps the rest.
+ */
+export interface ManuscriptEntity extends EntityBase {
+  type: "Manuscript";
+  // source precision: YYYY-MM-DD, YYYY-MM or YYYY
+  dateCreated?: string;
+  text: string;
+  author?: { type: "Person"; name: string; url?: string };
+  isPartOf?: BookEntity;
+  mentions: MentionEntity[];
+}
+
 /** Discriminated union of all concrete entity types. */
-export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity | ScreeningEventEntity | EventSeriesEntity;
+export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity | ScreeningEventEntity | EventSeriesEntity | ManuscriptEntity;
 
 
 /**
@@ -121,18 +150,6 @@ export type PlaceType = 'address' | 'street' | 'neighbourhood' | 'district';
 /** Where a place came from — Adamlink (historical) or a PDOK base registry. */
 export type PlaceSource = 'adamlink' | 'cbs' | 'nwb' | 'bag';
 
-/**
- * The institution behind each place source. Seeded into `organisations` (the same
- * table dataset providers live in) so `place.source` is a foreign key to it, and
- * the feature query joins it to render a clickable provider on the card. Keyed by
- * PlaceSource, so a new source can't be added without giving it a provider here.
- */
-export const PLACE_PROVIDERS: Record<PlaceSource, { label: string; url: string }> = {
-  adamlink: { label: 'Adamlink', url: 'https://adamlink.nl' },
-  cbs: { label: 'CBS', url: 'https://www.cbs.nl' },
-  nwb: { label: 'NWB', url: 'https://www.rijkswaterstaat.nl' },
-  bag: { label: 'BAG', url: 'https://www.kadaster.nl' },
-};
 
 /**
  * Spatial population of a features query: a display cell's bounds (inverted to a

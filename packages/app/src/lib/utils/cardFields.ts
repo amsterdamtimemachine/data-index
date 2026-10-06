@@ -1,5 +1,5 @@
-import type { Entity, PersonEntity, MediaObjectEntity, ScreeningEventEntity, EventSeriesEntity, VenueKind, GroupFeature, FeatureResult } from '@atm/shared/types';
-import { VENUE_KIND_FALLBACK } from '@atm/shared';
+import type { Entity, PersonEntity, MediaObjectEntity, ScreeningEventEntity, EventSeriesEntity, ManuscriptEntity, VenueKind, GroupFeature, FeatureResult } from '@atm/shared/types';
+import { VENUE_KIND_FALLBACK } from '@atm/shared/vocab';
 import { formatDate, formatDateRange, formatPartialDate, formatDateInYear, formatDatasetTitle } from './format';
 import { translate } from './translations';
 
@@ -13,6 +13,16 @@ const isPerson = (e: Entity): e is PersonEntity => e.type === 'Person';
 const isMedia = (e: Entity): e is MediaObjectEntity => e.type === 'MediaObject';
 const isScreening = (e: Entity): e is ScreeningEventEntity => e.type === 'ScreeningEvent';
 const isSeries = (e: Entity): e is EventSeriesEntity => e.type === 'EventSeries';
+const isManuscript = (e: Entity): e is ManuscriptEntity => e.type === 'Manuscript';
+
+/** The names of a story's mentions of one kind, joined; null when there are none. */
+function mentionNames(entity: ManuscriptEntity, kind: 'Place' | 'Person' | 'Organization'): string | null {
+	const names = entity.mentions.filter((m) => m.type === kind).map((m) => m.name);
+	if (names.length === 0) {
+		return null;
+	}
+	return names.join(', ');
+}
 
 /** The translate() key naming a venue of this kind: "Bioscoop", or "Locatie" for the catch-all. */
 function venueKindKey(kind: VenueKind): string {
@@ -77,6 +87,14 @@ const CARD_FIELDS: Partial<Record<Entity['type'], CardFieldSpec[]>> = {
 		{ label: 'film', value: () => null, summary: true, rows: (e) => (isScreening(e) ? e.workPresented.map((m) => ({ label: 'film', value: m.name, href: m.url })) : []) },
 		{ label: 'performer', value: (e) => (isScreening(e) ? e.performer ?? null : null), summary: true },
 		{ label: 'citation', value: (e) => (isScreening(e) && e.citation ? e.citation.join(', ') : null) },
+	],
+	Manuscript: [
+		{ label: 'author', value: (e) => (isManuscript(e) ? e.author?.name ?? null : null), href: (e) => (isManuscript(e) ? e.author?.url : undefined), summary: true },
+		{ label: 'diary', value: (e) => (isManuscript(e) ? e.isPartOf?.name ?? null : null), href: (e) => (isManuscript(e) ? e.isPartOf?.url : undefined) },
+		{ label: 'archive', value: (e) => (isManuscript(e) ? e.isPartOf?.holdingArchive ?? null : null) },
+		{ label: 'persons', value: (e) => (isManuscript(e) ? mentionNames(e, 'Person') : null) },
+		// the places only when there are several: with one it repeats the card's place
+		{ label: 'places', value: (e) => (isManuscript(e) && e.mentions.filter((m) => m.type === 'Place').length > 1 ? mentionNames(e, 'Place') : null) },
 	],
 	EventSeries: [
 		// the venue under its kind ("Bioscoop Passage"), then what it holds, counted over the period
