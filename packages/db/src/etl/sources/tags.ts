@@ -3,7 +3,8 @@
  * `{"id": <the dataset's natural key>, "tags": ["<tag id>", ...]}`; other fields
  * are ignored. Feature ids derive from --dataset + id exactly as that dataset's
  * ingestor derives them, so rows join features by primary key. Rows are stamped
- * with --tagger as their source and a rerun replaces only that source's rows.
+ * with --tagger as their source and a rerun replaces only that source's rows for
+ * that dataset.
  * Like every source, follow it with rebuild-index (which rebuilds tag_features).
  *
  * Usage: bun run db:ingest -s tags -f <file.jsonl> --tagger <id> --dataset <dataset-id>
@@ -47,7 +48,7 @@ export async function ingest(filePath: string, opts: TagsIngestOptions = {}): Pr
   const seen = new Set<string>();
 
   const written = await db.transaction(async (tx) => {
-    const writer = createTagWriter(tx, tagger);
+    const writer = createTagWriter(tx, tagger, dataset);
     await writer.clear();
 
     for await (const row of rows) {

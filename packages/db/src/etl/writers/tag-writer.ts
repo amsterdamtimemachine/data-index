@@ -3,8 +3,9 @@
  * only rows whose feature exists land, and upserting each batch's vocabulary into
  * tags first. Used by the tags source (sources/tags.ts).
  *
- * Replace semantics: clear() deletes the tagger's previous rows, then batches
- * insert. Unlike the feature writer's upsert, an interrupted replace would leave
+ * Replace semantics: clear() deletes the tagger's previous rows for the dataset,
+ * then batches insert, so one tagger run over two datasets is two files that leave
+ * each other alone. Unlike the feature writer's upsert, an interrupted replace would leave
  * the tagger with a fraction of its rows, so the source runs the whole thing in
  * one transaction and hands it in as `executor`.
  */
@@ -21,7 +22,7 @@ export type TagWriteReport = {
   rows: number;      // feature_tags rows written
 };
 
-export function createTagWriter(executor: Executor, tagger: string, batchSize = 10000) {
+export function createTagWriter(executor: Executor, tagger: string, dataset: string, batchSize = 10000) {
   let featureIds: string[] = [];
   let tagIds: string[] = [];
   const report: TagWriteReport = { matched: 0, unmatched: 0, rows: 0 };
@@ -67,9 +68,11 @@ export function createTagWriter(executor: Executor, tagger: string, batchSize = 
   }
 
   return {
-    /** Drop the tagger's previous rows; call once before adding. */
+    /** Drop the tagger's previous rows for the dataset; call once before adding. */
     async clear(): Promise<void> {
-      await executor.execute(sql`DELETE FROM ${featureTags} WHERE source = ${tagger}`);
+      await executor.execute(sql`
+        DELETE FROM ${featureTags} ft USING ${features} f
+        WHERE ft.feature_id = f.id AND ft.source = ${tagger} AND f.dataset_id = ${dataset}`);
     },
     add(featureId: string, tagId: string): void {
       featureIds.push(featureId);

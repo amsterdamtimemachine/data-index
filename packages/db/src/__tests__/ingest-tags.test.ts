@@ -1,6 +1,6 @@
 /**
  * Tags ingestion: classifier JSONL keyed by a dataset's natural keys, stamped with a
- * tagger id, replacing only that tagger's rows on rerun. The per-tag bitmaps
+ * tagger id, replacing only that tagger's rows for that dataset on rerun. The per-tag bitmaps
  * (tag_features) are rebuilt by rebuild-index, exercised here through its
  * buildTagFeatures step.
  *
@@ -23,6 +23,8 @@ const RERUN = resolve(__dirname, 'fixtures/tags-rerun.jsonl');
 const K1 = featureUuid(DATASET, 'k1');
 const K2 = featureUuid(DATASET, 'k2');
 const K3 = featureUuid(DATASET, 'k3');
+const OTHER_DATASET = 'tg-other';
+const O1 = featureUuid(OTHER_DATASET, 'k1');
 
 type TagRow = { feature_id: string; tag_id: string; source: string };
 
@@ -52,11 +54,16 @@ describe('tags ingestion', () => {
       organisation: { id: 'tg-org', label: 'TG Org' },
       dataset: { id: DATASET, label: 'TG DS' },
     });
+    await upsertSource({
+      organisation: { id: 'tg-org', label: 'TG Org' },
+      dataset: { id: OTHER_DATASET, label: 'TG Other' },
+    });
     await db.execute(sql`
       INSERT INTO features (id, url, record_type, label, start_date, end_date, dataset_id) VALUES
         (${K1}, 'u1', 'image', 'k1', '1950-01-01', '1950-12-31', ${DATASET}),
         (${K2}, 'u2', 'image', 'k2', '1950-01-01', '1950-12-31', ${DATASET}),
-        (${K3}, 'u3', 'image', 'k3', '1950-01-01', '1950-12-31', ${DATASET})
+        (${K3}, 'u3', 'image', 'k3', '1950-01-01', '1950-12-31', ${DATASET}),
+        (${O1}, 'o1', 'text', 'k1', '1950-01-01', '1950-12-31', ${OTHER_DATASET})
     `);
   });
 
@@ -122,5 +129,14 @@ describe('tags ingestion', () => {
     expect(members.get('bridge_canal')).toEqual([K1, K2].sort());
     expect(members.get('birds_eye_view')).toEqual([K1]);
     expect(members.get('maps')).toEqual([K1]);
+  });
+
+  test('the same tagger over another dataset leaves this dataset\'s rows in place', async () => {
+    const before = await rowsFor('siglip-test');
+    const report = await ingest(FILE, { tagger: 'siglip-test', dataset: OTHER_DATASET });
+    expect(report.matched).toBe(1);
+    const after = await rowsFor('siglip-test');
+    expect(after.filter((r) => r.feature_id !== O1)).toEqual(before);
+    expect(after.filter((r) => r.feature_id === O1).map((r) => r.tag_id)).toEqual(['birds_eye_view', 'bridge_canal']);
   });
 });
