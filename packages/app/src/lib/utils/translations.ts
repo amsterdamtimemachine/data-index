@@ -7,6 +7,7 @@ const TRANSLATIONS: Record<string, string> = {
 	image: 'Afbeelding',
 	person: 'Persoon',
 	text: 'Tekst',
+	event: 'Evenement',
 
 	// Place types
 	address: 'Adres',
@@ -38,7 +39,26 @@ const TRANSLATIONS: Record<string, string> = {
 	// Entity fields
 	born: 'Geboren',
 	died: 'Overleden',
+	// screening event rows
+	programme: 'Programma',
+	film: 'Film',
+	performer: 'Optreden',
+	citation: 'Bron',
 	date: 'Datum',
+
+	// Months, for dates worded on cards
+	january: 'januari',
+	february: 'februari',
+	march: 'maart',
+	april: 'april',
+	may: 'mei',
+	june: 'juni',
+	july: 'juli',
+	august: 'augustus',
+	september: 'september',
+	october: 'oktober',
+	november: 'november',
+	december: 'december',
 	author: 'Auteur',
 
 	// Sorting

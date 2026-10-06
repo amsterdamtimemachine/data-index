@@ -70,6 +70,7 @@ export function createFeatureWriter(batchSize = 1000) {
           endDate: sql`excluded.end_date`,
           datasetId: sql`excluded.dataset_id`,
           entity: sql`excluded.entity`,
+          groupKey: sql`excluded.group_key`,
         },
       });
       featureBatch = [];

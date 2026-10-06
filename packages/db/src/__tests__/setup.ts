@@ -114,7 +114,7 @@ export async function setupTestDb() {
       label_tsv TSVECTOR GENERATED ALWAYS AS (to_tsvector('dutch', label)) STORED,
       description TEXT, content_url TEXT, start_date DATE, end_date DATE,
       dataset_id TEXT REFERENCES datasets(id),
-      temporal_frequency INTEGER, entity JSONB
+      temporal_frequency INTEGER, entity JSONB, group_key TEXT
     )
   `);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_features_dates ON features(start_date, end_date)`);

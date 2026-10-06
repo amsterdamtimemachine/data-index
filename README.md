@@ -208,7 +208,7 @@ erDiagram
 - **place_geometry**: A place's geometry (RD / EPSG:28992) and the period it was valid (1:1 with place)
 - **place_historical_name**: Dated past names linked to places (addresses, streets), used to show what a location was called at a given time. Undated Adamlink name variants (spelling variants, abbreviations, old names without a date) are kept too, as rows without a `since` or `until`: a row with a period is an observation of what the place was called then, a row without one is a label. The place search finds labels and shows the current name in brackets after them, while feature-to-place resolution and name canonicalisation consider dated rows only
 - **tags**: Classifier vocabulary, keyed by the classifier's own labels (e.g. `bridge_canal`); the app shows them in Dutch by id. Assigned to features through `feature_tags`, one row per feature, tag and tagger run (`source`). For now only images carry tags
-- **features**: Images, texts, persons, or other content items linked to places and displayed in the UI
+- **features**: Images, texts, persons and events linked to places and displayed in the UI. `group_key` ties features of one dataset together (a cinema's programmes carry the venue's permanent id); null for datasets without such a grouping
 - **place_cells**: Pre-computed spatial grid that powers the heatmap. Each place is mapped to the 100m cells its geometry covers (one cell for a point, many for a street or neighbourhood). Features inherit cell coverage through their place link, cell assignments are stored once per place rather than duplicated per feature.
 - **cell_features**: Which features occupy each cell, base time bin and category — the cell-major counterpart of `place_cells`, written by `rebuild-index`. It materialises the `features → feature_to_place → place → place_cells` hop plus the time bin, so the heatmap and histogram read one table instead of re-running that join per request. Each bucket holds its feature set as a **roaring bitmap** rather than a count: merging buckets is then a set union, which de-duplicates a feature spanning several cells or place types, so base cells can be rolled up into *any* display grid and still yield an exact distinct count. The bitmap stores `features.feature_int_id`, a dense integer surrogate (roaringbitmap holds int4; `features.id` is a 128-bit uuid), so an external id set built on the same column — text-search matches, a tag's `tag_features` bitmap — can be intersected with the buckets.
 - **feature_tags** / **tag_features**: Classifier tags per feature. `feature_tags` holds one row per feature, tag and `source` (the tagger run that produced it, e.g. `siglip2-baseline-v1`), so re-ingesting a tagger replaces only its own rows. `tag_features` is the query-side rollup, one roaring bitmap of `feature_int_id` per tag unioned over every tagger, rebuilt by `rebuild-index` like `cell_features`, so tags follow the same rule as every other ingest. A tag filter is then a single bitmap intersection against each `cell_features` bucket, the same path a text search takes.
@@ -352,6 +352,7 @@ Ingestion reads files from a local data directory; how you obtain each differs b
   Splitting fetch from ingest keeps ingestion offline and reproducible and pins each PDOK snapshot as an inspectable file; re-run a fetch to refresh it.
 - **Feature datasets (Beeldbank, Joods Monument, Delpher)** — currently private derivatives of mostly-public source collections, so they are not publicly distributable.
 - **Classifier tags (optional)** — the output of a tagger run over an ingested dataset, as JSONL with one row per record: `{"id": <the dataset's natural key>, "tags": ["<tag id>", ...]}`. The id must be the same natural key the dataset's ingestor derives feature ids from (for Beeldbank the record's identifier, not its image URL); if the classifier emits another key, convert the file first. One file per run, ingested with that run's id as `--tagger`.
+- **Cinema Context programmes** — exported from the Cinema Context database dump with a script kept next to the dump (`export_cinema_context.py`, in the data project), as JSONL with one programme per line: its permanent id, date, title, venue with address and coordinates, the bill and the newspaper sources. Amsterdam only by default.
 
 All files land in the data directory; the ingestion steps below read them.
 
@@ -586,6 +587,7 @@ etl -s pdok-places -f /data/bag-addresses.ndjson
 etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
+etl -s cinema-context -f /data/cinema-context.jsonl
 etl -s tags -f /data/siglip2-baseline-v1.natural-key.jsonl --tagger siglip2-baseline-v1 --dataset beeldbank   # optional: classifier tags, keyed by natural keys
 
 # required, or the map stays empty; raise DB_STATEMENT_TIMEOUT_MS in .env if it times out
@@ -640,6 +642,7 @@ etl -s pdok-places -f /data/bag-addresses.ndjson
 etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
+etl -s cinema-context -f /data/cinema-context.jsonl
 etl -s tags -f /data/siglip2-baseline-v1.natural-key.jsonl --tagger siglip2-baseline-v1 --dataset beeldbank   # optional: classifier tags, keyed by natural keys
 $DC run --rm app bun run db:rebuild-index
 

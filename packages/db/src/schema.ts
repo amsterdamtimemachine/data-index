@@ -140,9 +140,13 @@ export const features = pgTable('features', {
   datasetId: text('dataset_id').notNull().references(() => datasets.id),
   temporalFrequency: integer('temporal_frequency'),
   entity: jsonb('entity'),
+  // features of one dataset sharing a key belong together (a cinema's programmes:
+  // the venue's permanent id); null for datasets without such a grouping
+  groupKey: text('group_key'),
 }, (table) => [
   index('idx_features_dates').on(table.startDate, table.endDate),
   index('idx_features_record_type').on(table.recordType),
+  index('idx_features_group_key').on(table.datasetId, table.groupKey),
   uniqueIndex('idx_features_int_id').on(table.featureIntId),
   index('idx_features_label_fts').using('gin', table.labelTsv)
 ]);

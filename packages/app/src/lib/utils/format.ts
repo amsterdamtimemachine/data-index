@@ -28,6 +28,22 @@ export function formatDateRange(date: string): string {
 	return formatDate(date);
 }
 
+const MONTH_KEYS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+
+/**
+ * Word a date at the precision it was recorded: "5 januari 1934" for YYYY-MM-DD,
+ * "januari 1934" for YYYY-MM, "1934" for YYYY. Anything else comes back as is.
+ */
+export function formatPartialDate(date: string): string {
+	const match = date.match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/);
+	if (!match) return date;
+	const [, year, month, day] = match;
+	if (!month) return year;
+	const monthName = translate(MONTH_KEYS[parseInt(month, 10) - 1] ?? '');
+	if (!day) return `${monthName} ${year}`;
+	return `${parseInt(day, 10)} ${monthName} ${year}`;
+}
+
 export function formatDatasetTitle(title: string): string {
 	return title
 		.replace(/_/g, ' ')

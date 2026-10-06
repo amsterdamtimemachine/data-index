@@ -37,6 +37,14 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
 
     protected abstract transform(source: SourceRecord): Draft | undefined;
 
+    /**
+     * The entity factory for this source: by default the one the record type maps to.
+     * A source whose entity shape is its own (a screening under the event type) overrides this.
+     */
+    protected entityFactory(): EntityFactory<EntityBase> {
+        return createEntityFactory(this.RECORD_TYPE)
+    }
+
     protected pi: PlaceIndex<SourceRecord> | undefined;
     protected ef: EntityFactory<EntityBase> | undefined;
     protected fr: FileReader<SourceRecord> | undefined;
@@ -149,7 +157,7 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
         await this.upsertDatasource();
 
         this.pi = await PlaceIndex.create(this.PLACE_EXTRACTION_METHODS)
-        this.ef = createEntityFactory(this.RECORD_TYPE)
+        this.ef = this.entityFactory()
         this.writer = createFeatureWriter(this.BATCH_SIZE)
         this.fr = new FileReader()
 

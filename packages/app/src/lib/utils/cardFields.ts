@@ -1,5 +1,5 @@
-import type { Entity, PersonEntity, MediaObjectEntity, FeatureResult } from '@atm/shared/types';
-import { formatDate, formatDateRange, formatDatasetTitle } from './format';
+import type { Entity, PersonEntity, MediaObjectEntity, ScreeningEventEntity, FeatureResult } from '@atm/shared/types';
+import { formatDate, formatDateRange, formatPartialDate, formatDatasetTitle } from './format';
 import { translate } from './translations';
 
 /** One label:value row on a card. `href` turns the value into a link; `label` is a translate() key. */
@@ -7,13 +7,19 @@ export type FieldRow = { label: string; value: string; href?: string };
 
 const isPerson = (e: Entity): e is PersonEntity => e.type === 'Person';
 const isMedia = (e: Entity): e is MediaObjectEntity => e.type === 'MediaObject';
+const isScreening = (e: Entity): e is ScreeningEventEntity => e.type === 'ScreeningEvent';
 
 const withPlace = (date?: string, place?: string) =>
 	date ? `${formatDate(date)}${place ? `, ${place}` : ''}` : translate('unknown');
 
 type CardFieldSpec = {
 	label: string;
-	value: (entity: Entity) => string | null; // formatted value; null hides the row
+	// formatted value; null hides the row
+	value: (entity: Entity) => string | null;
+	// a link for the value
+	href?: (entity: Entity) => string | undefined;
+	// one row per item, for a field that repeats (the films on a bill); the label and value are per row
+	rows?: (entity: Entity) => FieldRow[];
 	summary?: boolean; // also show on the collapsed card, not just the expanded detail
 };
 
@@ -32,15 +38,31 @@ const CARD_FIELDS: Partial<Record<Entity['type'], CardFieldSpec[]>> = {
 		{ label: 'date', value: (e) => (isMedia(e) ? (e.dateCreated ? formatDateRange(e.dateCreated) : translate('unknown')) : null) },
 		{ label: 'author', value: (e) => (isMedia(e) ? e.author || translate('unknown') : null) },
 	],
+	ScreeningEvent: [
+		{ label: 'date', value: (e) => (isScreening(e) ? formatPartialDate(e.startDate) : null), summary: true },
+		{ label: 'programme', value: (e) => (isScreening(e) ? e.alternateName ?? null : null) },
+		{ label: 'film', value: () => null, summary: true, rows: (e) => (isScreening(e) ? e.workPresented.map((m) => ({ label: 'film', value: m.name, href: m.url })) : []) },
+		{ label: 'performer', value: (e) => (isScreening(e) ? e.performer ?? null : null), summary: true },
+		{ label: 'citation', value: (e) => (isScreening(e) && e.citation ? e.citation.join(', ') : null) },
+	],
 };
 
 /** Entity fields to render for the given mode (collapsed keeps only `summary` fields). */
 export function resolveCardFields(entity: Entity, expanded: boolean): FieldRow[] {
 	const specs = CARD_FIELDS[entity.type] ?? [];
-	return specs
-		.filter((s) => expanded || s.summary)
-		.map((s) => ({ label: s.label, value: s.value(entity) }))
-		.filter((f): f is FieldRow => f.value != null);
+	const fields: FieldRow[] = [];
+	for (const spec of specs) {
+		if (!expanded && !spec.summary) continue;
+		if (spec.rows) {
+			fields.push(...spec.rows(entity));
+			continue;
+		}
+		const value = spec.value(entity);
+		if (value == null) continue;
+		const href = spec.href ? spec.href(entity) : undefined;
+		fields.push({ label: spec.label, value, href });
+	}
+	return fields;
 }
 
 /** Data-source rows (provider/dataset/place provider). Detail-only, so empty when collapsed. */

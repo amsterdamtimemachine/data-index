@@ -1,6 +1,6 @@
 import type { HeatmapCellBounds } from './heatmap';
 
-export type RecordType = 'image' | 'text' | 'person' | 'unknown';
+export type RecordType = 'image' | 'text' | 'person' | 'event' | 'unknown';
 
 // 'sample' and 'spatialFrequency' interleave record types and datasets (double
 // rotation); 'date' is flat chronology; 'relevance' is the legacy blended score
@@ -26,7 +26,7 @@ export interface MatchFilters {
  */
 export interface EntityBase {
   id?: string;
-  type: "Person" | "CreativeWork" | "MediaObject";
+  type: "Person" | "CreativeWork" | "MediaObject" | "ScreeningEvent";
   name: string;
 }
 
@@ -49,8 +49,48 @@ export interface MediaObjectEntity extends CreativeWorkEntity {
   contentUrl: string;
 }
 
+export interface MovieEntity {
+  type: "Movie";
+  name: string;
+  url?: string;
+  dateCreated?: string;
+  countryOfOrigin?: string;
+  director?: string;
+  productionCompany?: string;
+}
+
+/**
+ * The venue of a screening; identifier is its permanent id at the source. The type
+ * follows the source's venue kind: a cinema or a travelling cinema is a MovieTheater,
+ * a theatre a PerformingArtsTheater, a hall, club premises or an unknown kind an
+ * EventVenue. additionalType keeps the source's own wording.
+ */
+export interface VenueEntity {
+  type: "MovieTheater" | "PerformingArtsTheater" | "EventVenue";
+  name: string;
+  identifier: string;
+  additionalType?: string;
+  address?: string;
+  url?: string;
+}
+
+/** One programme: a screening at a venue on a date, with its bill. */
+export interface ScreeningEventEntity extends EntityBase {
+  type: "ScreeningEvent";
+  // the programme's own title where the source has one
+  alternateName?: string;
+  // source precision: YYYY-MM-DD, or YYYY-MM for a partial date
+  startDate: string;
+  location: VenueEntity;
+  workPresented: MovieEntity[];
+  // a live act on the bill, as the source words it
+  performer?: string;
+  // the newspapers the programme was taken from
+  citation?: string[];
+}
+
 /** Discriminated union of all concrete entity types. */
-export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity;
+export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity | ScreeningEventEntity;
 
 
 /**
