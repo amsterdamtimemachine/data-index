@@ -44,6 +44,17 @@ export function formatPartialDate(date: string): string {
 	return `${parseInt(day, 10)} ${monthName} ${year}`;
 }
 
+/** The day and month of a partial date, for rows under a year: "5 januari", "januari", or nothing for a bare year. */
+export function formatDateInYear(date: string): string {
+	const match = date.match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/);
+	if (!match) return date;
+	const [, , month, day] = match;
+	if (!month) return '';
+	const monthName = translate(MONTH_KEYS[parseInt(month, 10) - 1] ?? '');
+	if (!day) return monthName;
+	return `${parseInt(day, 10)} ${monthName}`;
+}
+
 export function formatDatasetTitle(title: string): string {
 	return title
 		.replace(/_/g, ' ')

@@ -83,7 +83,7 @@ describe('cinema-context ingestion', () => {
     expect(first.type).toBe('ScreeningEvent');
     expect(first.id).toBe('V000001');
     expect(first.alternateName).toBe('jeugdbioscoop');
-    expect(first.location).toEqual({ type: 'MovieTheater', name: 'Rialto', identifier: 'B000001', additionalType: 'Cinema', address: 'Ceintuurbaan 338-340' });
+    expect(first.location).toEqual({ type: 'MovieTheater', name: 'Rialto', identifier: 'B000001', additionalType: 'Cinema', address: 'Ceintuurbaan 338-340', url: 'https://cinemacontext.nl/id/B000001' });
     expect(first.workPresented).toEqual([{ type: 'Movie', name: 'Skippy (1931)', url: 'https://cinemacontext.nl/id/F000001', dateCreated: '1931', countryOfOrigin: 'USA' }]);
     expect(first.citation).toEqual(['Telegraaf']);
     expect(first.performer).toBeUndefined();

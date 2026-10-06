@@ -72,9 +72,16 @@
 					<!-- Hidden title for accessibility -->
 					<h2 use:melt={$title} class="sr-only">Feature Detail Viewer</h2>
 
-					<!-- Scrollable content area -->
-					<div class="overflow-y-auto flex-1 min-h-0">
-						<FeatureCard feature={selectedFeature} expanded={true} />
+					<!-- the card caps itself at this height and scrolls its content region;
+					     the overflow here is only a fallback -->
+					<div class="flex flex-col flex-1 min-h-0 overflow-y-auto">
+						<FeatureCard
+							feature={selectedFeature}
+							expanded={true}
+							groupYear={featureViewerState.selectedYear}
+							groupMembers={featureViewerState.yearFeatures}
+							onYearSelect={featureViewerState.selectYear}
+						/>
 					</div>
 				</div>
 			</div>

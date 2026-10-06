@@ -127,6 +127,10 @@ export const features = pgTable('features', {
   // roaring-bitmap surrogate: bitmaps hold int4 and id is a uuid. DB-assigned on
   // insert; only build-cell-features and the search-bitmap helper may read it.
   featureIntId: integer('feature_int_id').generatedAlwaysAsIdentity(),
+  // the surrogate the bitmaps store for a grouped feature: the smallest
+  // feature_int_id of its dataset and group_key, so a group counts once. Written by
+  // rebuild-index, null without a group_key.
+  groupIntId: integer('group_int_id'),
   url: text('url').notNull(),
   recordType: text('record_type').notNull(),
   label: text('label').notNull(),

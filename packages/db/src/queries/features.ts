@@ -10,6 +10,7 @@ import type {
   FeatureResult,
   FeaturesResponse,
   Entity,
+  ScreeningEventEntity,
 } from '@atm/shared';
 import { computeTimeSlices } from './time-slices';
 import { getRecordTypes } from './record-types';
@@ -52,6 +53,10 @@ type FeatureRow = {
   geometry_provider_label: string | null;
   geometry_url: string | null;
   tags: string[] | null;
+  dataset_id: string | null;
+  group_key: string | null;
+  member_count: string | null;
+  group_years: Array<{ year: number; count: number }> | null;
 };
 
 /**
@@ -168,7 +173,7 @@ const INTERLEAVED_ORDER = sql`type_rank, record_type, id`;
  * With no tags selected every w is 1 and this is a plain uniform shuffle.
  */
 function sampleKey(seed: string): SQL {
-  const u = sql`((('x' || substr(md5(id::text || ${seed}), 1, 7))::bit(28)::int + 1) / 268435456.0)`;
+  const u = sql`((('x' || substr(md5(group_id || ${seed}), 1, 7))::bit(28)::int + 1) / 268435456.0)`;
   return sql`-ln(${u}) / power(2, tag_matches)`;
 }
 
@@ -221,6 +226,31 @@ function sortPlan(
     laneKey = sql`relevance_score DESC NULLS LAST, start_date DESC NULLS LAST`;
   }
   return { rankedCte: singleRotationCte(laneKey), orderBy: INTERLEAVED_ORDER };
+}
+
+// a group has no page of its own at the source; its members have theirs
+function groupUrl(row: FeatureRow): string | undefined {
+  if (row.group_key) {
+    return undefined;
+  }
+  return row.url || undefined;
+}
+
+// a group's row is an EventSeries over its members: the venue from the earliest
+// member's entity, the span and the years from the population
+function groupEntity(row: FeatureRow): Entity | undefined {
+  if (!row.group_key) {
+    return row.entity || undefined;
+  }
+  const member = row.entity as ScreeningEventEntity | null;
+  return {
+    type: 'EventSeries',
+    name: row.label,
+    location: member?.location ?? { type: 'EventVenue', name: row.label, identifier: row.group_key },
+    startDate: row.start_date ?? '',
+    endDate: row.end_date ?? '',
+    years: row.group_years ?? [],
+  };
 }
 
 /**
@@ -321,9 +351,13 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       AND ${placeTypeCondition}
       AND ${searchCondition}`;
 
+  // A dataset's features sharing a group key are one row of the list (a cinema's
+  // programmes); the rest are their own group.
+  const groupIdExpr = sql`COALESCE(f.dataset_id || ':' || f.group_key, f.id::text)`;
+
   // Get total count
   const countResult = await db.execute<CountRow>(sql`
-    SELECT COUNT(DISTINCT f.id) as count
+    SELECT COUNT(DISTINCT ${groupIdExpr}) as count
     ${featureSpine}
     WHERE ${featureWhere}
   `);
@@ -340,12 +374,15 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
 
   const { rankedCte, orderBy } = sortPlan(sort, sortDirection, seed);
 
-  // filtered/ranked/page decide membership and order on narrow rows; the final
-  // SELECT joins the presentation columns for just the page's rows.
+  // members/filtered/ranked/page decide membership and order on narrow rows; the
+  // final SELECT joins the presentation columns for just the page's rows. A group
+  // is represented by its earliest member and spans all of them.
   const result = await db.execute<FeatureRow>(sql`
-    WITH filtered AS (
+    WITH members AS (
       SELECT DISTINCT ON (f.id)
         f.id,
+        ${groupIdExpr} as group_id,
+        f.group_key,
         f.record_type,
         f.dataset_id,
         f.start_date,
@@ -370,6 +407,20 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       ORDER BY f.id,
         CASE p.type WHEN 'address' THEN 0 WHEN 'street' THEN 1 WHEN 'neighbourhood' THEN 2 ELSE 3 END,
         p.id
+    ),
+    filtered AS (
+      SELECT DISTINCT ON (group_id)
+        id, group_id, group_key, record_type, dataset_id,
+        MIN(start_date) OVER w as start_date,
+        MAX(end_date) OVER w as end_date,
+        spatial_frequency, temporal_frequency, relevance_score,
+        MAX(match_score) OVER w as match_score,
+        MAX(tag_matches) OVER w as tag_matches,
+        place_type, place_id, relation_id,
+        COUNT(*) OVER w as member_count
+      FROM members
+      WINDOW w AS (PARTITION BY group_id)
+      ORDER BY group_id, members.start_date ASC NULLS LAST, id
     ),
     ${rankedCte},
     page AS (
@@ -415,7 +466,19 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         WHERE ft.feature_id = page.id
         GROUP BY ft.tag_id
         ORDER BY ${tagOrderExpr}
-      ) as tags
+      ) as tags,
+      page.dataset_id,
+      page.group_key,
+      page.member_count,
+      CASE WHEN page.group_key IS NOT NULL THEN (
+        SELECT jsonb_agg(jsonb_build_object('year', y.year, 'count', y.count) ORDER BY y.year)
+        FROM (
+          SELECT EXTRACT(YEAR FROM m.start_date)::int as year, COUNT(*) as count
+          FROM members m
+          WHERE m.group_id = page.group_id
+          GROUP BY 1
+        ) y
+      ) END as group_years
     FROM page
     JOIN features f ON f.id = page.id
     JOIN ${place} p ON p.id = page.place_id
@@ -430,7 +493,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   // Transform results
   const data: FeatureResult[] = result.rows.map(row => ({
     id: row.id,
-    url: row.url || undefined,
+    url: groupUrl(row),
     recordType: row.record_type,
     placeType: row.place_type,
     label: row.label,
@@ -441,13 +504,15 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       row.end_date ? parseInt(row.end_date.slice(0, 4), 10) : 0
     ] as [number, number],
     tags: row.tags || [],
+    datasetId: row.dataset_id || undefined,
+    groupKey: row.group_key || undefined,
     datasetLabel: row.dataset_label || undefined,
     datasetUrl: row.dataset_url || undefined,
     organisationLabel: row.organisation_label || undefined,
     organisationUrl: row.organisation_url || undefined,
     spatialFrequency: row.spatial_frequency || 1,
     temporalFrequency: row.temporal_frequency || 1,
-    entity: row.entity || undefined,
+    entity: groupEntity(row),
     relationId: row.relation_id || undefined,
     displayName: row.name || undefined,
     placeSource: row.place_source || undefined,

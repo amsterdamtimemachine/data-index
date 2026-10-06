@@ -134,7 +134,11 @@
 	{/if}
 	{#if !initialLoading && totalCount > 0}
 		<div class="header-count">
-			<FeaturesCount totalFeatures={totalCount} {currentPage} featuresPerPage={pageSize} {populationLabel} />
+			<FeaturesCount count={totalCount} {currentPage} perPage={pageSize}>
+				{#snippet children(shown)}
+					{translate('showing')} {shown} {translate('featureMany')} {populationLabel}
+				{/snippet}
+			</FeaturesCount>
 		</div>
 		{#if hasPagination}
 			<!-- pagination builder captures count/perPage once -->

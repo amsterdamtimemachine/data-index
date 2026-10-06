@@ -3,6 +3,7 @@
 	import { mergeCss } from '$utils/utils';
 	import { formatTimePeriod } from '$utils/format';
 	import { translate } from '$utils/translations';
+	import { entityKind } from '$utils/cardFields';
 	import Tag from './Tag.svelte';
 	import Link from './Link.svelte';
 	import Button from './Button.svelte';
@@ -16,6 +17,16 @@
 	};
 
 	let { feature, class: className, expanded = false, onExpand }: Props = $props();
+
+	// the record type, with the entity's subtype in brackets where it has one:
+	// "Evenement (Bioscoop)". Filters know the type only, so the word stays theirs.
+	const typeLabel = $derived.by(() => {
+		const kind = entityKind(feature.entity);
+		if (kind) {
+			return `${translate(feature.recordType)} (${translate(kind)})`;
+		}
+		return translate(feature.recordType);
+	});
 </script>
 
 <div class={mergeCss('border-b border-atm-sand-border', className)}>
@@ -25,10 +36,10 @@
 			<!-- Record type — links to the feature's source record when it has one -->
 			{#if feature.url}
 				<Link href={feature.url} target="_blank" rel="noopener noreferrer" class="no-underline flex-shrink-0">
-					<Tag variant="link" interactive>{translate(feature.recordType)}</Tag>
+					<Tag variant="link" interactive>{typeLabel}</Tag>
 				</Link>
 			{:else}
-				<Tag variant="outline" class="flex-shrink-0">{translate(feature.recordType)}</Tag>
+				<Tag variant="outline" class="flex-shrink-0">{typeLabel}</Tag>
 			{/if}
 			<!-- Place type — links to the place's source record when it has one -->
 			{#if feature.placeType}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { HistogramBin } from '@atm/shared/types';
 	import { translate } from '$utils/translations';
+	import DataTooltip from '$components/DataTooltip.svelte';
 
 	type Props = {
 		bin: HistogramBin;
@@ -26,10 +27,7 @@
 	<div class="font-medium text-atm-red">{count} {pluralised(count)} {translate('inSelection')}</div>
 {/snippet}
 
-<div
-	class="fixed z-50 bg-black bg-opacity-80 text-white px-2 py-1 rounded text-sm pointer-events-none transform -translate-x-1/2 -translate-y-full"
-	style="left: {x}px; top: {y - 8}px;"
->
+<DataTooltip {x} {y}>
 	{#if localCount !== null}
 		{@render selectionLine(localCount)}
 	{:else}
@@ -39,4 +37,4 @@
 		{/if}
 	{/if}
 	<div class="text-xs opacity-75">{translate('periodLabel')}: {bin.timeSlice.label}</div>
-</div>
+</DataTooltip>

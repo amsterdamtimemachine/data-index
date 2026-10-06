@@ -34,13 +34,18 @@ const TRANSLATIONS: Record<string, string> = {
 
 	// Relations
 	isAbout: 'Gaat over',
+	location: 'Gevestigd op',
+
+	// venue kinds (Schema.org types of an event's location)
+	MovieTheater: 'Bioscoop',
+	PerformingArtsTheater: 'Theater',
+	EventVenue: 'Andere',
 	hadLastLivingLocation: 'Laatste woonadres',
 
 	// Entity fields
 	born: 'Geboren',
 	died: 'Overleden',
 	// screening event rows
-	programme: 'Programma',
 	film: 'Film',
 	performer: 'Optreden',
 	citation: 'Bron',
@@ -93,6 +98,13 @@ const TRANSLATIONS: Record<string, string> = {
 	// the timeline hover
 	featureOne: 'feature',
 	featureMany: 'features',
+	showing: 'Toont',
+	// a group card's count rows and its failed year load
+	screenings: 'Vertoningen',
+	venue: 'Locatie',
+	screeningsIn: 'vertoningen in',
+	groupYearFailedTitle: 'Programma niet geladen',
+	groupYearFailed: 'Het programma van dit jaar kon niet worden geladen.',
 	inSelection: 'in de selectie',
 	periodLabel: 'Periode',
 	showPlaceFeatures: 'Features van deze plek tonen',

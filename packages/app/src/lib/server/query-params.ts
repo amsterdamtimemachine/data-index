@@ -130,3 +130,29 @@ export function parseGridCols(url: URL): number {
 	if (isNaN(parsed)) return DISPLAY_GRID_DEFAULT_COLS;
 	return Math.min(Math.max(parsed, DISPLAY_GRID_MIN_COLS), DISPLAY_GRID_MAX_COLS);
 }
+
+/**
+ * A group request (`/api/features/group`): the dataset, the group key and an
+ * inclusive date window, all required; a 400 names the first one missing or
+ * malformed. Dates are YYYY-MM-DD so they bind straight to date columns.
+ */
+export type GroupRequest = { datasetId: string; groupKey: string; start: string; end: string };
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function parseGroupRequest(url: URL): GroupRequest {
+	const datasetId = url.searchParams.get('dataset')?.trim().slice(0, 512);
+	const groupKey = url.searchParams.get('groupKey')?.trim().slice(0, 512);
+	const start = url.searchParams.get('start');
+	const end = url.searchParams.get('end');
+	if (!datasetId || !groupKey) {
+		throw error(400, { code: 'MISSING_GROUP', message: 'Missing required dataset or groupKey parameter' });
+	}
+	if (!start || !end || !ISO_DATE.test(start) || !ISO_DATE.test(end)) {
+		throw error(400, { code: 'INVALID_WINDOW', message: 'start and end must be YYYY-MM-DD dates' });
+	}
+	if (start > end) {
+		throw error(400, { code: 'INVALID_WINDOW', message: 'start must not be after end' });
+	}
+	return { datasetId, groupKey, start, end };
+}

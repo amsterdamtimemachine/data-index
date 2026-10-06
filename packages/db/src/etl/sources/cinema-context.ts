@@ -26,7 +26,7 @@ type CinemaContextRecord = {
   date: string | null;
   programme_title: string | null;
   first_sound: boolean;
-  venue: { perm_id: string | null; name: string | null; type: string | null; schema_type: string | null; address: string | null; city: string | null };
+  venue: { perm_id: string | null; url: string | null; name: string | null; type: string | null; schema_type: string | null; address: string | null; city: string | null };
   geom_wkt: string;
   items: Array<{ title?: string; film_perm_id?: string; url?: string; year?: string; country?: string; director?: string; production_company?: string; live?: string }>;
   sources: string[];
@@ -72,8 +72,9 @@ export class CinemaContextIngestor extends Ingestor<CinemaContextRecord> {
   protected DATASET_URL = 'https://cinemacontext.nl';
 
   protected RECORD_TYPE: RecordType = 'event';
-  protected RELATION_ID = 'isAbout';
-  protected RELATION_LABEL = 'Is About';
+  // a venue is at its address, not about it (Schema.org Event.location)
+  protected RELATION_ID = 'location';
+  protected RELATION_LABEL = 'Location';
 
   protected PLACE_EXTRACTION_METHODS: ExtractionArgs<CinemaContextRecord> = [
     { method: PlaceExtractionMethod.WKT, column: 'geom_wkt' }

@@ -156,7 +156,7 @@ export async function searchPlaces(query: string, options: PlaceSearchOptions = 
       page.matched_name, page.matched_since::text, page.matched_until::text,
       page.matched_historical, page.matched_name_id,
       page.geometry_since::text, page.geometry_until::text,
-      (SELECT COUNT(*) FROM feature_to_place fp WHERE fp.place_id = page.id) AS feature_count,
+      (SELECT COUNT(DISTINCT COALESCE(f.group_int_id, f.feature_int_id)) FROM feature_to_place fp JOIN features f ON f.id = fp.feature_id WHERE fp.place_id = page.id) AS feature_count,
       ${cells} AS cells
     FROM page
     ORDER BY ${SEARCH_ORDER}
@@ -181,7 +181,7 @@ export async function getPlaceById(placeId: string, options: PlaceByIdOptions = 
       (h.id IS NOT NULL) AS matched_historical,
       h.id AS matched_name_id,
       pg.since::text AS geometry_since, pg.until::text AS geometry_until,
-      (SELECT COUNT(*) FROM feature_to_place fp WHERE fp.place_id = page.id) AS feature_count,
+      (SELECT COUNT(DISTINCT COALESCE(f.group_int_id, f.feature_int_id)) FROM feature_to_place fp JOIN features f ON f.id = fp.feature_id WHERE fp.place_id = page.id) AS feature_count,
       ${cells} AS cells
     FROM place page
     LEFT JOIN place_historical_name h ON h.id = ${nameId} AND h.place_id = page.id

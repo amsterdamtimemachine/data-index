@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { PlaceSearchMatch } from '@atm/shared/types';
-import { formatPlaceWindow, formatPlaceName, formatPlaceTitle, formatPartialDate } from './format';
+import { formatPlaceWindow, formatPlaceName, formatPlaceTitle, formatPartialDate, formatDateInYear } from './format';
 
 function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 	return {
@@ -87,5 +87,13 @@ describe('formatPartialDate', () => {
 
 	test('leaves anything it cannot read as it is', () => {
 		expect(formatPartialDate('1910-01-174')).toBe('1910-01-174');
+	});
+});
+
+describe('formatDateInYear', () => {
+	test('drops the year and keeps the precision', () => {
+		expect(formatDateInYear('1934-01-05')).toBe('5 januari');
+		expect(formatDateInYear('1907-05')).toBe('mei');
+		expect(formatDateInYear('1928')).toBe('');
 	});
 });

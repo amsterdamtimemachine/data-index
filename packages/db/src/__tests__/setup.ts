@@ -110,6 +110,7 @@ export async function setupTestDb() {
     CREATE TABLE IF NOT EXISTS features (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       feature_int_id INTEGER GENERATED ALWAYS AS IDENTITY,
+      group_int_id INTEGER,
       url TEXT, record_type TEXT NOT NULL, label TEXT NOT NULL,
       label_tsv TSVECTOR GENERATED ALWAYS AS (to_tsvector('dutch', label)) STORED,
       description TEXT, content_url TEXT, start_date DATE, end_date DATE,

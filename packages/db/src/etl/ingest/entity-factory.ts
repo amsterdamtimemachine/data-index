@@ -51,7 +51,7 @@ export class MediaObjectEntityFactory extends EntityFactory<MediaObjectEntity> {
 }
 
 // the source row's shape, as the cinema-context source reads it
-type ScreeningVenue = { perm_id?: string; name?: string; type?: string; schema_type?: string; address?: string };
+type ScreeningVenue = { perm_id?: string; url?: string; name?: string; type?: string; schema_type?: string; address?: string };
 type ScreeningItem = { title?: string; url?: string; year?: string; country?: string; director?: string; production_company?: string; live?: string };
 
 export class ScreeningEventEntityFactory extends EntityFactory<ScreeningEventEntity> {
@@ -95,6 +95,7 @@ export class ScreeningEventEntityFactory extends EntityFactory<ScreeningEventEnt
                 identifier: venue.perm_id ?? '',
                 ...(venue.type && { additionalType: venue.type }),
                 ...(venue.address && { address: venue.address }),
+                ...(venue.url && { url: venue.url }),
             },
             workPresented: films,
             ...(acts.length > 0 && { performer: acts.join('; ') }),

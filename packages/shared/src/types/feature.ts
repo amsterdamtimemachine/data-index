@@ -26,7 +26,7 @@ export interface MatchFilters {
  */
 export interface EntityBase {
   id?: string;
-  type: "Person" | "CreativeWork" | "MediaObject" | "ScreeningEvent";
+  type: "Person" | "CreativeWork" | "MediaObject" | "ScreeningEvent" | "EventSeries";
   name: string;
 }
 
@@ -39,6 +39,7 @@ export interface PersonEntity extends EntityBase {
 }
 
 export interface CreativeWorkEntity extends EntityBase {
+  type: "CreativeWork" | "MediaObject";
   dateCreated?: string;
   author?: string;
   url?: string;
@@ -89,8 +90,22 @@ export interface ScreeningEventEntity extends EntityBase {
   citation?: string[];
 }
 
+/**
+ * A dataset's features sharing a group key, as one row of the feature list: a
+ * cinema's programmes. Never stored; the list query derives it from the members in
+ * the population, so the span and the years follow the period and the filters.
+ */
+export interface EventSeriesEntity extends EntityBase {
+  type: "EventSeries";
+  location: VenueEntity;
+  startDate: string;
+  endDate: string;
+  // members per year, ascending
+  years: Array<{ year: number; count: number }>;
+}
+
 /** Discriminated union of all concrete entity types. */
-export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity | ScreeningEventEntity;
+export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity | ScreeningEventEntity | EventSeriesEntity;
 
 
 /**
@@ -155,7 +170,10 @@ export interface FeatureResult {
   contentUrl?: string;
   dateRange: [number, number];
   tags: string[]; // tag ids; the UI translates them
+  datasetId?: string;
   datasetLabel?: string;
+  // set on a group row: with datasetId, the key for /api/features/group
+  groupKey?: string;
   datasetUrl?: string;
   organisationLabel?: string;
   organisationUrl?: string;
@@ -173,6 +191,28 @@ export interface FeatureResult {
   // (e.g. an Adamlink street backfilled from NWB); links to that source record.
   geometryProviderLabel?: string;
   geometryUrl?: string;
+}
+
+/** The members of one group (a dataset's features sharing a group key) in a date window. */
+export interface GroupFeaturesQuery {
+  datasetId: string;
+  groupKey: string;
+  // inclusive, YYYY-MM-DD
+  start: string;
+  end: string;
+}
+
+export interface GroupFeature {
+  id: string;
+  url?: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+  entity?: Entity;
+}
+
+export interface GroupFeaturesResponse {
+  data: GroupFeature[];
 }
 
 /**

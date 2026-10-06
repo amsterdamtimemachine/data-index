@@ -180,8 +180,9 @@ erDiagram
         date end_date  "e.g. 1948-09-30 (histogram placement)"
         text dataset_id FK "e.g. stadsarchief-beeldbank"
         integer temporal_frequency  "e.g. 2 # base time bins spanned"
-        jsonb entity  "e.g. Person | CreativeWork | MediaObject"
+        jsonb entity  "e.g. Person | CreativeWork | MediaObject | ScreeningEvent"
         integer feature_int_id  "identity # the surrogate the bitmaps store"
+        integer group_int_id  "the group's smallest feature_int_id # rebuilt by rebuild-index"
         tsvector label_tsv  "generated from label # dutch FTS"
     }
 
@@ -209,8 +210,9 @@ erDiagram
 - **place_historical_name**: Dated past names linked to places (addresses, streets), used to show what a location was called at a given time. Undated Adamlink name variants (spelling variants, abbreviations, old names without a date) are kept too, as rows without a `since` or `until`: a row with a period is an observation of what the place was called then, a row without one is a label. The place search finds labels and shows the current name in brackets after them, while feature-to-place resolution and name canonicalisation consider dated rows only
 - **tags**: Classifier vocabulary, keyed by the classifier's own labels (e.g. `bridge_canal`); the app shows them in Dutch by id. Assigned to features through `feature_tags`, one row per feature, tag and tagger run (`source`). For now only images carry tags
 - **features**: Images, texts, persons and events linked to places and displayed in the UI. `group_key` ties features of one dataset together (a cinema's programmes carry the venue's permanent id); null for datasets without such a grouping
+- **relation** / **feature_to_place**: How a feature relates to a place, one row per link. Each source names its relation: an article or an image `isAbout` an address, a cinema's programme has its `location` there, a Joods Monument person `hadLastLivingLocation`. The card words the relation before the place name through the app's translation map
 - **place_cells**: Pre-computed spatial grid that powers the heatmap. Each place is mapped to the 100m cells its geometry covers (one cell for a point, many for a street or neighbourhood). Features inherit cell coverage through their place link, cell assignments are stored once per place rather than duplicated per feature.
-- **cell_features**: Which features occupy each cell, base time bin and category — the cell-major counterpart of `place_cells`, written by `rebuild-index`. It materialises the `features → feature_to_place → place → place_cells` hop plus the time bin, so the heatmap and histogram read one table instead of re-running that join per request. Each bucket holds its feature set as a **roaring bitmap** rather than a count: merging buckets is then a set union, which de-duplicates a feature spanning several cells or place types, so base cells can be rolled up into *any* display grid and still yield an exact distinct count. The bitmap stores `features.feature_int_id`, a dense integer surrogate (roaringbitmap holds int4; `features.id` is a 128-bit uuid), so an external id set built on the same column — text-search matches, a tag's `tag_features` bitmap — can be intersected with the buckets.
+- **cell_features**: Which features occupy each cell, base time bin and category — the cell-major counterpart of `place_cells`, written by `rebuild-index`. It materialises the `features → feature_to_place → place → place_cells` hop plus the time bin, so the heatmap and histogram read one table instead of re-running that join per request. Each bucket holds its feature set as a **roaring bitmap** rather than a count: merging buckets is then a set union, which de-duplicates a feature spanning several cells or place types, so base cells can be rolled up into *any* display grid and still yield an exact distinct count. The bitmap stores `features.feature_int_id`, a dense integer surrogate (roaringbitmap holds int4; `features.id` is a 128-bit uuid), so an external id set built on the same column — text-search matches, a tag's `tag_features` bitmap — can be intersected with the buckets. A grouped feature stores its `group_int_id` instead, the group's smallest member id, so a group is one entry in every bitmap and one count everywhere.
 - **feature_tags** / **tag_features**: Classifier tags per feature. `feature_tags` holds one row per feature, tag and `source` (the tagger run that produced it, e.g. `siglip2-baseline-v1`), so re-ingesting a tagger replaces only its own rows. `tag_features` is the query-side rollup, one roaring bitmap of `feature_int_id` per tag unioned over every tagger, rebuilt by `rebuild-index` like `cell_features`, so tags follow the same rule as every other ingest. A tag filter is then a single bitmap intersection against each `cell_features` bucket, the same path a text search takes.
 - **grid_config**: Single row (`id = 'current'`) of grid metadata written by `rebuild-index`: the RD/28992 grid origin (`min_x`, `min_y`), the base-cell index extent, the WGS84 bounds of the cell grid, and the max spatial/temporal frequencies used to normalise relevance. Read once per heatmap/feature request.
 
@@ -279,6 +281,14 @@ The cell view sorts features in one of seven modes. All modes are deterministic.
 - **Relevance** ("Relevantie" in the UI). The blended `relevance_score` above, with the record type rotation. Features most unique to the time and place come first.
 - **Beste match**. Offered while a search term or topics are active. Ranks by the number of selected tags a feature matches first, then by how well its title matches the search term (`ts_rank`), with the record type rotation. A URL carrying `sort=bestMatch` keeps it until neither a term nor tags remain.
 - **Oldest / newest**. Plain chronological order on `start_date`. No rotation. An explicit date sort returns true chronology, even when that puts several items of one type in a row.
+
+### Grouped features
+
+A dataset can tie features together with `features.group_key`: a cinema's programmes carry the venue's permanent id. The feature list shows such a group as one row rather than one row per member, so a cell with a cinema lists the cinema once, and the index counts it once too: `rebuild-index` gives every member the group's smallest `feature_int_id` as its `group_int_id`, and the cell, tag and text-search bitmaps store that id, so a hover count, a timeline bar, a tag count and the panel's count all say the same number of cards. The volume of a cinema's programmes shows on its card, not on the map. Features without a key are their own row, as before.
+
+The group row is built from the members in the request's population, so it follows the cell or place, the period and the filters: its label is the venue's name, its date range spans the earliest and latest member, it has no source link of its own, and its entity is an `EventSeries` holding the venue and the members per year, which the card's year strip draws. Counting, sorting and paging run over groups; the sample shuffle seeds on the group's key.
+
+`/api/features/group` returns the members of one group in a date window, in date order, for the year a card shows: `dataset`, `groupKey`, `start` and `end` (both `YYYY-MM-DD`, inclusive) are all required. It reads the `(dataset_id, group_key)` index without joins and its result is immutable for a window, so it is cached for a day.
 
 `/api/features` accepts `sort` (`sample` / `relevance` / `spatialFrequency` / `datePrecision` / `date` / `bestMatch`), `sortDirection`, and `seed`. `sort` defaults to `sample`. `seed` is optional: without one the sample order is fixed and reproducible, and every request without a seed gets the same order. With a tag selection, the sample shuffle is weighted: a feature carrying one more of the selected tags is twice as likely to come earlier, so richer matches drift up without fixing the order. `bestMatch` orders by match quality: the number of selected `tags` a feature carries first, then its rank against the `q` text search; it is only meaningful together with at least one of them.
 
@@ -444,7 +454,8 @@ Ingestion is idempotent and source-driven: corrections are made in the **source 
 | `GET /api/metadata` | Time slices, record types, place types, datasets, tags |
 | `GET /api/heatmaps` | Sparse heatmap data with grid dimensions |
 | `GET /api/histogram` | Feature count distribution by time period |
-| `GET /api/features` | Paginated features within geographic bounds or the display cells of a place |
+| `GET /api/features` | Paginated features within geographic bounds or the display cells of a place; a dataset's features sharing a `group_key` are one row |
+| `GET /api/features/group` | The members of one group in a date window |
 | `GET /api/available-tags` | Every tag with its feature count under the request's filters |
 | `GET /api/places` | Place name search and place lookup for the search filter |
 
