@@ -4,6 +4,16 @@ export type { VenueKind } from '../vocab/venues';
 
 export type RecordType = 'image' | 'text' | 'person' | 'event' | 'story' | 'unknown';
 
+/** Who produced data, after PROV: an institution, a classifier run, a person. */
+export type AgentKind = 'Organization' | 'SoftwareAgent' | 'Person';
+
+/** A classifier model that tagged a feature, with its page (model card or repository). */
+export interface Classifier {
+  id: string;
+  label: string;
+  url?: string;
+}
+
 // 'sample' and 'spatialFrequency' interleave record types and datasets (double
 // rotation); 'date' is flat chronology; 'relevance' is the legacy blended score
 // (API-only, no UI entry); 'bestMatch' is flat ts_rank order, only meaningful with
@@ -192,13 +202,15 @@ export interface FeatureResult {
   contentUrl?: string;
   dateRange: [number, number];
   tags: string[]; // tag ids; the UI translates them
+  // the classifier models behind the tags, one row each on the card
+  classifiers: Classifier[];
   datasetId?: string;
   datasetLabel?: string;
   // set on a group row: with datasetId, the key for /api/features/group
   groupKey?: string;
   datasetUrl?: string;
-  organisationLabel?: string;
-  organisationUrl?: string;
+  providerLabel?: string;
+  providerUrl?: string;
   spatialFrequency: number;
   temporalFrequency: number;
   entity?: Entity;

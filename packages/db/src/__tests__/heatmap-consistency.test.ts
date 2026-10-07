@@ -63,8 +63,8 @@ describe('heatmap ↔ features cell-count consistency', () => {
     await setupTestDb();
     await cleanTestDb();
 
-    await db.execute(sql`INSERT INTO organisations (id, label) VALUES ('test-org', 'Test Org')`);
-    await db.execute(sql`INSERT INTO datasets (id, label, organisation_id) VALUES ('test-ds', 'Test DS', 'test-org')`);
+    await db.execute(sql`INSERT INTO agents (id, label) VALUES ('test-org', 'Test Org')`);
+    await db.execute(sql`INSERT INTO datasets (id, label, provider_id) VALUES ('test-ds', 'Test DS', 'test-org')`);
 
     // A street spanning ~6 base cells (500m line) + two point addresses elsewhere.
     await db.execute(sql`

@@ -73,7 +73,7 @@ describe('feature sorting', () => {
     await setupTestDb();
     await cleanTestDb();
 
-    await db.execute(sql`INSERT INTO organisations (id, label) VALUES ('adamlink', 'A')`);
+    await db.execute(sql`INSERT INTO agents (id, label) VALUES ('adamlink', 'A')`);
     await db.execute(sql`INSERT INTO datasets (id, label) VALUES ('dsA', 'Dataset A'), ('dsB', 'Dataset B')`);
     await db.execute(sql`INSERT INTO relation (id, label) VALUES ('isAbout', 'About') ON CONFLICT (id) DO NOTHING`);
 

@@ -17,7 +17,7 @@ const dated = { start: '1920-01-01', end: '1920-01-01' };
 const undated = { start: '', end: '' };
 
 async function seedOrgs() {
-  await db.execute(sql`INSERT INTO organisations (id, label) VALUES
+  await db.execute(sql`INSERT INTO agents (id, label) VALUES
     ('adamlink','Adamlink'), ('bag','BAG'), ('cbs','CBS'), ('nwb','NWB') ON CONFLICT (id) DO NOTHING`);
 }
 async function place(id: string, type: string, source: string, name: string | null) {

@@ -103,6 +103,7 @@ const TRANSLATIONS: Record<string, string> = {
 	showing: 'Toont',
 	// a group card's count rows and its failed year load
 	venue: 'Locatie',
+	classifier: 'Classificatiemodel',
 	// a story's rows
 	diary: 'Dagboek',
 	archive: 'Archief',

@@ -166,12 +166,16 @@ export function groupMemberRows(members: GroupFeature[]): FieldRow[] {
 export function dataSourceFields(feature: FeatureResult, expanded: boolean): FieldRow[] {
 	if (!expanded) return [];
 	const rows: FieldRow[] = [];
-	if (feature.organisationLabel) {
-		rows.push({ label: translate('dataProvider'), value: feature.organisationLabel, href: feature.organisationUrl });
+	if (feature.providerLabel) {
+		rows.push({ label: translate('dataProvider'), value: feature.providerLabel, href: feature.providerUrl });
 	}
 	// Skip the dataset row when it just repeats the provider (e.g. Joods Monument).
-	if (feature.datasetLabel && feature.datasetLabel !== feature.organisationLabel) {
+	if (feature.datasetLabel && feature.datasetLabel !== feature.providerLabel) {
 		rows.push({ label: translate('dataset'), value: formatDatasetTitle(feature.datasetLabel), href: feature.datasetUrl });
+	}
+	// the classifier models behind the feature's tags, each linked to its page when it has one
+	for (const classifier of feature.classifiers ?? []) {
+		rows.push({ label: translate('classifier'), value: classifier.label, href: classifier.url });
 	}
 	if (feature.placeProviderLabel && feature.placeProviderUrl) {
 		rows.push({ label: translate('placeDataProvider'), value: feature.placeProviderLabel, href: feature.placeProviderUrl });

@@ -23,7 +23,7 @@ describe('rebuild-index line + polygon rasterisation', () => {
     await setupTestDb();
     await cleanTestDb();
     await upsertSource({
-      organisation: { id: 'ri-org', label: 'RI Org' },
+      provider: { id: 'ri-org', label: 'RI Org' },
       dataset: { id: 'ri-ds', label: 'RI DS' },
       relation: { id: 'isAbout', label: 'Is About' },
     });

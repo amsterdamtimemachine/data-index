@@ -18,7 +18,7 @@ describe('amsterdam-diaries ingestion', () => {
   beforeAll(async () => {
     await setupTestDb();
     await cleanTestDb();
-    await db.execute(sql`INSERT INTO organisations (id, label) VALUES ('adamlink', 'Adamlink')`);
+    await db.execute(sql`INSERT INTO agents (id, label) VALUES ('adamlink', 'Adamlink')`);
     // the street by its Adamlink id, and an address at the building's point
     await db.execute(sql`INSERT INTO place (id, type, source, name) VALUES
       ('https://adamlink.nl/geo/street/prinsengracht/3684', 'street', 'adamlink', 'Prinsengracht'),

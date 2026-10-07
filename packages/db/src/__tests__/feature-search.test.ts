@@ -44,7 +44,7 @@ describe('feature text search', () => {
     await setupTestDb();
     await cleanTestDb();
     await upsertSource({
-      organisation: { id: 'fs-org', label: 'FS Org' },
+      provider: { id: 'fs-org', label: 'FS Org' },
       dataset: { id: 'fs-ds', label: 'FS DS' },
       relation: { id: 'isAbout', label: 'Is About' },
     });

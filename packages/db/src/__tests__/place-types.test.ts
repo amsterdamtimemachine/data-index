@@ -24,7 +24,7 @@ describe('placeTypes filter (address / street / neighbourhood / district)', () =
     await setupTestDb();
     await cleanTestDb();
     await upsertSource({
-      organisation: { id: 'pt-org', label: 'PT Org' },
+      provider: { id: 'pt-org', label: 'PT Org' },
       dataset: { id: 'pt-ds', label: 'PT DS' },
       relation: { id: 'isAbout', label: 'Is About' },
     });

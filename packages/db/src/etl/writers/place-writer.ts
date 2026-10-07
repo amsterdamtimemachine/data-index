@@ -8,7 +8,7 @@ import { PLACE_PROVIDERS, type PlaceSource } from '@atm/shared';
 import { db } from '../../client';
 import { wktToRd } from '../sql';
 import {
-  organisations,
+  agents,
   placeHistoricalName,
   place,
   placeGeometry,
@@ -16,13 +16,13 @@ import {
 } from '../../schema';
 
 /**
- * Seed the place-provider organisations (Adamlink/CBS/NWB/BAG) that `place.source`
+ * Seed the place-provider agents (Adamlink/CBS/NWB/BAG) that `place.source`
  * references. Idempotent; called by insertPlaces so every place has its provider row
  * before the foreign key is checked. The rows are a materialised copy of PLACE_PROVIDERS.
  */
 async function upsertProviders(): Promise<void> {
-  await db.insert(organisations)
-    .values(Object.entries(PLACE_PROVIDERS).map(([id, { label, url }]) => ({ id, label, url })))
+  await db.insert(agents)
+    .values(Object.entries(PLACE_PROVIDERS).map(([id, { label, url }]) => ({ id, kind: 'Organization' as const, label, url })))
     .onConflictDoNothing();
 }
 

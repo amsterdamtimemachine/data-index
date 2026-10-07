@@ -29,7 +29,7 @@ describe('grid_config + display-grid derivation', () => {
     await setupTestDb();
     await cleanTestDb();
     await upsertSource({
-      organisation: { id: 'gc-org', label: 'GC Org' },
+      provider: { id: 'gc-org', label: 'GC Org' },
       dataset: { id: 'gc-ds', label: 'GC DS' },
       relation: { id: 'isAbout', label: 'Is About' },
     });

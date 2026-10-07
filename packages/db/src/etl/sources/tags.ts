@@ -3,22 +3,23 @@
  * `{"id": <the dataset's natural key>, "tags": ["<tag id>", ...]}`; other fields
  * are ignored. Feature ids derive from --dataset + id exactly as that dataset's
  * ingestor derives them, so rows join features by primary key. Rows are stamped
- * with --tagger as their source and a rerun replaces only that source's rows for
- * that dataset.
+ * with --tagger, the classifier model, as their source: a SoftwareAgent named by
+ * --tagger-label and linked by --tagger-url (its model card or repository). A rerun
+ * of the model replaces only its rows for that dataset.
  * Like every source, follow it with rebuild-index (which rebuilds tag_features).
  *
- * Usage: bun run db:ingest -s tags -f <file.jsonl> --tagger <id> --dataset <dataset-id>
+ * Usage: bun run db:ingest -s tags -f <file.jsonl> --tagger <id> --dataset <dataset-id> [--tagger-label <name>] [--tagger-url <url>]
  */
 import { eq } from 'drizzle-orm';
 import { db } from '../../client';
 import { datasets } from '../../schema';
 import { FileReader } from '../ingest/file-reader';
 import { featureUuid } from '../util/ids';
-import { createTagWriter, type TagWriteReport } from '../writers/tag-writer';
+import { createTagWriter, upsertClassifier, type TagWriteReport } from '../writers/tag-writer';
 
 type TagRecord = { id: string; tags: string[] };
 
-export type TagsIngestOptions = { tagger?: string; dataset?: string };
+export type TagsIngestOptions = { tagger?: string; dataset?: string; taggerLabel?: string; taggerUrl?: string };
 
 export type TagsIngestReport = TagWriteReport & {
   records: number;  // distinct ids read
@@ -27,7 +28,7 @@ export type TagsIngestReport = TagWriteReport & {
 };
 
 export async function ingest(filePath: string, opts: TagsIngestOptions = {}): Promise<TagsIngestReport> {
-  const { tagger, dataset } = opts;
+  const { tagger, dataset, taggerLabel, taggerUrl } = opts;
   if (!tagger || !dataset) {
     throw new Error('The tags source needs --tagger <id> and --dataset <dataset-id>');
   }
@@ -48,6 +49,7 @@ export async function ingest(filePath: string, opts: TagsIngestOptions = {}): Pr
   const seen = new Set<string>();
 
   const written = await db.transaction(async (tx) => {
+    await upsertClassifier(tx, { id: tagger, label: taggerLabel || tagger, url: taggerUrl });
     const writer = createTagWriter(tx, tagger, dataset);
     await writer.clear();
 

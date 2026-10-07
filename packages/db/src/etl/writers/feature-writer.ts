@@ -1,12 +1,12 @@
 /**
- * Feature-side DB writers: register a source's organisation/dataset/relation, and
+ * Feature-side DB writers: register a source's provider/dataset/relation, and
  * batch feature + feature_to_place link inserts. Used by the feature-ingest base
  * (ingest/ingestor.ts).
  */
 import { sql, inArray } from 'drizzle-orm';
 import { db } from '../../client';
 import {
-  organisations,
+  agents,
   datasets,
   relation,
   features,
@@ -17,17 +17,17 @@ import {
 type Link = { featureId: string; placeId: string; relationId: string };
 
 /**
- * Upsert a source's organisation, dataset and (optionally) relation rows.
- * Idempotent — safe to call at the top of every ingest run.
+ * Upsert a source's provider (an Organization agent), dataset and (optionally)
+ * relation rows. Idempotent — safe to call at the top of every ingest run.
  */
 export async function upsertSource(opts: {
-  organisation: { id: string; label: string; url?: string };
+  provider: { id: string; label: string; url?: string };
   dataset: { id: string; label: string; url?: string };
   relation?: { id: string; label: string };
 }): Promise<void> {
-  await db.insert(organisations).values(opts.organisation).onConflictDoNothing();
+  await db.insert(agents).values({ ...opts.provider, kind: 'Organization' }).onConflictDoNothing();
   await db.insert(datasets)
-    .values({ ...opts.dataset, organisationId: opts.organisation.id })
+    .values({ ...opts.dataset, providerId: opts.provider.id })
     .onConflictDoNothing();
   if (opts.relation) {
     await db.insert(relation).values(opts.relation).onConflictDoNothing();

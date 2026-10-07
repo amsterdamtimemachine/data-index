@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
-import type { GroupFeature, EventSeriesEntity } from '@atm/shared/types';
-import { groupMemberRows, entityKind, seriesMemberCount, resolveCardFields } from './cardFields';
+import type { GroupFeature, EventSeriesEntity, FeatureResult } from '@atm/shared/types';
+import { groupMemberRows, entityKind, seriesMemberCount, resolveCardFields, dataSourceFields } from './cardFields';
 
 const programme: GroupFeature = {
 	id: 'a',
@@ -85,5 +85,22 @@ describe('entityKind', () => {
 		expect(entityKind(programme.entity)).toBe('MovieTheater');
 		expect(entityKind({ type: 'Person', name: 'x' })).toBeNull();
 		expect(entityKind(undefined)).toBeNull();
+	});
+});
+
+describe('dataSourceFields', () => {
+	test('the classifier models behind the tags are linked rows after the dataset', () => {
+		const feature = {
+			id: 'f', recordType: 'image', label: 'x', dateRange: [1900, 1900], tags: ['maps'], spatialFrequency: 1, temporalFrequency: 1,
+			providerLabel: 'Stadsarchief', providerUrl: 'https://archief.amsterdam', datasetLabel: 'Beeldbank',
+			classifiers: [{ id: 'siglip2', label: 'SigLIP 2', url: 'https://example.org/siglip' }, { id: 'b', label: 'Baseline' }]
+		} as FeatureResult;
+		expect(dataSourceFields(feature, true).map((r) => [r.label, r.value, r.href])).toEqual([
+			['Databron', 'Stadsarchief', 'https://archief.amsterdam'],
+			['Dataset', 'Beeldbank', undefined],
+			['Classificatiemodel', 'SigLIP 2', 'https://example.org/siglip'],
+			['Classificatiemodel', 'Baseline', undefined]
+		]);
+		expect(dataSourceFields(feature, false)).toEqual([]);
 	});
 });

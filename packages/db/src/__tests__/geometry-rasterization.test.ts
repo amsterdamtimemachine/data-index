@@ -17,7 +17,7 @@ let counter = 0;
 async function cellsForGeometry(wkt: string, type = 'neighbourhood'): Promise<Set<string>> {
   await cleanTestDb();
   await upsertSource({
-    organisation: { id: 'geo-org', label: 'Geo Org' },
+    provider: { id: 'geo-org', label: 'Geo Org' },
     dataset: { id: 'geo-ds', label: 'Geo DS' },
     relation: { id: 'isAbout', label: 'Is About' },
   });

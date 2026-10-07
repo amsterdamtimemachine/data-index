@@ -39,8 +39,8 @@ type FeatureRow = {
   temporal_frequency: number | null;
   dataset_label: string | null;
   dataset_url: string | null;
-  organisation_label: string | null;
-  organisation_url: string | null;
+  provider_label: string | null;
+  provider_url: string | null;
   relevance_score: number | null;
   entity: Entity | null;
   relation_id: string | null;
@@ -53,6 +53,7 @@ type FeatureRow = {
   geometry_provider_label: string | null;
   geometry_url: string | null;
   tags: string[] | null;
+  classifiers: Array<{ id: string; label: string; url: string | null }> | null;
   dataset_id: string | null;
   group_key: string | null;
   member_count: string | null;
@@ -448,8 +449,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       page.relevance_score,
       d.label as dataset_label,
       d.url as dataset_url,
-      o.label as organisation_label,
-      o.url as organisation_url,
+      o.label as provider_label,
+      o.url as provider_url,
       f.entity,
       page.relation_id,
       p.name,
@@ -470,6 +471,11 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         GROUP BY ft.tag_id
         ORDER BY ${tagOrderExpr}
       ) as tags,
+      (
+        SELECT COALESCE(jsonb_agg(jsonb_build_object('id', a.id, 'label', a.label, 'url', a.url) ORDER BY a.id), '[]'::jsonb)
+        FROM (SELECT DISTINCT ft.source FROM feature_tags ft WHERE ft.feature_id = page.id) s
+        JOIN agents a ON a.id = s.source
+      ) as classifiers,
       page.dataset_id,
       page.group_key,
       page.member_count,
@@ -487,9 +493,9 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     JOIN ${place} p ON p.id = page.place_id
     JOIN ${placeGeometry} pg ON pg.place_id = page.place_id
     LEFT JOIN datasets d ON page.dataset_id = d.id
-    LEFT JOIN organisations o ON d.organisation_id = o.id
-    LEFT JOIN organisations po ON p.source = po.id
-    LEFT JOIN organisations go ON pg.source = go.id
+    LEFT JOIN agents o ON d.provider_id = o.id
+    LEFT JOIN agents po ON p.source = po.id
+    LEFT JOIN agents go ON pg.source = go.id
     ORDER BY page.page_order
   `);
 
@@ -507,12 +513,13 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       row.end_date ? parseInt(row.end_date.slice(0, 4), 10) : 0
     ] as [number, number],
     tags: row.tags || [],
+    classifiers: (row.classifiers ?? []).map((c) => ({ id: c.id, label: c.label, url: c.url || undefined })),
     datasetId: row.dataset_id || undefined,
     groupKey: row.group_key || undefined,
     datasetLabel: row.dataset_label || undefined,
     datasetUrl: row.dataset_url || undefined,
-    organisationLabel: row.organisation_label || undefined,
-    organisationUrl: row.organisation_url || undefined,
+    providerLabel: row.provider_label || undefined,
+    providerUrl: row.provider_url || undefined,
     spatialFrequency: row.spatial_frequency || 1,
     temporalFrequency: row.temporal_frequency || 1,
     entity: groupEntity(row),

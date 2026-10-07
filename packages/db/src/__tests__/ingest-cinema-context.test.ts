@@ -19,7 +19,7 @@ describe('cinema-context ingestion', () => {
   beforeAll(async () => {
     await setupTestDb();
     await cleanTestDb();
-    await db.execute(sql`INSERT INTO organisations (id, label) VALUES ('adamlink', 'Adamlink'), ('bag', 'BAG')`);
+    await db.execute(sql`INSERT INTO agents (id, label) VALUES ('adamlink', 'Adamlink'), ('bag', 'BAG')`);
     // the cinema's address in both eras, at the same point
     await db.execute(sql`INSERT INTO place (id, type, source, name) VALUES
       ('cc-lp', 'address', 'adamlink', 'Ceintuurbaan 338'),

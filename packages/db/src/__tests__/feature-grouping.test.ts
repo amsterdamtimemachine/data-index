@@ -57,7 +57,7 @@ describe('feature grouping', () => {
   beforeAll(async () => {
     await setupTestDb();
     await cleanTestDb();
-    await db.execute(sql`INSERT INTO organisations (id, label) VALUES ('adamlink', 'A')`);
+    await db.execute(sql`INSERT INTO agents (id, label) VALUES ('adamlink', 'A')`);
     await db.execute(sql`INSERT INTO datasets (id, label) VALUES ('cc', 'Cinema Context'), ('dsT', 'Texts')`);
     await db.execute(sql`INSERT INTO relation (id, label) VALUES ('isAbout', 'About') ON CONFLICT (id) DO NOTHING`);
     await db.execute(sql`INSERT INTO place (id, type, source, name) VALUES ('p1', 'address', 'adamlink', 'Amstel 1')`);
@@ -72,6 +72,10 @@ describe('feature grouping', () => {
       INSERT INTO features (id, record_type, label, start_date, end_date, dataset_id)
       VALUES (${T1}::uuid, 'text', 'Een krant', '1934-06-01'::date, '1934-06-01'::date, 'dsT')`);
     await db.execute(sql`INSERT INTO feature_to_place (feature_id, place_id, relation_id) VALUES (${T1}::uuid, 'p1', 'isAbout')`);
+    // a classifier run tagged the text
+    await db.execute(sql`INSERT INTO agents (id, kind, label, url) VALUES ('tg-model', 'SoftwareAgent', 'TG Model', 'https://example.org/model')`);
+    await db.execute(sql`INSERT INTO tags (id, label) VALUES ('maps', 'maps')`);
+    await db.execute(sql`INSERT INTO feature_tags (feature_id, tag_id, source) VALUES (${T1}::uuid, 'maps', 'tg-model')`);
 
     await rebuildIndex();
   });
@@ -91,6 +95,12 @@ describe('feature grouping', () => {
     const text = result.data[2];
     expect(text.url).toBeUndefined();
     expect(text.entity).toBeUndefined();
+  });
+
+  test('a feature carries the classifier runs behind its tags', async () => {
+    const result = await list();
+    expect(result.data[2].classifiers).toEqual([{ id: 'tg-model', label: 'TG Model', url: 'https://example.org/model' }]);
+    expect(result.data[0].classifiers).toEqual([]);
   });
 
   test('the group row is an EventSeries with the venue and the years with counts', async () => {

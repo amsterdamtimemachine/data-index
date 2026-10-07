@@ -21,7 +21,7 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
     protected BATCH_SIZE = 1000;
 
     protected abstract ORG_ID: string; // Example: 'my-org';
-    protected abstract ORG_LABEL: string; // Example: 'My Organisation';
+    protected abstract ORG_LABEL: string; // Example: 'My Organization';
     protected abstract ORG_URL: string; // Example: 'https://org-url.com';
 
 
@@ -55,7 +55,7 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
      */
     private async upsertDatasource() {
         await upsertSource({
-            organisation: { id: this.ORG_ID, label: this.ORG_LABEL, url: this.ORG_URL },
+            provider: { id: this.ORG_ID, label: this.ORG_LABEL, url: this.ORG_URL },
             dataset: { id: this.DATASET_ID, label: this.DATASET_LABEL, url: this.DATASET_URL },
             relation: { id: this.RELATION_ID, label: this.RELATION_LABEL },            
         })

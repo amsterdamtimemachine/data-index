@@ -15,7 +15,7 @@ import { clearResolverCaches } from '../etl/places/cache';
 const Q = 'POINT(120000 485000)'; // RD query point
 
 async function seedOrgs() {
-  await db.execute(sql`INSERT INTO organisations (id, label) VALUES
+  await db.execute(sql`INSERT INTO agents (id, label) VALUES
     ('adamlink','Adamlink'), ('bag','BAG'), ('cbs','CBS'), ('nwb','NWB') ON CONFLICT (id) DO NOTHING`);
 }
 async function place(id: string, type: string, source: string, name: string | null, wktRD?: string, since: string | null = null, until: string | null = null) {

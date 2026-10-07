@@ -25,8 +25,10 @@ program
   .requiredOption('-s, --source <name>', 'Source name to ingest')
   .requiredOption('-f, --file <path>', 'Input file path')
   .option('-x, --adamlink-streets <path>', 'Adamlink straten TTL (required by the nwb-streets source, to dedup against)')
-  .option('-t, --tagger <id>', 'Id of the classifier run, stamped on its rows (required by the tags source)')
+  .option('-t, --tagger <id>', 'Id of the classifier model, stamped on its rows (required by the tags source)')
   .option('-d, --dataset <id>', 'Dataset whose natural keys the file carries (required by the tags source)')
+  .option('--tagger-label <name>', 'Name of the classifier model, shown on cards (tags source; defaults to the id)')
+  .option('--tagger-url <url>', 'Link for the classifier model, its model card or repository (tags source)')
   .action(async (opts) => {
     try {
       // Dynamically import the source module
@@ -66,6 +68,8 @@ program
         adamlinkStreets: opts.adamlinkStreets,
         tagger: opts.tagger,
         dataset: opts.dataset,
+        taggerLabel: opts.taggerLabel,
+        taggerUrl: opts.taggerUrl,
       });
 
       console.log('\nRun `db:rebuild-index` once all sources are ingested.');

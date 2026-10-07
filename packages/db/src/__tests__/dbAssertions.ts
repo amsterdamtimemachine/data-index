@@ -204,9 +204,9 @@ export async function datasetLabel(datasetId: string): Promise<string> {
   return r.rows[0].label;
 }
 
-export async function organisationLabelForDataset(datasetId: string): Promise<string> {
+export async function providerLabelForDataset(datasetId: string): Promise<string> {
   const r = await db.execute<{ label: string }>(sql`
-    SELECT o.label FROM datasets d JOIN organisations o ON d.organisation_id = o.id
+    SELECT o.label FROM datasets d JOIN agents o ON d.provider_id = o.id
     WHERE d.id = ${datasetId}
   `);
   return r.rows[0].label;

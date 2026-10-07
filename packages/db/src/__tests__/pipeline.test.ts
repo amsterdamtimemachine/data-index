@@ -226,26 +226,26 @@ describe('getFeatures', () => {
     expect(withHistorical).toBeDefined();
   });
 
-  test('resolves the place provider from place.source via the organisations join', async () => {
+  test('resolves the place provider from place.source via the agents join', async () => {
     // Seeded places are all Adamlink LPs, so every feature carries the Adamlink provider.
     const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, pageSize: 50 });
     const withProvider = r.data.find(f => f.placeProviderLabel);
     expect(withProvider).toBeDefined();
     expect(withProvider!.placeSource).toBe('adamlink');
-    expect(withProvider!.placeProviderLabel).toBe(PLACE_PROVIDERS.adamlink.label); // from organisations, seeded from PLACE_PROVIDERS
+    expect(withProvider!.placeProviderLabel).toBe(PLACE_PROVIDERS.adamlink.label); // from agents, seeded from PLACE_PROVIDERS
     expect(withProvider!.placeProviderUrl).toBe(PLACE_PROVIDERS.adamlink.url);
     expect(withProvider!.placeUrl).toBeTruthy(); // per-record link, distinct from the provider homepage
   });
 
-  test('returns datasetLabel and organisationLabel matching the source tables', async () => {
+  test('returns datasetLabel and providerLabel matching the source tables', async () => {
     const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, datasetIds: ['joods-monument'], pageSize: 50 });
     const dsLabel = await dbq.datasetLabel('joods-monument');
-    const orgLabel = await dbq.organisationLabelForDataset('joods-monument');
+    const orgLabel = await dbq.providerLabelForDataset('joods-monument');
     expect(r.data.length).toBeGreaterThan(0);
     for (const f of r.data) {
       expect(f.datasetLabel).toBe(dsLabel); // value cross-check vs datasets table
-      expect(f.organisationLabel).toBe(orgLabel); // vs organisations table
-      expect(f.organisationUrl).toBeTruthy();
+      expect(f.providerLabel).toBe(orgLabel); // vs agents table
+      expect(f.providerUrl).toBeTruthy();
     }
   });
 

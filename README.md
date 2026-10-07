@@ -68,8 +68,9 @@ Runtime: Bun. Infrastructure: Docker Compose. Map tiles: OpenFreeMap.
 
 ```mermaid
 erDiagram
-    organisations {
+    agents {
         text id PK "e.g. stadsarchief"
+        text kind  "Organization | SoftwareAgent | Person"
         text label  "e.g. Amsterdam Stadsarchief"
         text description  "e.g. Amsterdam city archives"
         text url  "e.g. https://archief.amsterdam"
@@ -80,7 +81,7 @@ erDiagram
         text label  "e.g. Beeldbank"
         text description  "e.g. Historical image archive"
         text url  "e.g. https://archief.amsterdam/beeldbank"
-        text organisation_id FK "e.g. stadsarchief"
+        text provider_id FK "e.g. stadsarchief"
     }
 
     place {
@@ -186,8 +187,9 @@ erDiagram
         tsvector label_tsv  "generated from label # dutch FTS"
     }
 
-    organisations||--o{datasets:"has datasets"
-    organisations||--o{place:"provides geometry"
+    agents||--o{datasets:"provides"
+    agents||--o{place:"provides geometry"
+    agents||--o{feature_tags:"classified"
     datasets||--o{features:"has"
     place||--||place_geometry:"has geometry"
     place||--o{place_historical_name:"has historical names"
@@ -203,9 +205,9 @@ erDiagram
     features||..o{cell_features:"counted in"
 ```
 
-- **organisations**: Institutions that provide datasets, or place geometry (referenced by `place.source`)
-- **datasets**: Data collections from organisations
-- **place**: Physical location identity (id, type, name); `source` is the provider organisation
+- **agents**: Who produced data, after PROV: an `Organization` that provides a dataset (`datasets.provider_id`) or place geometry (`place.source`), or a `SoftwareAgent`, a classifier model that produced tags (`feature_tags.source`). The `kind` column tells them apart; nothing lists agents directly, they are reached through what they produced
+- **datasets**: Data collections, each from a provider agent
+- **place**: Physical location identity (id, type, name); `source` is the provider agent
 - **place_geometry**: A place's geometry (RD / EPSG:28992) and the period it was valid (1:1 with place)
 - **place_historical_name**: Dated past names linked to places (addresses, streets), used to show what a location was called at a given time. Undated Adamlink name variants (spelling variants, abbreviations, old names without a date) are kept too, as rows without a `since` or `until`: a row with a period is an observation of what the place was called then, a row without one is a label. The place search finds labels and shows the current name in brackets after them, while feature-to-place resolution and name canonicalisation consider dated rows only
 - **tags**: Classifier vocabulary, keyed by the classifier's own labels (e.g. `bridge_canal`); the app shows them in Dutch by id. Assigned to features through `feature_tags`, one row per feature, tag and tagger run (`source`). For now only images carry tags
@@ -414,7 +416,7 @@ Optional: `description`, `content_url` (media), `entity` (schema.org JSONB), `ur
 
 ### Adding a dataset
 
-A dataset is a subclass of `Ingestor` (`packages/db/src/etl/ingest/ingestor.ts`) that declares its organisation/dataset metadata, a `transform` mapping each source row to a feature, and a `PLACE_EXTRACTION_METHODS` cascade — the ordered signals used to resolve each feature to a place, tried in turn until one resolves (else the feature is skipped and tallied by reason). Three signals are available:
+A dataset is a subclass of `Ingestor` (`packages/db/src/etl/ingest/ingestor.ts`) that declares its provider/dataset metadata, a `transform` mapping each source row to a feature, and a `PLACE_EXTRACTION_METHODS` cascade — the ordered signals used to resolve each feature to a place, tried in turn until one resolves (else the feature is skipped and tallied by reason). Three signals are available:
 
 - `WKT` — a coordinate, matched to the nearest era-appropriate place within a distance cap (see [Dates resolution](#dates-resolution))
 - `TEXT` — a free-text field, scanned for known place names
@@ -602,8 +604,8 @@ etl -s delpher        -f /data/delpher_newspapers.csv
 etl -s cinema-context -f /data/cinema-context.jsonl
 etl -s amsterdam-diaries -f /data/amsterdam-diaries.jsonl
 # optional: classifier tags, one file per dataset keyed by that dataset's natural keys (remap_tags_to_feature_keys.py, beside the data), one tagger id per run
-etl -s tags -f /data/beeldbank-tags.jsonl --tagger meeting-demo-complete --dataset beeldbank
-etl -s tags -f /data/delpher-tags.jsonl   --tagger meeting-demo-complete --dataset delpher
+etl -s tags -f /data/beeldbank-tags.jsonl --tagger siglip2 --dataset beeldbank --tagger-label "SigLIP 2" --tagger-url https://example.org/model-card
+etl -s tags -f /data/delpher-tags.jsonl   --tagger siglip2 --dataset delpher   --tagger-label "SigLIP 2" --tagger-url https://example.org/model-card
 
 # required, or the map stays empty; raise DB_STATEMENT_TIMEOUT_MS in .env if it times out
 $DC run --rm app bun run db:rebuild-index

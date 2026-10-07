@@ -40,11 +40,11 @@ describe('place search', () => {
     await setupTestDb();
     await cleanTestDb();
     await upsertSource({
-      organisation: { id: 'ps-org', label: 'PS Org' },
+      provider: { id: 'ps-org', label: 'PS Org' },
       dataset: { id: 'ps-ds', label: 'PS DS' },
       relation: { id: 'isAbout', label: 'Is About' },
     });
-    await db.execute(sql`INSERT INTO organisations (id, label) VALUES ('adamlink', 'Adamlink') ON CONFLICT (id) DO NOTHING`);
+    await db.execute(sql`INSERT INTO agents (id, label) VALUES ('adamlink', 'Adamlink') ON CONFLICT (id) DO NOTHING`);
 
     // homonym streets: one carries a feature, the other is a bare gazetteer entry
     await db.execute(sql`INSERT INTO place (id, type, name) VALUES

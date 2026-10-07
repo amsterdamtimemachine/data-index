@@ -52,7 +52,7 @@ describe('tag filtering', () => {
     await setupTestDb();
     await cleanTestDb();
     await upsertSource({
-      organisation: { id: 'tg-org', label: 'TG Org' },
+      provider: { id: 'tg-org', label: 'TG Org' },
       dataset: { id: 'tg-ds', label: 'TG DS' },
       relation: { id: 'isAbout', label: 'Is About' },
     });
@@ -84,6 +84,7 @@ describe('tag filtering', () => {
         (${F4}, 'tp-nbhd',   'isAbout')
     `);
     await db.execute(sql`INSERT INTO tags (id, label) VALUES ('nature','nature'), ('transport','transport'), ('water','water')`);
+    await db.execute(sql`INSERT INTO agents (id, kind, label) VALUES ('a', 'SoftwareAgent', 'A'), ('b', 'SoftwareAgent', 'B')`);
     await db.execute(sql`
       INSERT INTO feature_tags (feature_id, tag_id, source) VALUES
         (${F1}, 'nature', 'a'), (${F1}, 'water', 'a'),
