@@ -40,12 +40,18 @@ export class CreativeWorkEntityFactory extends EntityFactory<CreativeWorkEntity>
 export class MediaObjectEntityFactory extends EntityFactory<MediaObjectEntity> {
     create(feature: Draft, data: Map<string, unknown>): MediaObjectEntity {
         const dateCreatedFormatted = formatDateRange(feature.startDate, feature.endDate);
+        const textDate = data.get('textDate');
+        let dateText: string | undefined;
+        if (typeof textDate === 'string' && textDate.trim()) {
+            dateText = textDate.trim();
+        }
 
         return {
             type: 'MediaObject',
             name: feature.label,
             contentUrl: feature.contentUrl!,
-            ...(dateCreatedFormatted && { dateCreated: dateCreatedFormatted })
+            ...(dateCreatedFormatted && { dateCreated: dateCreatedFormatted }),
+            ...(dateText && { dateText }),
         };
     } 
 }

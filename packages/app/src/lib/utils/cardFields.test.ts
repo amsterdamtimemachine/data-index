@@ -117,6 +117,14 @@ describe('expanded rows: what and where, then the sources', () => {
 		expect(dataSourceFields(beeldbank, false)).toEqual([]);
 	});
 
+	test('an image shows the archive\'s own dating, else its dates worded at their precision', () => {
+		const image = { type: 'MediaObject' as const, name: 'x', contentUrl: 'u' };
+		expect(resolveCardFields({ ...image, dateText: '1953 (ca.) t/m 1995 (ca.)', dateCreated: '1953-01-01/1995-12-31' }, true)[0])
+			.toEqual({ label: 'Datering', value: '1953 (ca.) t/m 1995 (ca.)', href: undefined });
+		expect(resolveCardFields({ ...image, dateCreated: '1988-01-01/1988-12-31' }, true)[0].value).toBe('1988');
+		expect(resolveCardFields({ ...image, dateCreated: '1958-09-27' }, true)[0].value).toBe('27 september 1958');
+	});
+
 	test('a text shows the issue it appeared in', () => {
 		expect(resolveCardFields({ type: 'CreativeWork', name: 'x', dateCreated: '1967-01-03' }, true)).toEqual([
 			{ label: 'Gepubliceerd', value: '3 januari 1967', href: undefined }

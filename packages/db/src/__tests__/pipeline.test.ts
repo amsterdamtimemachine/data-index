@@ -7,6 +7,7 @@
  * Direct DB inspections are kept in `dbAssertions.ts` so test bodies read
  * like behaviour assertions instead of SQL.
  */
+import type { MediaObjectEntity } from '@atm/shared';
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { setupTestDb, cleanTestDb, seedTestData, teardownTestDb } from './setup';
 import * as dbq from './dbAssertions';
@@ -124,7 +125,10 @@ describe('Feature ingestion', () => {
   });
 
   test('features have entity JSONB with correct schema.org type', async () => {
-    expect((await dbq.firstFeatureEntity('beeldbank')).type).toBe('MediaObject');
+    const image = await dbq.firstFeatureEntity('beeldbank');
+    expect(image.type).toBe('MediaObject');
+    // the archive's wording of the dating, beside the ISO dates
+    expect((image as MediaObjectEntity).dateText).toBeTruthy();
     expect((await dbq.firstFeatureEntity('joods-monument')).type).toBe('Person');
   });
 });

@@ -1,5 +1,5 @@
 import type { Entity, PersonEntity, MediaObjectEntity, CreativeWorkEntity, ScreeningEventEntity, TheaterEventEntity, ManuscriptEntity, FeatureResult } from '@atm/shared/types';
-import { formatDate, formatDateRange, formatPartialDate, formatPeriod, formatDatasetTitle } from './format';
+import { formatDate, formatPartialDate, formatPeriod, formatDatasetTitle } from './format';
 import { translate } from './translations';
 
 /**
@@ -22,6 +22,21 @@ function mentionNames(entity: ManuscriptEntity, kind: 'Place' | 'Person' | 'Orga
 		return null;
 	}
 	return names.join(', ');
+}
+
+/** An image's dating as the archive words it; else its dates, worded at their precision. */
+function imageDating(entity: MediaObjectEntity): string {
+	if (entity.dateText) {
+		return entity.dateText;
+	}
+	if (!entity.dateCreated) {
+		return translate('unknown');
+	}
+	const [start, end] = entity.dateCreated.split('/');
+	if (end) {
+		return formatPeriod(start, end);
+	}
+	return formatPartialDate(start);
 }
 
 const withPlace = (date?: string, place?: string) =>
@@ -61,7 +76,7 @@ const CARD_FIELDS: Partial<Record<Entity['type'], CardFieldSpec[]>> = {
 		{ label: 'published', value: (e) => (isCreativeWork(e) && e.dateCreated ? formatPartialDate(e.dateCreated) : null) },
 	],
 	MediaObject: [
-		{ label: 'date', value: (e) => (isMedia(e) ? (e.dateCreated ? formatDateRange(e.dateCreated) : translate('unknown')) : null) },
+		{ label: 'dating', value: (e) => (isMedia(e) ? imageDating(e) : null) },
 		{ label: 'author', value: (e) => (isMedia(e) ? e.author || translate('unknown') : null) },
 	],
 	ScreeningEvent: PROGRAMME_FIELDS,

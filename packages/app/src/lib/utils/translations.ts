@@ -50,7 +50,7 @@ const TRANSLATIONS: Record<string, string> = {
 	// screening event rows
 	film: 'Film',
 	performer: 'Optreden',
-	date: 'Datum',
+	dating: 'Datering',
 
 	// Months, for dates worded on cards
 	january: 'januari',

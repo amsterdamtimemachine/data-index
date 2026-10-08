@@ -58,6 +58,9 @@ export interface CreativeWorkEntity extends EntityBase {
 export interface MediaObjectEntity extends CreativeWorkEntity {
   type: "MediaObject";
   contentUrl: string;
+  // the archive's own wording of the dating, with its uncertainty ("1953 (ca.) t/m
+  // 1995 (ca.)"); dateCreated holds the same dating as ISO dates
+  dateText?: string;
 }
 
 export interface MovieEntity {
