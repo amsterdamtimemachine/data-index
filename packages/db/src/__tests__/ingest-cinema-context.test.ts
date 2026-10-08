@@ -1,32 +1,34 @@
 /**
- * Cinema Context ingestion: a programme is an event at its cinema's point, resolved
- * to the era-appropriate address (Adamlink before 1943, BAG after), grouped by the
- * venue's permanent id, linked to its source page when it has a permanent id, dated
- * at the source's precision, labelled with the venue's name, and carrying its bill as
- * a ScreeningEvent entity.
- * Fixture: four programmes of one cinema and one with an unparseable date.
+ * Cinema Context ingestion: a programme with a film is a ScreeningEvent screened at
+ * its venue, one with acts only a TheaterEvent performed there; an empty bill or an
+ * unreadable date is skipped. The label is the first item on the bill. The place is
+ * the venue's address matched by name, with the point as fallback.
+ *
+ * Fixture: two programmes at a named address (one with an act before its film), one
+ * at an address written as a range, an acts-only programme without a permanent id,
+ * one with a malformed date and one with an empty bill.
  */
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { resolve } from 'path';
-import type { ScreeningEventEntity } from '@atm/shared';
+import type { ScreeningEventEntity, TheaterEventEntity } from '@atm/shared';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
 import { parseProgrammeDate } from '../etl/sources/cinema-context';
 
-type Row = { id: string; url: string; label: string; record_type: string; group_key: string | null; start: string; end: string; entity: ScreeningEventEntity };
+type Row = { id: string; url: string; label: string; record_type: string; start: string; end: string; entity: ScreeningEventEntity | TheaterEventEntity; place_id: string; relation_id: string };
 
 describe('cinema-context ingestion', () => {
   beforeAll(async () => {
     await setupTestDb();
     await cleanTestDb();
-    await db.execute(sql`INSERT INTO agents (id, label) VALUES ('adamlink', 'Adamlink'), ('bag', 'BAG')`);
-    // the cinema's address in both eras, at the same point
+    await db.execute(sql`INSERT INTO agents (id, label) VALUES ('adamlink', 'Adamlink')`);
+    // the address by its name, and an address of the era at the venue's point
     await db.execute(sql`INSERT INTO place (id, type, source, name) VALUES
-      ('cc-lp', 'address', 'adamlink', 'Ceintuurbaan 338'),
-      ('cc-bag', 'address', 'bag', 'Ceintuurbaan 338')`);
+      ('cc-named', 'address', 'adamlink', 'Ceintuurbaan 338'),
+      ('cc-point', 'address', 'adamlink', 'Ceintuurbaan 340')`);
     await db.execute(sql`INSERT INTO place_geometry (place_id, geometry) VALUES
-      ('cc-lp', ST_Transform(ST_GeomFromText('POINT(4.9 52.37)', 4326), 28992)),
-      ('cc-bag', ST_Transform(ST_GeomFromText('POINT(4.9 52.37)', 4326), 28992))`);
+      ('cc-named', ST_Transform(ST_GeomFromText('POINT(4.95 52.35)', 4326), 28992)),
+      ('cc-point', ST_Transform(ST_GeomFromText('POINT(4.9 52.37)', 4326), 28992))`);
     const { ingest } = await import('../etl/sources/cinema-context');
     await ingest(resolve(__dirname, 'fixtures/cinema-context.jsonl'));
   });
@@ -38,78 +40,66 @@ describe('cinema-context ingestion', () => {
 
   async function rows(): Promise<Row[]> {
     const r = await db.execute<Row>(sql`
-      SELECT id, url, label, record_type, group_key, start_date::text AS start, end_date::text AS end, entity
-      FROM features ORDER BY start_date`);
+      SELECT f.id, f.url, f.label, f.record_type, f.start_date::text AS start, f.end_date::text AS end, f.entity,
+             fp.place_id, fp.relation_id
+      FROM features f JOIN feature_to_place fp ON fp.feature_id = f.id ORDER BY f.start_date`);
     return r.rows;
   }
 
-  test('every parseable programme becomes an event; the malformed date is skipped', async () => {
+  test('a programme needs a bill and a readable date', async () => {
     const all = await rows();
     expect(all.length).toBe(4);
     expect(all.every((f) => f.record_type === 'event')).toBe(true);
-    expect(all.every((f) => f.group_key === 'B000001')).toBe(true);
   });
 
-  test('a programme resolves to the address of its era', async () => {
-    const r = await db.execute<{ start: string; place_id: string }>(sql`
-      SELECT f.start_date::text AS start, fp.place_id FROM features f JOIN feature_to_place fp ON fp.feature_id = f.id ORDER BY f.start_date`);
-    const byStart = new Map(r.rows.map((x) => [x.start, x.place_id]));
-    expect(byStart.get('1934-01-05')).toBe('cc-lp');
-    expect(byStart.get('1960-03-04')).toBe('cc-bag');
-  });
-
-  test('the label is the cinema; the period follows the date at source precision', async () => {
+  test('the label is the first item on the bill, film or act', async () => {
     const all = await rows();
-    expect(all.every((f) => f.label === 'Rialto')).toBe(true);
-    const month = all.find((f) => f.entity.startDate === '1907-05')!;
-    expect(month.start).toBe('1907-05-01');
+    expect(all.find((f) => f.start === '1934-01-05')!.label).toBe('Skippy (1931)');
+    expect(all.find((f) => f.start === '1960-03-04')!.label).toBe('Mello Wendini, komisch dressuur act');
+    expect(all.find((f) => f.start === '1934-01-12')!.label).toBe('Allison Troep, acrobaten');
+  });
+
+  test('the address matches by name; a range falls back to the point', async () => {
+    const all = await rows();
+    expect(all.find((f) => f.start === '1934-01-05')!.place_id).toBe('cc-named');
+    expect(all.find((f) => f.start === '1907-05-01')!.place_id).toBe('cc-point');
+  });
+
+  test('a film makes a screening screened at the venue; acts only a theatre event performed there', async () => {
+    const all = await rows();
+    const mixed = all.find((f) => f.start === '1960-03-04')!;
+    expect(mixed.entity.type).toBe('ScreeningEvent');
+    expect(mixed.relation_id).toBe('screenedAt');
+    const acts = all.find((f) => f.start === '1934-01-12')!;
+    expect(acts.entity.type).toBe('TheaterEvent');
+    expect(acts.relation_id).toBe('performedAt');
+  });
+
+  test('both relations are dated: the card words a programme\'s date with its place', async () => {
+    const r = await db.execute<{ id: string; dated: boolean }>(sql`SELECT id, dated FROM relation ORDER BY id`);
+    expect(r.rows).toEqual([{ id: 'performedAt', dated: true }, { id: 'screenedAt', dated: true }]);
+  });
+
+  test('the entity carries the venue as the source has it, the bill and the newspapers', async () => {
+    const all = await rows();
+    const mixed = all.find((f) => f.start === '1960-03-04')!.entity;
+    expect(mixed.id).toBe('V000002');
+    expect(mixed.name).toBe('Mello Wendini, komisch dressuur act');
+    expect(mixed.location).toEqual({ type: 'Place', name: 'Rialto', identifier: 'B000001', additionalType: 'Cinema', address: 'Ceintuurbaan 338' });
+    expect(mixed.workPresented).toEqual([{ type: 'Movie', name: 'Can-can (1960)', url: 'https://cinemacontext.nl/id/F000002', dateCreated: '1960', countryOfOrigin: 'USA' }]);
+    expect(mixed.performer).toEqual(['Mello Wendini, komisch dressuur act']);
+    expect(mixed.citation).toEqual(['Telegraaf', 'Het Parool']);
+    const acts = all.find((f) => f.start === '1934-01-12')!;
+    expect(acts.url).toBe('');
+    expect(acts.entity.workPresented).toEqual([]);
+    expect(acts.entity.performer).toEqual(['Allison Troep, acrobaten', 'Alfonso Avello Combination, pantomime']);
+  });
+
+  test('dates keep the source precision', async () => {
+    const all = await rows();
+    const month = all.find((f) => f.start === '1907-05-01')!;
     expect(month.end).toBe('1907-05-31');
-    const day = all.find((f) => f.entity.startDate === '1934-01-05')!;
-    expect(day.start).toBe('1934-01-05');
-    expect(day.end).toBe('1934-01-05');
-  });
-
-  test('the source link comes from the permanent id; a programme without one has none', async () => {
-    const all = await rows();
-    expect(all.find((f) => f.start === '1934-01-05')!.url).toBe('https://cinemacontext.nl/id/V000001');
-    const unlinked = all.find((f) => f.start === '1934-01-12')!;
-    expect(unlinked.url).toBe('');
-    expect(unlinked.entity.id).toBeUndefined();
-  });
-
-  test('the entity is a ScreeningEvent at a MovieTheater with its bill, acts and sources', async () => {
-    const all = await rows();
-    const first = all.find((f) => f.start === '1934-01-05')!.entity;
-    expect(first.type).toBe('ScreeningEvent');
-    expect(first.id).toBe('V000001');
-    expect(first.alternateName).toBe('jeugdbioscoop');
-    expect(first.location).toEqual({ type: 'MovieTheater', name: 'Rialto', identifier: 'B000001', additionalType: 'Cinema', address: 'Ceintuurbaan 338-340', url: 'https://cinemacontext.nl/id/B000001' });
-    expect(first.workPresented).toEqual([{ type: 'Movie', name: 'Skippy (1931)', url: 'https://cinemacontext.nl/id/F000001', dateCreated: '1931', countryOfOrigin: 'USA' }]);
-    expect(first.citation).toEqual(['Telegraaf']);
-    expect(first.performer).toBeUndefined();
-    const second = all.find((f) => f.start === '1960-03-04')!.entity;
-    expect(second.alternateName).toBeUndefined();
-    expect(second.workPresented.map((m) => m.name)).toEqual(['Can-can (1960)']);
-    expect(second.performer).toBe('Mello Wendini, komisch dressuur act');
-    expect(second.citation).toEqual(['Telegraaf', 'Het Parool']);
-  });
-
-  test('the venue takes the Schema.org type the export named and keeps its source wording', async () => {
-    const { ScreeningEventEntityFactory } = await import('../etl/ingest/entity-factory');
-    const factory = new ScreeningEventEntityFactory();
-    const draft = { id: 'x', url: '', label: 'x', description: '', startDate: '1934-01-05', endDate: '1934-01-05' };
-    const venues = [
-      ['Cinema', 'MovieTheater', 'MovieTheater'],
-      ['Theater', 'PerformingArtsTheater', 'PerformingArtsTheater'],
-      ['Zaal', 'EventVenue', 'EventVenue'],
-      ['Other', 'Castle', 'EventVenue'],
-      ['Other', undefined, 'EventVenue'],
-    ];
-    for (const [kind, named, expected] of venues) {
-      const entity = factory.create(draft, new Map<string, unknown>([['venue', { name: 'V', perm_id: 'B1', type: kind, schema_type: named }], ['items', []], ['sources', []]]));
-      expect(entity.location.type).toBe(expected as 'MovieTheater');
-      expect(entity.location.additionalType).toBe(kind);
-    }
+    expect(month.entity.startDate).toBe('1907-05');
   });
 
   test('date parsing keeps the source precision and rejects what it cannot read', () => {

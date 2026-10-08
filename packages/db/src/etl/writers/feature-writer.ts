@@ -16,6 +16,9 @@ import {
 
 type Link = { featureId: string; placeId: string; relationId: string };
 
+/** A relation a source links with; `dated` when the feature's date belongs to it. */
+export type SourceRelation = { id: string; label: string; dated?: boolean };
+
 /**
  * Upsert a source's provider (an Organization agent), dataset and (optionally)
  * relation rows. Idempotent — safe to call at the top of every ingest run.
@@ -23,14 +26,16 @@ type Link = { featureId: string; placeId: string; relationId: string };
 export async function upsertSource(opts: {
   provider: { id: string; label: string; url?: string };
   dataset: { id: string; label: string; url?: string };
-  relation?: { id: string; label: string };
+  relations?: SourceRelation[];
 }): Promise<void> {
   await db.insert(agents).values({ ...opts.provider, kind: 'Organization' }).onConflictDoNothing();
   await db.insert(datasets)
     .values({ ...opts.dataset, providerId: opts.provider.id })
     .onConflictDoNothing();
-  if (opts.relation) {
-    await db.insert(relation).values(opts.relation).onConflictDoNothing();
+  for (const r of opts.relations ?? []) {
+    await db.insert(relation)
+      .values({ id: r.id, label: r.label, dated: r.dated ?? false })
+      .onConflictDoUpdate({ target: relation.id, set: { label: r.label, dated: r.dated ?? false } });
   }
 }
 
@@ -70,7 +75,6 @@ export function createFeatureWriter(batchSize = 1000) {
           endDate: sql`excluded.end_date`,
           datasetId: sql`excluded.dataset_id`,
           entity: sql`excluded.entity`,
-          groupKey: sql`excluded.group_key`,
         },
       });
       featureBatch = [];

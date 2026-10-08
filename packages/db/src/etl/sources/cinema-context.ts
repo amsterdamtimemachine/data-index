@@ -1,20 +1,23 @@
 /**
- * Import Cinema Context programmes: one weekly programme of one cinema as an event,
- * placed at the cinema's address.
+ * Import Cinema Context programmes: one programme of one venue on one date as an
+ * event, at the venue's address.
  *
- * Reads the JSONL exported from the Cinema Context database dump (one line per
- * programme with its venue, coordinates, bill and newspaper sources). The venue's
- * point resolves through the WKT cascade (inferByPoint) to the era-appropriate
- * address, so a cinema's programmes land on the Adamlink address before 1943 and the
- * BAG address after it. Links come with the file: the export knows the site. The venue's permanent id is the feature's group key, which
- * keeps a cinema's programmes together across that boundary. The label is the venue's
- * name; the date is the entity's, kept at the source's precision: a full day, a month
- * for "1907-05-xx", a year for "1907", and the app words it. Anything else is skipped.
+ * Reads the JSONL exported from the Cinema Context database dump: one line per
+ * programme with its venue, the venue's address as written and its point, the bill
+ * in order, and the newspapers it was listed in. A programme is valid with at least
+ * one film or act on its bill; an empty bill is skipped. The label is the first
+ * item on the bill. A programme with a film is a ScreeningEvent screened at its
+ * venue, one with acts only a TheaterEvent performed there.
+ *
+ * The place is the venue's address, matched by name against the dated address names
+ * (Adamlink before 1943, BAG after, as for any era match); an address written as a
+ * range or a description matches nothing and falls back to the point. Dates keep the
+ * source's precision: a day, a month for "1907-05-xx", a year for "1907".
  *
  * Usage: bun run db:ingest -s cinema-context -f <path-to-cinema-context.jsonl>
  */
 import { Draft, Ingestor } from '../ingest/ingestor';
-import { ScreeningEventEntityFactory } from '../ingest/entity-factory';
+import { ProgrammeEntityFactory, programmeBill, type ProgrammeItem } from '../ingest/entity-factory';
 import { ExtractionArgs, PlaceExtractionMethod } from '../places/place-index';
 import { RecordType } from '@atm/shared';
 
@@ -24,13 +27,25 @@ type CinemaContextRecord = {
   url: string | null;
   programme_id: string;
   date: string | null;
-  programme_title: string | null;
-  first_sound: boolean;
-  venue: { perm_id: string | null; url: string | null; name: string | null; type: string | null; schema_type: string | null; address: string | null; city: string | null };
+  venue: { perm_id: string | null; name: string | null; type: string | null };
+  // the venue's address as the source writes it
+  address: string | null;
   geom_wkt: string;
-  items: Array<{ title?: string; film_perm_id?: string; url?: string; year?: string; country?: string; director?: string; production_company?: string; live?: string }>;
+  items: ProgrammeItem[];
   sources: string[];
 };
+
+const SCREENED_AT = { id: 'screenedAt', label: 'Screened at', dated: true };
+const PERFORMED_AT = { id: 'performedAt', label: 'Performed at', dated: true };
+
+/** The first item on the bill, film or act, as the source words it. */
+function firstOnBill(items: ProgrammeItem[]): string | undefined {
+  for (const item of items) {
+    if (item.title) return item.title;
+    if (item.live) return item.live;
+  }
+  return undefined;
+}
 
 function lastDayOfMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -72,32 +87,44 @@ export class CinemaContextIngestor extends Ingestor<CinemaContextRecord> {
   protected DATASET_URL = 'https://cinemacontext.nl';
 
   protected RECORD_TYPE: RecordType = 'event';
-  // a venue is at its address, not about it (Schema.org Event.location)
-  protected RELATION_ID = 'location';
-  protected RELATION_LABEL = 'Location';
+  protected RELATION_ID = SCREENED_AT.id;
+  protected RELATION_LABEL = SCREENED_AT.label;
 
   protected PLACE_EXTRACTION_METHODS: ExtractionArgs<CinemaContextRecord> = [
-    { method: PlaceExtractionMethod.WKT, column: 'geom_wkt' }
+    { method: PlaceExtractionMethod.NAME, column: 'address' },
+    { method: PlaceExtractionMethod.WKT, column: 'geom_wkt' },
   ];
 
   protected entityFactory() {
-    return new ScreeningEventEntityFactory();
+    return new ProgrammeEntityFactory();
+  }
+
+  protected relations() {
+    return [SCREENED_AT, PERFORMED_AT];
+  }
+
+  // screened at with a film on the bill, performed at with acts only
+  protected relationFor(source: CinemaContextRecord): string {
+    if (programmeBill(source.items ?? []).films.length > 0) {
+      return SCREENED_AT.id;
+    }
+    return PERFORMED_AT.id;
   }
 
   protected transform(source: CinemaContextRecord): Draft | undefined {
     const dates = parseProgrammeDate(source.date);
-    if (!dates || !source.venue?.name) {
+    const first = firstOnBill(source.items ?? []);
+    if (!dates || !first) {
       return undefined;
     }
     return {
       // the permanent id where the source has one; the internal id keeps the rest stable
       id: source.perm_id ?? `programme-${source.programme_id}`,
       url: source.url ?? '',
-      label: source.venue.name,
+      label: first,
       description: '',
       startDate: dates.startDate,
       endDate: dates.endDate,
-      groupKey: source.venue.perm_id ?? null,
     };
   }
 }

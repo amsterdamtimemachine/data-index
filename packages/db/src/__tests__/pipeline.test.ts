@@ -226,6 +226,16 @@ describe('getFeatures', () => {
     expect(withHistorical).toBeDefined();
   });
 
+  test('a feature carries its period and whether its relation is dated', async () => {
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, pageSize: 50 });
+    expect(r.data.length).toBeGreaterThan(0);
+    for (const f of r.data) {
+      expect(f.relationDated).toBe(false);
+      expect(f.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(f.endDate! >= f.startDate!).toBe(true);
+    }
+  });
+
   test('resolves the place provider from place.source via the agents join', async () => {
     // Seeded places are all Adamlink LPs, so every feature carries the Adamlink provider.
     const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, pageSize: 50 });

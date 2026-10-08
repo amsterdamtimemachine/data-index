@@ -26,7 +26,7 @@ describe('placeTypes filter (address / street / neighbourhood / district)', () =
     await upsertSource({
       provider: { id: 'pt-org', label: 'PT Org' },
       dataset: { id: 'pt-ds', label: 'PT DS' },
-      relation: { id: 'isAbout', label: 'Is About' },
+      relations: [{ id: 'isAbout', label: 'Is About' }],
     });
 
     // One place of each type (RD/28992), all within the Amsterdam WGS84 bounds.

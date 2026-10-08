@@ -104,18 +104,17 @@ export async function setupTestDb() {
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_historical_name_place ON place_historical_name(place_id)`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_historical_name_place_since ON place_historical_name(place_id, since)`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_historical_name_lower ON place_historical_name USING btree (lower(name)) WHERE name IS NOT NULL`);
-  await db.execute(sql`CREATE TABLE IF NOT EXISTS relation (id TEXT PRIMARY KEY, label TEXT NOT NULL)`);
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS relation (id TEXT PRIMARY KEY, label TEXT NOT NULL, dated BOOLEAN NOT NULL DEFAULT false)`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS tags (id TEXT PRIMARY KEY, label TEXT NOT NULL)`);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS features (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       feature_int_id INTEGER GENERATED ALWAYS AS IDENTITY,
-      group_int_id INTEGER,
       url TEXT, record_type TEXT NOT NULL, label TEXT NOT NULL,
       label_tsv TSVECTOR GENERATED ALWAYS AS (to_tsvector('dutch', label)) STORED,
       description TEXT, content_url TEXT, start_date DATE, end_date DATE,
       dataset_id TEXT REFERENCES datasets(id),
-      temporal_frequency INTEGER, entity JSONB, group_key TEXT
+      temporal_frequency INTEGER, entity JSONB
     )
   `);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_features_dates ON features(start_date, end_date)`);

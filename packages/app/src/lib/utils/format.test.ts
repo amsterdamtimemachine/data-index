@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { PlaceSearchMatch } from '@atm/shared/types';
-import { formatPlaceWindow, formatPlaceName, formatPlaceTitle, formatPartialDate, formatDateInYear, yearWindow, foldLines } from './format';
+import { formatPlaceWindow, formatPlaceName, formatPlaceTitle, formatPartialDate, formatPeriod, foldLines } from './format';
 
 function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 	return {
@@ -90,19 +90,6 @@ describe('formatPartialDate', () => {
 	});
 });
 
-describe('formatDateInYear', () => {
-	test('drops the year and keeps the precision', () => {
-		expect(formatDateInYear('1934-01-05')).toBe('5 januari');
-		expect(formatDateInYear('1907-05')).toBe('mei');
-		expect(formatDateInYear('1928')).toBe('');
-	});
-});
-
-describe('yearWindow', () => {
-	test('a year is its first and last day', () => {
-		expect(yearWindow(1934)).toEqual({ start: '1934-01-01', end: '1934-12-31' });
-	});
-});
 
 describe('foldLines', () => {
 	test('rejoins hyphenated words and turns line breaks into spaces', () => {
@@ -111,5 +98,14 @@ describe('foldLines', () => {
 
 	test('a blank line stays a paragraph break', () => {
 		expect(foldLines('1940.\nEen Woord Tot de Jongeren\n\n"Ik wens hen te wijzen\nop de grote verantwoorde-\nlijkheid.')).toBe('1940. Een Woord Tot de Jongeren\n\n"Ik wens hen te wijzen op de grote verantwoordelijkheid.');
+	});
+});
+
+describe('formatPeriod', () => {
+	test('words a period at the precision its dates show', () => {
+		expect(formatPeriod('1934-01-05', '1934-01-05')).toBe('5 januari 1934');
+		expect(formatPeriod('1907-05-01', '1907-05-31')).toBe('mei 1907');
+		expect(formatPeriod('1928-01-01', '1928-12-31')).toBe('1928');
+		expect(formatPeriod('1934-01-05', '1935-03-02')).toBe('5 januari 1934 tot 2 maart 1935');
 	});
 });

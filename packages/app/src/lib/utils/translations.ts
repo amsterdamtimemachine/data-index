@@ -8,6 +8,9 @@ const TRANSLATIONS: Record<string, string> = {
 	person: 'Persoon',
 	text: 'Tekst',
 	event: 'Evenement',
+	// an event's subtype, in brackets after the record type
+	screening: 'vertoning',
+	performance: 'voorstelling',
 	story: 'Verhaal',
 
 	// Place types
@@ -35,13 +38,10 @@ const TRANSLATIONS: Record<string, string> = {
 
 	// Relations
 	isAbout: 'Gaat over',
-	location: 'Gevestigd op',
 	mentions: 'Noemt',
+	screenedAt: 'Vertoond op',
+	performedAt: 'Opgevoerd op',
 
-	// venue kinds (Schema.org types of an event's location)
-	MovieTheater: 'Bioscoop',
-	PerformingArtsTheater: 'Theater',
-	EventVenue: 'Andere',
 	hadLastLivingLocation: 'Laatste woonadres',
 
 	// Entity fields
@@ -50,7 +50,6 @@ const TRANSLATIONS: Record<string, string> = {
 	// screening event rows
 	film: 'Film',
 	performer: 'Optreden',
-	citation: 'Bron',
 	date: 'Datum',
 
 	// Months, for dates worded on cards
@@ -101,21 +100,21 @@ const TRANSLATIONS: Record<string, string> = {
 	featureOne: 'feature',
 	featureMany: 'features',
 	showing: 'Toont',
-	// a group card's count rows and its failed year load
-	venue: 'Locatie',
+	venue: 'Venue',
+	// a programme's bill heading: "2 films en 1 optreden op het programma"
+	filmOne: 'film',
+	filmMany: 'films',
+	actOne: 'optreden',
+	actMany: 'optredens',
+	and: 'en',
+	onTheProgramme: 'op het programma',
+	programmeSource: 'Programmabron',
 	classifier: 'Classificatiemodel',
 	// a story's rows
 	diary: 'Dagboek',
 	archive: 'Archief',
 	persons: 'Personen',
 	places: 'Plaatsen',
-	// what a venue's series holds, by its kind
-	screenings: 'Vertoningen',
-	performances: 'Voorstellingen',
-	events: 'Evenementen',
-	inYear: 'in',
-	groupYearFailedTitle: 'Programma niet geladen',
-	groupYearFailed: 'Het programma van dit jaar kon niet worden geladen.',
 	inSelection: 'in de selectie',
 	periodLabel: 'Periode',
 	showPlaceFeatures: 'Features van deze plek tonen',
@@ -139,10 +138,12 @@ const TRANSLATIONS: Record<string, string> = {
 	windowUntil: 'tot',
 	windowIn: 'in',
 	filters: 'Filters',
-	dataset: 'Dataset',
-	dataProvider: 'Databron',
-	placeDataProvider: 'Locatiebron',
-	geometrySource: 'Geometriebron',
+	// an expanded card's what and where, and its sources
+	type: 'Type',
+	dataProvider: 'Dataleverancier',
+	placeDataProvider: 'Locatieleverancier',
+	geometryProvider: 'Geometrieleverancier',
+	published: 'Gepubliceerd',
 	contentType: 'Inhoudstype',
 	topics: 'Onderwerpen',
 	topicsAny: 'Minimaal één',

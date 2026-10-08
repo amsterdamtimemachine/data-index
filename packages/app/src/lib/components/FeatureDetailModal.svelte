@@ -2,10 +2,8 @@
 	import { createDialog, melt, type CreateDialogProps } from '@melt-ui/svelte';
 	import { fade } from 'svelte/transition';
 	import { featureViewerState } from '$lib/state/featureState.svelte';
-	import X from 'phosphor-svelte/lib/X';
 	import type { FeatureResult } from '@atm/shared/types';
 	import FeatureCard from '$components/FeatureCard.svelte';
-	import Button from '$components/Button.svelte';
 
 	const handleOpenChange: CreateDialogProps['onOpenChange'] = ({ next }) => {
 		if (next === false && featureViewerState.selectedFeature) {
@@ -15,7 +13,7 @@
 	};
 
 	const {
-		elements: { overlay, content, title, close, portalled },
+		elements: { overlay, content, title, portalled },
 		states: { open }
 	} = createDialog({
 		forceVisible: true,
@@ -56,21 +54,11 @@
 			transition:fade={{ duration: 150 }}
 		></div>
 
-		<!-- Layout layer: a reserved top strip for the close button, then the centering
-		     area. The card lives in the lower area with max-h-full, so no card height can
-		     ever cover the X. pointer-events-none lets backdrop clicks through to the
-		     overlay; the button and card re-enable their own. -->
+		<!-- Layout layer: the centering area; the card carries its own close button in
+		     its header. pointer-events-none lets backdrop clicks through to the overlay;
+		     the card re-enables its own. -->
 		<div class="fixed inset-0 z-50 flex flex-col pointer-events-none">
-			<div class="h-12 shrink-0 flex items-center justify-end px-3">
-				<Button
-					icon={X}
-					size={18}
-					meltAction={$close}
-					class="pointer-events-auto"
-					aria-label="Close feature detail viewer"
-				/>
-			</div>
-			<div class="flex-1 min-h-0 flex items-center justify-center px-3 pb-3">
+			<div class="flex-1 min-h-0 flex items-center justify-center p-3">
 				<!-- Modal Content -->
 				<div
 					use:melt={$content}
@@ -87,9 +75,7 @@
 						<FeatureCard
 							feature={selectedFeature}
 							expanded={true}
-							groupYear={featureViewerState.selectedYear}
-							groupMembers={featureViewerState.yearFeatures}
-							onYearSelect={featureViewerState.selectYear}
+							onClose={featureViewerState.closeFeature}
 						/>
 					</div>
 				</div>

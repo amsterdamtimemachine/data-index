@@ -4,7 +4,7 @@ import { getPlaceMap, inferByAdamURI, inferByName, inferByPoint } from "./place-
 /**
  * Different types of methods for extracting places from objects
  */
-export enum PlaceExtractionMethod { TEXT, WKT, URI }
+export enum PlaceExtractionMethod { TEXT, WKT, URI, NAME }
 
 /**
  * Object used for args for the place-extraction-methods. 
@@ -112,6 +112,10 @@ export class PlaceIndex<SourceRecord extends Record<string, any>> {
                     break
                 case PlaceExtractionMethod.URI:
                     res = await inferByAdamURI(value)
+                    break
+                case PlaceExtractionMethod.NAME:
+                    // the whole value is one place name, matched exactly and era-ranked
+                    res = await inferByName(JSON.stringify({ area: value, start: dateRange.start, end: dateRange.end } as InferPlaceArgs))
                     break
                 case PlaceExtractionMethod.TEXT:
                 default:

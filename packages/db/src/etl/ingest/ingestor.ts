@@ -1,4 +1,4 @@
-import { upsertSource, createFeatureWriter } from '../writers/feature-writer';
+import { upsertSource, createFeatureWriter, type SourceRelation } from '../writers/feature-writer';
 import { featureUuid } from '../util/ids';
 import { NewFeature } from '../../schema';
 import { createEntityFactory, EntityFactory } from './entity-factory';
@@ -45,6 +45,16 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
         return createEntityFactory(this.RECORD_TYPE)
     }
 
+    /** Every relation this source links with; by default its one relation. */
+    protected relations(): SourceRelation[] {
+        return [{ id: this.RELATION_ID, label: this.RELATION_LABEL }]
+    }
+
+    /** The relation a record's place link takes; by default the source's one relation. */
+    protected relationFor(_source: SourceRecord): string {
+        return this.RELATION_ID
+    }
+
     protected pi: PlaceIndex<SourceRecord> | undefined;
     protected ef: EntityFactory<EntityBase> | undefined;
     protected fr: FileReader<SourceRecord> | undefined;
@@ -57,7 +67,7 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
         await upsertSource({
             provider: { id: this.ORG_ID, label: this.ORG_LABEL, url: this.ORG_URL },
             dataset: { id: this.DATASET_ID, label: this.DATASET_LABEL, url: this.DATASET_URL },
-            relation: { id: this.RELATION_ID, label: this.RELATION_LABEL },            
+            relations: this.relations(),
         })
     }
 
@@ -130,7 +140,7 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
                 }
 
                 if (!fMap.get(feature.id)!.has(placeId)) {
-                    this.writer.addLink({ featureId: feature.id, placeId, relationId: this.RELATION_ID })
+                    this.writer.addLink({ featureId: feature.id, placeId, relationId: this.relationFor(source) })
                     fMap.get(feature.id)?.add(placeId)
                 }
             } catch (error) {

@@ -23,9 +23,8 @@ type UncoveredRow = { uncovered: string };
  * distinct count.
  *
  * Roaring bitmaps hold int4, but features.id is a uuid, so the buckets pack
- * features.feature_int_id — the DB-assigned surrogate — or, for a grouped feature,
- * its group_int_id, so a group is one entry. Because both are persisted, an
- * external id set (e.g. text-search matches mapped through the same columns) can be
+ * features.feature_int_id — the DB-assigned surrogate. Because it is persisted, an
+ * external id set (e.g. text-search matches mapped through the same column) can be
  * intersected with these bitmaps after the rebuild.
  */
 export async function buildCellFeatures() {
@@ -48,7 +47,7 @@ export async function buildCellFeatures() {
         f.record_type,
         f.dataset_id,
         p.type AS place_type,
-        COALESCE(f.group_int_id, f.feature_int_id) AS n
+        f.feature_int_id AS n
       FROM ${placeCells} pc
       JOIN ${featureToPlace} fp ON pc.place_id = fp.place_id
       JOIN ${features} f ON fp.feature_id = f.id

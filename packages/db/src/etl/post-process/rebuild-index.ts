@@ -23,30 +23,6 @@ type StatsRow = {
   max_y: number;
 };
 
-/**
- * The surrogate the bitmaps store for a grouped feature: every member of a dataset
- * and group_key shares the group's smallest feature_int_id, so a group is one entry
- * in every index and the heatmap, the histogram and the feature list count the
- * same thing. Features without a group_key keep null and store their own id.
- */
-async function assignGroupIntIds() {
-  console.log('\nAssigning group ids...');
-  const result = await db.execute(sql`
-    UPDATE ${features} f
-    SET group_int_id = g.min_id
-    FROM (
-      SELECT dataset_id, group_key, MIN(feature_int_id) AS min_id
-      FROM ${features}
-      WHERE group_key IS NOT NULL
-      GROUP BY dataset_id, group_key
-    ) g
-    WHERE f.dataset_id = g.dataset_id AND f.group_key = g.group_key
-      AND f.group_int_id IS DISTINCT FROM g.min_id
-  `);
-  await db.execute(sql`UPDATE ${features} SET group_int_id = NULL WHERE group_key IS NULL AND group_int_id IS NOT NULL`);
-  console.log(`  ${result.rowCount ?? 0} features assigned`);
-}
-
 export async function rebuildIndex() {
   console.log('=== Rebuilding place_cells at 100m resolution ===\n');
 
@@ -306,8 +282,6 @@ export async function rebuildIndex() {
       }
     });
   console.log('  Grid config updated');
-
-  await assignGroupIntIds();
 
   // Depends on place_cells, so it has to come after the rasterisation above.
   await buildCellFeatures();

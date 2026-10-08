@@ -1,5 +1,5 @@
 import type { AgentKind } from '@atm/shared';
-import { pgTable, text, date, smallint, integer, uuid, jsonb, real, doublePrecision, customType, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, date, smallint, integer, boolean, uuid, jsonb, real, doublePrecision, customType, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { PlaceSource } from '@atm/shared';
 
@@ -112,7 +112,10 @@ export const placeHistoricalName = pgTable('place_historical_name', {
 // ============================================================================
 export const relation = pgTable('relation', {
   id: text('id').primaryKey(),
-  label: text('label').notNull()
+  label: text('label').notNull(),
+  // the feature's date belongs to the relation itself (screened at a place on a
+  // day), so the card words it with the place
+  dated: boolean('dated').notNull().default(false)
 });
 
 // ============================================================================
@@ -131,10 +134,6 @@ export const features = pgTable('features', {
   // roaring-bitmap surrogate: bitmaps hold int4 and id is a uuid. DB-assigned on
   // insert; only build-cell-features and the search-bitmap helper may read it.
   featureIntId: integer('feature_int_id').generatedAlwaysAsIdentity(),
-  // the surrogate the bitmaps store for a grouped feature: the smallest
-  // feature_int_id of its dataset and group_key, so a group counts once. Written by
-  // rebuild-index, null without a group_key.
-  groupIntId: integer('group_int_id'),
   url: text('url').notNull(),
   recordType: text('record_type').notNull(),
   label: text('label').notNull(),
@@ -148,13 +147,9 @@ export const features = pgTable('features', {
   datasetId: text('dataset_id').notNull().references(() => datasets.id),
   temporalFrequency: integer('temporal_frequency'),
   entity: jsonb('entity'),
-  // features of one dataset sharing a key belong together (a cinema's programmes:
-  // the venue's permanent id); null for datasets without such a grouping
-  groupKey: text('group_key'),
 }, (table) => [
   index('idx_features_dates').on(table.startDate, table.endDate),
   index('idx_features_record_type').on(table.recordType),
-  index('idx_features_group_key').on(table.datasetId, table.groupKey),
   uniqueIndex('idx_features_int_id').on(table.featureIntId),
   index('idx_features_label_fts').using('gin', table.labelTsv)
 ]);

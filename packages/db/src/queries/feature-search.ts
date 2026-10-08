@@ -19,14 +19,12 @@ export function searchRank(tsvCol: SQL, q: string): SQL {
 }
 
 /**
- * Scalar subquery: roaring bitmap of feature_int_id (group_int_id for a grouped
- * feature) over every feature matching q —
+ * Scalar subquery: roaring bitmap of feature_int_id over every feature matching q —
  * the search set the cell_features intersections consume. Uncorrelated, so Postgres
  * evaluates it once per statement. NULL when nothing matches (including a q of only
  * stopwords, which parses to an empty tsquery); countMatchesExpr folds that to 0.
  */
 export function searchBitmap(q: string): SQL {
-  return sql`(SELECT rb_build(array_agg(n ORDER BY n))
-    FROM (SELECT DISTINCT COALESCE(group_int_id, feature_int_id) AS n
-          FROM ${features} WHERE ${searchMatch(sql`${features.labelTsv}`, q)}) matched)`;
+  return sql`(SELECT rb_build(array_agg(feature_int_id ORDER BY feature_int_id))
+    FROM ${features} WHERE ${searchMatch(sql`${features.labelTsv}`, q)})`;
 }

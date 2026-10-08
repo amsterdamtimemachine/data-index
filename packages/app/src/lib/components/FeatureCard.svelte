@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { FeatureResult, GroupFeature } from '@atm/shared/types';
+	import type { FeatureResult } from '@atm/shared/types';
 	import { translate, translateAll } from '$utils/translations';
-	import { resolveCardFields, dataSourceFields } from '$utils/cardFields';
+	import { resolveCardFields, dataSourceFields, identityFields, programmeBillRows, programmeBillHeading, relationLine } from '$utils/cardFields';
 	import { featureViewerState } from '$lib/state/featureState.svelte';
 	import FeatureCardHeader from '$components/FeatureCardHeader.svelte';
 	import FeatureCardImage from '$components/FeatureCardImage.svelte';
@@ -9,32 +9,39 @@
 	import FieldList from '$components/FieldList.svelte';
 	import TagList from '$components/TagList.svelte';
 	import Heading from '$components/Heading.svelte';
-	import FeatureCardProgrammeByYear from '$components/FeatureCardProgrammeByYear.svelte';
 	import { foldLines } from '$utils/format';
 
 	type Props = {
 		feature: FeatureResult;
 		expanded?: boolean;
-		// a group row's expanded view: the year shown, its members, and the strip's callback
-		groupYear?: number | null;
-		groupMembers?: GroupFeature[];
-		onYearSelect?: (year: number) => void;
+		// an expanded card's close button, in the header where the expand button sits
+		onClose?: () => void;
 	};
 
-	let { feature, expanded = false, groupYear = null, groupMembers = [], onYearSelect }: Props = $props();
+	let { feature, expanded = false, onClose }: Props = $props();
 
 	// the per-type content keys on the entity
 	const entityType = $derived(feature.entity?.type);
 
-	// one list: the entity's fields, then the data source rows (which are empty when collapsed)
-	const entityFields = $derived(feature.entity ? resolveCardFields(feature.entity, expanded) : []);
-	const detailFields = $derived([...entityFields, ...dataSourceFields(feature, expanded)]);
+	const placeLine = $derived(relationLine(feature));
 
-	const series = $derived.by(() => {
-		if (feature.entity?.type === 'EventSeries') {
-			return feature.entity;
+	// collapsed: the summary fields; expanded: every field, between what and where and the sources
+	const entityFields = $derived(feature.entity ? resolveCardFields(feature.entity, expanded) : []);
+	// expanded: what and where, the item's own fields, then where it comes from
+	const detailFields = $derived.by(() => {
+		if (!expanded) {
+			return entityFields;
 		}
-		return null;
+		return [...identityFields(feature), ...entityFields, ...dataSourceFields(feature, expanded)];
+	});
+
+	const billHeading = $derived(programmeBillHeading(feature.entity));
+	// a programme's whole bill, films and acts, when expanded
+	const billRows = $derived.by(() => {
+		if (!expanded) {
+			return [];
+		}
+		return programmeBillRows(feature.entity);
 	});
 	// a story's transcription read as prose: the whole text when expanded, the
 	// description's excerpt collapsed
@@ -48,7 +55,7 @@
 		return foldLines(feature.description ?? '');
 	});
 	// the content region scrolls for these: the blocks above and below it cast the edge shadows
-	const scrollingContent = $derived(expanded && (series !== null || storyText !== null));
+	const scrollingContent = $derived(expanded && (billRows.length > 0 || storyText !== null));
 	const SHADOW_DOWN = 'shadow-edge-down';
 	const SHADOW_UP = 'shadow-edge-up';
 
@@ -61,9 +68,9 @@
 		}
 		return 'px-2 py-2 shrink-0';
 	});
-	// a story has no strip: its title and place line cast the shadow onto the text
+	// the title and place line cast the shadow onto content that scrolls under them
 	const titleBlockClasses = $derived.by(() => {
-		if (expanded && storyText !== null) {
+		if (scrollingContent) {
 			return `shrink-0 relative z-10 bg-atm-sand pb-1 ${SHADOW_DOWN}`;
 		}
 		return 'shrink-0';
@@ -84,11 +91,24 @@
 		}
 		return 'p-2';
 	});
+	// expanded, text and bills scroll; a picture never does, it shrinks to the room
+	// left between the title and the fields and is shown whole
 	const contentClasses = $derived.by(() => {
-		if (expanded) {
-			return 'min-h-0 overflow-y-auto';
+		if (!expanded) {
+			return '';
 		}
-		return '';
+		if (entityType === 'MediaObject' && feature.contentUrl) {
+			return 'min-h-0 flex flex-col overflow-hidden';
+		}
+		return 'min-h-0 overflow-y-auto';
+	});
+
+	// collapsed cards open; an expanded card has nothing further to open
+	const expandHandler = $derived.by(() => {
+		if (expanded) {
+			return undefined;
+		}
+		return handleExpand;
 	});
 
 	function handleExpand() {
@@ -97,7 +117,7 @@
 </script>
 
 <div class={rootClasses}>
-	<FeatureCardHeader class="p-2 shrink-0" {feature} {expanded} onExpand={handleExpand} />
+	<FeatureCardHeader class="p-2 shrink-0" {feature} onExpand={expandHandler} {onClose} />
 	<div class={bodyClasses}>
 		<div class={titleBlockClasses}>
 			<Heading
@@ -108,17 +128,10 @@
 			>
 				{feature.label}
 			</Heading>
-			{#if feature.relationId || feature.displayName || feature.historicalLabel}
-				{@const placeName = feature.historicalLabel || feature.displayName}
-				{@const showBoth = feature.historicalLabel && feature.displayName && feature.historicalLabel !== feature.displayName}
-				<p class="italic text-gray-500 {expanded ? 'px-2 mb-2' : 'mb-1'} text-base">
-					{feature.relationId ? translate(feature.relationId) : ''}{placeName ? ` ${placeName}` : ''}{showBoth ? ` (nu ${feature.displayName})` : ''}
-				</p>
+			{#if placeLine}
+				<p class="italic text-gray-500 {expanded ? 'px-2 mb-2' : 'mb-1'} text-base">{placeLine}</p>
 			{/if}
 		</div>
-		{#if series && expanded}
-			<FeatureCardProgrammeByYear {series} year={groupYear} members={groupMembers} {onYearSelect} />
-		{/if}
 		<!-- Entity-specific content: the region that scrolls when expanded -->
 		<div class={contentClasses}>
 			{#if entityType === 'MediaObject' && feature.contentUrl}
@@ -128,6 +141,12 @@
 					{expanded}
 					onExpand={handleExpand}
 				/>
+			{/if}
+			{#if billRows.length > 0}
+				{#if billHeading}
+					<p class="px-2 pt-3 text-base text-gray-700">{billHeading}</p>
+				{/if}
+				<FieldList fields={billRows} class="px-2 py-3" />
 			{/if}
 			{#if storyText !== null}
 				<FeatureCardText text={storyText} {expanded} />

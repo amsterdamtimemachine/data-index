@@ -1,6 +1,4 @@
 import type { HeatmapCellBounds } from './heatmap';
-import type { VenueKind } from '../vocab/venues';
-export type { VenueKind } from '../vocab/venues';
 
 export type RecordType = 'image' | 'text' | 'person' | 'event' | 'story' | 'unknown';
 
@@ -38,7 +36,7 @@ export interface MatchFilters {
  */
 export interface EntityBase {
   id?: string;
-  type: "Person" | "CreativeWork" | "MediaObject" | "ScreeningEvent" | "EventSeries" | "Manuscript";
+  type: "Person" | "CreativeWork" | "MediaObject" | "ScreeningEvent" | "TheaterEvent" | "Manuscript";
   name: string;
 }
 
@@ -73,47 +71,37 @@ export interface MovieEntity {
 }
 
 /**
- * The venue of a screening; identifier is its permanent id at the source. The type
- * follows the source's venue kind: a cinema or a travelling cinema is a MovieTheater,
- * a theatre a PerformingArtsTheater, a hall, club premises or an unknown kind an
- * EventVenue. additionalType keeps the source's own wording.
+ * The venue of a programme, as the source records it: identifier is its permanent id
+ * at the source, additionalType the source's own kind ("Cinema", "mobile theatre").
  */
 export interface VenueEntity {
-  type: VenueKind;
+  type: "Place";
   name: string;
   identifier: string;
   additionalType?: string;
   address?: string;
-  url?: string;
 }
 
-/** One programme: a screening at a venue on a date, with its bill. */
-export interface ScreeningEventEntity extends EntityBase {
-  type: "ScreeningEvent";
-  // the programme's own title where the source has one
-  alternateName?: string;
-  // source precision: YYYY-MM-DD, or YYYY-MM for a partial date
+/** One programme at a venue on a date, with its bill and the newspapers it was listed in. */
+interface ProgrammeEntity extends EntityBase {
+  // source precision: YYYY-MM-DD, YYYY-MM or YYYY
   startDate: string;
   location: VenueEntity;
   workPresented: MovieEntity[];
-  // a live act on the bill, as the source words it
-  performer?: string;
-  // the newspapers the programme was taken from
+  // the live acts on the bill, as the source words them
+  performer?: string[];
+  // the newspapers the programme was listed in
   citation?: string[];
 }
 
-/**
- * A dataset's features sharing a group key, as one row of the feature list: a
- * cinema's programmes. Never stored; the list query derives it from the members in
- * the population, so the span and the years follow the period and the filters.
- */
-export interface EventSeriesEntity extends EntityBase {
-  type: "EventSeries";
-  location: VenueEntity;
-  startDate: string;
-  endDate: string;
-  // members per year, ascending
-  years: Array<{ year: number; count: number }>;
+/** A programme with at least one film on its bill. */
+export interface ScreeningEventEntity extends ProgrammeEntity {
+  type: "ScreeningEvent";
+}
+
+/** A programme with live acts only. */
+export interface TheaterEventEntity extends ProgrammeEntity {
+  type: "TheaterEvent";
 }
 
 /** A thing a work refers to, as the annotators identified it, with its page at the source that identifies it. */
@@ -149,7 +137,7 @@ export interface ManuscriptEntity extends EntityBase {
 }
 
 /** Discriminated union of all concrete entity types. */
-export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity | ScreeningEventEntity | EventSeriesEntity | ManuscriptEntity;
+export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity | ScreeningEventEntity | TheaterEventEntity | ManuscriptEntity;
 
 
 /**
@@ -201,20 +189,21 @@ export interface FeatureResult {
   description?: string;
   contentUrl?: string;
   dateRange: [number, number];
+  // the feature's period, YYYY-MM-DD, inclusive
+  startDate?: string;
+  endDate?: string;
   tags: string[]; // tag ids; the UI translates them
   // the classifier models behind the tags, one row each on the card
   classifiers: Classifier[];
-  datasetId?: string;
   datasetLabel?: string;
-  // set on a group row: with datasetId, the key for /api/features/group
-  groupKey?: string;
-  datasetUrl?: string;
   providerLabel?: string;
   providerUrl?: string;
   spatialFrequency: number;
   temporalFrequency: number;
   entity?: Entity;
   relationId?: string;
+  // the date belongs to the relation (screened at a place on a day): the card words it with the place
+  relationDated?: boolean;
   displayName?: string;
   historicalLabel?: string;
   placeSource?: PlaceSource;
@@ -222,31 +211,9 @@ export interface FeatureResult {
   placeProviderLabel?: string;
   placeProviderUrl?: string;
   // Set only when the geometry comes from a different provider than the place
-  // (e.g. an Adamlink street backfilled from NWB); links to that source record.
+  // (e.g. an Adamlink street backfilled from NWB): that provider and its page.
   geometryProviderLabel?: string;
-  geometryUrl?: string;
-}
-
-/** The members of one group (a dataset's features sharing a group key) in a date window. */
-export interface GroupFeaturesQuery {
-  datasetId: string;
-  groupKey: string;
-  // inclusive, YYYY-MM-DD
-  start: string;
-  end: string;
-}
-
-export interface GroupFeature {
-  id: string;
-  url?: string;
-  label: string;
-  startDate: string;
-  endDate: string;
-  entity?: Entity;
-}
-
-export interface GroupFeaturesResponse {
-  data: GroupFeature[];
+  geometryProviderUrl?: string;
 }
 
 /**

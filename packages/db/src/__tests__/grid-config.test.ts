@@ -31,7 +31,7 @@ describe('grid_config + display-grid derivation', () => {
     await upsertSource({
       provider: { id: 'gc-org', label: 'GC Org' },
       dataset: { id: 'gc-ds', label: 'GC DS' },
-      relation: { id: 'isAbout', label: 'Is About' },
+      relations: [{ id: 'isAbout', label: 'Is About' }],
     });
     await db.execute(sql`INSERT INTO place (id, type) VALUES ('gc-sw', 'address'), ('gc-ne', 'address')`);
     await db.execute(sql`INSERT INTO place_geometry (place_id, geometry) VALUES ('gc-sw', ST_SetSRID(ST_MakePoint(${ORIGIN_X}, ${ORIGIN_Y}), 28992)), ('gc-ne', ST_SetSRID(ST_MakePoint(${NE_X}, ${NE_Y}), 28992))`);

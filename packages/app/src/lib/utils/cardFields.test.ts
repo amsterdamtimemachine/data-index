@@ -1,75 +1,61 @@
 import { describe, test, expect } from 'vitest';
-import type { GroupFeature, EventSeriesEntity, FeatureResult } from '@atm/shared/types';
-import { groupMemberRows, entityKind, seriesMemberCount, resolveCardFields, dataSourceFields } from './cardFields';
+import type { ScreeningEventEntity, TheaterEventEntity, FeatureResult } from '@atm/shared/types';
+import { resolveCardFields, dataSourceFields, identityFields, programmeBillRows, programmeBillHeading, entitySubtype, relationLine } from './cardFields';
 
-const programme: GroupFeature = {
-	id: 'a',
-	url: 'https://cinemacontext.nl/id/V1',
-	label: 'Rialto',
+const screening: ScreeningEventEntity = {
+	type: 'ScreeningEvent',
+	id: 'V1',
+	name: 'Mello Wendini, komisch dressuur act',
 	startDate: '1934-01-05',
-	endDate: '1934-01-05',
-	entity: {
-		type: 'ScreeningEvent',
-		name: 'Rialto',
-		alternateName: 'jeugdbioscoop',
-		startDate: '1934-01-05',
-		location: { type: 'MovieTheater', name: 'Rialto', identifier: 'B1' },
-		workPresented: [
-			{ type: 'Movie', name: 'Skippy (1931)', url: 'https://cinemacontext.nl/id/F1' },
-			{ type: 'Movie', name: 'Reis naar de maan, De' }
-		],
-		performer: 'Dumas, humorist'
-	}
+	location: { type: 'Place', name: 'Rialto', identifier: 'B1', additionalType: 'Cinema', address: 'Ceintuurbaan 338' },
+	workPresented: [
+		{ type: 'Movie', name: 'Skippy (1931)', url: 'https://cinemacontext.nl/id/F1' },
+		{ type: 'Movie', name: 'Reis naar de maan, De' }
+	],
+	performer: ['Mello Wendini, komisch dressuur act'],
+	citation: ['Telegraaf', 'Het Parool']
 };
 
-const series: EventSeriesEntity = {
-	type: 'EventSeries',
-	name: 'Rialto',
-	location: { type: 'MovieTheater', name: 'Rialto', identifier: 'B1', url: 'https://cinemacontext.nl/id/B1' },
-	startDate: '1934-01-05',
-	endDate: '1960-03-04',
-	years: [{ year: 1934, count: 3 }, { year: 1960, count: 1 }]
+const theatre: TheaterEventEntity = {
+	type: 'TheaterEvent',
+	name: 'Allison Troep, acrobaten',
+	startDate: '1907-05',
+	location: { type: 'Place', name: 'Carr', identifier: 'B2' },
+	workPresented: [],
+	performer: ['Allison Troep, acrobaten']
 };
 
-describe('groupMemberRows', () => {
-	test('a programme is its linked date beside its first film, the rest of the bill under it', () => {
-		expect(groupMemberRows([programme])).toEqual([
-			{ label: '5 januari', labelHref: programme.url, value: 'Skippy (1931)', href: 'https://cinemacontext.nl/id/F1' },
-			{ label: '', value: 'Reis naar de maan, De', href: undefined },
-			{ label: '', value: 'Dumas, humorist', muted: true }
-		]);
+describe('programme cards', () => {
+	test('collapsed: the venue', () => {
+		expect(resolveCardFields(screening, false)).toEqual([{ label: 'Venue', value: 'Rialto', href: undefined }]);
 	});
 
-	test('a programme without a page has no label link; without a bill it is its date alone', () => {
-		const bare: GroupFeature = {
-			...programme,
-			url: undefined,
-			entity: { ...programme.entity!, type: 'ScreeningEvent', startDate: '1907-05', workPresented: [], performer: undefined } as GroupFeature['entity']
-		};
-		expect(groupMemberRows([bare])).toEqual([{ label: 'mei', labelHref: undefined, value: '' }]);
-	});
-});
-
-describe('EventSeries fields', () => {
-	test('the collapsed card shows the venue under its kind, linked, then what it holds over the period', () => {
-		expect(seriesMemberCount(series)).toBe(4);
-		expect(resolveCardFields(series, false)).toEqual([
-			{ label: 'Bioscoop', value: 'Rialto', href: 'https://cinemacontext.nl/id/B1' },
-			{ label: 'Vertoningen', value: '4' }
-		]);
+	test('expanded adds the newspapers the programme was listed in', () => {
+		expect(resolveCardFields(screening, true)[1]).toEqual({ label: 'Programmabron', value: 'Telegraaf, Het Parool', href: undefined });
+		expect(resolveCardFields(theatre, true).length).toBe(1);
 	});
 
-	test('the words follow the venue kind: a theatre holds performances, the catch-all events', () => {
-		const theatre: EventSeriesEntity = { ...series, location: { type: 'PerformingArtsTheater', name: 'Carré', identifier: 'B2' } };
-		expect(resolveCardFields(theatre, false)).toEqual([
-			{ label: 'Theater', value: 'Carré', href: undefined },
-			{ label: 'Voorstellingen', value: '4' }
+	test('a bill of several items gets a heading worded from it; one item gets none', () => {
+		expect(programmeBillHeading(screening)).toBe('2 films en 1 optreden op het programma');
+		expect(programmeBillHeading({ ...theatre, performer: ['a', 'b'] })).toBe('2 optredens op het programma');
+		expect(programmeBillHeading(theatre)).toBeNull();
+		expect(programmeBillHeading({ type: 'Person', name: 'x' })).toBeNull();
+	});
+
+	test('the bill: every film linked where it has a page, then every act', () => {
+		expect(programmeBillRows(screening)).toEqual([
+			{ label: 'Film', value: 'Skippy (1931)', href: 'https://cinemacontext.nl/id/F1' },
+			{ label: 'Film', value: 'Reis naar de maan, De', href: undefined },
+			{ label: 'Optreden', value: 'Mello Wendini, komisch dressuur act' }
 		]);
-		const hall: EventSeriesEntity = { ...series, location: { type: 'EventVenue', name: 'Carr', identifier: 'B3' } };
-		expect(resolveCardFields(hall, false)).toEqual([
-			{ label: 'Locatie', value: 'Carr', href: undefined },
-			{ label: 'Evenementen', value: '4' }
-		]);
+		expect(programmeBillRows({ type: 'Person', name: 'x' })).toEqual([]);
+		expect(programmeBillRows(undefined)).toEqual([]);
+	});
+
+	test('the subtype follows the type: a screening or a performance', () => {
+		expect(entitySubtype(screening)).toBe('screening');
+		expect(entitySubtype(theatre)).toBe('performance');
+		expect(entitySubtype({ type: 'Person', name: 'x' })).toBeNull();
 	});
 
 	test('labels reach the list as text', () => {
@@ -80,27 +66,60 @@ describe('EventSeries fields', () => {
 	});
 });
 
-describe('entityKind', () => {
-	test('an event names its venue kind; other entities none', () => {
-		expect(entityKind(programme.entity)).toBe('MovieTheater');
-		expect(entityKind({ type: 'Person', name: 'x' })).toBeNull();
-		expect(entityKind(undefined)).toBeNull();
+describe('relationLine', () => {
+	const base = {
+		id: 'f', recordType: 'event', label: 'x', dateRange: [1934, 1934], tags: [], classifiers: [], spatialFrequency: 1, temporalFrequency: 1,
+		relationId: 'screenedAt', displayName: 'Ceintuurbaan 338', startDate: '1934-01-05', endDate: '1934-01-05'
+	} as FeatureResult;
+
+	test('a dated relation carries the date at its precision', () => {
+		expect(relationLine({ ...base, relationDated: true })).toBe('Vertoond op Ceintuurbaan 338, 5 januari 1934');
+		expect(relationLine({ ...base, relationDated: true, startDate: '1907-05-01', endDate: '1907-05-31' })).toBe('Vertoond op Ceintuurbaan 338, mei 1907');
+	});
+
+	test('an undated relation names the place only, with its current name when it changed', () => {
+		expect(relationLine({ ...base, relationId: 'isAbout', relationDated: false })).toBe('Gaat over Ceintuurbaan 338');
+		expect(relationLine({ ...base, relationId: 'isAbout', historicalLabel: 'Plaetse', displayName: 'Dam' })).toBe('Gaat over Plaetse (nu Dam)');
 	});
 });
 
-describe('dataSourceFields', () => {
-	test('the classifier models behind the tags are linked rows after the dataset', () => {
-		const feature = {
-			id: 'f', recordType: 'image', label: 'x', dateRange: [1900, 1900], tags: ['maps'], spatialFrequency: 1, temporalFrequency: 1,
-			providerLabel: 'Stadsarchief', providerUrl: 'https://archief.amsterdam', datasetLabel: 'Beeldbank',
-			classifiers: [{ id: 'siglip2', label: 'SigLIP 2', url: 'https://example.org/siglip' }, { id: 'b', label: 'Baseline' }]
-		} as FeatureResult;
-		expect(dataSourceFields(feature, true).map((r) => [r.label, r.value, r.href])).toEqual([
-			['Databron', 'Stadsarchief', 'https://archief.amsterdam'],
-			['Dataset', 'Beeldbank', undefined],
-			['Classificatiemodel', 'SigLIP 2', 'https://example.org/siglip'],
-			['Classificatiemodel', 'Baseline', undefined]
+describe('expanded rows: what and where, then the sources', () => {
+	const beeldbank = {
+		id: 'f', recordType: 'image', label: 'x', dateRange: [1900, 1900], tags: ['maps'], spatialFrequency: 1, temporalFrequency: 1,
+		url: 'https://id.archief.amsterdam/f', providerLabel: 'Amsterdam Stadsarchief', providerUrl: 'https://archief.amsterdam', datasetLabel: 'Beeldbank',
+		placeType: 'street', displayName: 'Keizersgracht', placeUrl: 'https://adamlink.nl/geo/street/keizersgracht/2337',
+		placeProviderLabel: 'Adamlink', placeProviderUrl: 'https://adamlink.nl',
+		geometryProviderLabel: 'NWB', geometryProviderUrl: 'https://www.rijkswaterstaat.nl',
+		classifiers: [{ id: 'siglip2', label: 'SigLIP 2', url: 'https://example.org/siglip' }]
+	} as FeatureResult;
+
+	test('the type, then the place labelled by its type and linked to its record', () => {
+		expect(identityFields(beeldbank).map((r) => [r.label, r.value, r.href])).toEqual([
+			['Type', 'Afbeelding', undefined],
+			['Straat', 'Keizersgracht', 'https://adamlink.nl/geo/street/keizersgracht/2337']
 		]);
-		expect(dataSourceFields(feature, false)).toEqual([]);
+		const renamed = { ...beeldbank, historicalLabel: 'Keizersgragt', displayName: 'Keizersgracht' } as FeatureResult;
+		expect(identityFields(renamed)[1].value).toBe('Keizersgragt (nu Keizersgracht)');
+		const event = { ...beeldbank, recordType: 'event', entity: screening } as FeatureResult;
+		expect(identityFields(event)[0].value).toBe('Evenement, vertoning');
+	});
+
+	test('Bron links the record; a provider shows when it is someone else; the leveranciers link their pages', () => {
+		expect(dataSourceFields(beeldbank, true).map((r) => [r.label, r.value, r.href])).toEqual([
+			['Bron', 'Beeldbank', 'https://id.archief.amsterdam/f'],
+			['Dataleverancier', 'Amsterdam Stadsarchief', 'https://archief.amsterdam'],
+			['Classificatiemodel', 'SigLIP 2', 'https://example.org/siglip'],
+			['Locatieleverancier', 'Adamlink', 'https://adamlink.nl'],
+			['Geometrieleverancier', 'NWB', 'https://www.rijkswaterstaat.nl']
+		]);
+		const own = { ...beeldbank, providerLabel: 'Cinema Context', datasetLabel: 'Cinema Context', classifiers: [], geometryProviderLabel: undefined };
+		expect(dataSourceFields(own, true).map((r) => r.label)).toEqual(['Bron', 'Locatieleverancier']);
+		expect(dataSourceFields(beeldbank, false)).toEqual([]);
+	});
+
+	test('a text shows the issue it appeared in', () => {
+		expect(resolveCardFields({ type: 'CreativeWork', name: 'x', dateCreated: '1967-01-03' }, true)).toEqual([
+			{ label: 'Gepubliceerd', value: '3 januari 1967', href: undefined }
+		]);
 	});
 });

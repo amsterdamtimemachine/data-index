@@ -1,4 +1,4 @@
-import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, MovieEntity, ManuscriptEntity, MentionEntity, VenueKind, VENUE_KINDS, VENUE_KIND_FALLBACK, RecordType } from "@atm/shared";
+import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, TheaterEventEntity, MovieEntity, ManuscriptEntity, MentionEntity, RecordType } from "@atm/shared";
 import { formatDateRange } from "../util/dates";
 import { Draft } from "./ingestor";
 
@@ -51,27 +51,15 @@ export class MediaObjectEntityFactory extends EntityFactory<MediaObjectEntity> {
 }
 
 // the source row's shape, as the cinema-context source reads it
-type ScreeningVenue = { perm_id?: string; url?: string; name?: string; type?: string; schema_type?: string; address?: string };
-type ScreeningItem = { title?: string; url?: string; year?: string; country?: string; director?: string; production_company?: string; live?: string };
+type ProgrammeVenue = { perm_id?: string; name?: string; type?: string };
+export type ProgrammeItem = { title?: string; url?: string; year?: string; country?: string; director?: string; production_company?: string; live?: string };
 
-export class ScreeningEventEntityFactory extends EntityFactory<ScreeningEventEntity> {
-    create(feature: Draft, data: Map<string, unknown>): ScreeningEventEntity {
-        const venue = (data.get('venue') ?? {}) as ScreeningVenue;
-        const items = (data.get('items') ?? []) as ScreeningItem[];
-        const sources = (data.get('sources') ?? []) as string[];
-        const programmeTitle = data.get('programme_title');
-        const date = data.get('date');
-        const permId = data.get('perm_id');
-
-        const films: MovieEntity[] = [];
-        const acts: string[] = [];
-        for (const item of items) {
-            if (item.live) {
-                acts.push(item.live);
-            }
-            if (!item.title) {
-                continue;
-            }
+/** A programme's bill split into its films and its live acts, each in bill order. */
+export function programmeBill(items: ProgrammeItem[]): { films: MovieEntity[]; acts: string[] } {
+    const films: MovieEntity[] = [];
+    const acts: string[] = [];
+    for (const item of items) {
+        if (item.title) {
             films.push({
                 type: 'Movie',
                 name: item.title,
@@ -82,34 +70,49 @@ export class ScreeningEventEntityFactory extends EntityFactory<ScreeningEventEnt
                 ...(item.production_company && { productionCompany: item.production_company }),
             });
         }
+        if (item.live) {
+            acts.push(item.live);
+        }
+    }
+    return { films, acts };
+}
+
+/** A programme: a ScreeningEvent when its bill has a film, a TheaterEvent when it has acts only. */
+export class ProgrammeEntityFactory extends EntityFactory<ScreeningEventEntity | TheaterEventEntity> {
+    create(feature: Draft, data: Map<string, unknown>): ScreeningEventEntity | TheaterEventEntity {
+        const venue = (data.get('venue') ?? {}) as ProgrammeVenue;
+        const address = data.get('address');
+        const sources = (data.get('sources') ?? []) as string[];
+        const date = data.get('date');
+        const permId = data.get('perm_id');
+        const { films, acts } = programmeBill((data.get('items') ?? []) as ProgrammeItem[]);
+
+        let type: 'ScreeningEvent' | 'TheaterEvent' = 'TheaterEvent';
+        if (films.length > 0) {
+            type = 'ScreeningEvent';
+        }
+        let startDate = feature.startDate;
+        if (typeof date === 'string') {
+            startDate = date.replace(/-xx-xx$/, '').replace(/-xx$/, '');
+        }
 
         return {
-            type: 'ScreeningEvent',
+            type,
             ...(typeof permId === 'string' && { id: permId }),
             name: feature.label,
-            ...(typeof programmeTitle === 'string' && { alternateName: programmeTitle }),
-            startDate: typeof date === 'string' ? date.replace(/-xx$/, '').replace(/-xx-xx$/, '') : feature.startDate,
+            startDate,
             location: {
-                type: venueType(venue.schema_type),
+                type: 'Place',
                 name: venue.name ?? '',
                 identifier: venue.perm_id ?? '',
                 ...(venue.type && { additionalType: venue.type }),
-                ...(venue.address && { address: venue.address }),
-                ...(venue.url && { url: venue.url }),
+                ...(typeof address === 'string' && address && { address }),
             },
             workPresented: films,
-            ...(acts.length > 0 && { performer: acts.join('; ') }),
+            ...(acts.length > 0 && { performer: acts }),
             ...(sources.length > 0 && { citation: sources }),
         };
     }
-}
-// the export names the venue's Schema.org type; anything else is the catch-all kind
-function venueType(named: string | undefined): VenueKind {
-    const known = VENUE_KINDS.find((t) => t === named);
-    if (known) {
-        return known;
-    }
-    return VENUE_KIND_FALLBACK;
 }
 
 // the source row's shape, as the amsterdam-diaries source reads it

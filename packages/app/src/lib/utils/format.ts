@@ -44,15 +44,33 @@ export function formatPartialDate(date: string): string {
 	return `${parseInt(day, 10)} ${monthName} ${year}`;
 }
 
-/** The day and month of a partial date, for rows under a year: "5 januari", "januari", or nothing for a bare year. */
-export function formatDateInYear(date: string): string {
-	const match = date.match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/);
-	if (!match) return date;
-	const [, , month, day] = match;
-	if (!month) return '';
-	const monthName = translate(MONTH_KEYS[parseInt(month, 10) - 1] ?? '');
-	if (!day) return monthName;
-	return `${parseInt(day, 10)} ${monthName}`;
+function lastDayOfMonth(year: number, month: number): number {
+	return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/**
+ * Word an inclusive period (YYYY-MM-DD) at the precision its dates show: one day
+ * reads "5 januari 1934", a whole month "mei 1907", a whole year "1907", anything
+ * else "5 januari 1934 tot 2 maart 1935".
+ */
+export function formatPeriod(start: string, end: string): string {
+	if (start === end) {
+		return formatPartialDate(start);
+	}
+	const s = start.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+	const e = end.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+	if (!s || !e) {
+		return `${start} ${translate('windowUntil')} ${end}`;
+	}
+	const sameYear = s[1] === e[1];
+	if (sameYear && s[2] === '01' && s[3] === '01' && e[2] === '12' && e[3] === '31') {
+		return s[1];
+	}
+	const lastDay = lastDayOfMonth(parseInt(e[1], 10), parseInt(e[2], 10));
+	if (sameYear && s[2] === e[2] && s[3] === '01' && parseInt(e[3], 10) === lastDay) {
+		return formatPartialDate(`${s[1]}-${s[2]}`);
+	}
+	return `${formatPartialDate(start)} ${translate('windowUntil')} ${formatPartialDate(end)}`;
 }
 
 /**
@@ -67,11 +85,6 @@ export function foldLines(text: string): string {
 		.replace(/\n/g, ' ')
 		.replace(/\u0000/g, '\n\n')
 		.trim();
-}
-
-/** A year as an inclusive date window, the shape the date-windowed APIs take. */
-export function yearWindow(year: number): { start: string; end: string } {
-	return { start: `${year}-01-01`, end: `${year}-12-31` };
 }
 
 export function formatDatasetTitle(title: string): string {

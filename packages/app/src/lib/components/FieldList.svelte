@@ -20,7 +20,7 @@
 					{field.label}
 				{/if}
 			</dt>
-			<dd class:text-gray-500={field.muted}>
+			<dd>
 				{#if field.href}
 					<Link href={field.href} target="_blank" rel="noopener noreferrer">{field.value}</Link>
 				{:else}

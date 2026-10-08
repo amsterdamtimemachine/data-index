@@ -25,7 +25,7 @@ describe('rebuild-index line + polygon rasterisation', () => {
     await upsertSource({
       provider: { id: 'ri-org', label: 'RI Org' },
       dataset: { id: 'ri-ds', label: 'RI DS' },
-      relation: { id: 'isAbout', label: 'Is About' },
+      relations: [{ id: 'isAbout', label: 'Is About' }],
     });
     // A 280m square with fractional corners (so the test also exercises float8
     // cell-origin arithmetic, not just integer coords). As the only featured place

@@ -1,18 +1,18 @@
-import type { Entity, PersonEntity, MediaObjectEntity, ScreeningEventEntity, EventSeriesEntity, ManuscriptEntity, VenueKind, GroupFeature, FeatureResult } from '@atm/shared/types';
-import { VENUE_KIND_FALLBACK } from '@atm/shared/vocab';
-import { formatDate, formatDateRange, formatPartialDate, formatDateInYear, formatDatasetTitle } from './format';
+import type { Entity, PersonEntity, MediaObjectEntity, CreativeWorkEntity, ScreeningEventEntity, TheaterEventEntity, ManuscriptEntity, FeatureResult } from '@atm/shared/types';
+import { formatDate, formatDateRange, formatPartialDate, formatPeriod, formatDatasetTitle } from './format';
 import { translate } from './translations';
 
 /**
  * One label:value row on a card, as text ready to print. `href` turns the value into
- * a link, `labelHref` the label; `muted` grays the value.
+ * a link, `labelHref` the label.
  */
-export type FieldRow = { label: string; value: string; href?: string; labelHref?: string; muted?: boolean };
+export type FieldRow = { label: string; value: string; href?: string; labelHref?: string };
 
 const isPerson = (e: Entity): e is PersonEntity => e.type === 'Person';
 const isMedia = (e: Entity): e is MediaObjectEntity => e.type === 'MediaObject';
-const isScreening = (e: Entity): e is ScreeningEventEntity => e.type === 'ScreeningEvent';
-const isSeries = (e: Entity): e is EventSeriesEntity => e.type === 'EventSeries';
+const isCreativeWork = (e: Entity): e is CreativeWorkEntity => e.type === 'CreativeWork';
+// a programme: a screening (a film on its bill) or a theatre event (acts only)
+const isProgramme = (e: Entity): e is ScreeningEventEntity | TheaterEventEntity => e.type === 'ScreeningEvent' || e.type === 'TheaterEvent';
 const isManuscript = (e: Entity): e is ManuscriptEntity => e.type === 'Manuscript';
 
 /** The names of a story's mentions of one kind, joined; null when there are none. */
@@ -22,34 +22,6 @@ function mentionNames(entity: ManuscriptEntity, kind: 'Place' | 'Person' | 'Orga
 		return null;
 	}
 	return names.join(', ');
-}
-
-/** The translate() key naming a venue of this kind: "Bioscoop", or "Locatie" for the catch-all. */
-function venueKindKey(kind: VenueKind): string {
-	if (kind === VENUE_KIND_FALLBACK) {
-		return 'venue';
-	}
-	return kind;
-}
-
-/** The translate() key for what a venue of this kind holds: screenings, performances, events. */
-export function venueEventKey(kind: VenueKind): string {
-	if (kind === 'MovieTheater') {
-		return 'screenings';
-	}
-	if (kind === 'PerformingArtsTheater') {
-		return 'performances';
-	}
-	return 'events';
-}
-
-/** A group's members over the period: the sum of its years. */
-export function seriesMemberCount(series: EventSeriesEntity): number {
-	let total = 0;
-	for (const year of series.years) {
-		total += year.count;
-	}
-	return total;
 }
 
 const withPlace = (date?: string, place?: string) =>
@@ -67,6 +39,12 @@ type CardFieldSpec = {
 	summary?: boolean; // also show on the collapsed card, not just the expanded detail
 };
 
+// a programme's venue; its date is in the relation line, its bill the card's content (programmeBillRows)
+const PROGRAMME_FIELDS: CardFieldSpec[] = [
+	{ label: 'venue', value: (e) => (isProgramme(e) ? e.location.name : null), summary: true },
+	{ label: 'programmeSource', value: (e) => (isProgramme(e) && e.citation ? e.citation.join(', ') : null) },
+];
+
 /**
  * The label:value fields each entity type exposes. This is the single place that
  * decides which fields exist and where they show: flip `summary` to surface a field
@@ -78,16 +56,16 @@ const CARD_FIELDS: Partial<Record<Entity['type'], CardFieldSpec[]>> = {
 		{ label: 'born', value: (e) => (isPerson(e) ? withPlace(e.birthDate, e.birthPlace) : null), summary: true },
 		{ label: 'died', value: (e) => (isPerson(e) ? withPlace(e.deathDate, e.deathPlace) : null), summary: true },
 	],
+	// a text's date is the issue it appeared in
+	CreativeWork: [
+		{ label: 'published', value: (e) => (isCreativeWork(e) && e.dateCreated ? formatPartialDate(e.dateCreated) : null) },
+	],
 	MediaObject: [
 		{ label: 'date', value: (e) => (isMedia(e) ? (e.dateCreated ? formatDateRange(e.dateCreated) : translate('unknown')) : null) },
 		{ label: 'author', value: (e) => (isMedia(e) ? e.author || translate('unknown') : null) },
 	],
-	ScreeningEvent: [
-		{ label: 'date', value: (e) => (isScreening(e) ? formatPartialDate(e.startDate) : null), summary: true },
-		{ label: 'film', value: () => null, summary: true, rows: (e) => (isScreening(e) ? e.workPresented.map((m) => ({ label: 'film', value: m.name, href: m.url })) : []) },
-		{ label: 'performer', value: (e) => (isScreening(e) ? e.performer ?? null : null), summary: true },
-		{ label: 'citation', value: (e) => (isScreening(e) && e.citation ? e.citation.join(', ') : null) },
-	],
+	ScreeningEvent: PROGRAMME_FIELDS,
+	TheaterEvent: PROGRAMME_FIELDS,
 	Manuscript: [
 		{ label: 'author', value: (e) => (isManuscript(e) ? e.author?.name ?? null : null), href: (e) => (isManuscript(e) ? e.author?.url : undefined), summary: true },
 		{ label: 'diary', value: (e) => (isManuscript(e) ? e.isPartOf?.name ?? null : null), href: (e) => (isManuscript(e) ? e.isPartOf?.url : undefined) },
@@ -95,11 +73,6 @@ const CARD_FIELDS: Partial<Record<Entity['type'], CardFieldSpec[]>> = {
 		{ label: 'persons', value: (e) => (isManuscript(e) ? mentionNames(e, 'Person') : null) },
 		// the places only when there are several: with one it repeats the card's place
 		{ label: 'places', value: (e) => (isManuscript(e) && e.mentions.filter((m) => m.type === 'Place').length > 1 ? mentionNames(e, 'Place') : null) },
-	],
-	EventSeries: [
-		// the venue under its kind ("Bioscoop Passage"), then what it holds, counted over the period
-		{ label: 'venue', value: () => null, summary: true, rows: (e) => (isSeries(e) ? [{ label: translate(venueKindKey(e.location.type)), value: e.location.name, href: e.location.url }] : []) },
-		{ label: 'screenings', value: () => null, summary: true, rows: (e) => (isSeries(e) ? [{ label: translate(venueEventKey(e.location.type)), value: String(seriesMemberCount(e)) }] : []) },
 	],
 };
 
@@ -122,68 +95,134 @@ export function resolveCardFields(entity: Entity, expanded: boolean): FieldRow[]
 }
 
 /** An entity's subtype as a translate() key, shown in brackets after the record type; null without one. */
-export function entityKind(entity: Entity | undefined): string | null {
-	if (!entity) {
-		return null;
+export function entitySubtype(entity: Entity | undefined): string | null {
+	if (entity?.type === 'ScreeningEvent') {
+		return 'screening';
 	}
-	if (entity.type === 'ScreeningEvent' || entity.type === 'EventSeries') {
-		return entity.location.type;
+	if (entity?.type === 'TheaterEvent') {
+		return 'performance';
 	}
 	return null;
 }
 
 /**
- * A group's members as label:value rows: a programme's date is the label, linked to
- * its page, and the first film on its bill the value; the rest of the bill follows
- * under it with an empty label, each film linked to its own page, the acts gray. The
- * source's programme title is not shown, as the source's own pages do not show it.
+ * A heading for a bill of more than one item, worded from it: "3 films op het
+ * programma", "2 films en 1 optreden op het programma". Null for a single item,
+ * which the title already names.
  */
-export function groupMemberRows(members: GroupFeature[]): FieldRow[] {
+export function programmeBillHeading(entity: Entity | undefined): string | null {
+	if (!entity || !isProgramme(entity)) {
+		return null;
+	}
+	const films = entity.workPresented.length;
+	const acts = (entity.performer ?? []).length;
+	if (films + acts < 2) {
+		return null;
+	}
+	const parts: string[] = [];
+	if (films > 0) {
+		parts.push(countWord(films, 'filmOne', 'filmMany'));
+	}
+	if (acts > 0) {
+		parts.push(countWord(acts, 'actOne', 'actMany'));
+	}
+	return `${parts.join(` ${translate('and')} `)} ${translate('onTheProgramme')}`;
+}
+
+function countWord(count: number, one: string, many: string): string {
+	if (count === 1) {
+		return `${count} ${translate(one)}`;
+	}
+	return `${count} ${translate(many)}`;
+}
+
+/** A programme's bill as rows: its films, each linked to its page, then its acts, each in bill order. */
+export function programmeBillRows(entity: Entity | undefined): FieldRow[] {
+	if (!entity || !isProgramme(entity)) {
+		return [];
+	}
 	const rows: FieldRow[] = [];
-	for (const member of members) {
-		const entity = member.entity;
-		let date = formatDateInYear(member.startDate);
-		const bill: FieldRow[] = [];
-		if (entity && isScreening(entity)) {
-			date = formatDateInYear(entity.startDate);
-			for (const film of entity.workPresented) {
-				bill.push({ label: '', value: film.name, href: film.url });
-			}
-			if (entity.performer) {
-				bill.push({ label: '', value: entity.performer, muted: true });
-			}
-		}
-		if (bill.length === 0) {
-			bill.push({ label: '', value: '' });
-		}
-		bill[0] = { ...bill[0], label: date, labelHref: member.url };
-		rows.push(...bill);
+	for (const film of entity.workPresented) {
+		rows.push({ label: translate('film'), value: film.name, href: film.url });
+	}
+	for (const act of entity.performer ?? []) {
+		rows.push({ label: translate('performer'), value: act });
 	}
 	return rows;
 }
 
-/** Data-source rows (provider/dataset/place provider). Detail-only, so empty when collapsed. */
+/**
+ * The line under a card's title: how the feature relates to its place, the place's
+ * name as it was then with the current name after it when they differ, and the date
+ * when it belongs to the relation ("Vertoond op Ceintuurbaan 338, 5 januari 1934").
+ * Empty when the feature has neither a relation nor a place name.
+ */
+export function relationLine(feature: FeatureResult): string {
+	const parts: string[] = [];
+	if (feature.relationId) {
+		parts.push(translate(feature.relationId));
+	}
+	const placeName = feature.historicalLabel || feature.displayName;
+	if (placeName) {
+		parts.push(placeName);
+	}
+	let line = parts.join(' ');
+	if (feature.historicalLabel && feature.displayName && feature.historicalLabel !== feature.displayName) {
+		line = `${line} (${translate('nowKnownAs')} ${feature.displayName})`;
+	}
+	if (feature.relationDated && feature.startDate && feature.endDate) {
+		line = `${line}, ${formatPeriod(feature.startDate, feature.endDate)}`;
+	}
+	return line;
+}
+
+/**
+ * What the feature is and where, as an expanded card's first rows: its type with the
+ * subtype after a comma ("Evenement, vertoning"), and its place labelled by the place
+ * type and linked to the place's own record, with today's name after an old one
+ * ("Straat Keizersgragt (nu Keizersgracht)").
+ */
+export function identityFields(feature: FeatureResult): FieldRow[] {
+	const rows: FieldRow[] = [];
+	let type = translate(feature.recordType);
+	const subtype = entitySubtype(feature.entity);
+	if (subtype) {
+		type = `${type}, ${translate(subtype)}`;
+	}
+	rows.push({ label: translate('type'), value: type });
+	const placeName = feature.historicalLabel || feature.displayName;
+	if (feature.placeType && placeName) {
+		let value = placeName;
+		if (feature.historicalLabel && feature.displayName && feature.historicalLabel !== feature.displayName) {
+			value = `${placeName} (${translate('nowKnownAs')} ${feature.displayName})`;
+		}
+		rows.push({ label: translate(feature.placeType), value, href: feature.placeUrl });
+	}
+	return rows;
+}
+
+/**
+ * Where the feature comes from: the dataset, linked to the item's own record; its
+ * provider when that is someone else; the classifier models behind its tags; who
+ * provides the place, and the line when another provider drew it. Detail only.
+ */
 export function dataSourceFields(feature: FeatureResult, expanded: boolean): FieldRow[] {
 	if (!expanded) return [];
 	const rows: FieldRow[] = [];
-	if (feature.providerLabel) {
+	if (feature.datasetLabel) {
+		rows.push({ label: translate('source'), value: formatDatasetTitle(feature.datasetLabel), href: feature.url });
+	}
+	if (feature.providerLabel && feature.providerLabel !== feature.datasetLabel) {
 		rows.push({ label: translate('dataProvider'), value: feature.providerLabel, href: feature.providerUrl });
 	}
-	// Skip the dataset row when it just repeats the provider (e.g. Joods Monument).
-	if (feature.datasetLabel && feature.datasetLabel !== feature.providerLabel) {
-		rows.push({ label: translate('dataset'), value: formatDatasetTitle(feature.datasetLabel), href: feature.datasetUrl });
-	}
-	// the classifier models behind the feature's tags, each linked to its page when it has one
 	for (const classifier of feature.classifiers ?? []) {
 		rows.push({ label: translate('classifier'), value: classifier.label, href: classifier.url });
 	}
-	if (feature.placeProviderLabel && feature.placeProviderUrl) {
+	if (feature.placeProviderLabel) {
 		rows.push({ label: translate('placeDataProvider'), value: feature.placeProviderLabel, href: feature.placeProviderUrl });
 	}
-	// Only set when the geometry came from a different provider than the place
-	// (e.g. an Adamlink street whose line was backfilled from NWB).
 	if (feature.geometryProviderLabel) {
-		rows.push({ label: translate('geometrySource'), value: feature.geometryProviderLabel, href: feature.geometryUrl });
+		rows.push({ label: translate('geometryProvider'), value: feature.geometryProviderLabel, href: feature.geometryProviderUrl });
 	}
 	return rows;
 }

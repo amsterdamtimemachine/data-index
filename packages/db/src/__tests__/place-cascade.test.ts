@@ -29,10 +29,11 @@ async function geomWGS(id: string, lon: number, lat: number) {
 }
 
 // A record whose columns the extraction methods read by name.
-type Rec = { text?: string; wkt?: string; uri?: string };
+type Rec = { text?: string; wkt?: string; uri?: string; name?: string };
 const TEXT = { method: PlaceExtractionMethod.TEXT, column: 'text' } as const;
 const WKT = { method: PlaceExtractionMethod.WKT, column: 'wkt' } as const;
 const URI = { method: PlaceExtractionMethod.URI, column: 'uri' } as const;
+const NAME = { method: PlaceExtractionMethod.NAME, column: 'name' } as const;
 
 describe('place cascade (PlaceIndex.extract)', () => {
   beforeAll(setupTestDb);
@@ -47,6 +48,23 @@ describe('place cascade (PlaceIndex.extract)', () => {
 
     const idx = await PlaceIndex.create<Rec>([TEXT, WKT]);
     expect(await idx.extract({ text: 'Kerkstraat', wkt: W }, dated)).toEqual({ placeId: 'wkt-hit' });
+  });
+
+  test('NAME: the whole value is one place name, matched exactly', async () => {
+    await place('cb-338', 'address', 'adamlink', 'Ceintuurbaan 338');
+    await place('cb', 'street', 'adamlink', 'Ceintuurbaan');
+
+    const idx = await PlaceIndex.create<Rec>([NAME, WKT]);
+    expect(await idx.extract({ name: 'Ceintuurbaan 338', wkt: W }, dated)).toEqual({ placeId: 'cb-338' });
+  });
+
+  test('NAME: a name nothing carries falls through to a resolving WKT', async () => {
+    await place('cb-338', 'address', 'adamlink', 'Ceintuurbaan 338');
+    await place('wkt-hit', 'address', 'adamlink', 'Ergens 1');
+    await geomWGS('wkt-hit', 4.9, 52.37);
+
+    const idx = await PlaceIndex.create<Rec>([NAME, WKT]);
+    expect(await idx.extract({ name: 'Ceintuurbaan 338-340', wkt: W }, dated)).toEqual({ placeId: 'wkt-hit' });
   });
 
   test('skip precedence: TEXT ambiguous + WKT cap-miss keeps the more-actionable ambiguous', async () => {

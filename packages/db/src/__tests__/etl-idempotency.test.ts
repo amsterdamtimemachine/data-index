@@ -49,7 +49,7 @@ describe('ETL idempotency', () => {
     await upsertSource({
       provider: { id: 'idem-org', label: 'Idem Org' },
       dataset: { id: 'idem-ds', label: 'Idem DS' },
-      relation: { id: 'isAbout', label: 'Is About' },
+      relations: [{ id: 'isAbout', label: 'Is About' }],
     });
   });
 

@@ -46,7 +46,7 @@ describe('feature text search', () => {
     await upsertSource({
       provider: { id: 'fs-org', label: 'FS Org' },
       dataset: { id: 'fs-ds', label: 'FS DS' },
-      relation: { id: 'isAbout', label: 'Is About' },
+      relations: [{ id: 'isAbout', label: 'Is About' }],
     });
 
     await db.execute(sql`INSERT INTO place (id, type) VALUES (${P1}, 'address'), (${P2}, 'address')`);
