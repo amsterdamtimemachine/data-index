@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { ScreeningEventEntity, TheaterEventEntity, FeatureResult } from '@atm/shared/types';
-import { resolveCardFields, dataSourceFields, identityFields, programmeBillRows, programmeBillHeading, entitySubtype, relationLine } from './cardFields';
+import { resolveCardFields, dataSourceFields, programmeBillRows, programmeBillHeading, entitySubtype, relationLine, typeLabel, aboutHeading } from './cardFields';
 
 const screening: ScreeningEventEntity = {
 	type: 'ScreeningEvent',
@@ -60,7 +60,7 @@ describe('programme cards', () => {
 
 	test('labels reach the list as text', () => {
 		expect(resolveCardFields({ type: 'Person', name: 'x', birthDate: '1900-01-01' }, false)).toEqual([
-			{ label: 'Geboren', value: '01. 01. 1900', href: undefined },
+			{ label: 'Geboren', value: '1 januari 1900', href: undefined },
 			{ label: 'Overleden', value: 'Onbekend', href: undefined }
 		]);
 	});
@@ -69,21 +69,36 @@ describe('programme cards', () => {
 describe('relationLine', () => {
 	const base = {
 		id: 'f', recordType: 'event', label: 'x', dateRange: [1934, 1934], tags: [], classifiers: [], spatialFrequency: 1, temporalFrequency: 1,
-		relationId: 'screenedAt', displayName: 'Ceintuurbaan 338', startDate: '1934-01-05', endDate: '1934-01-05'
+		relationId: 'screenedAt', displayName: 'Ceintuurbaan 338', placeUrl: 'https://adamlink.nl/geo/address/A1',
+		startDate: '1934-01-05', endDate: '1934-01-05', entity: screening
 	} as FeatureResult;
 
-	test('a dated relation carries the date at its precision', () => {
-		expect(relationLine({ ...base, relationDated: true })).toBe('Vertoond op Ceintuurbaan 338, 5 januari 1934');
-		expect(relationLine({ ...base, relationDated: true, startDate: '1907-05-01', endDate: '1907-05-31' })).toBe('Vertoond op Ceintuurbaan 338, mei 1907');
+	test('the type, the relation, the place linked to its record, and the date of a dated relation', () => {
+		expect(relationLine({ ...base, relationDated: true })).toEqual({
+			type: 'Evenement, vertoning',
+			relation: 'Vertoond op',
+			place: 'Ceintuurbaan 338',
+			placeHref: 'https://adamlink.nl/geo/address/A1',
+			date: ', 5 januari 1934'
+		});
 	});
 
-	test('an undated relation names the place only, with its current name when it changed', () => {
-		expect(relationLine({ ...base, relationId: 'isAbout', relationDated: false })).toBe('Gaat over Ceintuurbaan 338');
-		expect(relationLine({ ...base, relationId: 'isAbout', historicalLabel: 'Plaetse', displayName: 'Dam' })).toBe('Gaat over Plaetse (nu Dam)');
+	test('an undated relation has no date; an old name carries today\'s after it', () => {
+		const text = { ...base, recordType: 'text', entity: undefined, relationId: 'isAbout', relationDated: false, historicalLabel: 'Plaetse', displayName: 'Dam' } as FeatureResult;
+		expect(relationLine(text)).toEqual({
+			type: 'Tekst', relation: 'Gaat over', place: 'Plaetse', placeHref: 'https://adamlink.nl/geo/address/A1', now: ' (nu Dam)'
+		});
+	});
+
+	test('the type reads the subtype after a comma; the heading follows the record type', () => {
+		expect(typeLabel(base)).toBe('Evenement, vertoning');
+		expect(typeLabel({ ...base, recordType: 'image', entity: undefined } as FeatureResult)).toBe('Afbeelding');
+		expect(aboutHeading({ ...base, recordType: 'story' } as FeatureResult)).toBe('Over het verhaal');
+		expect(aboutHeading({ ...base, recordType: 'image' } as FeatureResult)).toBe('Over de afbeelding');
 	});
 });
 
-describe('expanded rows: what and where, then the sources', () => {
+describe('provenance rows', () => {
 	const beeldbank = {
 		id: 'f', recordType: 'image', label: 'x', dateRange: [1900, 1900], tags: ['maps'], spatialFrequency: 1, temporalFrequency: 1,
 		url: 'https://id.archief.amsterdam/f', providerLabel: 'Amsterdam Stadsarchief', providerUrl: 'https://archief.amsterdam', datasetLabel: 'Beeldbank',
@@ -93,27 +108,15 @@ describe('expanded rows: what and where, then the sources', () => {
 		classifiers: [{ id: 'siglip2', label: 'SigLIP 2', url: 'https://example.org/siglip' }]
 	} as FeatureResult;
 
-	test('the type, then the place labelled by its type and linked to its record', () => {
-		expect(identityFields(beeldbank).map((r) => [r.label, r.value, r.href])).toEqual([
-			['Type', 'Afbeelding', undefined],
-			['Straat', 'Keizersgracht', 'https://adamlink.nl/geo/street/keizersgracht/2337']
-		]);
-		const renamed = { ...beeldbank, historicalLabel: 'Keizersgragt', displayName: 'Keizersgracht' } as FeatureResult;
-		expect(identityFields(renamed)[1].value).toBe('Keizersgragt (nu Keizersgracht)');
-		const event = { ...beeldbank, recordType: 'event', entity: screening } as FeatureResult;
-		expect(identityFields(event)[0].value).toBe('Evenement, vertoning');
-	});
-
-	test('Bron links the record; a provider shows when it is someone else; the leveranciers link their pages', () => {
+	test('provenance: a provider when it is someone else than the dataset, the model, and the leveranciers', () => {
 		expect(dataSourceFields(beeldbank, true).map((r) => [r.label, r.value, r.href])).toEqual([
-			['Bron', 'Beeldbank', 'https://id.archief.amsterdam/f'],
 			['Dataleverancier', 'Amsterdam Stadsarchief', 'https://archief.amsterdam'],
-			['Classificatiemodel', 'SigLIP 2', 'https://example.org/siglip'],
 			['Locatieleverancier', 'Adamlink', 'https://adamlink.nl'],
-			['Geometrieleverancier', 'NWB', 'https://www.rijkswaterstaat.nl']
+			['Geometrieleverancier', 'NWB', 'https://www.rijkswaterstaat.nl'],
+			['Classificatiemodel', 'SigLIP 2', 'https://example.org/siglip']
 		]);
 		const own = { ...beeldbank, providerLabel: 'Cinema Context', datasetLabel: 'Cinema Context', classifiers: [], geometryProviderLabel: undefined };
-		expect(dataSourceFields(own, true).map((r) => r.label)).toEqual(['Bron', 'Locatieleverancier']);
+		expect(dataSourceFields(own, true).map((r) => r.label)).toEqual(['Locatieleverancier']);
 		expect(dataSourceFields(beeldbank, false)).toEqual([]);
 	});
 
@@ -123,6 +126,13 @@ describe('expanded rows: what and where, then the sources', () => {
 			.toEqual({ label: 'Datering', value: '1953 (ca.) t/m 1995 (ca.)', href: undefined });
 		expect(resolveCardFields({ ...image, dateCreated: '1988-01-01/1988-12-31' }, true)[0].value).toBe('1988');
 		expect(resolveCardFields({ ...image, dateCreated: '1958-09-27' }, true)[0].value).toBe('27 september 1958');
+	});
+
+	test('a story shows when it was written, at the precision it was dated', () => {
+		const entry = { type: 'Manuscript' as const, name: 'x', text: 't', mentions: [] };
+		expect(resolveCardFields({ ...entry, dateCreated: '1944-10-30' }, true)[0]).toEqual({ label: 'Geschreven', value: '30 oktober 1944', href: undefined });
+		expect(resolveCardFields({ ...entry, dateCreated: '1943-01' }, true)[0].value).toBe('januari 1943');
+		expect(resolveCardFields(entry, true).find((r) => r.label === 'Geschreven')).toBeUndefined();
 	});
 
 	test('a text shows the issue it appeared in', () => {

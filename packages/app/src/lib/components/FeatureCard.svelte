@@ -1,12 +1,13 @@
 <script lang="ts">
 	import type { FeatureResult } from '@atm/shared/types';
 	import { translate, translateAll } from '$utils/translations';
-	import { resolveCardFields, dataSourceFields, identityFields, programmeBillRows, programmeBillHeading, relationLine } from '$utils/cardFields';
+	import { resolveCardFields, dataSourceFields, programmeBillRows, programmeBillHeading, relationLine, aboutHeading } from '$utils/cardFields';
 	import { featureViewerState } from '$lib/state/featureState.svelte';
 	import FeatureCardHeader from '$components/FeatureCardHeader.svelte';
 	import FeatureCardImage from '$components/FeatureCardImage.svelte';
 	import FeatureCardText from '$components/FeatureCardText.svelte';
 	import FieldList from '$components/FieldList.svelte';
+	import Link from '$components/Link.svelte';
 	import TagList from '$components/TagList.svelte';
 	import Heading from '$components/Heading.svelte';
 	import { foldLines } from '$utils/format';
@@ -28,12 +29,8 @@
 	// collapsed: the summary fields; expanded: every field, between what and where and the sources
 	const entityFields = $derived(feature.entity ? resolveCardFields(feature.entity, expanded) : []);
 	// expanded: what and where, the item's own fields, then where it comes from
-	const detailFields = $derived.by(() => {
-		if (!expanded) {
-			return entityFields;
-		}
-		return [...identityFields(feature), ...entityFields, ...dataSourceFields(feature, expanded)];
-	});
+	// expanded, below the item's own fields: where it comes from
+	const provenanceFields = $derived(dataSourceFields(feature, expanded));
 
 	const billHeading = $derived(programmeBillHeading(feature.entity));
 	// a programme's whole bill, films and acts, when expanded
@@ -128,9 +125,10 @@
 			>
 				{feature.label}
 			</Heading>
-			{#if placeLine}
-				<p class="italic text-gray-500 {expanded ? 'px-2 mb-2' : 'mb-1'} text-base">{placeLine}</p>
-			{/if}
+			<!-- the type, then how the item relates to its place, the place linked to its record -->
+			<p class="italic text-gray-500 {expanded ? 'px-2 mb-2' : 'mb-1'} text-base">
+				{placeLine.type}{#if placeLine.relation || placeLine.place}{' • '}{/if}{#if placeLine.relation}{placeLine.relation}{' '}{/if}{#if placeLine.place}{#if placeLine.placeHref}<Link href={placeLine.placeHref} target="_blank" rel="noopener noreferrer" class="inline text-gray-500">{placeLine.place}{placeLine.now ?? ''}</Link>{:else}{placeLine.place}{placeLine.now ?? ''}{/if}{/if}{placeLine.date ?? ''}
+			</p>
 		</div>
 		<!-- Entity-specific content: the region that scrolls when expanded -->
 		<div class={contentClasses}>
@@ -154,10 +152,21 @@
 				<FeatureCardText text={feature.description} {expanded} />
 			{/if}
 		</div>
-		<!-- Entity fields (born/died, date/author) and, in detail, the provider/dataset
-		     attribution. Collapsed keeps the summary fields; detail shows them all. The
-		     links to the actual source records live on the type tags in the header. -->
-		<FieldList fields={detailFields} class={entityFieldsClasses} />
+		{#if expanded}
+			<!-- the item's own fields, then where it comes from -->
+			<div class={entityFieldsClasses}>
+				{#if entityFields.length > 0}
+					<Heading level={4} class="font-medium mb-1">{aboutHeading(feature)}</Heading>
+					<FieldList fields={entityFields} class="mb-3" />
+				{/if}
+				{#if provenanceFields.length > 0}
+					<Heading level={4} class="font-medium mb-1">{translate('provenance')}</Heading>
+					<FieldList fields={provenanceFields} />
+				{/if}
+			</div>
+		{:else}
+			<FieldList fields={entityFields} class="mt-1" />
+		{/if}
 
 		<TagList
 			tags={translateAll(feature.tags || [])}

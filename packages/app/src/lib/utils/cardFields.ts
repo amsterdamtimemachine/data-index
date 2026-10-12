@@ -1,5 +1,5 @@
 import type { Entity, PersonEntity, MediaObjectEntity, CreativeWorkEntity, ScreeningEventEntity, TheaterEventEntity, ManuscriptEntity, FeatureResult } from '@atm/shared/types';
-import { formatDate, formatPartialDate, formatPeriod, formatDatasetTitle } from './format';
+import { formatPartialDate, formatPeriod } from './format';
 import { translate } from './translations';
 
 /**
@@ -39,8 +39,16 @@ function imageDating(entity: MediaObjectEntity): string {
 	return formatPartialDate(start);
 }
 
-const withPlace = (date?: string, place?: string) =>
-	date ? `${formatDate(date)}${place ? `, ${place}` : ''}` : translate('unknown');
+/** A person's date worded at its precision, with the place after it: "20 april 1894, Amsterdam". */
+function withPlace(date?: string, place?: string): string {
+	if (!date) {
+		return translate('unknown');
+	}
+	if (!place) {
+		return formatPartialDate(date);
+	}
+	return `${formatPartialDate(date)}, ${place}`;
+}
 
 type CardFieldSpec = {
 	// a translate() key
@@ -82,6 +90,8 @@ const CARD_FIELDS: Partial<Record<Entity['type'], CardFieldSpec[]>> = {
 	ScreeningEvent: PROGRAMME_FIELDS,
 	TheaterEvent: PROGRAMME_FIELDS,
 	Manuscript: [
+		// the day, month or year the entry was written, as the annotators dated it
+		{ label: 'written', value: (e) => (isManuscript(e) && e.dateCreated ? formatPartialDate(e.dateCreated) : null) },
 		{ label: 'author', value: (e) => (isManuscript(e) ? e.author?.name ?? null : null), href: (e) => (isManuscript(e) ? e.author?.url : undefined), summary: true },
 		{ label: 'diary', value: (e) => (isManuscript(e) ? e.isPartOf?.name ?? null : null), href: (e) => (isManuscript(e) ? e.isPartOf?.url : undefined) },
 		{ label: 'archive', value: (e) => (isManuscript(e) ? e.isPartOf?.holdingArchive ?? null : null) },
@@ -166,78 +176,76 @@ export function programmeBillRows(entity: Entity | undefined): FieldRow[] {
 	return rows;
 }
 
+/** The feature's type with its subtype after a comma: "Evenement, vertoning", "Afbeelding". */
+export function typeLabel(feature: FeatureResult): string {
+	const subtype = entitySubtype(feature.entity);
+	if (subtype) {
+		return `${translate(feature.recordType)}, ${translate(subtype)}`;
+	}
+	return translate(feature.recordType);
+}
+
 /**
- * The line under a card's title: how the feature relates to its place, the place's
- * name as it was then with the current name after it when they differ, and the date
- * when it belongs to the relation ("Vertoond op Ceintuurbaan 338, 5 januari 1934").
- * Empty when the feature has neither a relation nor a place name.
+ * The line under a card's title, in parts so the place can be a link: the type, how
+ * the feature relates to its place, the place's name as it was then (linked to the
+ * place's own record) with today's name after it when they differ, and the date when
+ * it belongs to the relation. "Evenement, vertoning · Vertoond op Ceintuurbaan 338, 5 januari 1934"
  */
-export function relationLine(feature: FeatureResult): string {
-	const parts: string[] = [];
+export type RelationLine = {
+	type: string;
+	relation?: string;
+	place?: string;
+	placeHref?: string;
+	// " (nu Dam)", when the name shown is an old one
+	now?: string;
+	// ", 5 januari 1934", when the date belongs to the relation
+	date?: string;
+};
+
+export function relationLine(feature: FeatureResult): RelationLine {
+	const line: RelationLine = { type: typeLabel(feature) };
 	if (feature.relationId) {
-		parts.push(translate(feature.relationId));
+		line.relation = translate(feature.relationId);
 	}
 	const placeName = feature.historicalLabel || feature.displayName;
 	if (placeName) {
-		parts.push(placeName);
+		line.place = placeName;
+		line.placeHref = feature.placeUrl;
 	}
-	let line = parts.join(' ');
 	if (feature.historicalLabel && feature.displayName && feature.historicalLabel !== feature.displayName) {
-		line = `${line} (${translate('nowKnownAs')} ${feature.displayName})`;
+		line.now = ` (${translate('nowKnownAs')} ${feature.displayName})`;
 	}
 	if (feature.relationDated && feature.startDate && feature.endDate) {
-		line = `${line}, ${formatPeriod(feature.startDate, feature.endDate)}`;
+		line.date = `, ${formatPeriod(feature.startDate, feature.endDate)}`;
 	}
 	return line;
 }
 
-/**
- * What the feature is and where, as an expanded card's first rows: its type with the
- * subtype after a comma ("Evenement, vertoning"), and its place labelled by the place
- * type and linked to the place's own record, with today's name after an old one
- * ("Straat Keizersgragt (nu Keizersgracht)").
- */
-export function identityFields(feature: FeatureResult): FieldRow[] {
-	const rows: FieldRow[] = [];
-	let type = translate(feature.recordType);
-	const subtype = entitySubtype(feature.entity);
-	if (subtype) {
-		type = `${type}, ${translate(subtype)}`;
-	}
-	rows.push({ label: translate('type'), value: type });
-	const placeName = feature.historicalLabel || feature.displayName;
-	if (feature.placeType && placeName) {
-		let value = placeName;
-		if (feature.historicalLabel && feature.displayName && feature.historicalLabel !== feature.displayName) {
-			value = `${placeName} (${translate('nowKnownAs')} ${feature.displayName})`;
-		}
-		rows.push({ label: translate(feature.placeType), value, href: feature.placeUrl });
-	}
-	return rows;
+/** The heading over an expanded card's own fields: "Over de afbeelding", "Over het verhaal". */
+export function aboutHeading(feature: FeatureResult): string {
+	return translate(`about_${feature.recordType}`);
 }
 
 /**
- * Where the feature comes from: the dataset, linked to the item's own record; its
- * provider when that is someone else; the classifier models behind its tags; who
- * provides the place, and the line when another provider drew it. Detail only.
+ * Where the feature comes from, below its dataset link at the card's top left: its
+ * provider when that is someone else than the dataset; who provides the place, and
+ * the line when another provider drew it; last, the classifier models behind its
+ * tags. Detail only.
  */
 export function dataSourceFields(feature: FeatureResult, expanded: boolean): FieldRow[] {
 	if (!expanded) return [];
 	const rows: FieldRow[] = [];
-	if (feature.datasetLabel) {
-		rows.push({ label: translate('source'), value: formatDatasetTitle(feature.datasetLabel), href: feature.url });
-	}
 	if (feature.providerLabel && feature.providerLabel !== feature.datasetLabel) {
 		rows.push({ label: translate('dataProvider'), value: feature.providerLabel, href: feature.providerUrl });
-	}
-	for (const classifier of feature.classifiers ?? []) {
-		rows.push({ label: translate('classifier'), value: classifier.label, href: classifier.url });
 	}
 	if (feature.placeProviderLabel) {
 		rows.push({ label: translate('placeDataProvider'), value: feature.placeProviderLabel, href: feature.placeProviderUrl });
 	}
 	if (feature.geometryProviderLabel) {
 		rows.push({ label: translate('geometryProvider'), value: feature.geometryProviderLabel, href: feature.geometryProviderUrl });
+	}
+	for (const classifier of feature.classifiers ?? []) {
+		rows.push({ label: translate('classifier'), value: classifier.label, href: classifier.url });
 	}
 	return rows;
 }
