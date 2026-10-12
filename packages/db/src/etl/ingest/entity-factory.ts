@@ -26,13 +26,14 @@ export class PersonEntityFactory extends EntityFactory<PersonEntity> {
 
 export class CreativeWorkEntityFactory extends EntityFactory<CreativeWorkEntity> {
     create(feature: Draft, data: Map<string, unknown>): CreativeWorkEntity {
-        const dateCreated = formatDateRange(feature.startDate, feature.endDate);
+        // a text's date is the issue it was published in
+        const datePublished = formatDateRange(feature.startDate, feature.endDate);
 
         return {
             type: 'CreativeWork',
             name: feature.label,
             url: feature.url,
-            ...(dateCreated && { dateCreated })
+            ...(datePublished && { datePublished })
         } as CreativeWorkEntity;
     }
 }

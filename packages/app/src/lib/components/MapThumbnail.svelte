@@ -5,6 +5,7 @@
 </script>
 
 <script lang="ts">
+	import { translate } from '$utils/translations';
 	import type { HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
 	import { parseRowColFromCellId } from '$utils/heatmap';
 	import { mergeCss } from '$utils/utils';
@@ -94,5 +95,5 @@
 	height={height * Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2)}
 	style="width: {width}px; height: {height}px"
 	class={mergeCss('block rounded border border-[1px] border-atm-gold', className)}
-	aria-label="Positie van de geselecteerde cel op de kaart"
+	aria-label={translate('selectedCellPosition')}
 ></canvas>

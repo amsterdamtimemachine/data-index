@@ -161,7 +161,7 @@
 		{/if}
 	{/if}
 	<div class="header-close justify-self-end">
-		<Button icon={X} onclick={onClose} size={18} aria-label="Close features panel" />
+		<Button icon={X} onclick={onClose} size={18} aria-label={translate('closeFeaturesPanel')} />
 	</div>
 </div>
 

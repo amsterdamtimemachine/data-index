@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { translate } from '$utils/translations';
 	type Props = {
 		text: string;
 		expanded?: boolean;
@@ -30,7 +31,7 @@
 					class="mt-2 text-base text-blue-600 hover:text-blue-800 underline"
 					onclick={() => (showFullText = true)}
 				>
-					Show more
+					{translate('showMore')}
 				</button>
 			{:else}
 				<div>
@@ -41,7 +42,7 @@
 						class="mt-2 text-base text-blue-600 hover:text-blue-800 underline"
 						onclick={() => (showFullText = false)}
 					>
-						Show less
+						{translate('showLess')}
 					</button>
 				{/if}
 			{/if}

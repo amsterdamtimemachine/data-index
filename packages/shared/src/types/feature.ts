@@ -51,6 +51,8 @@ export interface PersonEntity extends EntityBase {
 export interface CreativeWorkEntity extends EntityBase {
   type: "CreativeWork" | "MediaObject";
   dateCreated?: string;
+  // a published text's issue date (Schema.org datePublished), YYYY-MM-DD or a start/end range
+  datePublished?: string;
   author?: string;
   url?: string;
 }

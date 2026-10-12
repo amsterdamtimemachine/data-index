@@ -24,6 +24,15 @@ function mentionNames(entity: ManuscriptEntity, kind: 'Place' | 'Person' | 'Orga
 	return names.join(', ');
 }
 
+/** A publication date worded at its precision; a start/end range worded as a period. */
+function formatPublished(date: string): string {
+	const [start, end] = date.split('/');
+	if (end) {
+		return formatPeriod(start, end);
+	}
+	return formatPartialDate(start);
+}
+
 /** An image's dating as the archive words it; else its dates, worded at their precision. */
 function imageDating(entity: MediaObjectEntity): string {
 	if (entity.dateText) {
@@ -81,7 +90,7 @@ const CARD_FIELDS: Partial<Record<Entity['type'], CardFieldSpec[]>> = {
 	],
 	// a text's date is the issue it appeared in
 	CreativeWork: [
-		{ label: 'published', value: (e) => (isCreativeWork(e) && e.dateCreated ? formatPartialDate(e.dateCreated) : null) },
+		{ label: 'published', value: (e) => (isCreativeWork(e) && e.datePublished ? formatPublished(e.datePublished) : null) },
 	],
 	MediaObject: [
 		{ label: 'dating', value: (e) => (isMedia(e) ? imageDating(e) : null) },

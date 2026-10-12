@@ -39,8 +39,8 @@ describe('delpher ingestion (WKT cascade match + period parse)', () => {
   });
 
   test('the matched feature is a Delpher text record with the parsed date range', async () => {
-    const r = await db.execute<{ record_type: string; dataset_id: string; url: string; start: string; end: string }>(sql`
-      SELECT record_type, dataset_id, url, start_date::text AS start, end_date::text AS end
+    const r = await db.execute<{ record_type: string; dataset_id: string; url: string; start: string; end: string; published: string | null }>(sql`
+      SELECT record_type, dataset_id, url, start_date::text AS start, end_date::text AS end, entity->>'datePublished' AS published
       FROM features WHERE url = 'https://www.delpher.nl/article/a1'
     `);
     const f = r.rows[0];
@@ -48,6 +48,7 @@ describe('delpher ingestion (WKT cascade match + period parse)', () => {
     expect(f.dataset_id).toBe('delpher');
     expect(f.start).toBe('1925-01-01');
     expect(f.end).toBe('1925-12-31'); // period [1925-01-01,1926-01-01) is half-open → inclusive last day
+    expect(f.published).toBe('1925-01-01/1925-12-31');
   });
 
   test('an inclusive "]" closer keeps the end day as-is (no −1 shift)', async () => {

@@ -136,7 +136,7 @@ describe('provenance rows', () => {
 	});
 
 	test('a text shows the issue it appeared in', () => {
-		expect(resolveCardFields({ type: 'CreativeWork', name: 'x', dateCreated: '1967-01-03' }, true)).toEqual([
+		expect(resolveCardFields({ type: 'CreativeWork', name: 'x', datePublished: '1967-01-03' }, true)).toEqual([
 			{ label: 'Gepubliceerd', value: '3 januari 1967', href: undefined }
 		]);
 	});

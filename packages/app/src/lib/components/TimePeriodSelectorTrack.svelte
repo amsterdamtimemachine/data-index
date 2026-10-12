@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { translate } from '$utils/translations';
 	import type { HistogramBin } from '@atm/shared/types';
 	import { createMediaQuery, HOVER_QUERY } from '$utils/media.svelte';
 	import TimePeriodTooltip from '$components/TimePeriodTooltip.svelte';
@@ -10,7 +11,7 @@
 		localBins?: HistogramBin[];
 		// the selection's series under the city-wide one: the hover names its count
 		// for bins where it has data
-		markerBins?: HistogramBin[];
+		selectionBins?: HistogramBin[];
 		currentIndex: number;
 		onIndexChange: (newIndex: number) => void;
 		timelineHeight: number;
@@ -18,7 +19,7 @@
 		// a press on a bin starts a drag; the selector follows the pointer from there
 		onDragStart: (event: PointerEvent) => void;
 	}
-	let { bins, localBins = [], markerBins = [], currentIndex, onIndexChange, timelineHeight, onKeyDown, onDragStart }: Props = $props();
+	let { bins, localBins = [], selectionBins = [], currentIndex, onIndexChange, timelineHeight, onKeyDown, onDragStart }: Props = $props();
 
 	const hoverCapable = createMediaQuery(HOVER_QUERY);
 
@@ -55,7 +56,7 @@
 		if (!hoveredBin) {
 			return null;
 		}
-		return selectionCountFor(markerBins, hoveredBin.bin.timeSlice.key);
+		return selectionCountFor(selectionBins, hoveredBin.bin.timeSlice.key);
 	});
 
 	// a press selects the bin under the pointer and starts a drag from it; a keyboard
@@ -78,7 +79,7 @@
 	style="height: {timelineHeight}px;"
 	role="slider"
 	tabindex="0"
-	aria-label="Time period selector"
+	aria-label={translate('timePeriodSelector')}
 	aria-valuemin="0"
 	aria-valuemax={bins.length - 1}
 	aria-valuenow={currentIndex}
@@ -97,7 +98,7 @@
 			onmouseenter={(e) => handleMouseEnter(e, bin, i)}
 			onmouseleave={handleMouseLeave}
 			onmousemove={handleMouseMove}
-			aria-label="Select period {bin.timeSlice.label}"
+			aria-label="{translate('selectPeriod')} {bin.timeSlice.label}"
 		></button>
 	{/each}
 </div>

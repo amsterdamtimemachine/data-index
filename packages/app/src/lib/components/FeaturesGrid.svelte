@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { translate } from '$utils/translations';
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import FeatureCard from '$components/FeatureCard.svelte';
 	import { createMasonry, type MasonryInstance } from '$utils/masonry';
@@ -79,7 +80,7 @@
 
 <div class="w-full">
 	{#if features.length === 0}
-		<div class="text-gray-500 p-3">No features to display</div>
+		<div class="text-gray-500 p-3">{translate('noFeaturesToDisplay')}</div>
 	{:else}
 		<div
 			class="masonry-layout p-3"

@@ -4,6 +4,7 @@
 	opens a collapsed card or closes an expanded one.
 -->
 <script lang="ts">
+	import { translate } from '$utils/translations';
 	import type { FeatureResult } from '@atm/shared/types';
 	import { mergeCss } from '$utils/utils';
 	import { formatTimePeriod, formatDatasetTitle } from '$utils/format';
@@ -41,10 +42,10 @@
 	<div class="flex items-center gap-2 flex-shrink-0">
 		<span class="text-base text-black">{formatTimePeriod(feature.dateRange)}</span>
 		{#if onExpand}
-			<Button onclick={onExpand} icon={ArrowsOut} aria-label="View feature details" />
+			<Button onclick={onExpand} icon={ArrowsOut} aria-label={translate('openFeature')} />
 		{/if}
 		{#if onClose}
-			<Button onclick={onClose} icon={X} aria-label="Close feature detail viewer" />
+			<Button onclick={onClose} icon={X} aria-label={translate('closeFeature')} />
 		{/if}
 	</div>
 </div>

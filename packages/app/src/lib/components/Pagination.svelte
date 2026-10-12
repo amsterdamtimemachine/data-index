@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { translate } from '$utils/translations';
 	import { createPagination, melt } from '@melt-ui/svelte';
 	import CaretLeft from 'phosphor-svelte/lib/CaretLeft';
 	import CaretRight from 'phosphor-svelte/lib/CaretRight';
@@ -102,10 +103,10 @@
 	class="flex flex-wrap items-center gap-2 {className || ''}"
 	class:opacity-50={loading}
 	class:pointer-events-none={loading}
-	aria-label="pagination"
+	aria-label={translate('pagination')}
 	use:melt={$root}
 >
-	<Button icon={CaretLeft} meltAction={$prevButton} aria-label="Previous page" />
+	<Button icon={CaretLeft} meltAction={$prevButton} aria-label={translate('previousPage')} />
 	{#each strip as item, i (i)}
 		{#if item.kind === 'gap'}
 			<span class="px-1 text-gray-500">…</span>
@@ -113,13 +114,13 @@
 			<Button
 				class="data-[selected]:bg-atm-gold data-[selected]:hover:bg-atm-gold-dark"
 				meltAction={$pageTrigger({ type: 'page', value: item.value })}
-				aria-label="Go to page {item.value}"
+				aria-label="{translate('goToPage')} {item.value}"
 			>
 				{item.value}
 			</Button>
 		{/if}
 	{/each}
-	<Button icon={CaretRight} meltAction={$nextButton} aria-label="Next page" />
+	<Button icon={CaretRight} meltAction={$nextButton} aria-label={translate('nextPage')} />
 	<!-- jump-to-page: a fixed slot, whatever shape the strip takes -->
 	<input
 		type="text"
@@ -128,7 +129,7 @@
 		onkeydown={handleJumpKeydown}
 		onblur={handleJumpBlur}
 		placeholder="…"
-		aria-label="Ga naar pagina"
+		aria-label={translate('goToPage')}
 		class="h-[32px] w-[40px] text-center bg-atm-sand-darkish rounded border border-atm-gold border-[1px] hover:bg-atm-sand-dark text-sm placeholder:text-gray-500"
 	/>
 </nav>

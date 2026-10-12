@@ -50,7 +50,7 @@
 	class={mergeCss('bg-atm-sand border border-atm-sand-border rounded-sm shadow-sm p-1', className)}
 >
 	<div class="text-base font-sans text-black flex flex-wrap items-center gap-1">
-		<span>Bekijk</span>
+		<span>{translate('viewFilters')}</span>
 		{#each displayedRecordTypes as recordType, index}
 			<Tag variant="selected-outline">{recordType}</Tag>
 			{#if index < displayedRecordTypes.length - 1}

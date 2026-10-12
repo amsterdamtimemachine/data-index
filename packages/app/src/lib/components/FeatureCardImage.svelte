@@ -64,7 +64,7 @@
 					type="button"
 					class="w-full block cursor-pointer hover:opacity-80 transition-opacity"
 					onclick={onExpand}
-					aria-label="Expand image"
+					aria-label={translate('expandImage')}
 				>
 					<div class="w-full aspect-[4/3] overflow-hidden rounded bg-atm-gold-gray">
 						<img

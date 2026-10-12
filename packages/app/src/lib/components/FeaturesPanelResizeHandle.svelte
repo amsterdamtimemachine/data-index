@@ -27,6 +27,7 @@
 </script>
 
 <script lang="ts">
+	import { translate } from '$utils/translations';
 	import { onMount } from 'svelte';
 
 	type Props = {
@@ -107,7 +108,7 @@
 	role="separator"
 	tabindex="0"
 	aria-orientation="vertical"
-	aria-label="Paneelbreedte (kolommen)"
+	aria-label={translate('panelWidth')}
 	aria-valuemin={1}
 	aria-valuemax={maxCols}
 	aria-valuenow={cols}

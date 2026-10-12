@@ -22,6 +22,7 @@
 	</ToggleGroup>
 -->
 <script lang="ts">
+	import { translate } from '$utils/translations';
 	import { createToggleGroup, melt } from '@melt-ui/svelte';
 	import { get } from 'svelte/store';
 	import Check from 'phosphor-svelte/lib/Check';
@@ -155,14 +156,14 @@
 		"flex items-start data-[orientation='vertical']:flex-col data-[orientation='horizontal']:flex-row gap-1",
 		className
 	)}
-	aria-label="Toggle selection"
+	aria-label={translate('toggleSelection')}
 	role={type === 'single' ? 'radiogroup' : 'group'}
 >
 	{#each sortedItems as itemValue (itemValue)}
 		<button
 			class={itemClasses}
 			use:melt={$item({ value: itemValue, disabled: isDisabled(itemValue) })}
-			aria-label="Toggle {itemValue}"
+			aria-label="{translate('toggleItem')} {itemValue}"
 			role={type === 'single' ? 'radio' : 'checkbox'}
 			aria-checked={isSelected(itemValue)}
 			onmouseenter={(event) => onItemHover?.(itemValue, event.currentTarget)}

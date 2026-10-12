@@ -173,7 +173,7 @@ export function createTimelineScope(inputs: TimelineScopeInputs, fetcher: Fetche
 		get histogram() {
 			return histogram;
 		},
-		/** the subject's series regardless of the switch: the markers under the city-wide bars */
+		/** the subject's series regardless of the switch: the hover's selection count under the city-wide bars */
 		get subjectSeries() {
 			return series;
 		},

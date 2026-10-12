@@ -90,9 +90,42 @@ const TRANSLATIONS: Record<string, string> = {
 	clearPlaceFilter: 'Verwijder plekfilter',
 	imageUnavailable: 'Afbeelding niet beschikbaar',
 	noFeaturesForSelection: 'Geen features gevonden voor deze selectie en periode.',
+	// the filter panel's sections
+	placeFilter: 'Locatie',
+	searchTermFilter: 'Zoekterm',
+	recordTypeFilter: 'Inhoudstype',
+	recordTypeFilterTooltip: 'De data index bevat afbeeldingen, persoonsgegevens, teksten uit Nederlandse kranten, bioscoopprogramma\'s en dagboekverhalen.',
+	datasetFilter: 'Dataset',
+	datasetFilterTooltip: 'Filter op basis van de dataset waaruit de data afkomstig is.',
+	scaleFilter: 'Schaal',
+	scaleFilterTooltip: 'Filter op het type plek waaraan de data is verbonden: adres, straat, buurt of wijk.',
+	viewFilters: 'Bekijk',
+	navAbout: 'Over',
+
+	// cards, grid and panel
+	showMore: 'Meer tonen',
+	showLess: 'Minder tonen',
+	noFeaturesToDisplay: 'Geen features om te tonen',
+	openFeature: 'Feature openen',
+	closeFeature: 'Feature sluiten',
+	closeFeaturesPanel: 'Paneel sluiten',
+	expandImage: 'Afbeelding vergroten',
+	selectedCellPosition: 'Positie van de geselecteerde cel op de kaart',
+	panelWidth: 'Paneelbreedte (kolommen)',
+
+	// controls, for screen readers
+	pagination: 'Paginering',
+	previousPage: 'Vorige pagina',
+	nextPage: 'Volgende pagina',
+	goToPage: 'Ga naar pagina',
+	dismissNotification: 'Melding sluiten',
+	timePeriodSelector: 'Tijdperiode kiezen',
+	selectPeriod: 'Kies periode',
+	toggleSelection: 'Selectie',
+	toggleItem: 'Wissel',
+
 	// the empty panel's hints; {picture} and {button} stand for the inline elements
-	emptyPanelDotHint: 'Een rode stip op de tijdlijn {picture} laat zien in welke periodes de selectie wel data heeft. Klik op {button} rechtsonder om de tijdlijn van de selectie te tonen.',
-	redDotTimelineAlt: 'Tijdlijn met een rode stip onder een periode',
+	emptyPanelCityWideHint: 'Klik op {button} rechtsonder om de tijdlijn van de selectie te tonen: daar zie je in welke periodes de selectie wel features heeft.',
 	emptyPanelBarHint: 'Kies op de tijdlijn {picture} een periode met een rode balk: daar heeft de selectie wel features.',
 	emptyPanelOtherCell: 'Of kies een andere cel op de kaart.',
 	localTimelineAlt: 'Tijdlijn van de selectie met rode balken',
@@ -138,7 +171,6 @@ const TRANSLATIONS: Record<string, string> = {
 	windowUntil: 'tot',
 	windowIn: 'in',
 	filters: 'Filters',
-	// an expanded card's what and where, and its sources
 	// the heading over an expanded card's own fields, by record type; then its provenance
 	about_image: 'Over de afbeelding',
 	about_text: 'Over de tekst',

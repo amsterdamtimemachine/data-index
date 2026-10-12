@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { translate } from '$utils/translations';
 	import { fade } from 'svelte/transition';
 	import X from 'phosphor-svelte/lib/X';
 	import Button from '$components/Button.svelte';
@@ -35,7 +36,7 @@
 					</div>
 				</div>
 				<div class="absolute top-2 right-2">
-					<Button icon={X} onclick={toast.removeSelf} size={18} aria-label="Dismiss notification" />
+					<Button icon={X} onclick={toast.removeSelf} size={18} aria-label={translate('dismissNotification')} />
 				</div>
 			</div>
 		</div>

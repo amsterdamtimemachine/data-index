@@ -82,7 +82,7 @@ describe('timeline scope', () => {
 		expect(requests).toEqual([]);
 	});
 
-	test('desktop: a loaded cell series waits for the switch, but is there for the markers', () => {
+	test('desktop: a loaded cell series waits for the switch, but is there for the hover\'s selection count', () => {
 		const { inputs, scope, requests } = harness();
 		inputs.cellBounds = CELL;
 		flushSync();

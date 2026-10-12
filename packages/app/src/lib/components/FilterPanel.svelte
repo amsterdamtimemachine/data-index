@@ -200,11 +200,11 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 
 <div class="p-3">
 	<div class="mb-4">
-		<Heading level={2} class="font-bold text-lg mb-2"> Filters </Heading>
+		<Heading level={2} class="font-bold text-lg mb-2">{translate('filters')}</Heading>
 
 		<div class="mb-4">
 			<div class="flex mb-2">
-				<Heading level={3} class="pr-2">Plek</Heading>
+				<Heading level={3} class="pr-2">{translate('placeFilter')}</Heading>
 				<Tooltip icon={QuestionMark} placement="bottom">
 					<TextWithSlots text={translate('placeSearchTooltip')}>
 						{#snippet children(slot)}
@@ -225,7 +225,7 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 
 		<div class="mb-4">
 			<div class="flex mb-2">
-				<Heading level={3} class="pr-2">Zoekterm</Heading>
+				<Heading level={3} class="pr-2">{translate('searchTermFilter')}</Heading>
 				<Tooltip icon={QuestionMark} placement="bottom">{translate('searchTooltip')}</Tooltip>
 			</div>
 			<FeatureSearchInput onApply={handleSearchApply} filterQuery={activeParams} />
@@ -237,8 +237,8 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		</div>
 
 		<FilterSection
-			heading="Inhoudstype"
-			tooltip="De data index bevat een selectie van afbeeldingen, persoonsdata en teksten uit Nederlandse kranten."
+			heading={translate('recordTypeFilter')}
+			tooltip={translate('recordTypeFilterTooltip')}
 			items={translatedRecordTypes}
 			selectedItems={translatedCurrentRecordTypes}
 			onItemSelected={handleRecordTypeChange}
@@ -246,8 +246,8 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 	</div>
 
 	<FilterSection
-		heading="Dataset"
-		tooltip="Filter op basis van de dataset waaruit de data afkomstig is."
+		heading={translate('datasetFilter')}
+		tooltip={translate('datasetFilterTooltip')}
 		items={datasetLabels}
 		selectedItems={currentDatasetLabels}
 		onItemSelected={handleDatasetChange}
@@ -255,8 +255,8 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 
 	{#if placeTypes.length > 1}
 		<FilterSection
-			heading="Geometrie"
-			tooltip="Filter op basis van het type locatie waarmee de data is verbonden."
+			heading={translate('scaleFilter')}
+			tooltip={translate('scaleFilterTooltip')}
 			items={translatedPlaceTypes}
 			selectedItems={translatedCurrentPlaceTypes}
 			onItemSelected={handlePlaceTypeChange}

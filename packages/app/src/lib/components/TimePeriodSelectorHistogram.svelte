@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { HistogramBin } from '@atm/shared/types';
 	import { calculateHistogramBarHeights } from '$lib/utils/histogram';
-	import TimePeriodSelectorMarker from '$components/TimePeriodSelectorMarker.svelte';
 
 	interface Props {
 		bins: HistogramBin[];
@@ -9,9 +8,6 @@
 		// the selected cell's or place's series, shown instead of the global one
 		localBins?: HistogramBin[];
 		localMaxCount?: number;
-		// the selection's series while the global bars show: a dot marks each bin
-		// where it has data, a hint of where a switch to the selection pays off
-		markerBins?: HistogramBin[];
 		timelineHeight: number;
 		hideGlobal: boolean;
 	}
@@ -20,13 +16,9 @@
 		maxCount,
 		localBins = [],
 		localMaxCount = 0,
-		markerBins = [],
 		timelineHeight,
 		hideGlobal
 	}: Props = $props();
-
-	// matched by bin key: both series come from the same bin configuration
-	const markedKeys = $derived(new Set(markerBins.filter((bin) => bin.count > 0).map((bin) => bin.timeSlice.key)));
 
 	// Each series is normalised to its own max (log scaling); the hover carries
 	// the absolute counts.
@@ -109,13 +101,4 @@
 		stroke="black"
 		stroke-width="0.5"
 	/>
-
-	<!-- The selection's markers, on the baseline under the global bars -->
-	{#if !hideGlobal}
-		{#each bins as bin, i (bin.timeSlice.key)}
-			{#if markedKeys.has(bin.timeSlice.key)}
-				<TimePeriodSelectorMarker cx="{((i + 0.5) / bins.length) * 100}%" cy={timelineHeight} />
-			{/if}
-		{/each}
-	{/if}
 </svg>

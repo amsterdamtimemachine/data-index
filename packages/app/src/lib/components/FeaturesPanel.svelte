@@ -94,11 +94,9 @@
 		<p class="text-base text-black p-4 leading-loose">
 			<span class="font-bold">{translate('noFeaturesForSelection')}</span>
 			{#if timelineView === 'cityWide'}
-				<TextWithSlots text={translate('emptyPanelDotHint')}>
+				<TextWithSlots text={translate('emptyPanelCityWideHint')}>
 					{#snippet children(slot)}
-						{#if slot === 'picture'}
-							<Image src={asset('/images/red-dot-timeline-detail.png')} alt={translate('redDotTimelineAlt')} inline />
-						{:else if slot === 'button'}
+						{#if slot === 'button'}
 							<ButtonIllustration glyph="/glyphs/ToggleLocalTimeline.svg" />
 						{/if}
 					{/snippet}

@@ -1,5 +1,6 @@
 <!-- (map)/+page.svelte -->
 <script lang="ts">
+	import { translate } from '$utils/translations';
 	import { resolve } from '$app/paths';
 	import { filterParams } from '$utils/filters';
 	import { formatPlaceTitle } from '$utils/format';
@@ -407,7 +408,7 @@
 		<NavContainer bind:isExpanded={navExpanded} bind:element={navElement} class="absolute top-0 left-0 z-30">
 			{#snippet header()}
 				<Nav class="p-3">
-					<NavItem href={resolve('/about')} label="Over" />
+					<NavItem href={resolve('/about')} label={translate('navAbout')} />
 				</Nav>
 			{/snippet}
 			<FilterPanel
@@ -461,7 +462,7 @@
 			period={currentPeriod}
 			{histogram}
 			localHistogram={timelineScope.histogram}
-			markerHistogram={timelineScope.subjectSeries}
+			selectionHistogram={timelineScope.subjectSeries}
 			localLabel={timelineScope.label}
 			onToggleLocal={timelineScope.onToggle}
 			localToggleOn={timelineScope.switchOn}
