@@ -178,8 +178,8 @@
 </script>
 
 <!-- Global pointer events for drag behavior: mouse drags reach the document directly;
-     touch drags reach it by bubbling from the thumb, which implicitly captures the
-     pointer and blocks scrolling via touch-action -->
+     touch drags reach it by bubbling from the pressed bin, which implicitly captures
+     the pointer and blocks scrolling via touch-action -->
 <svelte:document
 	onpointermove={handlePointerMove}
 	onpointerup={handlePointerUp}
@@ -224,26 +224,23 @@
 			<!-- Labels Layer: Year labels -->
 			<TimePeriodSelectorLabels {displayPeriods} {timelineHeight} />
 
-			<!-- Interactive Layer: Clickable track -->
+			<!-- Interactive Layer: the bins select, drag and show the tooltip -->
 			<TimePeriodSelectorTrack
 				bins={histogram.bins}
 				localBins={localHistogram?.bins || []}
 				markerBins={markerHistogram?.bins || []}
 				{currentIndex}
 				onIndexChange={handleIndexChange}
+				onDragStart={handleDragStart}
 				{timelineHeight}
 				onKeyDown={handleKeyDown}
 			/>
 
-			<!-- Thumb Layer: Draggable indicator -->
+			<!-- Thumb Layer: the frame around the selected bin, drawing only -->
 			<TimePeriodSelectorThumb
 				{currentIndex}
 				totalBins={histogram.bins.length}
-				localBins={localHistogram?.bins || []}
-				{isDragging}
-				onDragStart={handleDragStart}
 				{timelineHeight}
-				bins={histogram.bins}
 			/>
 			</div>
 		</div>

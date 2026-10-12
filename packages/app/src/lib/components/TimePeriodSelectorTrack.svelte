@@ -2,6 +2,7 @@
 	import type { HistogramBin } from '@atm/shared/types';
 	import { createMediaQuery, HOVER_QUERY } from '$utils/media.svelte';
 	import TimePeriodTooltip from '$components/TimePeriodTooltip.svelte';
+	import { selectionCountFor } from '$utils/histogram';
 
 	interface Props {
 		bins: HistogramBin[];
@@ -14,12 +15,13 @@
 		onIndexChange: (newIndex: number) => void;
 		timelineHeight: number;
 		onKeyDown?: (event: KeyboardEvent) => void;
+		// a press on a bin starts a drag; the selector follows the pointer from there
+		onDragStart: (event: PointerEvent) => void;
 	}
-	let { bins, localBins = [], markerBins = [], currentIndex, onIndexChange, timelineHeight, onKeyDown }: Props = $props();
+	let { bins, localBins = [], markerBins = [], currentIndex, onIndexChange, timelineHeight, onKeyDown, onDragStart }: Props = $props();
 
 	const hoverCapable = createMediaQuery(HOVER_QUERY);
 
-	let trackElement: HTMLDivElement | undefined = $state();
 	let hoveredBin = $state<{ bin: HistogramBin; index: number } | null>(null);
 	let mousePosition = $state({ x: 0, y: 0 });
 
@@ -53,31 +55,27 @@
 		if (!hoveredBin) {
 			return null;
 		}
-		const key = hoveredBin.bin.timeSlice.key;
-		const marked = markerBins.find((bin) => bin.timeSlice.key === key);
-		if (!marked || marked.count === 0) {
-			return null;
-		}
-		return marked.count;
+		return selectionCountFor(markerBins, hoveredBin.bin.timeSlice.key);
 	});
 
-	function handleTrackClick(event: MouseEvent) {
-		if (!trackElement) return;
+	// a press selects the bin under the pointer and starts a drag from it; a keyboard
+	// activation (no pointer, detail 0) selects it
+	function handleBinPointerDown(event: PointerEvent, index: number) {
+		onIndexChange(index);
+		onDragStart(event);
+	}
 
-		const rect = trackElement.getBoundingClientRect();
-		const clickX = event.clientX - rect.left;
-		const percentage = clickX / rect.width;
-		const newIndex = Math.round(percentage * (bins.length - 1));
-
-		onIndexChange(Math.max(0, Math.min(bins.length - 1, newIndex)));
+	function handleBinClick(event: MouseEvent, index: number) {
+		event.stopPropagation();
+		if (event.detail === 0) {
+			onIndexChange(index);
+		}
 	}
 </script>
 
 <div
-	bind:this={trackElement}
 	class="absolute top-0 inset-x-0 cursor-pointer"
 	style="height: {timelineHeight}px;"
-	onclick={handleTrackClick}
 	role="slider"
 	tabindex="0"
 	aria-label="Time period selector"
@@ -92,12 +90,10 @@
 		{@const barWidth = 100 / bins.length}
 		{@const x = (i / bins.length) * 100}
 		<button
-			class="absolute h-full bg-transparent hover:border-atm-gold-darkest-hover hover:border-[4px] cursor-pointer"
+			class="absolute h-full bg-transparent hover:border-atm-gold-darkest-hover hover:border-[4px] cursor-pointer touch-none"
 			style="left: {x}%; width: {barWidth}%;"
-			onclick={(e) => {
-				e.stopPropagation();
-				onIndexChange(i);
-			}}
+			onpointerdown={(e) => handleBinPointerDown(e, i)}
+			onclick={(e) => handleBinClick(e, i)}
 			onmouseenter={(e) => handleMouseEnter(e, bin, i)}
 			onmouseleave={handleMouseLeave}
 			onmousemove={handleMouseMove}
