@@ -2,6 +2,7 @@
 	import Tag from '$components/Tag.svelte';
 	import Button from '$components/Button.svelte';
 	import X from 'phosphor-svelte/lib/X';
+	import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass';
 	import { translate } from '$utils/translations';
 
 	type Props = {
@@ -22,13 +23,17 @@
 	});
 </script>
 
+{#snippet chipContent()}
+	<span class="inline-flex align-[-2px] mr-1"><MagnifyingGlass size={14} weight="bold" /></span>{query}
+{/snippet}
+
 <div class="flex items-center gap-2">
 	<Button icon={X} onclick={onClear} size={18} aria-label={translate('clearSearchFilter')} class="shrink-0" />
 	<Tag {variant} interactive={true}>
 		{#if onToggle}
-			<button onclick={onToggle} class="text-left cursor-pointer">{query}</button>
+			<button onclick={onToggle} class="text-left cursor-pointer">{@render chipContent()}</button>
 		{:else}
-			<span class="text-left">{query}</span>
+			<span class="text-left">{@render chipContent()}</span>
 		{/if}
 	</Tag>
 </div>

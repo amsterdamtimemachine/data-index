@@ -1,39 +1,42 @@
+<!--
+	The input, popover and keyboard handling of a combobox; the rows are the parent's.
+	The children snippet draws the list and spreads getOption's attributes on each
+	row it wants selectable, so headers between rows cost nothing.
+-->
 <script lang="ts" module>
 	export type ComboboxOption<T extends string = string> = {
 		value: T;
 		label: string;
-		detail?: string;
 	};
+	export type OptionAttributes = Record<string, unknown>;
 </script>
 
 <script lang="ts" generics="T extends string">
 	import { Combobox as MeltCombobox } from 'melt/builders';
 	import { tick } from 'svelte';
+	import type { Snippet } from 'svelte';
 	import { mergeCss } from '$utils/utils';
 
 	type Props = {
 		options: ComboboxOption<T>[];
 		onInput: (text: string) => void;
 		onSelect?: (value: T) => void;
-		// Search-action mode: keep the picked label in the input but forget the
-		// value, so the same option can be picked again later.
-		resetValueOnSelect?: boolean;
-		// label of the selection this input represents, mirrored into the input
-		// whenever it changes; null clears the input
-		selectedLabel?: string | null;
+		// empty the input after a choice, so the same option can be picked again
+		clearOnSelect?: boolean;
 		placeholder?: string;
 		'aria-label'?: string;
 		class?: string;
+		children: Snippet<[(option: ComboboxOption<T>) => OptionAttributes]>;
 	};
 	let {
 		options,
 		onInput,
 		onSelect,
-		resetValueOnSelect = false,
-		selectedLabel = undefined,
+		clearOnSelect = false,
 		placeholder,
 		'aria-label': ariaLabel,
-		class: className
+		class: className,
+		children
 	}: Props = $props();
 
 	// Options arrive async (debounced fetch), after melt's own tick-based first
@@ -91,20 +94,14 @@
 			if (onSelect) {
 				onSelect(value);
 			}
-			if (resetValueOnSelect) {
+			if (clearOnSelect) {
 				// after melt's own post-callback write of the label into the input
 				tick().then(() => {
 					combobox.value = undefined;
+					combobox.inputValue = '';
 				});
 			}
 		}
-	});
-
-	$effect(() => {
-		if (selectedLabel === undefined) {
-			return;
-		}
-		combobox.inputValue = selectedLabel ?? '';
 	});
 
 	// Enter should pick the top result as soon as results exist
@@ -121,6 +118,10 @@
 	$effect(() => {
 		onInput(combobox.inputValue);
 	});
+
+	function getOption(option: ComboboxOption<T>): OptionAttributes {
+		return combobox.getOption(option.value, option.label);
+	}
 </script>
 
 <input
@@ -138,15 +139,5 @@
 	{...combobox.content}
 	class="z-50 m-0 p-0 inset-auto w-max max-w-[min(64rem,calc(100vw-1.5rem))] bg-atm-sand border border-atm-sand-border rounded-sm shadow-md overflow-hidden divide-y divide-atm-gold {options.length === 0 ? 'hidden' : ''}"
 >
-	{#each options as option (option.value)}
-		<div
-			{...combobox.getOption(option.value, option.label)}
-			class="px-3 py-1.5 text-base text-gray-500 cursor-pointer data-[highlighted]:bg-atm-sand-dark aria-selected:bg-atm-gold"
-		>
-			<span class="text-black">{option.label}</span>
-			{#if option.detail}
-				<span> · {option.detail}</span>
-			{/if}
-		</div>
-	{/each}
+	{@render children(getOption)}
 </div>

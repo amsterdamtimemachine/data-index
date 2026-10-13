@@ -4,6 +4,7 @@ import type { PlaceSearchMatch } from '@atm/shared/types';
 import { addToast } from '$state/toaster.svelte';
 import { translate } from '$utils/translations';
 import { apiUrl } from '$utils/api';
+import { MIN_QUERY_LENGTH } from '$utils/search-options';
 
 const DEBOUNCE_MS = 300;
 const RESULT_LIMIT = 10;
@@ -48,7 +49,7 @@ export function createPlaceSearch() {
 	}, DEBOUNCE_MS);
 
 	function setQuery(q: string) {
-		if (q.trim().length < 2) {
+		if (q.trim().length < MIN_QUERY_LENGTH) {
 			run.cancel();
 			requestId++;
 			matches = [];

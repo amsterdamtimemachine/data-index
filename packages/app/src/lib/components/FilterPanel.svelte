@@ -1,5 +1,5 @@
 <!--
-	The map's filter sidebar: place, search term, record type, dataset, geometry, topics.
+	The map's filter sidebar: search (place or term), record type, dataset, scale, topics.
 	Owns the URL writing — each change sets/deletes its query param and navigates, which
 	re-runs the loader and re-fetches the map data.
 -->
@@ -10,17 +10,13 @@
 	import { translate, translateAll, reverseTranslateAll } from '$utils/translations';
 	import { navigateParams, withoutPlace } from '$utils/navigate';
 	import { createTagCounts } from '$lib/state/tag-counts.svelte';
-	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
 	import Heading from './Heading.svelte';
-	import Tooltip from './Tooltip.svelte';
 	import TextWithSlots from './TextWithSlots.svelte';
-	import ToggleGroup from './ToggleGroup.svelte';
-	import Tag from './Tag.svelte';
 	import FilterSection from './FilterSection.svelte';
-import PlaceSearchInput from './PlaceSearchInput.svelte';
-import PlaceFilterTag from './PlaceFilterTag.svelte';
-import FeatureSearchInput from './FeatureSearchInput.svelte';
-import SearchFilterTag from './SearchFilterTag.svelte';
+	import FilterToggleGroup from './FilterToggleGroup.svelte';
+	import SearchInput from './SearchInput.svelte';
+	import PlaceFilterTag from './PlaceFilterTag.svelte';
+	import SearchFilterTag from './SearchFilterTag.svelte';
 	import Button from './Button.svelte';
 	import X from 'phosphor-svelte/lib/X';
 	import TagOperatorSwitch from './TagOperatorSwitch.svelte';
@@ -202,75 +198,63 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 	<div class="mb-4">
 		<Heading level={2} class="font-bold text-lg mb-2">{translate('filters')}</Heading>
 
-		<div class="mb-4">
-			<div class="flex mb-2">
-				<Heading level={3} class="pr-2">{translate('placeFilter')}</Heading>
-				<Tooltip icon={QuestionMark} placement="bottom">
-					<TextWithSlots text={translate('placeSearchTooltip')}>
-						{#snippet children(slot)}
-							{#if slot === 'border'}
-								<img src={asset('/glyphs/PlaceBorder.svg')} alt="" width="24" height="24" class="inline align-middle mx-1" />
-							{/if}
-						{/snippet}
-					</TextWithSlots>
-				</Tooltip>
-			</div>
-			<PlaceSearchInput onSelect={handlePlaceSelect} {selectedPlace} />
+		<FilterSection heading={translate('searchFilter')}>
+			{#snippet tooltip()}
+				<TextWithSlots text={translate('searchTooltip')}>
+					{#snippet children(slot)}
+						{#if slot === 'border'}
+							<img src={asset('/glyphs/PlaceBorder.svg')} alt="" width="24" height="24" class="inline align-middle mx-1" />
+						{/if}
+					{/snippet}
+				</TextWithSlots>
+			{/snippet}
+			<SearchInput onApplySearch={handleSearchApply} onSelectPlace={handlePlaceSelect} filterQuery={activeParams} />
 			{#if selectedPlace}
 				<div class="mt-2">
 					<PlaceFilterTag place={selectedPlace} onClear={handlePlaceClear} onToggle={onTogglePlacePanel} active={placePanelOpen} />
 				</div>
 			{/if}
-		</div>
-
-		<div class="mb-4">
-			<div class="flex mb-2">
-				<Heading level={3} class="pr-2">{translate('searchTermFilter')}</Heading>
-				<Tooltip icon={QuestionMark} placement="bottom">{translate('searchTooltip')}</Tooltip>
-			</div>
-			<FeatureSearchInput onApply={handleSearchApply} filterQuery={activeParams} />
 			{#if currentSearchQuery}
 				<div class="mt-2">
 					<SearchFilterTag query={currentSearchQuery} onClear={handleSearchClear} onToggle={onToggleSearch} active={!searchPaused} />
 				</div>
 			{/if}
-		</div>
+		</FilterSection>
 
-		<FilterSection
-			heading={translate('recordTypeFilter')}
-			tooltip={translate('recordTypeFilterTooltip')}
-			items={translatedRecordTypes}
-			selectedItems={translatedCurrentRecordTypes}
-			onItemSelected={handleRecordTypeChange}
-		/>
+		<FilterSection heading={translate('recordTypeFilter')}>
+			<FilterToggleGroup
+				items={translatedRecordTypes}
+				selectedItems={translatedCurrentRecordTypes}
+				onItemSelected={handleRecordTypeChange}
+			/>
+		</FilterSection>
 	</div>
 
-	<FilterSection
-		heading={translate('datasetFilter')}
-		tooltip={translate('datasetFilterTooltip')}
-		items={datasetLabels}
-		selectedItems={currentDatasetLabels}
-		onItemSelected={handleDatasetChange}
-	/>
+	<FilterSection heading={translate('datasetFilter')}>
+		{#snippet tooltip()}
+			{translate('datasetFilterTooltip')}
+		{/snippet}
+		<FilterToggleGroup items={datasetLabels} selectedItems={currentDatasetLabels} onItemSelected={handleDatasetChange} />
+	</FilterSection>
 
 	{#if placeTypes.length > 1}
-		<FilterSection
-			heading={translate('scaleFilter')}
-			tooltip={translate('scaleFilterTooltip')}
-			items={translatedPlaceTypes}
-			selectedItems={translatedCurrentPlaceTypes}
-			onItemSelected={handlePlaceTypeChange}
-		/>
+		<FilterSection heading={translate('scaleFilter')}>
+			{#snippet tooltip()}
+				{translate('scaleFilterTooltip')}
+			{/snippet}
+			<FilterToggleGroup
+				items={translatedPlaceTypes}
+				selectedItems={translatedCurrentPlaceTypes}
+				onItemSelected={handlePlaceTypeChange}
+			/>
+		</FilterSection>
 	{/if}
 
 	{#if availableTags.length > 0}
-		<div class="mb-4">
-			<div class="flex mb-2">
-				<Heading level={3} class="pr-2">{translate('topics')}</Heading>
-				<Tooltip icon={QuestionMark} placement="bottom">
-					Onderwerpen zijn automatisch toegekend door beeldclassificatie, zonder handmatige correctie, en voorlopig alleen aan afbeeldingen. Een grijs onderwerp heeft geen resultaten binnen de andere filters. Minimaal één: resultaten met minstens één gekozen onderwerp. Alle: alleen resultaten met alle gekozen onderwerpen.
-				</Tooltip>
-			</div>
+		<FilterSection heading={translate('topics')}>
+			{#snippet tooltip()}
+				{translate('topicsTooltip')}
+			{/snippet}
 			<TagOperatorSwitch
 				operator={currentTagOperator}
 				onOperatorChange={handleTagOperatorChange}
@@ -281,21 +265,13 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 			{#if currentTags.length > 0}
 				<Button icon={X} size={16} onclick={handleTagsClear} class="mb-2">{translate('clearAll')}</Button>
 			{/if}
-			<ToggleGroup
+			<FilterToggleGroup
 				items={translatedTags}
 				selectedItems={translatedCurrentTags}
 				disabledItems={disabledTagLabels}
 				onItemSelected={handleTagsChange}
-				requireOneItemSelected={false}
-			>
-				{#snippet children(item, isSelected, isDisabled)}
-					{#if isSelected}
-						<Tag variant="selected-outline" disabled={isDisabled} interactive={true}>{item}</Tag>
-					{:else}
-						<Tag variant="outline" disabled={isDisabled} interactive={true}>{item}</Tag>
-					{/if}
-				{/snippet}
-			</ToggleGroup>
-		</div>
+				requireOne={false}
+			/>
+		</FilterSection>
 	{/if}
 </div>

@@ -2,6 +2,7 @@
 	import Tag from '$components/Tag.svelte';
 	import Button from '$components/Button.svelte';
 	import X from 'phosphor-svelte/lib/X';
+	import MapPin from 'phosphor-svelte/lib/MapPin';
 	import { translate } from '$utils/translations';
 	import { formatPlaceTitle } from '$utils/format';
 	import type { PlaceSearchMatch } from '@atm/shared/types';
@@ -39,7 +40,7 @@
 </script>
 
 {#snippet chipContent()}
-	{`${cellsLabel} ${displayName}`}
+	<span class="inline-flex align-[-2px] mr-1"><MapPin size={14} weight="bold" /></span>{`${cellsLabel} ${displayName}`}
 {/snippet}
 
 <div class="flex items-center gap-2">

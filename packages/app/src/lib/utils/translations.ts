@@ -79,26 +79,22 @@ const TRANSLATIONS: Record<string, string> = {
 	reshuffle: 'Schud opnieuw',
 
 	// UI labels
-	searchPlaceholder: 'Zoek een plek op de kaart',
-	featureSearchPlaceholder: 'Zoek in de collectie',
-	applySearch: 'Zoek',
+	searchPlaceholder: 'Zoek een plek of zoekterm',
+	// the dropdown's text search row; {term} stands for what was typed
+	searchInTitles: 'Zoek ‘{term}’ in titels',
 	clearSearchFilter: 'Verwijder zoekfilter',
-	searchResult: 'resultaat',
-	searchResults: 'resultaten',
 	cellsOf: 'Cellen van',
 	cellOf: 'Cel van',
 	clearPlaceFilter: 'Verwijder plekfilter',
 	imageUnavailable: 'Afbeelding niet beschikbaar',
 	noFeaturesForSelection: 'Geen features gevonden voor deze selectie en periode.',
 	// the filter panel's sections
-	placeFilter: 'Locatie',
-	searchTermFilter: 'Zoekterm',
+	searchFilter: 'Zoeken op de kaart',
 	recordTypeFilter: 'Inhoudstype',
-	recordTypeFilterTooltip: 'De data index bevat afbeeldingen, persoonsgegevens, teksten uit Nederlandse kranten, bioscoopprogramma\'s en dagboekverhalen.',
 	datasetFilter: 'Dataset',
 	datasetFilterTooltip: 'Filter op basis van de dataset waaruit de data afkomstig is.',
 	scaleFilter: 'Schaal',
-	scaleFilterTooltip: 'Filter op het type plek waaraan de data is verbonden: adres, straat, buurt of wijk.',
+	scaleFilterTooltip: 'Hoe precies een feature op de kaart is geplaatst: op een adres, een straat, een buurt of een wijk.',
 	viewFilters: 'Bekijk',
 	navAbout: 'Over',
 
@@ -155,9 +151,8 @@ const TRANSLATIONS: Record<string, string> = {
 	// the collapsed filter status line
 	statusInCellsOf: 'in de cellen van',
 	statusWithSearch: 'met zoekterm',
-	searchTooltip: 'Doorzoek de titels van alle features. Voorlopig wordt alleen op titels gezocht, niet op beschrijvingen of volledige teksten. Na een geslaagde zoekopdracht tonen de kaart en de tijdlijn alleen de gevonden features.',
-	// the place search tooltip; {border} stands for the map's outline glyph
-	placeSearchTooltip: 'Zoek op huidige of historische plaatsnamen. De resultaten staan in chronologische volgorde. Kies een plek: de gouden rand {border} op de kaart markeert de cellen waarin de plek ligt en het paneel toont de features van die cellen.',
+	// the search tooltip; {border} stands for the map's outline glyph
+	searchTooltip: 'Een zoekterm doorzoekt voorlopig alleen titels, binnen de toegepaste filters. Bij een gekozen plek markeert de gouden rand {border} op de kaart de cellen waarin de plek ligt.',
 	ofThisCell: 'van deze cel',
 	timelineOfCell: 'Tijdlijn van deze cel',
 	timelineOf: 'Tijdlijn van',
@@ -178,6 +173,7 @@ const TRANSLATIONS: Record<string, string> = {
 	geometryProvider: 'Geometrieleverancier',
 	published: 'Gepubliceerd',
 	written: 'Geschreven',
+	topicsTooltip: 'Onderwerpen zijn automatisch toegekend door een classificatiemodel, zonder handmatige correctie, en voorlopig alleen aan een deel van de datasets. Een grijs onderwerp heeft geen resultaten binnen de andere filters. Minimaal één: resultaten met minstens één gekozen onderwerp. Alle: alleen resultaten met alle gekozen onderwerpen.',
 	topics: 'Onderwerpen',
 	topicsAny: 'Minimaal één',
 	topicsAll: 'Alle',
