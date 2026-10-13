@@ -4,6 +4,8 @@
 	import { selectsAll } from '$utils/filters';
 	import { formatPlaceTitle } from '$utils/format';
 	import Tag from './Tag.svelte';
+	import MapPin from 'phosphor-svelte/lib/MapPin';
+	import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass';
 	import type { FiltersStatus } from '$types/filters';
 
 	interface Props {
@@ -44,6 +46,12 @@
 	const searchQuery = $derived(filters.searchQuery);
 	const selectedTags = $derived(filters.tags);
 	const tagOperator = $derived(filters.tagOperator);
+	const tagJoiner = $derived.by(() => {
+		if (tagOperator === 'AND') {
+			return translate('and');
+		}
+		return translate('or');
+	});
 </script>
 
 <div
@@ -54,39 +62,43 @@
 		{#each displayedRecordTypes as recordType, index}
 			<Tag variant="selected-outline">{recordType}</Tag>
 			{#if index < displayedRecordTypes.length - 1}
-				<span>of</span>
+				<span>{translate('or')}</span>
 			{/if}
 		{/each}
 		{#if displayedPlaceTypes.length > 0}
-			<span>op</span>
+			<span>{translate('statusAtScale')}</span>
 			{#each displayedPlaceTypes as placeType, index}
 				<Tag variant="selected-outline">{placeType}</Tag>
 				{#if index < displayedPlaceTypes.length - 1}
-					<span>of</span>
+					<span>{translate('or')}</span>
 				{/if}
 			{/each}
 		{/if}
-		<span>in</span>
+		<span>{translate('statusInDatasets')}</span>
 		{#each displayedDatasets as dataset, index}
 			<Tag variant="selected-outline">{dataset}</Tag>
 			{#if index < displayedDatasets.length - 1}
-				<span>en</span>
+				<span>{translate('and')}</span>
 			{/if}
 		{/each}
 		{#if selectedPlace}
 			<span>{translate('statusInCellsOf')}</span>
-			<Tag variant="selected-outline">{formatPlaceTitle(selectedPlace)}</Tag>
+			<Tag variant="selected-outline">
+				<span class="inline-flex align-[-2px] mr-1"><MapPin size={14} weight="bold" /></span>{formatPlaceTitle(selectedPlace)}
+			</Tag>
 		{/if}
 		{#if searchQuery}
 			<span>{translate('statusWithSearch')}</span>
-			<Tag variant="selected-outline">{searchQuery}</Tag>
+			<Tag variant="selected-outline">
+				<span class="inline-flex align-[-2px] mr-1"><MagnifyingGlass size={14} weight="bold" /></span>{searchQuery}
+			</Tag>
 		{/if}
 		{#if selectedTags.length > 0}
-			<span>over</span>
+			<span>{translate('statusAboutTopics')}</span>
 			{#each selectedTags as tag, index}
 				<Tag variant="selected-outline">{translate(tag)}</Tag>
 				{#if index < selectedTags.length - 1}
-					<span>{tagOperator === 'AND' ? 'en' : 'of'}</span>
+					<span>{tagJoiner}</span>
 				{/if}
 			{/each}
 		{/if}

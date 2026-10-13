@@ -136,6 +136,7 @@ const TRANSLATIONS: Record<string, string> = {
 	actOne: 'optreden',
 	actMany: 'optredens',
 	and: 'en',
+	or: 'of',
 	onTheProgramme: 'op het programma',
 	programmeSource: 'Programmabron',
 	classifier: 'Classificatiemodel',
@@ -149,8 +150,11 @@ const TRANSLATIONS: Record<string, string> = {
 	showPlaceFeatures: 'Features van deze plek tonen',
 	hidePlaceFeatures: 'Features van deze plek verbergen',
 	// the collapsed filter status line
+	statusAtScale: 'op',
+	statusInDatasets: 'in',
 	statusInCellsOf: 'in de cellen van',
 	statusWithSearch: 'met zoekterm',
+	statusAboutTopics: 'over',
 	// the search tooltip; {border} stands for the map's outline glyph
 	searchTooltip: 'Een zoekterm doorzoekt voorlopig alleen titels, binnen de toegepaste filters. Bij een gekozen plek markeert de gouden rand {border} op de kaart de cellen waarin de plek ligt.',
 	ofThisCell: 'van deze cel',
