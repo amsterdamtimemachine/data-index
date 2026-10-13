@@ -8,9 +8,9 @@ const TRANSLATIONS: Record<string, string> = {
 	person: 'Persoon',
 	text: 'Tekst',
 	event: 'Evenement',
-	// an event's subtype, in brackets after the record type
-	screening: 'vertoning',
-	performance: 'voorstelling',
+	// an event's subtype, which names its type on the card in place of "Evenement"
+	screening: 'Filmvertoning',
+	performance: 'Voorstelling',
 	story: 'Verhaal',
 
 	// Place types
@@ -171,26 +171,18 @@ const TRANSLATIONS: Record<string, string> = {
 	windowUntil: 'tot',
 	windowIn: 'in',
 	filters: 'Filters',
-	// the heading over an expanded card's own fields, by record type; then its provenance
-	about_image: 'Over de afbeelding',
-	about_text: 'Over de tekst',
-	about_person: 'Over de persoon',
-	about_event: 'Over het evenement',
-	about_story: 'Over het verhaal',
-	about_unknown: 'Over het item',
+	// the heading over an expanded card's provenance
 	provenance: 'Herkomst',
 	dataProvider: 'Dataleverancier',
 	placeDataProvider: 'Locatieleverancier',
 	geometryProvider: 'Geometrieleverancier',
 	published: 'Gepubliceerd',
 	written: 'Geschreven',
-	contentType: 'Inhoudstype',
 	topics: 'Onderwerpen',
 	topicsAny: 'Minimaal één',
 	topicsAll: 'Alle',
 	clearAll: 'Wis alles',
 	toggleTopicOperator: 'Wissel tussen minimaal één en alle onderwerpen',
-	source: 'Bron',
 
 	// Error titles
 	'Invalid Content Type Removed': 'Ongeldig inhoudstype verwijderd',

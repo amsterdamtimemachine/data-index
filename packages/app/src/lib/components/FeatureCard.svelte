@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { FeatureResult } from '@atm/shared/types';
 	import { translate, translateAll } from '$utils/translations';
-	import { resolveCardFields, dataSourceFields, programmeBillRows, programmeBillHeading, relationLine, aboutHeading } from '$utils/cardFields';
+	import { resolveCardFields, dataSourceFields, programmeBillRows, programmeBillHeading, relationLine } from '$utils/cardFields';
 	import { featureViewerState } from '$lib/state/featureState.svelte';
 	import FeatureCardHeader from '$components/FeatureCardHeader.svelte';
 	import FeatureCardImage from '$components/FeatureCardImage.svelte';
@@ -156,7 +156,6 @@
 			<!-- the item's own fields, then where it comes from -->
 			<div class={entityFieldsClasses}>
 				{#if entityFields.length > 0}
-					<Heading level={4} class="font-medium mb-1">{aboutHeading(feature)}</Heading>
 					<FieldList fields={entityFields} class="mb-3" />
 				{/if}
 				{#if provenanceFields.length > 0}

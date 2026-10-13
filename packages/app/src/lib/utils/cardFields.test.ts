@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { ScreeningEventEntity, TheaterEventEntity, FeatureResult } from '@atm/shared/types';
-import { resolveCardFields, dataSourceFields, programmeBillRows, programmeBillHeading, entitySubtype, relationLine, typeLabel, aboutHeading } from './cardFields';
+import { resolveCardFields, dataSourceFields, programmeBillRows, programmeBillHeading, entitySubtype, relationLine, typeLabel } from './cardFields';
 
 const screening: ScreeningEventEntity = {
 	type: 'ScreeningEvent',
@@ -75,7 +75,7 @@ describe('relationLine', () => {
 
 	test('the type, the relation, the place linked to its record, and the date of a dated relation', () => {
 		expect(relationLine({ ...base, relationDated: true })).toEqual({
-			type: 'Evenement, vertoning',
+			type: 'Filmvertoning',
 			relation: 'Vertoond op',
 			place: 'Ceintuurbaan 338',
 			placeHref: 'https://adamlink.nl/geo/address/A1',
@@ -90,11 +90,10 @@ describe('relationLine', () => {
 		});
 	});
 
-	test('the type reads the subtype after a comma; the heading follows the record type', () => {
-		expect(typeLabel(base)).toBe('Evenement, vertoning');
+	test('the type is the most specific one: the subtype where there is one', () => {
+		expect(typeLabel(base)).toBe('Filmvertoning');
+		expect(typeLabel({ ...base, entity: theatre } as FeatureResult)).toBe('Voorstelling');
 		expect(typeLabel({ ...base, recordType: 'image', entity: undefined } as FeatureResult)).toBe('Afbeelding');
-		expect(aboutHeading({ ...base, recordType: 'story' } as FeatureResult)).toBe('Over het verhaal');
-		expect(aboutHeading({ ...base, recordType: 'image' } as FeatureResult)).toBe('Over de afbeelding');
 	});
 });
 

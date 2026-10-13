@@ -128,7 +128,7 @@ export function resolveCardFields(entity: Entity, expanded: boolean): FieldRow[]
 	return fields;
 }
 
-/** An entity's subtype as a translate() key, shown in brackets after the record type; null without one. */
+/** An entity's subtype as a translate() key, its most specific type; null without one. */
 export function entitySubtype(entity: Entity | undefined): string | null {
 	if (entity?.type === 'ScreeningEvent') {
 		return 'screening';
@@ -185,11 +185,11 @@ export function programmeBillRows(entity: Entity | undefined): FieldRow[] {
 	return rows;
 }
 
-/** The feature's type with its subtype after a comma: "Evenement, vertoning", "Afbeelding". */
+/** The feature's most specific type: its subtype where it has one ("Filmvertoning"), else its record type ("Afbeelding"). */
 export function typeLabel(feature: FeatureResult): string {
 	const subtype = entitySubtype(feature.entity);
 	if (subtype) {
-		return `${translate(feature.recordType)}, ${translate(subtype)}`;
+		return translate(subtype);
 	}
 	return translate(feature.recordType);
 }
@@ -198,7 +198,7 @@ export function typeLabel(feature: FeatureResult): string {
  * The line under a card's title, in parts so the place can be a link: the type, how
  * the feature relates to its place, the place's name as it was then (linked to the
  * place's own record) with today's name after it when they differ, and the date when
- * it belongs to the relation. "Evenement, vertoning · Vertoond op Ceintuurbaan 338, 5 januari 1934"
+ * it belongs to the relation. "Filmvertoning • Vertoond op Ceintuurbaan 338, 5 januari 1934"
  */
 export type RelationLine = {
 	type: string;
@@ -228,11 +228,6 @@ export function relationLine(feature: FeatureResult): RelationLine {
 		line.date = `, ${formatPeriod(feature.startDate, feature.endDate)}`;
 	}
 	return line;
-}
-
-/** The heading over an expanded card's own fields: "Over de afbeelding", "Over het verhaal". */
-export function aboutHeading(feature: FeatureResult): string {
-	return translate(`about_${feature.recordType}`);
 }
 
 /**
