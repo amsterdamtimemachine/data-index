@@ -248,6 +248,9 @@ export function dataSourceFields(feature: FeatureResult, expanded: boolean): Fie
 	if (feature.geometryProviderLabel) {
 		rows.push({ label: translate('geometryProvider'), value: feature.geometryProviderLabel, href: feature.geometryProviderUrl });
 	}
+	if (feature.datasetDistributionUrl) {
+		rows.push({ label: translate('fullDataset'), value: feature.datasetLabel ?? feature.datasetDistributionUrl, href: feature.datasetDistributionUrl });
+	}
 	for (const classifier of feature.classifiers ?? []) {
 		rows.push({ label: translate('classifier'), value: classifier.label, href: classifier.url });
 	}

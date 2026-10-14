@@ -119,6 +119,12 @@ describe('provenance rows', () => {
 		expect(dataSourceFields(beeldbank, false)).toEqual([]);
 	});
 
+	test('a public download of the whole dataset is a row between the leveranciers and the model', () => {
+		const diaries = { ...beeldbank, datasetLabel: 'Amsterdam Diaries Time Machine', datasetDistributionUrl: 'https://zenodo.org/records/14385058' } as FeatureResult;
+		expect(dataSourceFields(diaries, true).map((r) => r.label)).toEqual(['Dataleverancier', 'Locatieleverancier', 'Geometrieleverancier', 'Volledige dataset', 'Classificatiemodel']);
+		expect(dataSourceFields(diaries, true)[3]).toEqual({ label: 'Volledige dataset', value: 'Amsterdam Diaries Time Machine', href: 'https://zenodo.org/records/14385058' });
+	});
+
 	test('an image shows the archive\'s own dating, else its dates worded at their precision', () => {
 		const image = { type: 'MediaObject' as const, name: 'x', contentUrl: 'u' };
 		expect(resolveCardFields({ ...image, dateText: '1953 (ca.) t/m 1995 (ca.)', dateCreated: '1953-01-01/1995-12-31' }, true)[0])

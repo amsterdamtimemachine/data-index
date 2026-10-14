@@ -177,6 +177,7 @@ const TRANSLATIONS: Record<string, string> = {
 	provenance: 'Herkomst',
 	dataProvider: 'Dataleverancier',
 	placeDataProvider: 'Locatieleverancier',
+	fullDataset: 'Volledige dataset',
 	geometryProvider: 'Geometrieleverancier',
 	published: 'Gepubliceerd',
 	written: 'Geschreven',

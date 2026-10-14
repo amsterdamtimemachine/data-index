@@ -47,6 +47,8 @@ export const datasets = pgTable('datasets', {
   label: text('label').notNull(),
   description: text('description'),
   url: text('url'),
+  // the whole dataset as a download, Schema.org's distribution (e.g. a Zenodo record)
+  distributionUrl: text('distribution_url'),
   providerId: text('provider_id').references(() => agents.id)
 });
 

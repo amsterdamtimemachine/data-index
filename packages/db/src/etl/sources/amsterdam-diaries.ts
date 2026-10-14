@@ -79,6 +79,7 @@ export class AmsterdamDiariesIngestor extends Ingestor<DiaryEntryRecord> {
   protected DATASET_ID = 'amsterdam-diaries';
   protected DATASET_LABEL = 'Amsterdam Diaries Time Machine';
   protected DATASET_URL = 'https://diaries.amsterdamtimemachine.nl';
+  protected DATASET_DISTRIBUTION_URL = 'https://zenodo.org/records/14385058';
 
   protected RECORD_TYPE: RecordType = 'story';
   // the writer named the place; the entry is not about it (Schema.org CreativeWork.mentions)

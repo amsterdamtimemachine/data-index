@@ -81,6 +81,7 @@ erDiagram
         text label  "e.g. Beeldbank"
         text description  "e.g. Historical image archive"
         text url  "e.g. https://archief.amsterdam/beeldbank"
+        text distribution_url  "the whole dataset as a download, e.g. a Zenodo record"
         text provider_id FK "e.g. stadsarchief"
     }
 
@@ -206,7 +207,7 @@ erDiagram
 ```
 
 - **agents**: Who produced data, after PROV: an `Organization` that provides a dataset (`datasets.provider_id`) or place geometry (`place.source`), or a `SoftwareAgent`, a classifier model that produced tags (`feature_tags.source`). The `kind` column tells them apart; nothing lists agents directly, they are reached through what they produced
-- **datasets**: Data collections, each from a provider agent
+- **datasets**: Data collections, each from a provider agent, loosely after Schema.org's `Dataset`: `url` is the collection's site, `distribution_url` the whole dataset as a download when the source offers one (a Zenodo record for the diaries), shown on the card as Volledige dataset
 - **place**: Physical location identity (id, type, name); `source` is the provider agent
 - **place_geometry**: A place's geometry (RD / EPSG:28992) and the period it was valid (1:1 with place)
 - **place_historical_name**: Dated past names linked to places (addresses, streets), used to show what a location was called at a given time. Undated Adamlink name variants (spelling variants, abbreviations, old names without a date) are kept too, as rows without a `since` or `until`: a row with a period is an observation of what the place was called then, a row without one is a label. The place search finds labels and shows the current name in brackets after them, while feature-to-place resolution and name canonicalisation consider dated rows only

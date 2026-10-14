@@ -39,6 +39,7 @@ type FeatureRow = {
   spatial_frequency: number | null;
   temporal_frequency: number | null;
   dataset_label: string | null;
+  dataset_distribution_url: string | null;
   provider_label: string | null;
   provider_url: string | null;
   relevance_score: number | null;
@@ -397,6 +398,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       page.temporal_frequency,
       page.relevance_score,
       d.label as dataset_label,
+      d.distribution_url as dataset_distribution_url,
       o.label as provider_label,
       o.url as provider_url,
       f.entity,
@@ -453,6 +455,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     tags: row.tags || [],
     classifiers: (row.classifiers ?? []).map((c) => ({ id: c.id, label: c.label, url: c.url || undefined })),
     datasetLabel: row.dataset_label || undefined,
+    datasetDistributionUrl: row.dataset_distribution_url || undefined,
     providerLabel: row.provider_label || undefined,
     providerUrl: row.provider_url || undefined,
     spatialFrequency: row.spatial_frequency || 1,

@@ -28,6 +28,8 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
     protected abstract DATASET_ID: string; // Example: 'my-dataset';
     protected abstract DATASET_LABEL: string; // Example: 'My Dataset';
     protected abstract DATASET_URL: string; // Example: 'https://dataset-url.com';
+    // the whole dataset as a download, when one is public (e.g. a Zenodo record)
+    protected DATASET_DISTRIBUTION_URL?: string;
 
     protected abstract RECORD_TYPE: RecordType; // Possible values: 'image' | 'text' | 'person'
     protected abstract RELATION_ID: string; // Example: 'isAbout';
@@ -66,7 +68,7 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
     private async upsertDatasource() {
         await upsertSource({
             provider: { id: this.ORG_ID, label: this.ORG_LABEL, url: this.ORG_URL },
-            dataset: { id: this.DATASET_ID, label: this.DATASET_LABEL, url: this.DATASET_URL },
+            dataset: { id: this.DATASET_ID, label: this.DATASET_LABEL, url: this.DATASET_URL, distributionUrl: this.DATASET_DISTRIBUTION_URL },
             relations: this.relations(),
         })
     }

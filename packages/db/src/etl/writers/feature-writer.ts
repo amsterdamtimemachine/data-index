@@ -25,13 +25,14 @@ export type SourceRelation = { id: string; label: string; dated?: boolean };
  */
 export async function upsertSource(opts: {
   provider: { id: string; label: string; url?: string };
-  dataset: { id: string; label: string; url?: string };
+  dataset: { id: string; label: string; url?: string; distributionUrl?: string };
   relations?: SourceRelation[];
 }): Promise<void> {
   await db.insert(agents).values({ ...opts.provider, kind: 'Organization' }).onConflictDoNothing();
+  const dataset = { ...opts.dataset, distributionUrl: opts.dataset.distributionUrl ?? null, providerId: opts.provider.id };
   await db.insert(datasets)
-    .values({ ...opts.dataset, providerId: opts.provider.id })
-    .onConflictDoNothing();
+    .values(dataset)
+    .onConflictDoUpdate({ target: datasets.id, set: { label: dataset.label, url: dataset.url, distributionUrl: dataset.distributionUrl } });
   for (const r of opts.relations ?? []) {
     await db.insert(relation)
       .values({ id: r.id, label: r.label, dated: r.dated ?? false })

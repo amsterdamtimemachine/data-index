@@ -73,7 +73,7 @@ export async function setupTestDb() {
   `);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS datasets (
-      id TEXT PRIMARY KEY, label TEXT NOT NULL, description TEXT, url TEXT,
+      id TEXT PRIMARY KEY, label TEXT NOT NULL, description TEXT, url TEXT, distribution_url TEXT,
       provider_id TEXT REFERENCES agents(id)
     )
   `);

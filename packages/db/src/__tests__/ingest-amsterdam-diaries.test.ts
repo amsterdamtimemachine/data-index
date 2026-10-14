@@ -90,6 +90,11 @@ describe('amsterdam-diaries ingestion', () => {
     expect(single.excerpts.map((x: { placeId?: string }) => x.placeId)).toEqual(['https://adamlink.nl/geo/street/prinsengracht/3684']);
   });
 
+  test('the dataset records where the whole of it can be downloaded', async () => {
+    const r = await db.execute<{ distribution_url: string | null }>(sql`SELECT distribution_url FROM datasets WHERE id = 'amsterdam-diaries'`);
+    expect(r.rows[0].distribution_url).toBe('https://zenodo.org/records/14385058');
+  });
+
   test('date parsing keeps the source precision and rejects what it cannot read', () => {
     expect(parseEntryDate('1941-03-19')).toEqual({ startDate: '1941-03-19', endDate: '1941-03-19' });
     expect(parseEntryDate('1943-01')).toEqual({ startDate: '1943-01-01', endDate: '1943-01-31' });

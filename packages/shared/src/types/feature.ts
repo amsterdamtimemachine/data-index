@@ -231,6 +231,8 @@ export interface FeatureResult {
   // the classifier models behind the tags, one row each on the card
   classifiers: Classifier[];
   datasetLabel?: string;
+  // the whole dataset as a download, when the source offers one
+  datasetDistributionUrl?: string;
   providerLabel?: string;
   providerUrl?: string;
   spatialFrequency: number;
