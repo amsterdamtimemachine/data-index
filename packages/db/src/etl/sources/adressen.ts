@@ -72,7 +72,8 @@ export async function ingest(filePath: string) {
 
   console.log(`Inserted ${written} place names (${skipped} skipped: LP place not found)`);
 
-  // Set place.name to the most recent named entry per place.
+  // Set place.name to the most recent observation per address; a street's undated
+  // name rows are aliases and its name stays the straten ingest's preferred label.
   console.log('Updating place names...');
   const result = await db.execute(sql`
     UPDATE place SET name = sub.name
@@ -82,7 +83,7 @@ export async function ingest(filePath: string) {
       WHERE name IS NOT NULL
       ORDER BY place_id, since DESC
     ) sub
-    WHERE place.id = sub.place_id
+    WHERE place.id = sub.place_id AND place.type = 'address'
   `);
   console.log(`Done: ${written} names, ${result.rowCount} place names updated`);
 }

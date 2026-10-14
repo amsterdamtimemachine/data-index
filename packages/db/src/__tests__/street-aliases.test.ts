@@ -73,6 +73,17 @@ describe('street name aliases', () => {
     expect(r.rows[0].name).toBe('Kerkweg');
   });
 
+  test('the adressen name update leaves a street with aliases alone', async () => {
+    const lps = await import('../etl/sources/lps');
+    const adressen = await import('../etl/sources/adressen');
+    await lps.ingest(resolve(__dirname, 'fixtures/lps.ttl'));
+    await adressen.ingest(resolve(__dirname, 'fixtures/adressen.ttl'));
+    const street = await db.execute<{ name: string }>(sql`SELECT name FROM place WHERE id = ${KERKWEG}`);
+    expect(street.rows[0].name).toBe('Kerkweg');
+    const named = await db.execute<{ n: number }>(sql`SELECT count(*)::int AS n FROM place WHERE type = 'address' AND name IS NOT NULL`);
+    expect(named.rows[0].n).toBeGreaterThan(0);
+  });
+
   test("a street's existence dates become its geometry window", () => {
     const streets = parseAdamlinkStreets(readFileSync(FIXTURE, 'utf8'));
     expect(streets.find(s => s.uri === MEDIEVAL)).toMatchObject({ since: '1380', until: '1663' });

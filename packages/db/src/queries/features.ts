@@ -1,4 +1,5 @@
 import { sql, type SQL } from 'drizzle-orm';
+import { historicalLabelSql } from './historical-label';
 import type {
   RecordType,
   PlaceType,
@@ -402,10 +403,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       page.relation_id,
       r.dated as relation_dated,
       p.name,
-      (SELECT a.name FROM place_historical_name a
-       WHERE a.place_id = page.place_id
-         AND a.since <= page.end_date
-       ORDER BY a.since DESC LIMIT 1) as historical_label,
+      ${historicalLabelSql(sql`page.place_id`, sql`page.place_type`, sql`page.start_date`, sql`page.end_date`)} as historical_label,
       p.source as place_source,
       p.url as place_url,
       po.label as place_provider_label,
