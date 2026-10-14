@@ -27,7 +27,7 @@ type CinemaContextRecord = {
   url: string | null;
   programme_id: string;
   date: string | null;
-  venue: { perm_id: string | null; name: string | null; type: string | null };
+  venue: { perm_id: string | null; url: string | null; name: string | null; type: string | null };
   // the venue's address as the source writes it
   address: string | null;
   geom_wkt: string;

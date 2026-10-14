@@ -128,7 +128,7 @@ describe('provenance rows', () => {
 	});
 
 	test('a story shows when it was written, at the precision it was dated', () => {
-		const entry = { type: 'Manuscript' as const, name: 'x', text: 't', mentions: [] };
+		const entry = { type: 'Manuscript' as const, name: 'x', excerpts: [], textLength: 0, mentions: [] };
 		expect(resolveCardFields({ ...entry, dateCreated: '1944-10-30' }, true)[0]).toEqual({ label: 'Geschreven', value: '30 oktober 1944', href: undefined });
 		expect(resolveCardFields({ ...entry, dateCreated: '1943-01' }, true)[0].value).toBe('januari 1943');
 		expect(resolveCardFields(entry, true).find((r) => r.label === 'Geschreven')).toBeUndefined();

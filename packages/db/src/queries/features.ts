@@ -29,6 +29,7 @@ type FeatureRow = {
   url: string | null;
   record_type: RecordType;
   place_type: PlaceType;
+  place_id: string;
   label: string;
   description: string | null;
   content_url: string | null;
@@ -385,6 +386,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       f.url,
       page.record_type,
       page.place_type,
+      page.place_id,
       f.label,
       f.description,
       f.content_url,
@@ -440,6 +442,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     url: row.url || undefined,
     recordType: row.record_type,
     placeType: row.place_type,
+    placeId: row.place_id,
     label: row.label,
     description: row.description?.slice(0, 128) || undefined,
     contentUrl: row.content_url || undefined,

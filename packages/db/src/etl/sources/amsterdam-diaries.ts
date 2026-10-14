@@ -6,30 +6,38 @@
  * per entry and place, the same entry fields repeated with a different `place`, so
  * the writer links the one feature to each place in turn. A street or address
  * resolves by its Adamlink id, a building or a Wikidata place by its point through
- * the era cascade. The entry's full transcription goes into the entity; the
- * description holds its opening as the excerpt the collapsed card shows. Dates
- * keep the source's precision: a day, a month, or a year.
+ * the era cascade. The entity carries an excerpt of the transcription per place,
+ * each stamped with the index place its mention resolved to, so the card can open
+ * the text at the place it shows; the description holds the first excerpt's
+ * opening. Dates keep the source's precision: a day, a month, or a year.
  *
  * Usage: bun run db:ingest -s amsterdam-diaries -f <path-to-amsterdam-diaries.jsonl>
  */
 import { Draft, Ingestor } from '../ingest/ingestor';
 import { ManuscriptEntityFactory } from '../ingest/entity-factory';
-import { ExtractionArgs, PlaceExtractionMethod } from '../places/place-index';
-import { RecordType } from '@atm/shared';
+import { ExtractionArgs, PlaceExtractionMethod, Resolved } from '../places/place-index';
+import { NewFeature } from '../../schema';
+import { Excerpt, ManuscriptEntity, RecordType } from '@atm/shared';
+
+type DiaryPlace = { uri: string; name: string; kind: string; geom_wkt: string };
 
 type DiaryEntryRecord = {
   id: string;
   url: string;
   name: string | null;
   date: string | null;
-  text: string;
+  excerpts: Excerpt[];
+  textLength: number;
   diary: { name: string | null; url: string | null; coverage: string | null };
   author: { name: string | null; url: string | null };
   mentions: Array<{ type: 'Place' | 'Person' | 'Organization'; name: string; url: string }>;
-  place: { uri: string; name: string; kind: string; geom_wkt: string };
+  // this row's place, and every Amsterdam place of the entry
+  place: DiaryPlace;
+  places: DiaryPlace[];
   // the place's Adamlink id when it is one the index holds by id (a street or an
   // address); empty otherwise, so the point takes over
   place_uri?: string;
+  geom_wkt?: string;
 };
 
 const EXCERPT_LENGTH = 128;
@@ -79,31 +87,62 @@ export class AmsterdamDiariesIngestor extends Ingestor<DiaryEntryRecord> {
 
   protected PLACE_EXTRACTION_METHODS: ExtractionArgs<DiaryEntryRecord> = [
     { method: PlaceExtractionMethod.URI, column: 'place_uri' },
-    { method: PlaceExtractionMethod.WKT, column: 'geom_wkt' as keyof DiaryEntryRecord & string },
+    { method: PlaceExtractionMethod.WKT, column: 'geom_wkt' },
   ];
 
   protected entityFactory() {
     return new ManuscriptEntityFactory();
   }
 
-  protected transform(source: DiaryEntryRecord): Draft | undefined {
-    const dates = parseEntryDate(source.date);
-    if (!dates || !source.text || !source.place) {
-      return undefined;
-    }
-    // the place methods read columns of the row: lift the place's id and point to the top
-    const row = source as DiaryEntryRecord & { geom_wkt?: string };
-    row.geom_wkt = source.place.geom_wkt;
-    if (source.place.kind === 'street' || source.place.kind === 'address') {
-      row.place_uri = source.place.uri;
+  // the place methods read columns of the row: lift the place's id and point to the top
+  private placeColumns(row: DiaryEntryRecord, place: DiaryPlace): DiaryEntryRecord {
+    row.geom_wkt = place.geom_wkt;
+    if (place.kind === 'street' || place.kind === 'address') {
+      row.place_uri = place.uri;
     } else {
       row.place_uri = '';
     }
+    return row;
+  }
+
+  // The base writes an entity the first time it sees a feature, so the first row of
+  // an entry resolves every place of the entry and stamps each excerpt; the later
+  // rows repeat it from the resolver caches.
+  protected async sourceToFeature(source: DiaryEntryRecord): Promise<[NewFeature | undefined, Resolved | undefined]> {
+    const [feature, resolved] = await super.sourceToFeature(source);
+    if (!feature || !resolved || !('placeId' in resolved)) {
+      return [feature, resolved];
+    }
+    const entity = feature.entity as ManuscriptEntity;
+    const draft = { startDate: feature.startDate, endDate: feature.endDate } as Draft;
+    for (const excerpt of entity.excerpts) {
+      if (excerpt.place === source.place.uri) {
+        excerpt.placeId = resolved.placeId;
+        continue;
+      }
+      const place = source.places?.find((p) => p.uri === excerpt.place);
+      if (!place) {
+        continue;
+      }
+      const other = await this.extractPlace(this.placeColumns({} as DiaryEntryRecord, place), draft);
+      if ('placeId' in other) {
+        excerpt.placeId = other.placeId;
+      }
+    }
+    return [feature, resolved];
+  }
+
+  protected transform(source: DiaryEntryRecord): Draft | undefined {
+    const dates = parseEntryDate(source.date);
+    if (!dates || !source.excerpts?.length || !source.place) {
+      return undefined;
+    }
+    this.placeColumns(source, source.place);
     return {
       id: source.id,
       url: source.url,
       label: source.diary?.name || source.name || '',
-      description: source.text.slice(0, EXCERPT_LENGTH),
+      description: source.excerpts[0].text.slice(0, EXCERPT_LENGTH),
       startDate: dates.startDate,
       endDate: dates.endDate,
     };

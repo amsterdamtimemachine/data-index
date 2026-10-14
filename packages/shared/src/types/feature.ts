@@ -83,6 +83,8 @@ export interface VenueEntity {
   type: "Place";
   name: string;
   identifier: string;
+  // the venue's page at the source
+  url?: string;
   additionalType?: string;
   address?: string;
 }
@@ -126,16 +128,42 @@ export interface BookEntity {
   holdingArchive?: string;
 }
 
+/** A span of an excerpt where a place is named, as the writer spelled it. */
+export interface ExcerptMention {
+  start: number;
+  end: number;
+  quote: string;
+}
+
 /**
- * One diary entry: a dated piece of writing with its full transcription, its diary
- * and author, and everything the annotators identified in it. The places among the
- * mentions are also the feature's place links; the list keeps the rest.
+ * The part of an entry's transcription around the first mention of one place: whole
+ * lines, the offsets of every mention of that place inside it, and whether the entry
+ * continues before or after it.
+ */
+export interface Excerpt {
+  // the mention's URI at the source
+  place: string;
+  // the index place the entry was linked to for this mention; the card's key
+  placeId?: string;
+  text: string;
+  truncatedBefore: boolean;
+  truncatedAfter: boolean;
+  mentions: ExcerptMention[];
+}
+
+/**
+ * One diary entry: a dated piece of writing with an excerpt of its transcription per
+ * Amsterdam place it mentions, its diary and author, and everything the annotators
+ * identified in it. The places among the mentions are also the feature's place
+ * links; the list keeps the rest.
  */
 export interface ManuscriptEntity extends EntityBase {
   type: "Manuscript";
   // source precision: YYYY-MM-DD, YYYY-MM or YYYY
   dateCreated?: string;
-  text: string;
+  excerpts: Excerpt[];
+  // length of the whole transcription the excerpts were cut from
+  textLength: number;
   author?: { type: "Person"; name: string; url?: string };
   isPartOf?: BookEntity;
   mentions: MentionEntity[];
@@ -190,6 +218,8 @@ export interface FeatureResult {
   url?: string;
   recordType: RecordType;
   placeType?: PlaceType;
+  // the index place this result is shown at
+  placeId?: string;
   label: string;
   description?: string;
   contentUrl?: string;

@@ -1,4 +1,4 @@
-import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, TheaterEventEntity, MovieEntity, ManuscriptEntity, MentionEntity, RecordType } from "@atm/shared";
+import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, TheaterEventEntity, MovieEntity, ManuscriptEntity, MentionEntity, Excerpt, RecordType } from "@atm/shared";
 import { formatDateRange } from "../util/dates";
 import { Draft } from "./ingestor";
 
@@ -58,7 +58,7 @@ export class MediaObjectEntityFactory extends EntityFactory<MediaObjectEntity> {
 }
 
 // the source row's shape, as the cinema-context source reads it
-type ProgrammeVenue = { perm_id?: string; name?: string; type?: string };
+type ProgrammeVenue = { perm_id?: string; url?: string; name?: string; type?: string };
 export type ProgrammeItem = { title?: string; url?: string; year?: string; country?: string; director?: string; production_company?: string; live?: string };
 
 /** A programme's bill split into its films and its live acts, each in bill order. */
@@ -112,6 +112,7 @@ export class ProgrammeEntityFactory extends EntityFactory<ScreeningEventEntity |
                 type: 'Place',
                 name: venue.name ?? '',
                 identifier: venue.perm_id ?? '',
+                ...(venue.url && { url: venue.url }),
                 ...(venue.type && { additionalType: venue.type }),
                 ...(typeof address === 'string' && address && { address }),
             },
@@ -133,14 +134,16 @@ export class ManuscriptEntityFactory extends EntityFactory<ManuscriptEntity> {
         const mentions = (data.get('mentions') ?? []) as MentionEntity[];
         const name = data.get('name');
         const date = data.get('date');
-        const text = data.get('text');
+        const excerpts = (data.get('excerpts') ?? []) as Excerpt[];
+        const textLength = data.get('textLength');
 
         return {
             type: 'Manuscript',
             id: feature.id,
             name: typeof name === 'string' && name ? name : feature.label,
             ...(typeof date === 'string' && date && { dateCreated: date }),
-            text: typeof text === 'string' ? text : '',
+            excerpts: excerpts.map((x) => ({ ...x })),
+            textLength: typeof textLength === 'number' ? textLength : 0,
             ...(author.name && { author: { type: 'Person' as const, name: author.name, ...(author.url && { url: author.url }) } }),
             ...(diary.name && {
                 isPartOf: {

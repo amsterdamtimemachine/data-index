@@ -67,15 +67,27 @@ describe('amsterdam-diaries ingestion', () => {
     expect(day.url).toBe('https://id.amsterdamtimemachine.nl/ark:/81741/amsterdam-diaries/annotations/entries/1');
   });
 
-  test('the entity is a Manuscript with its text, author, diary and mentions', async () => {
+  test('the entity is a Manuscript with its excerpts, author, diary and mentions', async () => {
     const all = await rows();
     const e = all.find((f) => f.start === '1941-03-19')!.entity;
     expect(e.type).toBe('Manuscript');
     expect(e.name).toBe("19 Maart '41.");
-    expect(e.text).toBe("19 Maart '41.\nVader is weer thuis!!!!");
+    expect(e.textLength).toBe(37);
+    expect(e.excerpts.map((x: { text: string }) => x.text)).toEqual(["19 Maart '41.\nVader is weer thuis!!!!", "19 Maart '41.\nVader is weer thuis!!!!"]);
     expect(e.author).toEqual({ type: 'Person', name: 'Els Polak', url: 'http://www.wikidata.org/entity/Q125020291' });
     expect(e.isPartOf).toEqual({ type: 'Book', name: 'Dagboek Els Polak, deel 2', url: 'https://resolver.kb.nl/resolve?urn=urn:gvn:EVDO01:IIAV002_IAV001000041', temporalCoverage: '1941' });
     expect(e.mentions.map((m) => `${m.type}:${m.name}`)).toEqual(['Place:Prinsengracht', 'Place:Koninklijk Concertgebouw', 'Person:Zeno Paul Polak']);
+  });
+
+  test('each excerpt is stamped with the index place its mention resolved to', async () => {
+    const all = await rows();
+    const e = all.find((f) => f.start === '1941-03-19')!.entity;
+    expect(e.excerpts.map((x: { place: string; placeId?: string }) => [x.place.split('/')[4], x.placeId])).toEqual([
+      ['street', 'https://adamlink.nl/geo/street/prinsengracht/3684'],
+      ['building', 'ad-concertgebouw']
+    ]);
+    const single = all.find((f) => f.start === '1943-01-01')!.entity;
+    expect(single.excerpts.map((x: { placeId?: string }) => x.placeId)).toEqual(['https://adamlink.nl/geo/street/prinsengracht/3684']);
   });
 
   test('date parsing keeps the source precision and rejects what it cannot read', () => {

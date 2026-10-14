@@ -6,11 +6,12 @@
 	import FeatureCardHeader from '$components/FeatureCardHeader.svelte';
 	import FeatureCardImage from '$components/FeatureCardImage.svelte';
 	import FeatureCardText from '$components/FeatureCardText.svelte';
+	import FeatureCardExcerpt from '$components/FeatureCardExcerpt.svelte';
+	import { pickExcerpt, excerptWindow, segmentText, foldSegments, COLLAPSED_EXCERPT_LENGTH } from '$utils/excerpts';
 	import FieldList from '$components/FieldList.svelte';
 	import Link from '$components/Link.svelte';
 	import TagList from '$components/TagList.svelte';
 	import Heading from '$components/Heading.svelte';
-	import { foldLines } from '$utils/format';
 
 	type Props = {
 		feature: FeatureResult;
@@ -40,19 +41,29 @@
 		}
 		return programmeBillRows(feature.entity);
 	});
-	// a story's transcription read as prose: the whole text when expanded, the
-	// description's excerpt collapsed
-	const storyText = $derived.by(() => {
+	// a story opens at the place it is shown at: the whole excerpt when expanded, a
+	// window around the first mention collapsed
+	const storyExcerpt = $derived.by(() => {
 		if (feature.entity?.type !== 'Manuscript') {
 			return null;
 		}
-		if (expanded) {
-			return foldLines(feature.entity.text);
+		const excerpt = pickExcerpt(feature.entity, feature.placeId);
+		if (!excerpt) {
+			return null;
 		}
-		return foldLines(feature.description ?? '');
+		if (expanded) {
+			return excerpt;
+		}
+		return excerptWindow(excerpt, COLLAPSED_EXCERPT_LENGTH);
+	});
+	const storySegments = $derived.by(() => {
+		if (!storyExcerpt) {
+			return [];
+		}
+		return foldSegments(segmentText(storyExcerpt.text, storyExcerpt.mentions));
 	});
 	// the content region scrolls for these: the blocks above and below it cast the edge shadows
-	const scrollingContent = $derived(expanded && (billRows.length > 0 || storyText !== null));
+	const scrollingContent = $derived(expanded && (billRows.length > 0 || storyExcerpt !== null));
 	const SHADOW_DOWN = 'shadow-edge-down';
 	const SHADOW_UP = 'shadow-edge-up';
 
@@ -146,8 +157,14 @@
 				{/if}
 				<FieldList fields={billRows} class="px-2 py-3" />
 			{/if}
-			{#if storyText !== null}
-				<FeatureCardText text={storyText} {expanded} />
+			{#if storyExcerpt}
+				<FeatureCardExcerpt
+					segments={storySegments}
+					truncatedBefore={storyExcerpt.truncatedBefore}
+					truncatedAfter={storyExcerpt.truncatedAfter}
+					sourceUrl={feature.url}
+					{expanded}
+				/>
 			{:else if feature.description}
 				<FeatureCardText text={feature.description} {expanded} />
 			{/if}
