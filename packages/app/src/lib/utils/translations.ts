@@ -100,7 +100,8 @@ const TRANSLATIONS: Record<string, string> = {
 
 	// cards, grid and panel
 	showMore: 'Meer tonen',
-	// the ellipsis on a cut side of a story's excerpt
+	// the link after a story's excerpt to the entry's page at the source
+	readMore: 'Lees verder',
 	fullTextAtSource: 'Volledige tekst bij de bron',
 	showLess: 'Minder tonen',
 	noFeaturesToDisplay: 'Geen features om te tonen',
