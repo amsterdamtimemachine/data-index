@@ -2,7 +2,8 @@ import { db } from '../../client';
 import { createCachedResolver } from './cache';
 import { PlaceIdRow } from '../../row-types';
 import { sql } from 'drizzle-orm/sql';
-import { getCandidatesByPoint, getCandidatesByName, pickFinest, resolveNamePool } from './place-candidates';
+import { getCandidatesByPoint, getCandidatesByName, getNamesForPlaces, pickFinest, resolveNamePool, type Candidate } from './place-candidates';
+import { confirmByText } from './place-confirm';
 import type { Resolved } from './place-index';
 
 const allPlacesCTE = sql`
@@ -53,6 +54,22 @@ export const inferByPoint = createCachedResolver(async (key: string): Promise<Re
     const best = pickFinest(await getCandidatesByPoint(wkt, start, end));
     return best ? { placeId: best.placeId } : { skip: 'cap-miss' };
 });
+
+const pointPool = createCachedResolver(async (key: string): Promise<Candidate[]> => {
+    const { wkt, start, end } = JSON.parse(key);
+    return getCandidatesByPoint(wkt, start, end);
+});
+
+/** The point cascade, with the feature's text deciding between neighbours it names. */
+export async function inferByPointConfirmed(wkt: string, text: string, start: string, end: string): Promise<Resolved> {
+    if (!wkt) { return { skip: 'no-match' } }
+    if (!start || !end) { return { skip: 'undated' } }
+    const pool = await pointPool(JSON.stringify({ wkt, start, end }));
+    const named = pool.filter((c) => c.type === 'address' || c.type === 'street').map((c) => c.placeId);
+    const names = await getNamesForPlaces(named);
+    const best = pickFinest(confirmByText(pool, names, text));
+    return best ? { placeId: best.placeId } : { skip: 'cap-miss' };
+}
 
 /**
  * Fetches place_id based solely on the provided adamlinkuri

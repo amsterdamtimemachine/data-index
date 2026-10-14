@@ -9,7 +9,7 @@ import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:tes
 import { sql } from 'drizzle-orm';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
 import { getCandidatesByPoint, getCandidatesByName, pickFinest, resolveNamePool, rank, type Candidate } from '../etl/places/place-candidates';
-import { inferByPoint, inferByName } from '../etl/places/place-inference';
+import { inferByPoint, inferByName, inferByPointConfirmed } from '../etl/places/place-inference';
 import { clearResolverCaches } from '../etl/places/cache';
 
 const Q = 'POINT(120000 485000)'; // RD query point
@@ -218,5 +218,25 @@ describe('feature → place resolution', () => {
     // swapped lon/lat: POINT(52.37 4.9) in 4326 lands far outside the seeded area
     expect(await inferByPoint(JSON.stringify({ wkt: 'POINT(52.37 4.9)', start: '1920-01-01', end: '1920-01-01' })))
       .toEqual({ skip: 'cap-miss' });
+  });
+
+  test('text confirmation: the named neighbour wins over the nearer point, nearest otherwise', async () => {
+    await place('lp-old', 'address', 'adamlink', 'E 52', 'POINT(120000 485001)');
+    await histName('n-old', 'lp-old', 'E 52', '1853-01-01', '1853-12-31');
+    await place('lp-new', 'address', 'adamlink', 'Kalverstraat 97', 'POINT(120000 484997)');
+    await histName('n-new', 'lp-new', 'Kalverstraat 97', '1876-01-01', '1876-12-31');
+
+    // the resolvers take WGS84, the fixtures are RD
+    const wgs = await db.execute<{ wkt: string }>(sql`SELECT ST_AsText(ST_Transform(ST_GeomFromText(${Q}, 28992), 4326)) AS wkt`);
+    const q = wgs.rows[0].wkt;
+
+    const plain = await inferByPoint(JSON.stringify({ wkt: q, start: '1903-03-09', end: '1903-03-09' }));
+    expect(plain).toEqual({ placeId: 'lp-old' });
+
+    const named = await inferByPointConfirmed(q, 'Perry & Co., Kalverstraat 97, Amsterdam.', '1903-03-09', '1903-03-09');
+    expect(named).toEqual({ placeId: 'lp-new' });
+
+    const unnamed = await inferByPointConfirmed(q, 'Hotel Ponsen, Dordrecht.', '1903-03-09', '1903-03-09');
+    expect(unnamed).toEqual({ placeId: 'lp-old' });
   });
 });

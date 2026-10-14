@@ -2,9 +2,10 @@
  * Import Delpher newspaper articles
  *
  * Parses a CSV of articles carrying a WGS84 geometry point and a PostgreSQL date range.
- * Each point resolves through the WKT cascade (inferByPoint): the nearest place per source
- * within the per-type distance caps, era-ranked by the article's date. Articles that
- * resolve no place — or whose range is absent or degenerate — are skipped.
+ * Each point resolves through the WKT cascade: the places within the per-type distance
+ * caps, era-ranked by the article's date, with the article's text confirming a neighbour
+ * it names. Articles that resolve no place — or whose range is absent or degenerate — are
+ * skipped.
  *
  * Usage: bun run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
  */
@@ -47,7 +48,7 @@ export class DelpherIngestor extends Ingestor<DelpherSourceData> {
   protected RELATION_LABEL = 'Is About';
 
   protected PLACE_EXTRACTION_METHODS: ExtractionArgs<DelpherSourceData> = [
-    { method: PlaceExtractionMethod.WKT, column: 'geom_wkt' }
+    { method: PlaceExtractionMethod.WKT, column: 'geom_wkt', confirmBy: 'text' }
   ];
 
   private parsePeriod(period: string): { startDate: string | null; endDate: string | null } {

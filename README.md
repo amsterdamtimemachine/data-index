@@ -410,7 +410,7 @@ Optional: `description`, `content_url` (media), `entity` (schema.org JSONB), `ur
 
 A dataset is a subclass of `Ingestor` (`packages/db/src/etl/ingest/ingestor.ts`) that declares its provider/dataset metadata, a `transform` mapping each source row to a feature, and a `PLACE_EXTRACTION_METHODS` cascade — the ordered signals used to resolve each feature to a place, tried in turn until one resolves (else the feature is skipped and tallied by reason). Four signals are available:
 
-- `WKT` — a coordinate, matched to the nearest era-appropriate place within a distance cap (see [Dates resolution](#dates-resolution))
+- `WKT` — a coordinate, matched to the nearest era-appropriate place within a distance cap (see [Dates resolution](#dates-resolution)); with `confirmBy` naming a text column, a candidate whose name is written in that text outranks its nearer neighbours at the same granularity
 - `TEXT` — a free-text field, scanned for known place names
 - `NAME` — a field holding one place name, such as an address, matched exactly against current and dated names and ranked by era
 - `URI` — an Adamlink place URI, matched exactly

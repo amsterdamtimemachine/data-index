@@ -68,7 +68,7 @@ END`;
 
 // ══ FETCHERS ══════════════════════════════════════════════════════════════════
 
-// ── POINT signal: nearest address/street per source within cap + containing areas ──
+// ── POINT signal: every address/street within cap, nearest first, + containing areas ──
 // Address era-fit is OVERLAP-based: adamlink if the range reaches before ERA_CUTOFF,
 // bag if it reaches on/after it — a range straddling 1943 surfaces both, distance decides.
 // Area era-fit is [start,end] ⋂ [since,until); overlap length ranks among containers.
@@ -79,8 +79,7 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
   }>(sql`
     WITH q AS (SELECT ${wktToRd(wkt, srid)} AS g),
     near AS (
-      SELECT DISTINCT ON (p.type, p.source)
-             p.id, p.name, p.type, p.source, ST_Distance(pg.geometry, q.g) AS dist
+      SELECT p.id, p.name, p.type, p.source, ST_Distance(pg.geometry, q.g) AS dist
       FROM q, place_geometry pg JOIN place p ON p.id = pg.place_id
       WHERE p.type IN ('address', 'street')
         AND ST_DWithin(pg.geometry, q.g, ${MAX_POINT_CAP_M}::float8)
@@ -149,6 +148,25 @@ export async function getCandidatesByName(name: string, start: string, end: stri
     placeId: r.place_id, name: r.name, type: r.type,
     source: r.source, via: r.via, gapDays: Number(r.gap_days),
   }));
+}
+
+// ── every name a place has gone by: the current one and each historical row, dated or not ──
+export async function getNamesForPlaces(placeIds: string[]): Promise<Map<string, string[]>> {
+  const names = new Map<string, string[]>();
+  if (placeIds.length === 0) return names;
+  const rows = await db.execute<{ place_id: string; name: string }>(sql`
+    SELECT p.id AS place_id, p.name
+    FROM place p WHERE p.id IN ${placeIds} AND p.name IS NOT NULL
+    UNION
+    SELECT hn.place_id, hn.name
+    FROM place_historical_name hn WHERE hn.place_id IN ${placeIds} AND hn.name IS NOT NULL
+  `);
+  for (const r of rows.rows) {
+    const list = names.get(r.place_id) ?? [];
+    list.push(r.name);
+    names.set(r.place_id, list);
+  }
+  return names;
 }
 
 // ══ SELECTION HELPERS ═════════════════════════════════════════════════════════
