@@ -5,14 +5,14 @@ import { resolveCardFields, dataSourceFields, programmeBillRows, programmeBillHe
 const screening: ScreeningEventEntity = {
 	type: 'ScreeningEvent',
 	id: 'V1',
-	name: 'Mello Wendini, komisch dressuur act',
+	name: 'Skippy (1931)',
 	startDate: '1934-01-05',
 	location: { type: 'Place', name: 'Rialto', identifier: 'B1', additionalType: 'Cinema', address: 'Ceintuurbaan 338' },
-	workPresented: [
+	bill: [
 		{ type: 'Movie', name: 'Skippy (1931)', url: 'https://cinemacontext.nl/id/F1' },
+		{ type: 'LiveAct', name: 'Mello Wendini, komisch dressuur act' },
 		{ type: 'Movie', name: 'Reis naar de maan, De' }
-	],
-	performer: ['Mello Wendini, komisch dressuur act']
+	]
 };
 
 const theatre: TheaterEventEntity = {
@@ -20,8 +20,7 @@ const theatre: TheaterEventEntity = {
 	name: 'Allison Troep, acrobaten',
 	startDate: '1907-05',
 	location: { type: 'Place', name: 'Carr', identifier: 'B2' },
-	workPresented: [],
-	performer: ['Allison Troep, acrobaten']
+	bill: [{ type: 'LiveAct', name: 'Allison Troep, acrobaten' }]
 };
 
 describe('programme cards', () => {
@@ -36,16 +35,16 @@ describe('programme cards', () => {
 
 	test('a bill of several items gets a heading worded from it; one item gets none', () => {
 		expect(programmeBillHeading(screening)).toBe('2 films en 1 optreden op het programma');
-		expect(programmeBillHeading({ ...theatre, performer: ['a', 'b'] })).toBe('2 optredens op het programma');
+		expect(programmeBillHeading({ ...theatre, bill: [{ type: 'LiveAct', name: 'a' }, { type: 'LiveAct', name: 'b' }] })).toBe('2 optredens op het programma');
 		expect(programmeBillHeading(theatre)).toBeNull();
 		expect(programmeBillHeading({ type: 'Person', name: 'x' })).toBeNull();
 	});
 
-	test('the bill: every film linked where it has a page, then every act', () => {
+	test("the bill in the source's order: a film linked where it has a page, an act as worded", () => {
 		expect(programmeBillRows(screening)).toEqual([
 			{ label: 'Film', value: 'Skippy (1931)', href: 'https://cinemacontext.nl/id/F1' },
-			{ label: 'Film', value: 'Reis naar de maan, De', href: undefined },
-			{ label: 'Optreden', value: 'Mello Wendini, komisch dressuur act' }
+			{ label: 'Optreden', value: 'Mello Wendini, komisch dressuur act' },
+			{ label: 'Film', value: 'Reis naar de maan, De', href: undefined }
 		]);
 		expect(programmeBillRows({ type: 'Person', name: 'x' })).toEqual([]);
 		expect(programmeBillRows(undefined)).toEqual([]);

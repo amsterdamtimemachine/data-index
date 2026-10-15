@@ -6,8 +6,9 @@
  * programme with its venue, the venue's address as written and its point, the bill
  * in order, and the newspapers it was listed in. A programme is valid with at least
  * one film or act on its bill; an empty bill is skipped. The label is the first
- * item on the bill. A programme with a film is a ScreeningEvent screened at its
- * venue, one with acts only a TheaterEvent performed there.
+ * item on the bill, and that item sets the kind: a bill opening with a film is a
+ * ScreeningEvent screened at its venue, one opening with an act a TheaterEvent
+ * performed there.
  *
  * The place is the venue's address, matched by name against the dated address names
  * (Adamlink before 1943, BAG after, as for any era match); an address written as a
@@ -17,7 +18,7 @@
  * Usage: bun run db:ingest -s cinema-context -f <path-to-cinema-context.jsonl>
  */
 import { Draft, Ingestor } from '../ingest/ingestor';
-import { ProgrammeEntityFactory, programmeBill, type ProgrammeItem } from '../ingest/entity-factory';
+import { ProgrammeEntityFactory, programmeBill, leadsWithFilm, type ProgrammeItem } from '../ingest/entity-factory';
 import { ExtractionArgs, PlaceExtractionMethod } from '../places/place-index';
 import { RecordType } from '@atm/shared';
 
@@ -104,7 +105,7 @@ export class CinemaContextIngestor extends Ingestor<CinemaContextRecord> {
 
   // screened at with a film on the bill, performed at with acts only
   protected override relationFor(source: CinemaContextRecord): string {
-    if (programmeBill(source.items ?? []).films.length > 0) {
+    if (leadsWithFilm(programmeBill(source.items ?? []))) {
       return SCREENED_AT.id;
     }
     return PERFORMED_AT.id;

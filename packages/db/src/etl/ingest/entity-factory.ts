@@ -1,4 +1,4 @@
-import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, TheaterEventEntity, MovieEntity, ManuscriptEntity, Excerpt, RecordType } from "@atm/shared";
+import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, TheaterEventEntity, BillItem, ManuscriptEntity, Excerpt, RecordType } from "@atm/shared";
 import { formatDateRange } from "../util/dates";
 import { Draft } from "./ingestor";
 
@@ -61,13 +61,12 @@ export class MediaObjectEntityFactory extends EntityFactory<MediaObjectEntity> {
 type ProgrammeVenue = { perm_id?: string; url?: string; name?: string; type?: string };
 export type ProgrammeItem = { title?: string; url?: string; year?: string; country?: string; director?: string; production_company?: string; live?: string };
 
-/** A programme's bill split into its films and its live acts, each in bill order. */
-export function programmeBill(items: ProgrammeItem[]): { films: MovieEntity[]; acts: string[] } {
-    const films: MovieEntity[] = [];
-    const acts: string[] = [];
+/** A programme's bill in the source's order: films and live acts as they were billed. */
+export function programmeBill(items: ProgrammeItem[]): BillItem[] {
+    const bill: BillItem[] = [];
     for (const item of items) {
         if (item.title) {
-            films.push({
+            bill.push({
                 type: 'Movie',
                 name: item.title,
                 ...(item.url && { url: item.url }),
@@ -78,23 +77,28 @@ export function programmeBill(items: ProgrammeItem[]): { films: MovieEntity[]; a
             });
         }
         if (item.live) {
-            acts.push(item.live);
+            bill.push({ type: 'LiveAct', name: item.live });
         }
     }
-    return { films, acts };
+    return bill;
 }
 
-/** A programme: a ScreeningEvent when its bill has a film, a TheaterEvent when it has acts only. */
+/** Whether a bill opens with a film: that makes the programme a screening, and its title the film. */
+export function leadsWithFilm(bill: BillItem[]): boolean {
+    return bill.length > 0 && bill[0].type === 'Movie';
+}
+
+/** A programme: a ScreeningEvent when its bill opens with a film, a TheaterEvent when it opens with an act. */
 export class ProgrammeEntityFactory extends EntityFactory<ScreeningEventEntity | TheaterEventEntity> {
     create(feature: Draft, data: Map<string, unknown>): ScreeningEventEntity | TheaterEventEntity {
         const venue = (data.get('venue') ?? {}) as ProgrammeVenue;
         const address = data.get('address');
         const date = data.get('date');
         const permId = data.get('perm_id');
-        const { films, acts } = programmeBill((data.get('items') ?? []) as ProgrammeItem[]);
+        const bill = programmeBill((data.get('items') ?? []) as ProgrammeItem[]);
 
         let type: 'ScreeningEvent' | 'TheaterEvent' = 'TheaterEvent';
-        if (films.length > 0) {
+        if (leadsWithFilm(bill)) {
             type = 'ScreeningEvent';
         }
         let startDate = feature.startDate;
@@ -115,8 +119,7 @@ export class ProgrammeEntityFactory extends EntityFactory<ScreeningEventEntity |
                 ...(venue.type && { additionalType: venue.type }),
                 ...(typeof address === 'string' && address && { address }),
             },
-            workPresented: films,
-            ...(acts.length > 0 && { performer: acts }),
+            bill,
         };
     }
 }

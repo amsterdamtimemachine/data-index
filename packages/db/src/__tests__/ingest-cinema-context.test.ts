@@ -65,11 +65,15 @@ describe('cinema-context ingestion', () => {
     expect(all.find((f) => f.start === '1907-05-01')!.place_id).toBe('cc-point');
   });
 
-  test('a film makes a screening screened at the venue; acts only a theatre event performed there', async () => {
+  test('the lead item sets the type and the relation: a film opens a screening, an act a theatre event', async () => {
     const all = await rows();
-    const mixed = all.find((f) => f.start === '1960-03-04')!;
-    expect(mixed.entity.type).toBe('ScreeningEvent');
-    expect(mixed.relation_id).toBe('screenedAt');
+    const film = all.find((f) => f.start === '1934-01-05')!;
+    expect(film.entity.type).toBe('ScreeningEvent');
+    expect(film.relation_id).toBe('screenedAt');
+    // an act followed by a film: the act leads, so a theatre event, titled by the act
+    const actFirst = all.find((f) => f.start === '1960-03-04')!;
+    expect(actFirst.entity.type).toBe('TheaterEvent');
+    expect(actFirst.relation_id).toBe('performedAt');
     const acts = all.find((f) => f.start === '1934-01-12')!;
     expect(acts.entity.type).toBe('TheaterEvent');
     expect(acts.relation_id).toBe('performedAt');
@@ -80,19 +84,22 @@ describe('cinema-context ingestion', () => {
     expect(r.rows).toEqual([{ id: 'performedAt', dated: true }, { id: 'screenedAt', dated: true }]);
   });
 
-  test('the entity carries the venue as the source has it, the bill and the newspapers', async () => {
+  test("the entity carries the venue as the source has it and the bill in the source's order", async () => {
     const all = await rows();
     const mixed = all.find((f) => f.start === '1960-03-04')!.entity;
     expect(mixed.id).toBe('V000002');
     expect(mixed.name).toBe('Mello Wendini, komisch dressuur act');
     expect(mixed.location).toEqual({ type: 'Place', name: 'Rialto', identifier: 'B000001', url: 'https://cinemacontext.nl/id/B000001', additionalType: 'Cinema', address: 'Ceintuurbaan 338' });
-    expect(mixed.workPresented).toEqual([{ type: 'Movie', name: 'Can-can (1960)', url: 'https://cinemacontext.nl/id/F000002', dateCreated: '1960', countryOfOrigin: 'USA' }]);
-    expect(mixed.performer).toEqual(['Mello Wendini, komisch dressuur act']);
-    expect(mixed).not.toHaveProperty('citation');
+    expect(mixed.bill).toEqual([
+      { type: 'LiveAct', name: 'Mello Wendini, komisch dressuur act' },
+      { type: 'Movie', name: 'Can-can (1960)', url: 'https://cinemacontext.nl/id/F000002', dateCreated: '1960', countryOfOrigin: 'USA' }
+    ]);
+    for (const gone of ['citation', 'workPresented', 'performer']) {
+      expect(mixed).not.toHaveProperty(gone);
+    }
     const acts = all.find((f) => f.start === '1934-01-12')!;
     expect(acts.url).toBe('');
-    expect(acts.entity.workPresented).toEqual([]);
-    expect(acts.entity.performer).toEqual(['Allison Troep, acrobaten', 'Alfonso Avello Combination, pantomime']);
+    expect(acts.entity.bill).toEqual([{ type: 'LiveAct', name: 'Allison Troep, acrobaten' }, { type: 'LiveAct', name: 'Alfonso Avello Combination, pantomime' }]);
   });
 
   test('dates keep the source precision', async () => {

@@ -134,8 +134,8 @@ export function programmeBillHeading(entity: Entity | undefined): string | null 
 	if (!entity || !isProgramme(entity)) {
 		return null;
 	}
-	const films = entity.workPresented.length;
-	const acts = (entity.performer ?? []).length;
+	const films = entity.bill.filter((item) => item.type === 'Movie').length;
+	const acts = entity.bill.length - films;
 	if (films + acts < 2) {
 		return null;
 	}
@@ -156,17 +156,18 @@ function countWord(count: number, one: string, many: string): string {
 	return `${count} ${translate(many)}`;
 }
 
-/** A programme's bill as rows: its films, each linked to its page, then its acts, each in bill order. */
+/** A programme's bill as rows in the source's order: a film linked to its page, an act as worded. */
 export function programmeBillRows(entity: Entity | undefined): FieldRow[] {
 	if (!entity || !isProgramme(entity)) {
 		return [];
 	}
 	const rows: FieldRow[] = [];
-	for (const film of entity.workPresented) {
-		rows.push({ label: translate('film'), value: film.name, href: film.url });
-	}
-	for (const act of entity.performer ?? []) {
-		rows.push({ label: translate('performer'), value: act });
+	for (const item of entity.bill) {
+		if (item.type === 'Movie') {
+			rows.push({ label: translate('film'), value: item.name, href: item.url });
+		} else {
+			rows.push({ label: translate('performer'), value: item.name });
+		}
 	}
 	return rows;
 }

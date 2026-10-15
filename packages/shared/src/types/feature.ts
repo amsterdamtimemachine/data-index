@@ -89,22 +89,28 @@ export interface VenueEntity {
   address?: string;
 }
 
-/** One programme at a venue on a date, with its bill and the newspapers it was listed in. */
+/** A live act on a bill, as the source words it. */
+export interface LiveActEntity {
+  type: "LiveAct";
+  name: string;
+}
+
+export type BillItem = MovieEntity | LiveActEntity;
+
+/** One programme at a venue on a date, with its bill in the source's order. */
 interface ProgrammeEntity extends EntityBase {
   // source precision: YYYY-MM-DD, YYYY-MM or YYYY
   startDate: string;
   location: VenueEntity;
-  workPresented: MovieEntity[];
-  // the live acts on the bill, as the source words them
-  performer?: string[];
+  bill: BillItem[];
 }
 
-/** A programme with at least one film on its bill. */
+/** A programme whose bill opens with a film; the title is that film. */
 export interface ScreeningEventEntity extends ProgrammeEntity {
   type: "ScreeningEvent";
 }
 
-/** A programme with live acts only. */
+/** A programme whose bill opens with a live act; the title is that act. */
 export interface TheaterEventEntity extends ProgrammeEntity {
   type: "TheaterEvent";
 }
