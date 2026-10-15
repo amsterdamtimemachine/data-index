@@ -152,7 +152,6 @@ const TRANSLATIONS: Record<string, string> = {
 	and: 'en',
 	or: 'of',
 	onTheProgramme: 'op het programma',
-	programmeSource: 'Programmabron',
 	classifier: 'Classificatiemodel',
 	// a story's rows
 	diary: 'Dagboek',

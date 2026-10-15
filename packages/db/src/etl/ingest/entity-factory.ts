@@ -89,7 +89,6 @@ export class ProgrammeEntityFactory extends EntityFactory<ScreeningEventEntity |
     create(feature: Draft, data: Map<string, unknown>): ScreeningEventEntity | TheaterEventEntity {
         const venue = (data.get('venue') ?? {}) as ProgrammeVenue;
         const address = data.get('address');
-        const sources = (data.get('sources') ?? []) as string[];
         const date = data.get('date');
         const permId = data.get('perm_id');
         const { films, acts } = programmeBill((data.get('items') ?? []) as ProgrammeItem[]);
@@ -118,7 +117,6 @@ export class ProgrammeEntityFactory extends EntityFactory<ScreeningEventEntity |
             },
             workPresented: films,
             ...(acts.length > 0 && { performer: acts }),
-            ...(sources.length > 0 && { citation: sources }),
         };
     }
 }

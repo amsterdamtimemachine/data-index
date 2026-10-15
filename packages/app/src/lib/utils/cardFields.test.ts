@@ -12,8 +12,7 @@ const screening: ScreeningEventEntity = {
 		{ type: 'Movie', name: 'Skippy (1931)', url: 'https://cinemacontext.nl/id/F1' },
 		{ type: 'Movie', name: 'Reis naar de maan, De' }
 	],
-	performer: ['Mello Wendini, komisch dressuur act'],
-	citation: ['Telegraaf', 'Het Parool']
+	performer: ['Mello Wendini, komisch dressuur act']
 };
 
 const theatre: TheaterEventEntity = {
@@ -30,8 +29,8 @@ describe('programme cards', () => {
 		expect(resolveCardFields(screening, false)).toEqual([{ label: 'Venue', value: 'Rialto', href: undefined }]);
 	});
 
-	test('expanded adds the newspapers the programme was listed in', () => {
-		expect(resolveCardFields(screening, true)[1]).toEqual({ label: 'Programmabron', value: 'Telegraaf, Het Parool', href: undefined });
+	test('expanded adds nothing beyond the venue: the bill is the card content', () => {
+		expect(resolveCardFields(screening, true).length).toBe(1);
 		expect(resolveCardFields(theatre, true).length).toBe(1);
 	});
 

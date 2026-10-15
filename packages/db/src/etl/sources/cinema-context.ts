@@ -32,7 +32,6 @@ type CinemaContextRecord = {
   address: string | null;
   geom_wkt: string;
   items: ProgrammeItem[];
-  sources: string[];
 };
 
 const SCREENED_AT = { id: 'screenedAt', label: 'Screened at', dated: true };

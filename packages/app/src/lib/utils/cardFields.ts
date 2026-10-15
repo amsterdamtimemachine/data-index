@@ -65,7 +65,6 @@ type CardFieldSpec = {
 // a programme's venue; its date is in the relation line, its bill the card's content (programmeBillRows)
 const PROGRAMME_FIELDS: CardFieldSpec[] = [
 	{ label: 'venue', value: (e) => (isProgramme(e) ? e.location.name : null), href: (e) => (isProgramme(e) ? e.location.url : undefined), summary: true },
-	{ label: 'programmeSource', value: (e) => (isProgramme(e) && e.citation ? e.citation.join(', ') : null) },
 ];
 
 /**

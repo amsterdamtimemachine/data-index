@@ -88,7 +88,7 @@ describe('cinema-context ingestion', () => {
     expect(mixed.location).toEqual({ type: 'Place', name: 'Rialto', identifier: 'B000001', url: 'https://cinemacontext.nl/id/B000001', additionalType: 'Cinema', address: 'Ceintuurbaan 338' });
     expect(mixed.workPresented).toEqual([{ type: 'Movie', name: 'Can-can (1960)', url: 'https://cinemacontext.nl/id/F000002', dateCreated: '1960', countryOfOrigin: 'USA' }]);
     expect(mixed.performer).toEqual(['Mello Wendini, komisch dressuur act']);
-    expect(mixed.citation).toEqual(['Telegraaf', 'Het Parool']);
+    expect(mixed).not.toHaveProperty('citation');
     const acts = all.find((f) => f.start === '1934-01-12')!;
     expect(acts.url).toBe('');
     expect(acts.entity.workPresented).toEqual([]);

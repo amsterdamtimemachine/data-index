@@ -97,8 +97,6 @@ interface ProgrammeEntity extends EntityBase {
   workPresented: MovieEntity[];
   // the live acts on the bill, as the source words them
   performer?: string[];
-  // the newspapers the programme was listed in
-  citation?: string[];
 }
 
 /** A programme with at least one film on its bill. */
