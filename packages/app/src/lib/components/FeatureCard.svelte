@@ -190,7 +190,7 @@
 					<FieldList fields={entityFields} class="mb-3" />
 				{/if}
 				{#if provenanceFields.length > 0}
-					<Heading level={sectionLevel} class="font-medium mb-1">{translate('provenance')}</Heading>
+					<Heading level={sectionLevel} class="text-base font-medium mb-1">{translate('provenance')}</Heading>
 					<FieldList fields={provenanceFields} />
 				{/if}
 			</div>
