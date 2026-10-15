@@ -106,6 +106,19 @@ const TRANSLATIONS: Record<string, string> = {
 	showLess: 'Minder tonen',
 	noFeaturesToDisplay: 'Geen features om te tonen',
 	openFeature: 'Feature openen',
+	siteTitle: 'Amsterdam Time Machine Data Index',
+	results: 'Resultaten',
+	found: 'gevonden',
+	loading: 'Laden',
+	opensInNewWindow: 'opent in nieuw venster',
+	// the map region and its canvas, which the arrow keys pan
+	mapRegion: 'Kaart van Amsterdam',
+	mapCanvas: 'Kaart, verschuif met de pijltjestoetsen',
+	mapKeyboardHint: 'Kies een plek met het zoekveld, of een periode met de tijdlijn.',
+	// a filter section's question mark; the heading follows
+	explainAbout: 'Uitleg over',
+	pauseSearchTerm: 'Pauzeer zoekterm',
+	resumeSearchTerm: 'Pas zoekterm toe',
 	closeFeature: 'Feature sluiten',
 	closeFeaturesPanel: 'Paneel sluiten',
 	expandImage: 'Afbeelding vergroten',
@@ -120,8 +133,6 @@ const TRANSLATIONS: Record<string, string> = {
 	dismissNotification: 'Melding sluiten',
 	timePeriodSelector: 'Tijdperiode kiezen',
 	selectPeriod: 'Kies periode',
-	toggleSelection: 'Selectie',
-	toggleItem: 'Wissel',
 
 	// the empty panel's hints; {picture} and {button} stand for the inline elements
 	emptyPanelCityWideHint: 'Klik op {button} rechtsonder om de tijdlijn van de selectie te tonen: daar zie je in welke periodes de selectie wel features heeft.',

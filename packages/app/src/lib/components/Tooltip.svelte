@@ -8,6 +8,8 @@
 		// the tooltip's content; the box owns its text style, so callers pass plain content
 		children: Snippet;
 		icon: PhosphorIcon;
+		// the trigger's name, since it shows only an icon
+		label: string;
 		placement?:
 			| 'top'
 			| 'bottom'
@@ -36,6 +38,7 @@
 
 	let {
 		children,
+		label,
 		placement = 'top',
 		openDelay = 100,
 		closeDelay = 300,
@@ -67,7 +70,8 @@
 	<button
 		type="button"
 		{...tooltip.trigger}
-		class="inline-flex items-center justify-center w-5 h-5 bg-atm-sand-darkish rounded-full border border-atm-gold cursor-pointer hover:bg-atm-sand-dark transition-colors {className}"
+		aria-label={label}
+		class="focus-ring inline-flex items-center justify-center w-5 h-5 bg-atm-sand-darkish rounded-full border border-atm-gold cursor-pointer hover:bg-atm-sand-dark transition-colors {className}"
 	>
 		<Icon {...iconProps} />
 	</button>

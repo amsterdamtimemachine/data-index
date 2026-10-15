@@ -110,8 +110,8 @@
 		}
 	}
 
-	function handleRecordTypeChange(selected: string[] | string) {
-		const dutch = Array.isArray(selected) ? selected : [selected];
+	function handleRecordTypeChange(selected: string[]) {
+		const dutch = selected;
 		const english = reverseTranslateAll(dutch);
 		navigateParams((p) => {
 			if (english.length > 0) p.set('recordTypes', english.join(','));
@@ -119,8 +119,8 @@
 		});
 	}
 
-	function handleDatasetChange(selected: string[] | string) {
-		const labels = Array.isArray(selected) ? selected : [selected];
+	function handleDatasetChange(selected: string[]) {
+		const labels = selected;
 		const labelToId = new Map(datasets.map((s) => [s.label, s.id]));
 		const ids = labels.map((label) => labelToId.get(label) || label);
 		navigateParams((p) => {
@@ -129,8 +129,8 @@
 		});
 	}
 
-	function handlePlaceTypeChange(selected: string[] | string) {
-		const dutch = Array.isArray(selected) ? selected : [selected];
+	function handlePlaceTypeChange(selected: string[]) {
+		const dutch = selected;
 		const raw = reverseTranslateAll(dutch);
 		navigateParams((p) => {
 			if (raw.length > 0) p.set('placeTypes', raw.join(','));
@@ -138,8 +138,8 @@
 		});
 	}
 
-	function handleTagsChange(selected: string | string[]) {
-		const dutch = Array.isArray(selected) ? selected : [selected];
+	function handleTagsChange(selected: string[]) {
+		const dutch = selected;
 		const ids = reverseTranslateAll(dutch);
 		navigateParams((p) => {
 			if (ids.length > 0) p.set('tags', ids.join(','));
@@ -222,11 +222,14 @@
 		</FilterSection>
 
 		<FilterSection heading={translate('recordTypeFilter')}>
-			<FilterToggleGroup
-				items={translatedRecordTypes}
-				selectedItems={translatedCurrentRecordTypes}
-				onItemSelected={handleRecordTypeChange}
-			/>
+			{#snippet children(headingId)}
+				<FilterToggleGroup
+					items={translatedRecordTypes}
+					selectedItems={translatedCurrentRecordTypes}
+					onItemSelected={handleRecordTypeChange}
+					labelledBy={headingId}
+				/>
+			{/snippet}
 		</FilterSection>
 	</div>
 
@@ -234,7 +237,9 @@
 		{#snippet tooltip()}
 			{translate('datasetFilterTooltip')}
 		{/snippet}
-		<FilterToggleGroup items={datasetLabels} selectedItems={currentDatasetLabels} onItemSelected={handleDatasetChange} />
+		{#snippet children(headingId)}
+			<FilterToggleGroup items={datasetLabels} selectedItems={currentDatasetLabels} onItemSelected={handleDatasetChange} labelledBy={headingId} />
+		{/snippet}
 	</FilterSection>
 
 	{#if placeTypes.length > 1}
@@ -242,11 +247,14 @@
 			{#snippet tooltip()}
 				{translate('scaleFilterTooltip')}
 			{/snippet}
-			<FilterToggleGroup
-				items={translatedPlaceTypes}
-				selectedItems={translatedCurrentPlaceTypes}
-				onItemSelected={handlePlaceTypeChange}
-			/>
+			{#snippet children(headingId)}
+				<FilterToggleGroup
+					items={translatedPlaceTypes}
+					selectedItems={translatedCurrentPlaceTypes}
+					onItemSelected={handlePlaceTypeChange}
+					labelledBy={headingId}
+				/>
+			{/snippet}
 		</FilterSection>
 	{/if}
 
@@ -255,23 +263,26 @@
 			{#snippet tooltip()}
 				{translate('topicsTooltip')}
 			{/snippet}
-			<TagOperatorSwitch
-				operator={currentTagOperator}
-				onOperatorChange={handleTagOperatorChange}
-				anyLabel={translate('topicsAny')}
-				allLabel={translate('topicsAll')}
-				class="mb-2"
-			/>
-			{#if currentTags.length > 0}
-				<Button icon={X} size={16} onclick={handleTagsClear} class="mb-2">{translate('clearAll')}</Button>
-			{/if}
-			<FilterToggleGroup
-				items={translatedTags}
-				selectedItems={translatedCurrentTags}
-				disabledItems={disabledTagLabels}
-				onItemSelected={handleTagsChange}
-				requireOne={false}
-			/>
+			{#snippet children(headingId)}
+				<TagOperatorSwitch
+					operator={currentTagOperator}
+					onOperatorChange={handleTagOperatorChange}
+					anyLabel={translate('topicsAny')}
+					allLabel={translate('topicsAll')}
+					class="mb-2"
+				/>
+				{#if currentTags.length > 0}
+					<Button icon={X} size={16} onclick={handleTagsClear} class="mb-2">{translate('clearAll')}</Button>
+				{/if}
+				<FilterToggleGroup
+					items={translatedTags}
+					selectedItems={translatedCurrentTags}
+					disabledItems={disabledTagLabels}
+					onItemSelected={handleTagsChange}
+					requireOne={false}
+					labelledBy={headingId}
+				/>
+			{/snippet}
 		</FilterSection>
 	{/if}
 </div>

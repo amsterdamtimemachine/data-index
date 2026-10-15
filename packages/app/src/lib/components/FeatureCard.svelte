@@ -19,9 +19,19 @@
 		expanded?: boolean;
 		// an expanded card's close button, in the header where the expand button sits
 		onClose?: () => void;
+		// where the card sits in the page's heading order: 3 in the list, 2 as a dialog
+		headingLevel?: 2 | 3;
+		// the heading's id, for a dialog that is named by it
+		headingId?: string;
 	};
 
-	let { feature, expanded = false, onClose }: Props = $props();
+	let { feature, expanded = false, onClose, headingLevel = 3, headingId }: Props = $props();
+	const sectionLevel = $derived.by((): 3 | 4 => {
+		if (headingLevel === 2) {
+			return 3;
+		}
+		return 4;
+	});
 
 	// the per-type content keys on the entity
 	const entityType = $derived(feature.entity?.type);
@@ -132,7 +142,8 @@
 	<div class={bodyClasses}>
 		<div class={titleBlockClasses}>
 			<Heading
-			level={3}
+				level={headingLevel}
+				id={headingId}
 				class={expanded
 					? 'font-medium text-xl my-3 px-2'
 					: 'font-medium text-lg line-clamp-2 mb-0'}
@@ -179,7 +190,7 @@
 					<FieldList fields={entityFields} class="mb-3" />
 				{/if}
 				{#if provenanceFields.length > 0}
-					<Heading level={4} class="font-medium mb-1">{translate('provenance')}</Heading>
+					<Heading level={sectionLevel} class="font-medium mb-1">{translate('provenance')}</Heading>
 					<FieldList fields={provenanceFields} />
 				{/if}
 			</div>

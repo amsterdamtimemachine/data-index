@@ -111,6 +111,19 @@
 		}
 		return 32;
 	});
+
+	// the count for screen readers, a moment after it settles so a timeline drag does not chatter
+	let announcement = $state('');
+	$effect(() => {
+		if (initialLoading) {
+			return;
+		}
+		const text = `${totalCount} ${translate('featureMany')} ${translate('found')}`;
+		const timer = setTimeout(() => {
+			announcement = text;
+		}, 500);
+		return () => clearTimeout(timer);
+	});
 </script>
 
 <div
@@ -132,6 +145,9 @@
 			/>
 		</div>
 	{/if}
+	<h2 class="sr-only">{translate('results')}</h2>
+	<!-- present from the first paint, so a changed count is announced; the text follows totalCount -->
+	<p class="sr-only" aria-live="polite">{announcement}</p>
 	{#if !initialLoading && totalCount > 0}
 		<div class="header-count">
 			<FeaturesCount count={totalCount} {currentPage} perPage={pageSize}>

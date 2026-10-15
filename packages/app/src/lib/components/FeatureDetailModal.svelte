@@ -12,14 +12,18 @@
 		return next;
 	};
 
+	// the dialog is named by the card's own heading, which carries this id
+	const TITLE_ID = 'feature-dialog-title';
+
 	const {
-		elements: { overlay, content, title, portalled },
+		elements: { overlay, content, portalled },
 		states: { open }
 	} = createDialog({
 		forceVisible: true,
 		defaultOpen: false,
 		role: 'dialog',
 		preventScroll: true,
+		ids: { title: TITLE_ID },
 		onOpenChange: handleOpenChange
 	});
 
@@ -66,15 +70,14 @@
 					       shadow-xl overflow-hidden flex flex-col"
 					transition:fade={{ duration: 100 }}
 				>
-					<!-- Hidden title for accessibility -->
-					<h2 use:melt={$title} class="sr-only">Feature Detail Viewer</h2>
-
 					<!-- the card caps itself at this height and scrolls its content region;
 					     the overflow here is only a fallback -->
 					<div class="flex flex-col flex-1 min-h-0 overflow-y-auto">
 						<FeatureCard
 							feature={selectedFeature}
 							expanded={true}
+							headingLevel={2}
+							headingId={TITLE_ID}
 							onClose={featureViewerState.closeFeature}
 						/>
 					</div>

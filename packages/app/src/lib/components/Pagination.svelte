@@ -130,6 +130,6 @@
 		onblur={handleJumpBlur}
 		placeholder="…"
 		aria-label={translate('goToPage')}
-		class="h-[32px] w-[40px] text-center bg-atm-sand-darkish rounded border border-atm-gold border-[1px] hover:bg-atm-sand-dark text-sm placeholder:text-gray-500"
+		class="focus-ring h-[32px] w-[40px] text-center bg-atm-sand-darkish rounded border border-atm-gold border-[1px] hover:bg-atm-sand-dark text-sm placeholder:text-gray-500"
 	/>
 </nav>

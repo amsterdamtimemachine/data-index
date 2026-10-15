@@ -91,7 +91,7 @@
 		{@const barWidth = 100 / bins.length}
 		{@const x = (i / bins.length) * 100}
 		<button
-			class="absolute h-full bg-transparent hover:border-atm-gold-darkest-hover hover:border-[4px] cursor-pointer touch-none"
+			class="focus-ring absolute h-full bg-transparent hover:border-atm-gold-darkest-hover hover:border-[4px] cursor-pointer touch-none"
 			style="left: {x}%; width: {barWidth}%;"
 			onpointerdown={(e) => handleBinPointerDown(e, i)}
 			onclick={(e) => handleBinClick(e, i)}
