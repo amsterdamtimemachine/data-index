@@ -1,4 +1,4 @@
-import type { Entity, PersonEntity, MediaObjectEntity, CreativeWorkEntity, ScreeningEventEntity, TheaterEventEntity, ManuscriptEntity, MentionEntity, FeatureResult } from '@atm/shared/types';
+import type { Entity, PersonEntity, MediaObjectEntity, CreativeWorkEntity, ScreeningEventEntity, TheaterEventEntity, ManuscriptEntity, FeatureResult } from '@atm/shared/types';
 import { formatPartialDate, formatPeriod } from './format';
 import { translate } from './translations';
 
@@ -6,9 +6,7 @@ import { translate } from './translations';
  * One label:value row on a card, as text ready to print. `href` turns the value into
  * a link, `labelHref` the label.
  */
-/** One linked piece of a row that lists several things. */
-export type FieldPart = { text: string; href?: string };
-export type FieldRow = { label: string; value: string; href?: string; labelHref?: string; parts?: FieldPart[] };
+export type FieldRow = { label: string; value: string; href?: string; labelHref?: string };
 
 const isPerson = (e: Entity): e is PersonEntity => e.type === 'Person';
 const isMedia = (e: Entity): e is MediaObjectEntity => e.type === 'MediaObject';
@@ -16,43 +14,6 @@ const isCreativeWork = (e: Entity): e is CreativeWorkEntity => e.type === 'Creat
 // a programme: a screening (a film on its bill) or a theatre event (acts only)
 const isProgramme = (e: Entity): e is ScreeningEventEntity | TheaterEventEntity => e.type === 'ScreeningEvent' || e.type === 'TheaterEvent';
 const isManuscript = (e: Entity): e is ManuscriptEntity => e.type === 'Manuscript';
-
-// a link must lead to more than the card shows: a person's page at the source, a place's
-// Adamlink record; a Wikidata item is identification and stays in the data
-function isAdamlink(uri?: string): boolean {
-	return uri !== undefined && uri.startsWith('https://adamlink.nl/');
-}
-
-function mentionHref(m: MentionEntity): string | undefined {
-	if (m.url) {
-		return m.url;
-	}
-	if (m.type === 'Place' && isAdamlink(m.sameAs)) {
-		return m.sameAs;
-	}
-	return undefined;
-}
-
-/** A story's mentions of one kind, linked where there is a page to read; null when there are none. */
-function mentionParts(entity: ManuscriptEntity, kind: 'Place' | 'Person' | 'Organization'): FieldPart[] | null {
-	const parts = entity.mentions.filter((m) => m.type === kind).map((m) => ({ text: m.name, href: mentionHref(m) }));
-	if (parts.length === 0) {
-		return null;
-	}
-	return parts;
-}
-
-/** The entry's mentioned places that are on the map, the ones it has an excerpt for; the rest stay in the data. */
-function mappedPlaceParts(entity: ManuscriptEntity): FieldPart[] | null {
-	const mapped = new Set(entity.excerpts.map((x) => x.place));
-	const parts = entity.mentions
-		.filter((m) => m.type === 'Place' && m.sameAs !== undefined && mapped.has(m.sameAs))
-		.map((m) => ({ text: m.name, href: mentionHref(m) }));
-	if (parts.length < 2) {
-		return null;
-	}
-	return parts;
-}
 
 /** A publication date worded at its precision; a start/end range worded as a period. */
 function formatPublished(date: string): string {
@@ -96,8 +57,6 @@ type CardFieldSpec = {
 	value: (entity: Entity) => string | null;
 	// a link for the value
 	href?: (entity: Entity) => string | undefined;
-	// the value as several linked pieces; null hides the row
-	parts?: (entity: Entity) => FieldPart[] | null;
 	// one row per item, for a field that repeats (the films on a bill); the label and value are per row
 	rows?: (entity: Entity) => FieldRow[];
 	summary?: boolean; // also show on the collapsed card, not just the expanded detail
@@ -135,10 +94,6 @@ const CARD_FIELDS: Partial<Record<Entity['type'], CardFieldSpec[]>> = {
 		{ label: 'written', value: (e) => (isManuscript(e) && e.dateCreated ? formatPartialDate(e.dateCreated) : null) },
 		{ label: 'author', value: (e) => (isManuscript(e) ? e.author?.name ?? null : null), href: (e) => (isManuscript(e) ? e.author?.url : undefined), summary: true },
 		{ label: 'diary', value: (e) => (isManuscript(e) ? e.isPartOf?.name ?? null : null), href: (e) => (isManuscript(e) ? e.isPartOf?.url : undefined) },
-		{ label: 'archive', value: (e) => (isManuscript(e) ? e.isPartOf?.holdingArchive ?? null : null) },
-		{ label: 'persons', value: () => null, parts: (e) => (isManuscript(e) ? mentionParts(e, 'Person') : null) },
-		// the places only when there are several: with one it repeats the card's place
-		{ label: 'places', value: () => null, parts: (e) => (isManuscript(e) ? mappedPlaceParts(e) : null) },
 	],
 };
 
@@ -150,12 +105,6 @@ export function resolveCardFields(entity: Entity, expanded: boolean): FieldRow[]
 		if (!expanded && !spec.summary) continue;
 		if (spec.rows) {
 			fields.push(...spec.rows(entity));
-			continue;
-		}
-		if (spec.parts) {
-			const parts = spec.parts(entity);
-			if (parts == null) continue;
-			fields.push({ label: translate(spec.label), value: parts.map((p) => p.text).join(', '), parts });
 			continue;
 		}
 		const value = spec.value(entity);

@@ -111,22 +111,11 @@ export interface TheaterEventEntity extends ProgrammeEntity {
   type: "TheaterEvent";
 }
 
-/** A thing a work refers to, as the annotators identified it: the id that identifies it and, when the source has one, its page there. */
-export interface MentionEntity {
-  type: "Place" | "Person" | "Organization";
-  name: string;
-  sameAs?: string;
-  url?: string;
-}
-
 /** The diary an entry belongs to, with its page at the holding archive. */
 export interface BookEntity {
   type: "Book";
   name: string;
   url?: string;
-  // the years the diary covers, as the source words it ("1940/1945")
-  temporalCoverage?: string;
-  holdingArchive?: string;
 }
 
 /** A span of an excerpt where a place is named, as the writer spelled it. */
@@ -142,8 +131,6 @@ export interface ExcerptMention {
  * continues before or after it.
  */
 export interface Excerpt {
-  // the mention's URI at the source
-  place: string;
   // the index place the entry was linked to for this mention; the card's key
   placeId?: string;
   text: string;
@@ -154,20 +141,17 @@ export interface Excerpt {
 
 /**
  * One diary entry: a dated piece of writing with an excerpt of its transcription per
- * Amsterdam place it mentions, its diary and author, and everything the annotators
- * identified in it. The places among the mentions are also the feature's place
- * links; the list keeps the rest.
+ * Amsterdam place it mentions, its diary and author. The index answers what, when,
+ * where and why it is here; the people and places the entry names are the source's
+ * to show.
  */
 export interface ManuscriptEntity extends EntityBase {
   type: "Manuscript";
   // source precision: YYYY-MM-DD, YYYY-MM or YYYY
   dateCreated?: string;
   excerpts: Excerpt[];
-  // length of the whole transcription the excerpts were cut from
-  textLength: number;
-  author?: { type: "Person"; name: string; sameAs?: string; url?: string };
+  author?: { type: "Person"; name: string; url?: string };
   isPartOf?: BookEntity;
-  mentions: MentionEntity[];
 }
 
 /** Discriminated union of all concrete entity types. */

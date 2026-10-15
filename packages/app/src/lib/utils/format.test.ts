@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { PlaceSearchMatch } from '@atm/shared/types';
-import { formatPlaceWindow, formatPlaceName, formatPlaceTitle, formatPartialDate, formatPeriod, foldLines } from './format';
+import { formatPlaceWindow, formatPlaceName, formatPlaceTitle, formatPartialDate, formatPeriod, foldLinesInline } from './format';
 
 function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 	return {
@@ -91,13 +91,13 @@ describe('formatPartialDate', () => {
 });
 
 
-describe('foldLines', () => {
-	test('rejoins hyphenated words and turns line breaks into spaces', () => {
-		expect(foldLines('Om 11 uur gaan de cursisten gezame-\nlijk materiaal maken.\nZe komen aldoor.\n')).toBe('Om 11 uur gaan de cursisten gezamelijk materiaal maken. Ze komen aldoor.');
+describe('foldLinesInline', () => {
+	test('rejoins hyphenated words and turns line breaks into spaces, keeping the edges', () => {
+		expect(foldLinesInline('Om 11 uur gaan de cursisten gezame-\nlijk materiaal maken.\nZe komen aldoor.\n')).toBe('Om 11 uur gaan de cursisten gezamelijk materiaal maken. Ze komen aldoor. ');
 	});
 
 	test('a blank line stays a paragraph break', () => {
-		expect(foldLines('1940.\nEen Woord Tot de Jongeren\n\n"Ik wens hen te wijzen\nop de grote verantwoorde-\nlijkheid.')).toBe('1940. Een Woord Tot de Jongeren\n\n"Ik wens hen te wijzen op de grote verantwoordelijkheid.');
+		expect(foldLinesInline('1940.\nEen Woord Tot de Jongeren\n\n"Ik wens hen te wijzen\nop de grote verantwoorde-\nlijkheid.')).toBe('1940. Een Woord Tot de Jongeren\n\n"Ik wens hen te wijzen op de grote verantwoordelijkheid.');
 	});
 });
 

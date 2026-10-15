@@ -145,9 +145,6 @@ const TRANSLATIONS: Record<string, string> = {
 	classifier: 'Classificatiemodel',
 	// a story's rows
 	diary: 'Dagboek',
-	archive: 'Archief',
-	persons: 'Personen',
-	places: 'Plaatsen',
 	inSelection: 'in de selectie',
 	periodLabel: 'Periode',
 	showPlaceFeatures: 'Features van deze plek tonen',

@@ -21,9 +21,7 @@
 				{/if}
 			</dt>
 			<dd>
-				{#if field.parts}
-					{#each field.parts as part, i (i)}{#if i > 0}{', '}{/if}{#if part.href}<Link href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</Link>{:else}{part.text}{/if}{/each}
-				{:else if field.href}
+				{#if field.href}
 					<Link href={field.href} target="_blank" rel="noopener noreferrer">{field.value}</Link>
 				{:else}
 					{field.value}

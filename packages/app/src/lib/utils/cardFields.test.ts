@@ -133,37 +133,8 @@ describe('provenance rows', () => {
 		expect(resolveCardFields({ ...image, dateCreated: '1958-09-27' }, true)[0].value).toBe('27 september 1958');
 	});
 
-	test("a story's persons and places link only where there is a page to read: the site, Adamlink; never Wikidata", () => {
-		const excerpt = { text: '', truncatedBefore: false, truncatedAfter: false, mentions: [] };
-		const entry = {
-			type: 'Manuscript' as const, name: 'x', textLength: 0,
-			excerpts: [{ ...excerpt, place: 'https://adamlink.nl/geo/street/dam/880' }, { ...excerpt, place: 'https://adamlink.nl/geo/street/kalverstraat/1' }],
-			author: { type: 'Person' as const, name: 'Els Polak', sameAs: 'http://www.wikidata.org/entity/Q125020291' },
-			mentions: [
-				{ type: 'Person' as const, name: 'Zeno Paul Polak', sameAs: 'https://archief.amsterdam/indexen/deeds/1', url: 'https://diaries.amsterdamtimemachine.nl/personen/zeno-paul-polak' },
-				{ type: 'Person' as const, name: 'Onbekende', sameAs: 'http://www.wikidata.org/entity/Q1' },
-				{ type: 'Place' as const, name: 'Dam', sameAs: 'https://adamlink.nl/geo/street/dam/880' },
-				{ type: 'Place' as const, name: 'Rotterdam', sameAs: 'http://www.wikidata.org/entity/Q34370' },
-				{ type: 'Place' as const, name: 'Kalverstraat', sameAs: 'https://adamlink.nl/geo/street/kalverstraat/1' }
-			]
-		};
-		const rows = resolveCardFields(entry, true);
-		expect(rows.find((r) => r.label === 'Auteur')).toEqual({ label: 'Auteur', value: 'Els Polak', href: undefined });
-		expect(rows.find((r) => r.label === 'Personen')!.parts).toEqual([
-			{ text: 'Zeno Paul Polak', href: 'https://diaries.amsterdamtimemachine.nl/personen/zeno-paul-polak' },
-			{ text: 'Onbekende', href: undefined }
-		]);
-		// only the places on the map: Rotterdam is mentioned but has no excerpt
-		expect(rows.find((r) => r.label === 'Plaatsen')!.parts).toEqual([
-			{ text: 'Dam', href: 'https://adamlink.nl/geo/street/dam/880' },
-			{ text: 'Kalverstraat', href: 'https://adamlink.nl/geo/street/kalverstraat/1' }
-		]);
-		const one = { ...entry, excerpts: [entry.excerpts[0]] };
-		expect(resolveCardFields(one, true).find((r) => r.label === 'Plaatsen')).toBeUndefined();
-	});
-
 	test('a story shows when it was written, at the precision it was dated', () => {
-		const entry = { type: 'Manuscript' as const, name: 'x', excerpts: [], textLength: 0, mentions: [] };
+		const entry = { type: 'Manuscript' as const, name: 'x', excerpts: [] };
 		expect(resolveCardFields({ ...entry, dateCreated: '1944-10-30' }, true)[0]).toEqual({ label: 'Geschreven', value: '30 oktober 1944', href: undefined });
 		expect(resolveCardFields({ ...entry, dateCreated: '1943-01' }, true)[0].value).toBe('januari 1943');
 		expect(resolveCardFields(entry, true).find((r) => r.label === 'Geschreven')).toBeUndefined();

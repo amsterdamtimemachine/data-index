@@ -67,26 +67,25 @@ describe('amsterdam-diaries ingestion', () => {
     expect(day.url).toBe('https://id.amsterdamtimemachine.nl/ark:/81741/amsterdam-diaries/annotations/entries/1');
   });
 
-  test('the entity is a Manuscript with its excerpts, author, diary and mentions', async () => {
+  test('the entity is a Manuscript with its excerpts, author and diary', async () => {
     const all = await rows();
     const e = all.find((f) => f.start === '1941-03-19')!.entity;
     expect(e.type).toBe('Manuscript');
     expect(e.name).toBe("19 Maart '41.");
-    expect(e.textLength).toBe(37);
+    for (const gone of ['mentions', 'textLength']) {
+      expect(e).not.toHaveProperty(gone);
+    }
+    expect(Object.keys(e.excerpts[0]).sort()).toEqual(['mentions', 'placeId', 'text', 'truncatedAfter', 'truncatedBefore']);
     expect(e.excerpts.map((x: { text: string }) => x.text)).toEqual(["19 Maart '41.\nVader is weer thuis!!!!", "19 Maart '41.\nVader is weer thuis!!!!"]);
-    expect(e.author).toEqual({ type: 'Person', name: 'Els Polak', sameAs: 'http://www.wikidata.org/entity/Q125020291', url: 'https://diaries.amsterdamtimemachine.nl/dagboekschrijfsters/els-polak' });
-    expect(e.mentions[2]).toEqual({ type: 'Person', name: 'Zeno Paul Polak', sameAs: 'https://archief.amsterdam/indexen/deeds/98517a9d', url: 'https://diaries.amsterdamtimemachine.nl/personen/zeno-paul-polak' });
-    expect(e.isPartOf).toEqual({ type: 'Book', name: 'Dagboek Els Polak, deel 2', url: 'https://resolver.kb.nl/resolve?urn=urn:gvn:EVDO01:IIAV002_IAV001000041', temporalCoverage: '1941' });
-    expect(e.mentions.map((m) => `${m.type}:${m.name}`)).toEqual(['Place:Prinsengracht', 'Place:Koninklijk Concertgebouw', 'Person:Zeno Paul Polak']);
+    expect(e.author).toEqual({ type: 'Person', name: 'Els Polak', url: 'https://diaries.amsterdamtimemachine.nl/dagboekschrijfsters/els-polak' });
+    expect(e.isPartOf).toEqual({ type: 'Book', name: 'Dagboek Els Polak, deel 2', url: 'https://resolver.kb.nl/resolve?urn=urn:gvn:EVDO01:IIAV002_IAV001000041' });
   });
 
   test('each excerpt is stamped with the index place its mention resolved to', async () => {
     const all = await rows();
     const e = all.find((f) => f.start === '1941-03-19')!.entity;
-    expect(e.excerpts.map((x: { place: string; placeId?: string }) => [x.place.split('/')[4], x.placeId])).toEqual([
-      ['street', 'https://adamlink.nl/geo/street/prinsengracht/3684'],
-      ['building', 'ad-concertgebouw']
-    ]);
+    // the street by its id, the building by its point, in the row's order
+    expect(e.excerpts.map((x: { placeId?: string }) => x.placeId)).toEqual(['https://adamlink.nl/geo/street/prinsengracht/3684', 'ad-concertgebouw']);
     const single = all.find((f) => f.start === '1943-01-01')!.entity;
     expect(single.excerpts.map((x: { placeId?: string }) => x.placeId)).toEqual(['https://adamlink.nl/geo/street/prinsengracht/3684']);
   });

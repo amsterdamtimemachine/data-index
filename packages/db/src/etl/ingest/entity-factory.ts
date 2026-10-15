@@ -1,4 +1,4 @@
-import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, TheaterEventEntity, MovieEntity, ManuscriptEntity, MentionEntity, Excerpt, RecordType } from "@atm/shared";
+import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, TheaterEventEntity, MovieEntity, ManuscriptEntity, Excerpt, RecordType } from "@atm/shared";
 import { formatDateRange } from "../util/dates";
 import { Draft } from "./ingestor";
 
@@ -124,36 +124,32 @@ export class ProgrammeEntityFactory extends EntityFactory<ScreeningEventEntity |
 }
 
 // the source row's shape, as the amsterdam-diaries source reads it
-type DiaryRef = { name?: string; url?: string; coverage?: string };
-type DiaryAuthor = { name?: string; sameAs?: string; url?: string };
+type DiaryRef = { name?: string; url?: string };
+type DiaryAuthor = { name?: string; url?: string };
 
 export class ManuscriptEntityFactory extends EntityFactory<ManuscriptEntity> {
     create(feature: Draft, data: Map<string, unknown>): ManuscriptEntity {
         const diary = (data.get('diary') ?? {}) as DiaryRef;
         const author = (data.get('author') ?? {}) as DiaryAuthor;
-        const mentions = (data.get('mentions') ?? []) as MentionEntity[];
         const name = data.get('name');
         const date = data.get('date');
         const excerpts = (data.get('excerpts') ?? []) as Excerpt[];
-        const textLength = data.get('textLength');
 
         return {
             type: 'Manuscript',
             id: feature.id,
             name: typeof name === 'string' && name ? name : feature.label,
             ...(typeof date === 'string' && date && { dateCreated: date }),
-            excerpts: excerpts.map((x) => ({ ...x })),
-            textLength: typeof textLength === 'number' ? textLength : 0,
-            ...(author.name && { author: { type: 'Person' as const, name: author.name, ...(author.sameAs && { sameAs: author.sameAs }), ...(author.url && { url: author.url }) } }),
+            // only the excerpt's own fields: the source row's place URI is the ingest's key, not the entity's
+            excerpts: excerpts.map((x) => ({ text: x.text, truncatedBefore: x.truncatedBefore, truncatedAfter: x.truncatedAfter, mentions: x.mentions })),
+            ...(author.name && { author: { type: 'Person' as const, name: author.name, ...(author.url && { url: author.url }) } }),
             ...(diary.name && {
                 isPartOf: {
                     type: 'Book' as const,
                     name: diary.name,
                     ...(diary.url && { url: diary.url }),
-                    ...(diary.coverage && { temporalCoverage: diary.coverage }),
                 },
             }),
-            mentions: mentions.map((m) => ({ type: m.type, name: m.name, ...(m.sameAs && { sameAs: m.sameAs }), ...(m.url && { url: m.url }) })),
         };
     }
 }

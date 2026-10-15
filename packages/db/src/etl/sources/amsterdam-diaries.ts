@@ -1,6 +1,7 @@
 /**
  * Import Amsterdam Diaries entries: one dated diary entry as a story, placed at
- * every Amsterdam place it mentions.
+ * every Amsterdam place it mentions. The index keeps what, when, where and why it
+ * is here; the people and places an entry names are the source's to show.
  *
  * Reads the JSONL exported from the Amsterdam Diaries Time Machine dump: one line
  * per entry and place, the same entry fields repeated with a different `place`, so
@@ -26,11 +27,10 @@ type DiaryEntryRecord = {
   url: string;
   name: string | null;
   date: string | null;
-  excerpts: Excerpt[];
-  textLength: number;
-  diary: { name: string | null; url: string | null; coverage: string | null };
-  author: { name: string | null; sameAs: string | null; url: string | null };
-  mentions: Array<{ type: 'Place' | 'Person' | 'Organization'; name: string; sameAs: string; url?: string }>;
+  // each with the mention's URI, which picks the place to resolve and is not kept
+  excerpts: Array<Excerpt & { place: string }>;
+  diary: { name: string | null; url: string | null };
+  author: { name: string | null; url: string | null };
   // this row's place, and every Amsterdam place of the entry
   place: DiaryPlace;
   places: DiaryPlace[];
@@ -116,12 +116,13 @@ export class AmsterdamDiariesIngestor extends Ingestor<DiaryEntryRecord> {
     }
     const entity = feature.entity as ManuscriptEntity;
     const draft = { startDate: feature.startDate, endDate: feature.endDate } as Draft;
-    for (const excerpt of entity.excerpts) {
-      if (excerpt.place === source.place.uri) {
+    for (const [i, excerpt] of entity.excerpts.entries()) {
+      const uri = source.excerpts[i].place;
+      if (uri === source.place.uri) {
         excerpt.placeId = resolved.placeId;
         continue;
       }
-      const place = source.places?.find((p) => p.uri === excerpt.place);
+      const place = source.places?.find((p) => p.uri === uri);
       if (!place) {
         continue;
       }

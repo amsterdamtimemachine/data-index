@@ -3,7 +3,6 @@ import type { Excerpt, ManuscriptEntity } from '@atm/shared/types';
 import { pickExcerpt, excerptWindow, segmentText, foldSegments } from './excerpts';
 
 const excerpt = (over: Partial<Excerpt>): Excerpt => ({
-	place: 'p',
 	text: '',
 	truncatedBefore: false,
 	truncatedAfter: false,
@@ -12,12 +11,12 @@ const excerpt = (over: Partial<Excerpt>): Excerpt => ({
 });
 
 describe('pickExcerpt', () => {
-	const entity = { type: 'Manuscript', name: '', excerpts: [excerpt({ place: 'a', placeId: 'ia' }), excerpt({ place: 'b', placeId: 'ib' })], textLength: 0, mentions: [] } as unknown as ManuscriptEntity;
+	const entity = { type: 'Manuscript', name: '', excerpts: [excerpt({ placeId: 'ia' }), excerpt({ placeId: 'ib' })] } as unknown as ManuscriptEntity;
 
 	test('the excerpt stamped with the shown place, else the first', () => {
-		expect(pickExcerpt(entity, 'ib')?.place).toBe('b');
-		expect(pickExcerpt(entity, 'other')?.place).toBe('a');
-		expect(pickExcerpt(entity)?.place).toBe('a');
+		expect(pickExcerpt(entity, 'ib')?.placeId).toBe('ib');
+		expect(pickExcerpt(entity, 'other')?.placeId).toBe('ia');
+		expect(pickExcerpt(entity)?.placeId).toBe('ia');
 	});
 
 	test('nothing without excerpts', () => {

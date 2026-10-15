@@ -57,17 +57,13 @@ export function formatPeriod(start: string, end: string): string {
  * rejoined, a blank line stays a paragraph break, every other line break becomes a
  * space. The stored text keeps the page's lines; this is how the card reads it.
  */
-/** Lines folded into prose with the edges kept, for a piece of a longer text. */
+/** Lines folded into prose: a hyphen break rejoined, a line break a space, a blank line a paragraph; the edges kept. */
 export function foldLinesInline(text: string): string {
 	return text
 		.replace(/-\n(?!\n)/g, '')
 		.replace(/\n{2,}/g, '\u0000')
 		.replace(/\n/g, ' ')
 		.replace(/\u0000/g, '\n\n');
-}
-
-export function foldLines(text: string): string {
-	return foldLinesInline(text).trim();
 }
 
 export function formatDatasetTitle(title: string): string {
