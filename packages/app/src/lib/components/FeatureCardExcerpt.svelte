@@ -1,10 +1,11 @@
 <!--
 	A story's excerpt: the text around the place it is shown at, with the place's
-	mentions marked and an ellipsis on each cut side. Expanded, a cut excerpt ends with
+	mentions marked as the link's evidence and an ellipsis on each cut side. Expanded, a cut excerpt ends with
 	a link to the entry's page at the source.
 -->
 <script lang="ts">
 	import Link from '$components/Link.svelte';
+	import EvidenceHighlight from '$components/EvidenceHighlight.svelte';
 	import ArrowUpRight from 'phosphor-svelte/lib/ArrowUpRight';
 	import { translate } from '$utils/translations';
 	import type { TextSegment } from '$utils/excerpts';
@@ -29,7 +30,7 @@
 
 <div class={wrapperClasses}>
 	<p class="p-2 text-base text-gray-700 leading-relaxed whitespace-pre-wrap">
-		{#if truncatedBefore}{'… '}{/if}{#each segments as segment, i (i)}{#if segment.marked}<mark class="bg-atm-gold-gray text-inherit rounded-sm">{segment.text}</mark>{:else}{segment.text}{/if}{/each}{#if truncatedAfter}{' …'}{/if}
+		{#if truncatedBefore}{'… '}{/if}{#each segments as segment, i (i)}{#if segment.marked}<EvidenceHighlight inText={true}>{segment.text}</EvidenceHighlight>{:else}{segment.text}{/if}{/each}{#if truncatedAfter}{' …'}{/if}
 	</p>
 	{#if expanded && sourceUrl && (truncatedBefore || truncatedAfter)}
 		<p class="px-2 pb-2">

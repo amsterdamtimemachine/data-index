@@ -48,7 +48,7 @@ export class NwbStreetsFetcher extends PdokFetcher<NwbProps> {
   // NWB returns one feature per road segment; a street is many segments sharing a
   // bagOrl (BAG openbareruimte). Merge them into one MultiLineString per street,
   // preferring carriageway geometry and falling back to footpath for pedestrian-only ways.
-  protected async *places(g: Gemeente): AsyncGenerator<PlaceDraft> {
+  protected override async *places(g: Gemeente): AsyncGenerator<PlaceDraft> {
     const groups = new Map<string, { props: NwbProps; street: Position[][]; foot: Position[][] }>();
     for await (const seg of this.page(this.service(), this.layers[0], this.gemeenteFilter(g))) {
       if (!this.keep(seg.properties)) continue;

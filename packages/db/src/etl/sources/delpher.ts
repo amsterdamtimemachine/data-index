@@ -10,7 +10,6 @@
  * Usage: bun run db:ingest -s delpher -f <path-to-delpher_newspapers.csv>
  */
 import { Draft, Ingestor } from '../ingest/ingestor';
-import { NewFeature } from '../../schema';
 import { ExtractionArgs, PlaceExtractionMethod } from '../places/place-index';
 import { RecordType } from '@atm/shared';
 
@@ -24,6 +23,9 @@ type DelpherSourceData = {
   dataset: string;
   tags: string;
 }
+
+// the index keeps an article's opening, not its OCR text
+const DESCRIPTION_LENGTH = 128;
 
 // Postgres daterange output is canonically [start,end): exclusive upper bound. The rest of
 // the app reads end_date INCLUSIVELY, so map the exclusive bound to the inclusive last day
@@ -64,21 +66,6 @@ export class DelpherIngestor extends Ingestor<DelpherSourceData> {
     return { startDate, endDate };
   }
 
-  private truncate(text: string): string {
-    return text ? text.slice(0, 128) : '';
-  }
-
-  // @override from ingestor.ts, 'cause we have to truncate the description
-  // at the last step
-  protected async writeFeature(feature: NewFeature, placeId: string): Promise<void> {
-    feature.description = this.truncate(feature.description!)
-    
-    this.writer.addFeature(feature)
-    this.writer.addLink({ featureId: feature.id, placeId, relationId: this.RELATION_ID })
-
-    await this.writer.flushIfFull();
-  }
-  
   protected transform(source: DelpherSourceData): Draft | undefined {
     const dates = this.parsePeriod(source.period)
 
@@ -91,7 +78,7 @@ export class DelpherIngestor extends Ingestor<DelpherSourceData> {
       url: source.url,
       contentUrl: source.url,
       label: source.title || '',
-      description: source.text || '',
+      description: (source.text || '').slice(0, DESCRIPTION_LENGTH),
       startDate: dates.startDate,
       endDate: dates.endDate
     }

@@ -74,7 +74,8 @@ describe('amsterdam-diaries ingestion', () => {
     expect(e.name).toBe("19 Maart '41.");
     expect(e.textLength).toBe(37);
     expect(e.excerpts.map((x: { text: string }) => x.text)).toEqual(["19 Maart '41.\nVader is weer thuis!!!!", "19 Maart '41.\nVader is weer thuis!!!!"]);
-    expect(e.author).toEqual({ type: 'Person', name: 'Els Polak', url: 'http://www.wikidata.org/entity/Q125020291' });
+    expect(e.author).toEqual({ type: 'Person', name: 'Els Polak', sameAs: 'http://www.wikidata.org/entity/Q125020291', url: 'https://diaries.amsterdamtimemachine.nl/dagboekschrijfsters/els-polak' });
+    expect(e.mentions[2]).toEqual({ type: 'Person', name: 'Zeno Paul Polak', sameAs: 'https://archief.amsterdam/indexen/deeds/98517a9d', url: 'https://diaries.amsterdamtimemachine.nl/personen/zeno-paul-polak' });
     expect(e.isPartOf).toEqual({ type: 'Book', name: 'Dagboek Els Polak, deel 2', url: 'https://resolver.kb.nl/resolve?urn=urn:gvn:EVDO01:IIAV002_IAV001000041', temporalCoverage: '1941' });
     expect(e.mentions.map((m) => `${m.type}:${m.name}`)).toEqual(['Place:Prinsengracht', 'Place:Koninklijk Concertgebouw', 'Person:Zeno Paul Polak']);
   });

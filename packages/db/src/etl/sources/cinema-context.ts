@@ -95,16 +95,16 @@ export class CinemaContextIngestor extends Ingestor<CinemaContextRecord> {
     { method: PlaceExtractionMethod.WKT, column: 'geom_wkt' },
   ];
 
-  protected entityFactory() {
+  protected override entityFactory() {
     return new ProgrammeEntityFactory();
   }
 
-  protected relations() {
+  protected override relations() {
     return [SCREENED_AT, PERFORMED_AT];
   }
 
   // screened at with a film on the bill, performed at with acts only
-  protected relationFor(source: CinemaContextRecord): string {
+  protected override relationFor(source: CinemaContextRecord): string {
     if (programmeBill(source.items ?? []).films.length > 0) {
       return SCREENED_AT.id;
     }

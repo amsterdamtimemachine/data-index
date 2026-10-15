@@ -111,10 +111,11 @@ export interface TheaterEventEntity extends ProgrammeEntity {
   type: "TheaterEvent";
 }
 
-/** A thing a work refers to, as the annotators identified it, with its page at the source that identifies it. */
+/** A thing a work refers to, as the annotators identified it: the id that identifies it and, when the source has one, its page there. */
 export interface MentionEntity {
   type: "Place" | "Person" | "Organization";
   name: string;
+  sameAs?: string;
   url?: string;
 }
 
@@ -164,7 +165,7 @@ export interface ManuscriptEntity extends EntityBase {
   excerpts: Excerpt[];
   // length of the whole transcription the excerpts were cut from
   textLength: number;
-  author?: { type: "Person"; name: string; url?: string };
+  author?: { type: "Person"; name: string; sameAs?: string; url?: string };
   isPartOf?: BookEntity;
   mentions: MentionEntity[];
 }

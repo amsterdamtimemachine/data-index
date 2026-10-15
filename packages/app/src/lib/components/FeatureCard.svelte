@@ -10,6 +10,7 @@
 	import { pickExcerpt, excerptWindow, segmentText, foldSegments, COLLAPSED_EXCERPT_LENGTH } from '$utils/excerpts';
 	import FieldList from '$components/FieldList.svelte';
 	import Link from '$components/Link.svelte';
+	import EvidenceHighlight from '$components/EvidenceHighlight.svelte';
 	import TagList from '$components/TagList.svelte';
 	import Heading from '$components/Heading.svelte';
 
@@ -56,6 +57,8 @@
 		}
 		return excerptWindow(excerpt, COLLAPSED_EXCERPT_LENGTH);
 	});
+	// the place is marked in the text shown, so the relation line takes the same colour
+	const hasEvidence = $derived(storyExcerpt !== null && storyExcerpt.mentions.length > 0);
 	const storySegments = $derived.by(() => {
 		if (!storyExcerpt) {
 			return [];
@@ -138,7 +141,7 @@
 			</Heading>
 			<!-- the type, then how the item relates to its place, the place linked to its record -->
 			<p class="italic text-gray-500 {expanded ? 'px-2 mb-2' : 'mb-1'} text-base">
-				{placeLine.type}{#if placeLine.relation || placeLine.place}{' • '}{/if}{#if placeLine.relation}{placeLine.relation}{' '}{/if}{#if placeLine.place}{#if placeLine.placeHref}<Link href={placeLine.placeHref} target="_blank" rel="noopener noreferrer" class="inline text-gray-500">{placeLine.place}{placeLine.now ?? ''}</Link>{:else}{placeLine.place}{placeLine.now ?? ''}{/if}{/if}{placeLine.date ?? ''}
+				{placeLine.type}{#if placeLine.relation || placeLine.place}{' • '}{/if}{#if placeLine.relation}{placeLine.relation}{' '}{/if}{#if placeLine.place}{#if hasEvidence}<EvidenceHighlight href={placeLine.placeHref}>{placeLine.place}{placeLine.now ?? ''}</EvidenceHighlight>{:else if placeLine.placeHref}<Link href={placeLine.placeHref} target="_blank" rel="noopener noreferrer" class="inline text-gray-500">{placeLine.place}{placeLine.now ?? ''}</Link>{:else}{placeLine.place}{placeLine.now ?? ''}{/if}{/if}{placeLine.date ?? ''}
 			</p>
 		</div>
 		<!-- Entity-specific content: the region that scrolls when expanded -->

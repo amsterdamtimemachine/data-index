@@ -68,6 +68,12 @@ describe('delpher ingestion (WKT cascade match + period parse)', () => {
     expect(parseInt(r.rows[0].count)).toBe(0);
   });
 
+  test('the description keeps the opening of the article, not its text', async () => {
+    const r = await db.execute<{ description: string }>(sql`SELECT description FROM features WHERE url LIKE '%article/a1'`);
+    expect(r.rows[0].description.length).toBe(128);
+    expect(r.rows[0].description).toBe(('Amsterdam. '.repeat(20)).slice(0, 128));
+  });
+
   test('the matched articles link to the place under their point', async () => {
     const r = await db.execute<{ place_id: string }>(sql`SELECT place_id FROM feature_to_place`);
     expect(r.rows.length).toBe(2); // a1 and a3, both over delpher-place

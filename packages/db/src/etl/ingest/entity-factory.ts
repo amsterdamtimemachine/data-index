@@ -125,7 +125,7 @@ export class ProgrammeEntityFactory extends EntityFactory<ScreeningEventEntity |
 
 // the source row's shape, as the amsterdam-diaries source reads it
 type DiaryRef = { name?: string; url?: string; coverage?: string };
-type DiaryAuthor = { name?: string; url?: string };
+type DiaryAuthor = { name?: string; sameAs?: string; url?: string };
 
 export class ManuscriptEntityFactory extends EntityFactory<ManuscriptEntity> {
     create(feature: Draft, data: Map<string, unknown>): ManuscriptEntity {
@@ -144,7 +144,7 @@ export class ManuscriptEntityFactory extends EntityFactory<ManuscriptEntity> {
             ...(typeof date === 'string' && date && { dateCreated: date }),
             excerpts: excerpts.map((x) => ({ ...x })),
             textLength: typeof textLength === 'number' ? textLength : 0,
-            ...(author.name && { author: { type: 'Person' as const, name: author.name, ...(author.url && { url: author.url }) } }),
+            ...(author.name && { author: { type: 'Person' as const, name: author.name, ...(author.sameAs && { sameAs: author.sameAs }), ...(author.url && { url: author.url }) } }),
             ...(diary.name && {
                 isPartOf: {
                     type: 'Book' as const,
@@ -153,7 +153,7 @@ export class ManuscriptEntityFactory extends EntityFactory<ManuscriptEntity> {
                     ...(diary.coverage && { temporalCoverage: diary.coverage }),
                 },
             }),
-            mentions: mentions.map((m) => ({ type: m.type, name: m.name, ...(m.url && { url: m.url }) })),
+            mentions: mentions.map((m) => ({ type: m.type, name: m.name, ...(m.sameAs && { sameAs: m.sameAs }), ...(m.url && { url: m.url }) })),
         };
     }
 }

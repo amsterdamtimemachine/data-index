@@ -31,6 +31,7 @@ export default {
 				'atm-red-darkest-hover': '#522100',
 				'atm-blue':'#5e92f3',
 				'atm-blue-light':'#c2d0fb',
+				'atm-plum': '#5a3d7a', // the evidence of a link: the place name in the relation line and where the text names it
 				'status-error': 'ee3f00',
 				'status-warning': '#fff',
 				'status-success': '#fff',

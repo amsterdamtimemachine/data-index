@@ -29,8 +29,8 @@ type DiaryEntryRecord = {
   excerpts: Excerpt[];
   textLength: number;
   diary: { name: string | null; url: string | null; coverage: string | null };
-  author: { name: string | null; url: string | null };
-  mentions: Array<{ type: 'Place' | 'Person' | 'Organization'; name: string; url: string }>;
+  author: { name: string | null; sameAs: string | null; url: string | null };
+  mentions: Array<{ type: 'Place' | 'Person' | 'Organization'; name: string; sameAs: string; url?: string }>;
   // this row's place, and every Amsterdam place of the entry
   place: DiaryPlace;
   places: DiaryPlace[];
@@ -79,7 +79,7 @@ export class AmsterdamDiariesIngestor extends Ingestor<DiaryEntryRecord> {
   protected DATASET_ID = 'amsterdam-diaries';
   protected DATASET_LABEL = 'Amsterdam Diaries Time Machine';
   protected DATASET_URL = 'https://diaries.amsterdamtimemachine.nl';
-  protected DATASET_DISTRIBUTION_URL = 'https://zenodo.org/records/14385058';
+  protected override DATASET_DISTRIBUTION_URL = 'https://zenodo.org/records/14385058';
 
   protected RECORD_TYPE: RecordType = 'story';
   // the writer named the place; the entry is not about it (Schema.org CreativeWork.mentions)
@@ -91,7 +91,7 @@ export class AmsterdamDiariesIngestor extends Ingestor<DiaryEntryRecord> {
     { method: PlaceExtractionMethod.WKT, column: 'geom_wkt' },
   ];
 
-  protected entityFactory() {
+  protected override entityFactory() {
     return new ManuscriptEntityFactory();
   }
 
@@ -109,7 +109,7 @@ export class AmsterdamDiariesIngestor extends Ingestor<DiaryEntryRecord> {
   // The base writes an entity the first time it sees a feature, so the first row of
   // an entry resolves every place of the entry and stamps each excerpt; the later
   // rows repeat it from the resolver caches.
-  protected async sourceToFeature(source: DiaryEntryRecord): Promise<[NewFeature | undefined, Resolved | undefined]> {
+  protected override async sourceToFeature(source: DiaryEntryRecord): Promise<[NewFeature | undefined, Resolved | undefined]> {
     const [feature, resolved] = await super.sourceToFeature(source);
     if (!feature || !resolved || !('placeId' in resolved)) {
       return [feature, resolved];

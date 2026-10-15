@@ -30,7 +30,7 @@ function addressLabel(p: BagProps): string {
 export class BagAddressesFetcher extends PdokFetcher<BagProps> {
   protected source = 'bag' as const;
   protected layers = ['bag:verblijfsobject'];
-  protected ndjson = true;
+  protected override ndjson = true;
 
   // Full ACTIVE_SCOPE: Amsterdam + Weesp (identificatie 0457*, still present
   // post-annexation; not in Adamlink). Peripheral parked — add here to re-expand.
@@ -42,7 +42,7 @@ export class BagAddressesFetcher extends PdokFetcher<BagProps> {
   // PDOK's BAG WFS caps startIndex paging, so a large municipality (Amsterdam ~470k)
   // is fetched by keyset pagination: sort by identificatie and page with
   // identificatie > last-seen instead of a growing offset.
-  protected async *places(g: Gemeente): AsyncGenerator<PlaceDraft> {
+  protected override async *places(g: Gemeente): AsyncGenerator<PlaceDraft> {
     const code = g.code.slice(2);
     const layer = this.layers[0];
     let cursor: string | null = null;
