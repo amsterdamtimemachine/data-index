@@ -42,9 +42,8 @@
 	<span class="font-sans text-base text-black select-none whitespace-nowrap">{anyLabel}</span>
 	<button
 		use:melt={$root}
-		class="relative h-5 w-9 cursor-pointer rounded-full bg-atm-sand-darkish hover:bg-atm-sand-dark border border-atm-gold transition-transform duration-200 ease-in-out
-			   data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50
-			   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2"
+		class="focus-ring relative h-5 w-9 cursor-pointer rounded-full bg-atm-sand-darkish hover:bg-atm-sand-dark border border-atm-gold transition-transform duration-200 ease-in-out
+			   data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
 		aria-label={translate('toggleTopicOperator')}
 	>
 		<span

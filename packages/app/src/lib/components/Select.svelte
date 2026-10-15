@@ -43,7 +43,7 @@
 <button
 	{...select.trigger}
 	class={mergeCss(
-		'h-[32px] flex items-center justify-between gap-2 px-3 bg-atm-sand-darkish rounded border border-atm-gold border-[1px] hover:bg-atm-sand-dark text-sm',
+		'focus-ring h-[32px] flex items-center justify-between gap-2 px-3 bg-atm-sand-darkish rounded border border-atm-gold border-[1px] hover:bg-atm-sand-dark text-sm',
 		className
 	)}
 	aria-label={ariaLabel}

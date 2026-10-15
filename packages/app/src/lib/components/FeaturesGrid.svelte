@@ -82,17 +82,20 @@
 	{#if features.length === 0}
 		<div class="text-gray-500 p-3">{translate('noFeaturesToDisplay')}</div>
 	{:else}
+		<!-- after layout the DOM holds the cards in column order, top to bottom then the next
+		     column, which is the order the columns read; the list roles survive the move -->
 		<div
 			class="masonry-layout p-3"
 			class:invisible={!ready}
+			role="list"
 			bind:this={masonryContainer}
 			style:grid-template-columns={`repeat(${currentColumns}, minmax(0, 1fr))`}
 		>
 			{#each Array(MAX_COLUMNS) as _, columnIndex}
-				<div class="masonry-column"></div>
+				<div class="masonry-column" role="presentation"></div>
 			{/each}
 			{#each features as feature, index (index)}
-				<div class="masonry-item" data-index={index} data-feature-id={feature.id}>
+				<div class="masonry-item" role="listitem" data-index={index} data-feature-id={feature.id}>
 					<FeatureCard {feature} />
 				</div>
 			{/each}

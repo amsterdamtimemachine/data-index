@@ -5,6 +5,7 @@
 	import { cubicOut } from 'svelte/easing';
 	import { tweened } from 'svelte/motion';
 	import { mergeCss } from '$utils/utils';
+	import { translate } from '$utils/translations';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -51,16 +52,18 @@
 		className
 	)}
 	style="transform: translateX({$navPosition}%);"
-	aria-hidden={!isExpanded}
 >
+	<!-- outside the hidden part, so it stays reachable while the panel is closed -->
 	<Button
 		onclick={toggleToc}
 		icon={isExpanded ? X : List}
 		class="absolute right-[-32px] top-[50%] h-[32px] w-[32px] rounded-l-none border-l-atm-sand-border"
 		size={18}
-		aria-label={isExpanded ? 'Close navigation menu' : 'Open navigation menu'}
+		aria-label={translate('filters')}
+		aria-expanded={isExpanded}
+		aria-controls="filters-panel"
 	/>
-	<div class="w-full h-full flex flex-col" inert={!isExpanded}>
+	<div id="filters-panel" class="w-full h-full flex flex-col" inert={!isExpanded} aria-hidden={!isExpanded}>
 		{#if header}
 			<div class="shrink-0">
 				{@render header()}

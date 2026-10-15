@@ -14,6 +14,8 @@
 		color?: string;
 		children?: Snippet;
 		'aria-label'?: string;
+		'aria-expanded'?: boolean;
+		'aria-controls'?: string;
 		meltAction?: any; // Melt UI action - type varies by context
 	}
 
@@ -27,6 +29,8 @@
 		color = 'black',
 		children,
 		'aria-label': ariaLabel,
+		'aria-expanded': ariaExpanded,
+		'aria-controls': ariaControls,
 		meltAction
 	}: Props = $props();
 
@@ -38,7 +42,7 @@
 	});
 
 	const baseClasses =
-		'h-[32px] flex justify-center items-center bg-atm-sand-darkish rounded border border-atm-gold border-[1px] hover:bg-atm-sand-dark disabled:opacity-50 disabled:cursor-not-allowed text-sm';
+		'focus-ring h-[32px] flex justify-center items-center bg-atm-sand-darkish rounded border border-atm-gold border-[1px] hover:bg-atm-sand-dark disabled:opacity-50 disabled:cursor-not-allowed text-sm';
 	// icon-only and label-only stay a 32px square; a glyph with a label sizes to its text
 	const shapeClasses = $derived.by(() => {
 		if (Icon && children) {
@@ -57,6 +61,8 @@
 		{disabled}
 		class={mergeCss(`${baseClasses} ${shapeClasses}`, className)}
 		aria-label={ariaLabel}
+		aria-expanded={ariaExpanded}
+		aria-controls={ariaControls}
 		use:melt={meltAction}
 	>
 		{#if Icon}
@@ -72,6 +78,8 @@
 		{disabled}
 		class={mergeCss(`${baseClasses} ${shapeClasses}`, className)}
 		aria-label={ariaLabel}
+		aria-expanded={ariaExpanded}
+		aria-controls={ariaControls}
 	>
 		{#if Icon}
 			<Icon {...iconProps} />

@@ -1,4 +1,13 @@
 <script lang="ts">
+	import { translate } from '$utils/translations';
+	import { parseRowColFromCellId } from '$utils/heatmap';
+
+	function pluralised(count: number): string {
+		if (count === 1) {
+			return translate('featureOne');
+		}
+		return translate('featureMany');
+	}
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { env } from '$env/dynamic/public';
@@ -421,6 +430,8 @@
 		map.on('load', () => {
 			if (!map || !dimensions) return; // Guard for TypeScript
 			const mapInstance = map;
+			// the canvas is focusable (the arrow keys pan it); name it in Dutch instead of MapLibre's "Map"
+			mapInstance.getCanvas().setAttribute('aria-label', translate('mapCanvas'));
 
 			// Heatmap geometry - generate from dimensions
 			const geojsonData = generateHeatmapCells(dimensions);
@@ -679,18 +690,21 @@
 	}
 </script>
 
-<div class={mergeCss('h-full w-full relative', className)}>
+<div class={mergeCss('h-full w-full relative', className)} role="region" aria-label={translate('mapRegion')}>
+	<p class="sr-only">{translate('mapKeyboardHint')}</p>
 	<div bind:this={mapContainer} class="h-full w-full"></div>
 
 	<!-- Hover tooltip -->
 	{#if hoverTooltip}
-		{@const featuresText = hoverTooltip.count === 1 ? 'feature' : 'features'}
+		{@const cell = parseRowColFromCellId(hoverTooltip.cellId)}
 		<div
 			class="absolute z-50 bg-black bg-opacity-80 text-white px-2 py-1 rounded text-sm pointer-events-none transform -translate-x-1/2 -translate-y-full"
 			style="left: {hoverTooltip.x}px; top: {hoverTooltip.y - TOOLTIP_OFFSET_PX}px;"
 		>
-			<div class="font-medium">{hoverTooltip.count} {featuresText}</div>
-			<div class="text-xs opacity-75">Cel: {hoverTooltip.cellId}</div>
+			<div class="font-medium">{hoverTooltip.count} {pluralised(hoverTooltip.count)}</div>
+			{#if cell}
+				<div class="text-xs opacity-75">x:{cell.col} y:{cell.row}</div>
+			{/if}
 		</div>
 	{/if}
 </div>

@@ -129,7 +129,7 @@
 	{placeholder}
 	aria-label={ariaLabel}
 	class={mergeCss(
-		'h-[32px] w-full px-3 bg-atm-sand-darkish rounded border border-atm-gold border-[1px] text-base placeholder:text-gray-500',
+		'focus-ring h-[32px] w-full px-3 bg-atm-sand-darkish rounded border border-atm-gold border-[1px] text-base placeholder:text-gray-500',
 		className
 	)}
 />

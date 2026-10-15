@@ -392,6 +392,7 @@
 <!-- inline 100dvh tracks the mobile browser chrome; browsers without dvh drop the
      declaration and fall back to the h-screen class -->
 <div class="relative flex flex-col w-screen h-screen" style:height="100dvh">
+	<h1 class="sr-only">{translate('siteTitle')}</h1>
 	<div class="relative flex-1">
 		{#if currentHeatmap && dimensions}
 			<Heatmap

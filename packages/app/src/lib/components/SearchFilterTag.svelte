@@ -15,6 +15,12 @@
 	};
 	let { query, onClear, onToggle, active = false }: Props = $props();
 
+	const toggleLabel = $derived.by(() => {
+		if (active) {
+			return `${translate('pauseSearchTerm')} ${query}`;
+		}
+		return `${translate('resumeSearchTerm')} ${query}`;
+	});
 	const variant = $derived.by(() => {
 		if (active) {
 			return 'selected-outline' as const;
@@ -31,7 +37,7 @@
 	<Button icon={X} onclick={onClear} size={18} aria-label={translate('clearSearchFilter')} class="shrink-0" />
 	<Tag {variant} interactive={true}>
 		{#if onToggle}
-			<button onclick={onToggle} class="text-left cursor-pointer">{@render chipContent()}</button>
+			<button onclick={onToggle} aria-label={toggleLabel} aria-pressed={active} class="text-left cursor-pointer">{@render chipContent()}</button>
 		{:else}
 			<span class="text-left">{@render chipContent()}</span>
 		{/if}

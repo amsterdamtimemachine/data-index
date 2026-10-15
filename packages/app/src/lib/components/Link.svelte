@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { mergeCss } from '$utils/utils';
+	import { translate } from '$utils/translations';
 	import type { PhosphorIcon, PhosphorIconProps } from '@atm/shared/types';
 
 	interface Props {
@@ -37,7 +38,7 @@
 	});
 
 	const baseClasses =
-		'inline-flex items-center font-sans text-black hover:text-atm-gold-dark underline';
+		'focus-ring inline-flex items-center font-sans text-black hover:text-atm-gold-dark underline';
 	const gapClass = $derived(Icon && children ? 'gap-1' : '');
 </script>
 
@@ -47,5 +48,8 @@
 	{/if}
 	{#if Icon}
 		<Icon {...iconProps} />
+	{/if}
+	{#if target === '_blank'}
+		<span class="sr-only"> ({translate('opensInNewWindow')})</span>
 	{/if}
 </a>
