@@ -27,7 +27,6 @@
 	import NavContainer from '$components/NavContainer.svelte';
 	import FiltersStatusPanel from '$components/FiltersStatusPanel.svelte';
 	import ErrorHandler from '$components/ErrorHandler.svelte';
-	import FeatureDetailModal from '$components/FeatureDetailModal.svelte';
 	import Nav from '$components/Nav.svelte';
 	import NavItem from '$components/NavItem.svelte';
 	import type { PageData } from './$types';
@@ -473,5 +472,4 @@
 		/>
 	{/if}
 
-	<FeatureDetailModal />
 </div>
