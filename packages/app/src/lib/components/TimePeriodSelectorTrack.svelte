@@ -4,6 +4,7 @@
 	import { createMediaQuery, HOVER_QUERY } from '$utils/media.svelte';
 	import TimePeriodTooltip from '$components/TimePeriodTooltip.svelte';
 	import { selectionCountFor } from '$utils/histogram';
+	import { periodValueText } from '$lib/a11y/announcements';
 
 	interface Props {
 		bins: HistogramBin[];
@@ -59,23 +60,36 @@
 		return selectionCountFor(selectionBins, hoveredBin.bin.timeSlice.key);
 	});
 
-	// a press selects the bin under the pointer and starts a drag from it; a keyboard
-	// activation (no pointer, detail 0) selects it
+	let slider: HTMLDivElement | undefined = $state();
+
+	// what a screen reader hears for the selected period: the counts the tooltip shows
+	const valueText = $derived.by(() => {
+		const bin = bins[currentIndex];
+		if (!bin) {
+			return '';
+		}
+		let localCount: number | null = null;
+		if (localBins.length > 0) {
+			localCount = localBins[currentIndex]?.count ?? 0;
+		}
+		return periodValueText(bin.timeSlice.label, bin.count, localCount, selectionCountFor(selectionBins, bin.timeSlice.key));
+	});
+
+	// a press selects the bin under the pointer and starts a drag from it. The drag
+	// cancels the press's default, which would also have moved focus, so the slider
+	// takes focus itself: the arrow keys then step the timeline instead of panning the map.
 	function handleBinPointerDown(event: PointerEvent, index: number) {
 		onIndexChange(index);
 		onDragStart(event);
-	}
-
-	function handleBinClick(event: MouseEvent, index: number) {
-		event.stopPropagation();
-		if (event.detail === 0) {
-			onIndexChange(index);
-		}
+		slider?.focus({ preventScroll: true });
 	}
 </script>
 
+<!-- One Tab stop: the slider. The arrow keys, Home and End step it; the ring is drawn
+     inside, so the scrolling row around the timeline cannot clip it. -->
 <div
-	class="absolute top-0 inset-x-0 cursor-pointer"
+	bind:this={slider}
+	class="absolute top-0 inset-x-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-atm-gold-darkest"
 	style="height: {timelineHeight}px;"
 	role="slider"
 	tabindex="0"
@@ -83,23 +97,23 @@
 	aria-valuemin="0"
 	aria-valuemax={bins.length - 1}
 	aria-valuenow={currentIndex}
-	aria-valuetext={bins[currentIndex]?.timeSlice?.label || ''}
+	aria-valuetext={valueText}
 	onkeydown={onKeyDown}
 >
-	<!-- Clickable areas for each period -->
+	<!-- a press area per period, for the pointer only: a slider's parts are not separate
+	     controls, so they take no focus and screen readers hear the slider's value -->
 	{#each bins as bin, i}
 		{@const barWidth = 100 / bins.length}
 		{@const x = (i / bins.length) * 100}
-		<button
-			class="focus-ring absolute h-full bg-transparent hover:border-atm-gold-darkest-hover hover:border-[4px] cursor-pointer touch-none"
+		<div
+			aria-hidden="true"
+			class="absolute h-full bg-transparent hover:border-atm-gold-darkest-hover hover:border-[4px] cursor-pointer touch-none"
 			style="left: {x}%; width: {barWidth}%;"
 			onpointerdown={(e) => handleBinPointerDown(e, i)}
-			onclick={(e) => handleBinClick(e, i)}
 			onmouseenter={(e) => handleMouseEnter(e, bin, i)}
 			onmouseleave={handleMouseLeave}
 			onmousemove={handleMouseMove}
-			aria-label="{translate('selectPeriod')} {bin.timeSlice.label}"
-		></button>
+		></div>
 	{/each}
 </div>
 

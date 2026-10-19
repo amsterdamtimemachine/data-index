@@ -63,6 +63,8 @@
 		return translate('toggleLocalTimeline');
 	});
 
+	const MIN_BIN_WIDTH = 60;
+
 	// Slider state
 	let currentIndex = $state(getInitialIndex());
 	let isDragging = $state(false);
@@ -174,6 +176,25 @@
 
 		event.preventDefault();
 		handleIndexChange(newIndex);
+		revealBin(newIndex);
+	}
+
+	// A period chosen with the keyboard may lie outside the scrolled view: scroll just
+	// enough to show its bin.
+	function revealBin(index: number) {
+		const wrapper = scrollWrapper;
+		const track = trackElement;
+		if (!wrapper || !track || timePeriods.length === 0) {
+			return;
+		}
+		const binWidth = track.scrollWidth / timePeriods.length;
+		const left = index * binWidth;
+		const right = left + binWidth;
+		if (left < wrapper.scrollLeft) {
+			wrapper.scrollLeft = left;
+		} else if (right > wrapper.scrollLeft + wrapper.clientWidth) {
+			wrapper.scrollLeft = right - wrapper.clientWidth;
+		}
 	}
 </script>
 
@@ -196,18 +217,20 @@
 			<div class="h-1"></div>
 		{/if}
 		<div class="flex items-start gap-2">
-		<!-- Horizontal scroll wrapper for mobile; pointerdown only forfeits the one-shot
-		     auto-scroll, it is not an interaction affordance -->
+		<!-- The track scrolls at every width, so the toggle beside it always keeps its
+		     place; the hover tooltip is fixed to the screen, so the scrolling never clips
+		     it. pointerdown only forfeits the one-shot auto-scroll, it is not an
+		     interaction affordance -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			bind:this={scrollWrapper}
 			onpointerdown={() => (hasAutoScrolled = true)}
-			class="flex-1 min-w-0 overflow-x-auto max-[850px]:overflow-x-auto min-[851px]:overflow-x-visible relative max-[850px]:shadow-[inset_10px_0_10px_-10px_rgba(0,0,0,0.3),inset_-10px_0_10px_-10px_rgba(0,0,0,0.3)]"
+			class="flex-1 min-w-0 overflow-x-auto relative scroll-shadows"
 		>
-			<!-- 736 = md breakpoint (768) minus the px-4 gutters: the track must fit the wrapper once overflow goes visible -->
+			<!-- each bin at least 60px, so its year fits; narrower than that, the row scrolls -->
 			<div
 				class="relative"
-				style="min-width: max(736px, {histogram.bins.length * 60}px); width: 100%; height: {timelineHeight + 25}px;"
+				style="min-width: {histogram.bins.length * MIN_BIN_WIDTH}px; width: 100%; height: {timelineHeight + 25}px;"
 				bind:this={trackElement}
 			>
 			<!-- Histogram Layer: Histogram bars and grid -->

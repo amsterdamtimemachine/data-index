@@ -3,7 +3,7 @@
 	import Toaster from '$components/Toaster.svelte';
 	import LoadingBar from '$components/LoadingBar.svelte';
 	import FeatureDetailModal from '$components/FeatureDetailModal.svelte';
-	import LiveRegion from '$components/LiveRegion.svelte';
+	import LiveRegion from '$lib/a11y/LiveRegion.svelte';
 	import '../app.pcss';
 
 	let {

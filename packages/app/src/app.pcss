@@ -8,5 +8,15 @@
 	.focus-ring {
 		@apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atm-gold-darkest focus-visible:ring-offset-2 focus-visible:ring-offset-atm-sand;
 	}
+
+	/* a soft shadow at an edge of a scroll area only while content is hidden past it:
+	   the sand covers scroll with the content and hide the shadows at either end */
+	.scroll-shadows {
+		background:
+			linear-gradient(to right, theme('colors.atm-sand') 30%, transparent) left center / 2.5rem 100% no-repeat local,
+			linear-gradient(to left, theme('colors.atm-sand') 30%, transparent) right center / 2.5rem 100% no-repeat local,
+			radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.2), transparent) left center / 0.75rem 100% no-repeat scroll,
+			radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.2), transparent) right center / 0.75rem 100% no-repeat scroll;
+	}
 }
 

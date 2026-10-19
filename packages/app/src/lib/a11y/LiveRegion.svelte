@@ -3,7 +3,7 @@
 	anything is announced. Atomic, so the whole sentence is read, not only what changed.
 -->
 <script lang="ts">
-	import { announcer } from '$lib/state/announcer.svelte';
+	import { announcer } from './announcer.svelte';
 </script>
 
 <p class="sr-only" aria-live="polite" aria-atomic="true">{announcer.message}</p>

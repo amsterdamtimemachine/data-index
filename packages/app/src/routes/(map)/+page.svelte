@@ -24,8 +24,8 @@
 	import TimePeriodSelector from '$components/TimePeriodSelector.svelte';
 	import FilterPanel from '$components/FilterPanel.svelte';
 	import FeaturesPanel from '$components/FeaturesPanel.svelte';
-	import { announcer } from '$lib/state/announcer.svelte';
-	import { mapSentence } from '$utils/announcements';
+	import { announcer } from '$lib/a11y/announcer.svelte';
+	import { mapSentence } from '$lib/a11y/announcements';
 	import NavContainer from '$components/NavContainer.svelte';
 	import FiltersStatusPanel from '$components/FiltersStatusPanel.svelte';
 	import Nav from '$components/Nav.svelte';

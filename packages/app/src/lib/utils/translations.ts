@@ -135,7 +135,6 @@ const TRANSLATIONS: Record<string, string> = {
 	goToPage: 'Ga naar pagina',
 	dismissNotification: 'Melding sluiten',
 	timePeriodSelector: 'Tijdperiode kiezen',
-	selectPeriod: 'Kies periode',
 
 	// the empty panel's hints; {picture} and {button} stand for the inline elements
 	emptyPanelCityWideHint: 'Klik op {button} rechtsonder om de tijdlijn van de selectie te tonen: daar zie je in welke periodes de selectie wel features heeft.',

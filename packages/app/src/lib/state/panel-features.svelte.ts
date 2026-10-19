@@ -7,8 +7,8 @@ import { filterParams } from '$utils/filters';
 import type { UiSortMode } from '$components/FeaturesSortSelect.svelte';
 import { apiUrl } from '$utils/api';
 import { notifyFailure } from '$lib/state/notify';
-import { announcer } from '$lib/state/announcer.svelte';
-import { resultsSentence } from '$utils/announcements';
+import { announcer } from '$lib/a11y/announcer.svelte';
+import { resultsSentence } from '$lib/a11y/announcements';
 import { subjectPhrase } from '$utils/format';
 
 /**
