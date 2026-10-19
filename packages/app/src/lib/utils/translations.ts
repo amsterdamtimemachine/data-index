@@ -177,7 +177,8 @@ const TRANSLATIONS: Record<string, string> = {
 	toggleGlobalTimeline: 'Tijdlijn van de hele stad tonen',
 	ofCellsOf: 'van de cellen van',
 	ofCellOf: 'van de cel van',
-	nowKnownAs: 'nu',
+	// after an old place name, the name it goes by now; {name} stands for it
+	nowKnownAs: '(nu {name})',
 	// place window words: "vanaf 1923", "1380 tot 1663", "in 1853"
 	windowSince: 'vanaf',
 	windowUntil: 'tot',

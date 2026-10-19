@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { PlaceSearchMatch } from '@atm/shared/types';
-import { formatPlaceWindow, formatPlaceName, formatPlaceTitle, formatPartialDate, formatPeriod, foldLinesInline, subjectPhrase } from './format';
+import { formatPlaceWindow, formatPlaceName, formatPlaceTitle, formatPartialDate, formatPeriod, foldLinesInline, subjectPhrase, formatNowKnownAs } from './format';
 
 function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 	return {
@@ -115,5 +115,11 @@ describe('subjectPhrase', () => {
 		expect(subjectPhrase({ kind: 'cell', cellId: '3_4' })).toBe('van deze cel');
 		expect(subjectPhrase({ kind: 'place', place: match({ name: 'Kalverstraat', matchedName: 'Kalverstraat', cells: [1] }) })).toBe('van de cel van Kalverstraat');
 		expect(subjectPhrase({ kind: 'place', place: match({ name: 'Kalverstraat', matchedName: 'Kalverstraat', cells: [1, 2] }) })).toBe('van de cellen van Kalverstraat');
+	});
+});
+
+describe('formatNowKnownAs', () => {
+	test('the whole phrase comes from the translation, the name filled in', () => {
+		expect(formatNowKnownAs('Dam')).toBe('(nu Dam)');
 	});
 });

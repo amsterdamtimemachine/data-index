@@ -65,6 +65,7 @@
 					class="w-full block cursor-pointer hover:opacity-80 transition-opacity"
 					onclick={onExpand}
 					aria-label={translate('expandImage')}
+					title={translate('expandImage')}
 				>
 					<div class="w-full aspect-[4/3] overflow-hidden rounded bg-atm-gold-gray">
 						<img

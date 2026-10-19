@@ -47,6 +47,7 @@
 		className
 	)}
 	aria-label={ariaLabel}
+	title={ariaLabel}
 >
 	{currentLabel}
 	{#if select.open}

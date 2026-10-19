@@ -1,5 +1,5 @@
 import type { Entity, PersonEntity, MediaObjectEntity, CreativeWorkEntity, ScreeningEventEntity, TheaterEventEntity, ManuscriptEntity, FeatureResult } from '@atm/shared/types';
-import { formatPartialDate, formatPeriod } from './format';
+import { formatPartialDate, formatPeriod, formatNowKnownAs } from './format';
 import { translate } from './translations';
 
 /**
@@ -209,7 +209,7 @@ export function relationLine(feature: FeatureResult): RelationLine {
 		line.placeHref = feature.placeUrl;
 	}
 	if (feature.historicalLabel && feature.displayName && feature.historicalLabel !== feature.displayName) {
-		line.now = ` (${translate('nowKnownAs')} ${feature.displayName})`;
+		line.now = ` ${formatNowKnownAs(feature.displayName)}`;
 	}
 	if (feature.relationDated && feature.startDate && feature.endDate) {
 		line.date = `, ${formatPeriod(feature.startDate, feature.endDate)}`;

@@ -33,6 +33,7 @@
 		<button
 			{...group.item(item, disabled)}
 			aria-label={item}
+			title={item}
 			class="focus-ring flex items-center gap-2 pb-1 w-full text-left cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
 		>
 			<span

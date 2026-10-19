@@ -58,6 +58,7 @@
 		role="switch"
 		aria-checked={all}
 		aria-label={translate('topicOperator')}
+		title={translate('topicOperator')}
 		{disabled}
 		onclick={flip}
 		class="focus-ring relative inline-flex items-center h-5 w-9 p-px cursor-pointer rounded-full bg-atm-sand-darkish hover:bg-atm-sand-dark border border-atm-gold disabled:cursor-not-allowed"

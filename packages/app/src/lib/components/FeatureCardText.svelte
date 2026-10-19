@@ -29,6 +29,7 @@
 				</div>
 				<button
 					class="mt-2 text-base text-blue-600 hover:text-blue-800 underline"
+					title={translate('showMore')}
 					onclick={() => (showFullText = true)}
 				>
 					{translate('showMore')}
@@ -40,6 +41,7 @@
 				{#if needsTruncation}
 					<button
 						class="mt-2 text-base text-blue-600 hover:text-blue-800 underline"
+						title={translate('showLess')}
 						onclick={() => (showFullText = false)}
 					>
 						{translate('showLess')}

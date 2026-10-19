@@ -75,9 +75,14 @@ export function formatDatasetTitle(title: string): string {
 		.join(' ');
 }
 
+/** The phrase after an old place name naming the current one, worded by the translation: "(nu Dam)". */
+export function formatNowKnownAs(currentName: string): string {
+	return translate('nowKnownAs').replace('{name}', currentName);
+}
+
 /**
  * A place as the UI names it: the matched (possibly historical) name, else the current
- * one, else the id — followed by "(nu <current>)" when the shown name is an old one.
+ * one, else the id — followed by the current name when the shown name is an old one.
  */
 export function formatPlaceTitle(match: PlaceSearchMatch): string {
 	let shown = match.matchedName;
@@ -88,7 +93,7 @@ export function formatPlaceTitle(match: PlaceSearchMatch): string {
 		shown = match.placeId;
 	}
 	if (match.name && match.name !== shown) {
-		return `${shown} (${translate('nowKnownAs')} ${match.name})`;
+		return `${shown} ${formatNowKnownAs(match.name)}`;
 	}
 	return shown;
 }
