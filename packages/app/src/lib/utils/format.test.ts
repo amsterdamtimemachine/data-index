@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { PlaceSearchMatch } from '@atm/shared/types';
-import { formatPlaceWindow, formatPlaceName, formatPlaceTitle, formatPartialDate, formatPeriod, foldLinesInline } from './format';
+import { formatPlaceWindow, formatPlaceName, formatPlaceTitle, formatPartialDate, formatPeriod, foldLinesInline, subjectPhrase } from './format';
 
 function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 	return {
@@ -107,5 +107,13 @@ describe('formatPeriod', () => {
 		expect(formatPeriod('1907-05-01', '1907-05-31')).toBe('mei 1907');
 		expect(formatPeriod('1928-01-01', '1928-12-31')).toBe('1928');
 		expect(formatPeriod('1934-01-05', '1935-03-02')).toBe('5 januari 1934 tot 2 maart 1935');
+	});
+});
+
+describe('subjectPhrase', () => {
+	test('a cell, a place in one cell, a place across cells', () => {
+		expect(subjectPhrase({ kind: 'cell', cellId: '3_4' })).toBe('van deze cel');
+		expect(subjectPhrase({ kind: 'place', place: match({ name: 'Kalverstraat', matchedName: 'Kalverstraat', cells: [1] }) })).toBe('van de cel van Kalverstraat');
+		expect(subjectPhrase({ kind: 'place', place: match({ name: 'Kalverstraat', matchedName: 'Kalverstraat', cells: [1, 2] }) })).toBe('van de cellen van Kalverstraat');
 	});
 });

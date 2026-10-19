@@ -24,6 +24,8 @@
 	import TimePeriodSelector from '$components/TimePeriodSelector.svelte';
 	import FilterPanel from '$components/FilterPanel.svelte';
 	import FeaturesPanel from '$components/FeaturesPanel.svelte';
+	import { announcer } from '$lib/state/announcer.svelte';
+	import { mapSentence } from '$utils/announcements';
 	import NavContainer from '$components/NavContainer.svelte';
 	import FiltersStatusPanel from '$components/FiltersStatusPanel.svelte';
 	import ErrorHandler from '$components/ErrorHandler.svelte';
@@ -65,7 +67,13 @@
 				return filters.recordTypes;
 			}
 		},
-		initializeFromHeatmap
+		initializeFromHeatmap,
+		// with the panel open its list speaks for the results; closed, the map's total does
+		(histogram) => {
+			if (!showPanel) {
+				announcer.announce(mapSentence(histogram.totalFeatures));
+			}
+		}
 	);
 	const heatmapTimeline = $derived(mapData.timeline);
 	const dimensions = $derived(mapData.dimensions);

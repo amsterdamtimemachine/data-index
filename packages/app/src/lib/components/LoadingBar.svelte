@@ -3,7 +3,6 @@
 	import { loadingState } from '$state/loadingState.svelte';
 	import { onDestroy } from 'svelte';
 	import { mergeCss } from '$utils/utils';
-	import { translate } from '$utils/translations';
 
 	interface Props {
 		class?: string;
@@ -91,10 +90,11 @@
 	});
 </script>
 
+<!-- visual only: its value is an easing animation, not real progress; the results
+     are announced when they land -->
 <div
 	{...progress.root}
-	aria-label={translate('loading')}
-	aria-hidden={!visible}
+	aria-hidden="true"
 	class={mergeCss('w-full h-[3px] overflow-hidden', className)}
 	style:opacity={visible ? '1' : '0'}
 	style:transition="opacity 250ms ease-in-out"

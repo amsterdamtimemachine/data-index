@@ -109,7 +109,10 @@ const TRANSLATIONS: Record<string, string> = {
 	siteTitle: 'Amsterdam Time Machine Data Index',
 	results: 'Resultaten',
 	found: 'gevonden',
-	loading: 'Laden',
+	// the screen reader's sentence after results change: "Pagina 3 van 12, …", "Geen features …"
+	page: 'Pagina',
+	outOf: 'van',
+	none: 'Geen',
 	opensInNewWindow: 'opent in nieuw venster',
 	// the map region and its canvas, which the arrow keys pan
 	mapRegion: 'Kaart van Amsterdam',

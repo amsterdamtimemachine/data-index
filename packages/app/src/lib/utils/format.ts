@@ -1,4 +1,5 @@
 import type { PlaceSearchMatch } from '@atm/shared/types';
+import type { PanelSubject } from '$lib/state/panel-features.svelte';
 import { translate } from './translations';
 
 export function formatTimePeriod(per: [number, number]): string {
@@ -134,4 +135,17 @@ export function formatPlaceWindow(match: PlaceSearchMatch): string {
 		return `${translate('windowSince')} ${since.slice(0, 4)}`;
 	}
 	return '';
+}
+
+/** How the panel names what it lists: this cell, or the place's cells with the matched name. */
+export function subjectPhrase(subject: PanelSubject): string {
+	if (subject.kind === 'cell') {
+		return translate('ofThisCell');
+	}
+	const place = subject.place;
+	let phrase = translate('ofCellsOf');
+	if (place.cells.length === 1) {
+		phrase = translate('ofCellOf');
+	}
+	return `${phrase} ${formatPlaceTitle(place)}`;
 }

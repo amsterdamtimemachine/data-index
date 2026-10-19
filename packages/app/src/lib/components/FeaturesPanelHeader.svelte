@@ -7,7 +7,7 @@
 	import FeaturesSortSelect, { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
 	import { createMediaQuery, MOBILE_QUERY } from '$utils/media.svelte';
 	import { translate } from '$utils/translations';
-	import { formatPlaceTitle } from '$utils/format';
+	import { subjectPhrase } from '$utils/format';
 	import type { HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
 	import type { PanelSubject } from '$lib/state/panel-features.svelte';
 
@@ -77,19 +77,8 @@
 	});
 	const highlightSelected = $derived(subject.kind === 'place');
 
-	// the count names its population: this cell, or the place's cells — with the
-	// clicked alias and, when it differs, the current name (the card convention)
-	const populationLabel = $derived.by(() => {
-		if (subject.kind === 'cell') {
-			return translate('ofThisCell');
-		}
-		const place = subject.place;
-		let phrase = translate('ofCellsOf');
-		if (place.cells.length === 1) {
-			phrase = translate('ofCellOf');
-		}
-		return `${phrase} ${formatPlaceTitle(place)}`;
-	});
+	// the count names its population: this cell, or the place's cells
+	const populationLabel = $derived(subjectPhrase(subject));
 
 	// desktop: live period; mobile: frozen at cell selection
 	const thumbnailPeriod = $derived.by(() => {
@@ -112,18 +101,6 @@
 		return 32;
 	});
 
-	// the count for screen readers, a moment after it settles so a timeline drag does not chatter
-	let announcement = $state('');
-	$effect(() => {
-		if (initialLoading) {
-			return;
-		}
-		const text = `${totalCount} ${translate('featureMany')} ${translate('found')}`;
-		const timer = setTimeout(() => {
-			announcement = text;
-		}, 500);
-		return () => clearTimeout(timer);
-	});
 </script>
 
 <div
@@ -146,8 +123,6 @@
 		</div>
 	{/if}
 	<h2 class="sr-only">{translate('results')}</h2>
-	<!-- present from the first paint, so a changed count is announced; the text follows totalCount -->
-	<p class="sr-only" aria-live="polite">{announcement}</p>
 	{#if !initialLoading && totalCount > 0}
 		<div class="header-count">
 			<FeaturesCount count={totalCount} {currentPage} perPage={pageSize}>
@@ -157,18 +132,9 @@
 			</FeaturesCount>
 		</div>
 		{#if hasPagination}
-			<!-- pagination builder captures count/perPage once -->
-			{#key `${totalCount}-${pageSize}`}
-				<div class="header-pages min-w-0">
-					<Pagination
-						totalItems={totalCount}
-						{currentPage}
-						itemsPerPage={pageSize}
-						{onPageChange}
-						{loading}
-					/>
-				</div>
-			{/key}
+			<div class="header-pages min-w-0">
+				<Pagination totalItems={totalCount} {currentPage} itemsPerPage={pageSize} {onPageChange} {loading} />
+			</div>
 		{/if}
 		{#if onSortChange && onShuffle}
 			<div class="header-sort">

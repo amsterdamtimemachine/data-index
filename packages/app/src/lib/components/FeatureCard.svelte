@@ -26,6 +26,13 @@
 	};
 
 	let { feature, expanded = false, onClose, headingLevel = 3, headingId }: Props = $props();
+	// a heading with an id is a dialog's title, which takes the first focus
+	const headingTabindex = $derived.by(() => {
+		if (headingId) {
+			return -1;
+		}
+		return undefined;
+	});
 	const sectionLevel = $derived.by((): 3 | 4 => {
 		if (headingLevel === 2) {
 			return 3;
@@ -142,11 +149,15 @@
 	<FeatureCardHeader class="p-2 shrink-0" {feature} onExpand={expandHandler} {onClose} />
 	<div class={bodyClasses}>
 		<div class={titleBlockClasses}>
+			<!-- in the dialog the title takes the first focus: a screen reader says the title and
+			     stops, rather than reading the whole card -->
 			<Heading
 				level={headingLevel}
 				id={headingId}
+				tabindex={headingTabindex}
+				autofocus={headingId !== undefined}
 				class={expanded
-					? 'font-medium text-xl my-3 px-2'
+					? 'font-medium text-xl my-3 px-2 focus:outline-none'
 					: 'font-medium text-lg line-clamp-2 mb-0'}
 			>
 				{feature.label}

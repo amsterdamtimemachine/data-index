@@ -8,6 +8,9 @@ import { filterParams } from '$utils/filters';
 import type { UiSortMode } from '$components/FeaturesSortSelect.svelte';
 import type { AppError } from '$types/error';
 import { apiUrl } from '$utils/api';
+import { announcer } from '$lib/state/announcer.svelte';
+import { resultsSentence } from '$utils/announcements';
+import { subjectPhrase } from '$utils/format';
 
 /**
  * What the panel is showing: one display cell (picked on the map) or a place's
@@ -121,6 +124,7 @@ export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 			currentPage = data.page || 1;
 			totalCount = data.total || 0;
 			pageSize = data.pageSize || 50;
+			announcer.announce(resultsSentence(totalCount, currentPage, pageSize, subjectPhrase(query.subject)));
 
 			errors = [];
 		} catch (err) {

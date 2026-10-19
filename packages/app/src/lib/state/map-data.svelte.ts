@@ -18,7 +18,7 @@ export type MapDataInputs = {
 	recordTypes: RecordType[];
 };
 
-export function createMapData(inputs: MapDataInputs, onHeatmap?: () => void) {
+export function createMapData(inputs: MapDataInputs, onHeatmap?: () => void, onHistogram?: (histogram: Histogram) => void) {
 	let timeline = $state<HeatmapTimeline | null>(null);
 	let dimensions = $state<HeatmapDimensions | null>(null);
 	let histogram = $state<Histogram | null>(null);
@@ -54,6 +54,9 @@ export function createMapData(inputs: MapDataInputs, onHeatmap?: () => void) {
 			url,
 			(res) => {
 				histogram = res;
+				if (onHistogram) {
+					onHistogram(res);
+				}
 			},
 			() => loadError('Histogram Load Error', 'Could not load histogram. Temporal data may be limited.')
 		);

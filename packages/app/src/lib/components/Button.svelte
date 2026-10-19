@@ -1,38 +1,23 @@
+<!-- The app's button: an optional Phosphor icon, an optional label, and any button attribute passed on -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import type { HTMLButtonAttributes } from 'svelte/elements';
 	import { mergeCss } from '$utils/utils';
-	import { melt, type AnyMeltElement } from '@melt-ui/svelte';
 	import type { PhosphorIcon, PhosphorIconProps } from '@atm/shared/types';
 
-	interface Props {
-		onclick?: () => void;
+	type Props = Omit<HTMLButtonAttributes, 'class' | 'color' | 'children'> & {
 		class?: string;
-		disabled?: boolean;
 		icon?: PhosphorIcon;
 		size?: number;
 		weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone';
+		// the icon's colour
 		color?: string;
 		children?: Snippet;
-		'aria-label'?: string;
-		'aria-expanded'?: boolean;
-		'aria-controls'?: string;
-		meltAction?: any; // Melt UI action - type varies by context
-	}
+	};
 
-	let {
-		onclick,
-		class: className,
-		disabled = false,
-		icon: Icon,
-		size = 18,
-		weight = 'bold',
-		color = 'black',
-		children,
-		'aria-label': ariaLabel,
-		'aria-expanded': ariaExpanded,
-		'aria-controls': ariaControls,
-		meltAction
-	}: Props = $props();
+	// the rest carries any button attribute through; the app is not compiled to custom elements
+	// svelte-ignore custom_element_props_identifier
+	let { class: className, icon: Icon, size = 18, weight = 'bold', color = 'black', children, ...rest }: Props = $props();
 
 	const iconProps: PhosphorIconProps = $derived({
 		size,
@@ -55,37 +40,11 @@
 	});
 </script>
 
-{#if meltAction}
-	<button
-		{onclick}
-		{disabled}
-		class={mergeCss(`${baseClasses} ${shapeClasses}`, className)}
-		aria-label={ariaLabel}
-		aria-expanded={ariaExpanded}
-		aria-controls={ariaControls}
-		use:melt={meltAction}
-	>
-		{#if Icon}
-			<Icon {...iconProps} />
-		{/if}
-		{#if children}
-			{@render children()}
-		{/if}
-	</button>
-{:else}
-	<button
-		{onclick}
-		{disabled}
-		class={mergeCss(`${baseClasses} ${shapeClasses}`, className)}
-		aria-label={ariaLabel}
-		aria-expanded={ariaExpanded}
-		aria-controls={ariaControls}
-	>
-		{#if Icon}
-			<Icon {...iconProps} />
-		{/if}
-		{#if children}
-			{@render children()}
-		{/if}
-	</button>
-{/if}
+<button {...rest} class={mergeCss(`${baseClasses} ${shapeClasses}`, className)}>
+	{#if Icon}
+		<Icon {...iconProps} />
+	{/if}
+	{#if children}
+		{@render children()}
+	{/if}
+</button>
