@@ -200,35 +200,29 @@ const TRANSLATIONS: Record<string, string> = {
 	// the topics' operator switch, named by what "on" means
 	topicOperator: 'Alle gekozen onderwerpen',
 
-	// Error titles
-	'Invalid Content Type Removed': 'Ongeldig inhoudstype verwijderd',
-	'Invalid Tag Removed': 'Ongeldig onderwerp verwijderd',
-	'Tag Counts Failed': 'Aantallen per onderwerp niet geladen',
-	'Invalid Input': 'Ongeldige invoer',
-	'Period Not Found': 'Periode niet gevonden',
-	'Invalid Cell': 'Ongeldige cel',
-	'Place Not Found': 'Plek niet gevonden',
-	'Place Filter Load Failed': 'Plekfilter laden mislukt',
-	'Place Search Failed': 'Zoeken naar plekken mislukt',
-
-	// Error messages
-	'is not a valid content type and was removed from your selection': 'is geen geldig inhoudstype en is verwijderd uit uw selectie',
-	'is not a valid tag and was removed from your selection': 'is geen geldig onderwerp en is verwijderd uit uw selectie',
-	'No valid content types found. Defaulting to all content types': 'Geen geldige inhoudstypes gevonden. Standaard ingesteld op alle inhoudstypes',
-	'invalid format. Expected YYYY_YYYY': 'ongeldig formaat. Verwacht YYYY_YYYY',
-	'Defaulting to most recent period': 'Standaard ingesteld op meest recente periode',
-	'invalid range. Start year must be less than end year': 'ongeldig bereik. Beginjaar moet kleiner zijn dan eindjaar',
-	spans: 'beslaat',
-	'years. Maximum 50 years supported': 'jaar. Maximaal 50 jaar ondersteund',
-	"doesn't exist in the dataset. Defaulting to most recent period": 'bestaat niet in de dataset. Standaard ingesteld op meest recente periode',
-	'not found. Please select a valid cell from the map': 'niet gevonden. Selecteer een geldige cel op de kaart',
-	'The place in this URL does not exist anymore. The place filter was removed.':
-		'De plek in deze URL bestaat niet meer. Het plekfilter is verwijderd.',
-	'Could not restore the place filter. Please try again later.':
-		'Kon het plekfilter niet herstellen. Probeer het later opnieuw.',
-	'Could not search places. Please try again later.':
-		'Kon geen plekken zoeken. Probeer het later opnieuw.',
-	'Could not load the topic counts.': 'Kon de aantallen per onderwerp niet laden.'
+	// Toasts: a title, and a sentence under <key>Text when the title needs one; {slots} are filled in
+	indexUnreachable: 'Index niet bereikbaar',
+	noInternet: 'Geen internetverbinding',
+	// added under a failure when the server answered with a status
+	failureCode: 'Foutcode {code}',
+	indexNotLoaded: 'Index niet geladen',
+	mapNotLoaded: 'Kaart niet geladen',
+	timelineNotLoaded: 'Tijdlijn niet geladen',
+	featuresNotLoaded: 'Features niet geladen',
+	topicCountsNotLoaded: 'Aantallen per onderwerp niet geladen',
+	topicCountsNotLoadedText: 'De onderwerpen werken nog wel.',
+	placeSearchFailed: 'Zoeken naar plekken mislukt',
+	placeFilterNotRestored: 'Plekfilter niet hersteld',
+	// one toast for everything wrong with a link on arrival
+	linkValueUnknownOne: 'Onbekende waarde in de link',
+	linkValueUnknownMany: 'Onbekende waarden in de link',
+	linkValueIgnoredOne: '{values} bestaat niet en wordt genegeerd.',
+	linkValueIgnoredMany: '{values} bestaan niet en worden genegeerd.',
+	linkPeriodReplaced: 'Periode {period} bestaat niet; de meest recente periode wordt getoond.',
+	// the error page
+	pageNotFound: 'Pagina niet gevonden',
+	somethingWentWrong: 'Er ging iets mis',
+	backToMap: 'Terug naar de kaart'
 };
 
 // Reverse map (built once)
@@ -260,17 +254,17 @@ export function reverseTranslateAll(dutch: string[]): string[] {
 	return dutch.map(reverseTranslate);
 }
 
-/**
- * Translate an error message by substring replacement (not a key lookup), so
- * dynamic messages with interpolated values still get their known phrases translated.
- */
-export function translateErrorMessage(message: string): string {
-	let translated = message;
-	// Apply translations for error message patterns
-	for (const [english, dutch] of Object.entries(TRANSLATIONS)) {
-		if (english.length > 20) { // Only match longer error message strings
-			translated = translated.replace(english, dutch);
+/** Whether a key has a translation of its own. */
+export function hasTranslation(key: string): boolean {
+	return key in TRANSLATIONS;
+}
+
+/** A translated template with its {name} slots filled in: fill('(nu {name})', { name: 'Dam' }). */
+export function fill(template: string, values: Record<string, string> = {}): string {
+	return template.replace(/\{(\w+)\}/g, (slot, name: string) => {
+		if (name in values) {
+			return values[name];
 		}
-	}
-	return translated;
+		return slot;
+	});
 }

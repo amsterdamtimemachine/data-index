@@ -1,25 +1,30 @@
 /**
  * The city-wide fetches: one URL per params for the heatmap and the histogram, the
- * first heatmap runs the page's setup, a failure leaves a warning that a navigation
- * clears, and a params change refetches.
+ * first heatmap runs the page's setup, a failure is reported with the feature's key,
+ * and a params change refetches.
  */
 import { describe, test, expect, afterEach, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import type { Histogram, HeatmapResponse } from '@atm/shared/types';
 
-type Call = { url: string; load: (data: unknown) => void; fail: () => void };
+type Call = { url: string; load: (data: unknown) => void; fail: (failure: unknown) => void };
 const calls: Call[] = [];
+const failures: Array<[string, unknown]> = [];
+
+vi.mock('$lib/state/notify', () => ({
+	notifyFailure: (key: string, failure: unknown) => failures.push([key, failure])
+}));
 
 vi.mock('$utils/fetchJson', () => ({
-	fetchJson: (url: string, onData: (d: unknown) => void, onError: () => void, onSettled?: () => void) => {
+	fetchJson: (url: string, onData: (d: unknown) => void, onError: (failure: unknown) => void, onSettled?: () => void) => {
 		calls.push({
 			url,
 			load: (data) => {
 				onData(data);
 				if (onSettled) onSettled();
 			},
-			fail: () => {
-				onError();
+			fail: (failure) => {
+				onError(failure);
 				if (onSettled) onSettled();
 			}
 		});
@@ -36,10 +41,11 @@ afterEach(() => {
 	}
 	cleanups = [];
 	calls.length = 0;
+	failures.length = 0;
 });
 
 function harness(query = 'recordTypes=image') {
-	const inputs = $state({ params: new URLSearchParams(query), recordTypes: ['image' as const] });
+	const inputs = $state({ params: new URLSearchParams(query) });
 	let setups = 0;
 	let data!: ReturnType<typeof createMapData>;
 	cleanups.push($effect.root(() => {
@@ -76,15 +82,16 @@ describe('map data', () => {
 		expect(data.histogram?.totalFeatures).toBe(7);
 	});
 
-	test('a failed fetch leaves a warning that clearErrors removes', () => {
-		const { data } = harness();
-		calls[0].fail();
+	test('a failed fetch is reported with the feature it was for', () => {
+		harness();
+		const lost = new TypeError('Failed to fetch');
+		calls[0].fail(lost);
+		calls[1].fail(lost);
 		flushSync();
-		expect(data.errors.length).toBe(1);
-		expect(data.errors[0].title).toBe('Heatmap Load Error');
-		data.clearErrors();
-		flushSync();
-		expect(data.errors).toEqual([]);
+		expect(failures).toEqual([
+			['mapNotLoaded', lost],
+			['timelineNotLoaded', lost]
+		]);
 	});
 
 	test('a params change refetches both', () => {

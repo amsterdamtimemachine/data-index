@@ -5,9 +5,6 @@
  */
 import type { VisualizationMetadata } from '@atm/shared/types';
 import type { FilterState } from '$types/filters';
-import type { AppError } from '$types/error';
-import { createError, createValidationError } from './error';
-import { translateAll } from './translations';
 import { parseSearchQuery, parseTagSelection } from './page-params';
 
 function parseList(url: URL, name: string): string[] | null {
@@ -27,13 +24,13 @@ export function selectsAll(selected: string[], all: string[]): boolean {
 }
 
 /**
- * The filter state a URL asks for, checked against what the index has. Unknown record
- * types and tags are dropped with a warning; unknown datasets and place types are
- * dropped silently. A category with nothing valid left falls back to everything.
+ * The filter state a URL asks for, checked against what the index has. Values the
+ * index does not have are left out of the state and listed in unknownValues, as the
+ * link wrote them; a category with nothing valid left falls back to everything.
  * Without metadata (its load failed) the categories stay empty.
  */
-export function parseFilterState(url: URL, metadata: VisualizationMetadata | null): { filters: FilterState; errors: AppError[] } {
-	const errors: AppError[] = [];
+export function parseFilterState(url: URL, metadata: VisualizationMetadata | null): { filters: FilterState; unknownValues: string[] } {
+	const unknownValues: string[] = [];
 	const tagSelection = parseTagSelection(url);
 	const filters: FilterState = {
 		recordTypes: [],
@@ -44,72 +41,47 @@ export function parseFilterState(url: URL, metadata: VisualizationMetadata | nul
 		searchQuery: parseSearchQuery(url)
 	};
 	if (!metadata) {
-		return { filters, errors };
+		return { filters, unknownValues };
 	}
 
-	const requestedTypes = parseList(url, 'recordTypes');
-	if (requestedTypes) {
-		const validTypes = requestedTypes.filter((type) => (metadata.recordTypes as string[]).includes(type));
-		const invalidTypes = requestedTypes.filter((type) => !(metadata.recordTypes as string[]).includes(type));
-		if (validTypes.length > 0) {
-			for (const invalidType of invalidTypes) {
-				errors.push(
-					createError(
-						'warning',
-						'Invalid Content Type Removed',
-						`"${invalidType}" is not a valid content type and was removed from your selection.`,
-						{ invalidType, availableTypes: translateAll(metadata.recordTypes) }
-					)
-				);
-			}
-			filters.recordTypes = validTypes as FilterState['recordTypes'];
-		} else {
-			errors.push(
-				createValidationError(
-					'recordTypes',
-					requestedTypes.join(','),
-					`No valid content types found. Showing all content types: ${translateAll(metadata.recordTypes).join(', ')}`
-				)
-			);
-			filters.recordTypes = metadata.recordTypes;
+	// the known values of one category, the unknown ones noted
+	function known(requested: string[] | null, all: string[]): string[] {
+		if (!requested) {
+			return [];
 		}
-	} else {
-		filters.recordTypes = metadata.recordTypes;
+		const valid: string[] = [];
+		for (const value of requested) {
+			if (all.includes(value)) {
+				valid.push(value);
+			} else {
+				unknownValues.push(value);
+			}
+		}
+		return valid;
+	}
+
+	const validTypes = known(parseList(url, 'recordTypes'), metadata.recordTypes);
+	filters.recordTypes = metadata.recordTypes;
+	if (validTypes.length > 0) {
+		filters.recordTypes = validTypes as FilterState['recordTypes'];
 	}
 
 	const datasetIds = metadata.datasets.map((d) => d.id);
-	const requestedDatasets = parseList(url, 'datasets');
+	const validDatasets = known(parseList(url, 'datasets'), datasetIds);
 	filters.datasets = datasetIds;
-	if (requestedDatasets) {
-		const validDatasets = requestedDatasets.filter((id) => datasetIds.includes(id));
-		if (validDatasets.length > 0) {
-			filters.datasets = validDatasets;
-		}
+	if (validDatasets.length > 0) {
+		filters.datasets = validDatasets;
 	}
 
-	const requestedPlaceTypes = parseList(url, 'placeTypes');
+	const validPlaceTypes = known(parseList(url, 'placeTypes'), metadata.placeTypes);
 	filters.placeTypes = metadata.placeTypes;
-	if (requestedPlaceTypes) {
-		const validPlaceTypes = requestedPlaceTypes.filter((type) => (metadata.placeTypes as string[]).includes(type));
-		if (validPlaceTypes.length > 0) {
-			filters.placeTypes = validPlaceTypes as FilterState['placeTypes'];
-		}
+	if (validPlaceTypes.length > 0) {
+		filters.placeTypes = validPlaceTypes as FilterState['placeTypes'];
 	}
 
-	for (const tag of tagSelection.tags) {
-		if (metadata.tags.includes(tag)) {
-			filters.tags.push(tag);
-		} else {
-			errors.push(
-				createError('warning', 'Invalid Tag Removed', `"${tag}" is not a valid tag and was removed from your selection.`, {
-					invalidTag: tag,
-					availableTags: metadata.tags
-				})
-			);
-		}
-	}
+	filters.tags = known(tagSelection.tags, metadata.tags);
 
-	return { filters, errors };
+	return { filters, unknownValues };
 }
 
 /**

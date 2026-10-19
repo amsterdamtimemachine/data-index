@@ -6,7 +6,6 @@
 	import ButtonIllustration from '$components/ButtonIllustration.svelte';
 	import TextWithSlots from '$components/TextWithSlots.svelte';
 	import FeaturesPanelHeader from '$components/FeaturesPanelHeader.svelte';
-	import ErrorHandler from '$components/ErrorHandler.svelte';
 	import { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
 	import { createPanelFeatures, type PanelSubject } from '$lib/state/panel-features.svelte';
 	import type { HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
@@ -64,7 +63,6 @@
 	}
 </script>
 
-<ErrorHandler errorData={panelFeatures.errorData} />
 
 <FeaturesPanelHeader
 	{subject}

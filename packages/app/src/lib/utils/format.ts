@@ -1,6 +1,6 @@
 import type { PlaceSearchMatch } from '@atm/shared/types';
 import type { PanelSubject } from '$lib/state/panel-features.svelte';
-import { translate } from './translations';
+import { translate, fill } from './translations';
 
 export function formatTimePeriod(per: [number, number]): string {
 	const [start, end] = per;
@@ -77,7 +77,7 @@ export function formatDatasetTitle(title: string): string {
 
 /** The phrase after an old place name naming the current one, worded by the translation: "(nu Dam)". */
 export function formatNowKnownAs(currentName: string): string {
-	return translate('nowKnownAs').replace('{name}', currentName);
+	return fill(translate('nowKnownAs'), { name: currentName });
 }
 
 /**
@@ -105,17 +105,6 @@ export function formatPlaceTitle(match: PlaceSearchMatch): string {
  * window, so an undated variant carries none. "1850 tot 1909", "in 1853" (both ends
  * in one year), "tot 1850", "vanaf 1921", or '' without a window.
  */
-/** The name a place is shown under: the matched (possibly historical) name, else the current one, else the id. */
-export function formatPlaceName(match: PlaceSearchMatch): string {
-	if (match.matchedName) {
-		return match.matchedName;
-	}
-	if (match.name) {
-		return match.name;
-	}
-	return match.placeId;
-}
-
 export function formatPlaceWindow(match: PlaceSearchMatch): string {
 	let window = match.geometryWindow;
 	if (match.matchedNameId) {

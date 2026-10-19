@@ -4,7 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { filterParams } from '$utils/filters';
 	import { formatPlaceTitle } from '$utils/format';
-	import { tick, untrack } from 'svelte';
+	import { tick, untrack, onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { navigateParams } from '$utils/navigate';
 	import { createMapSelection } from '$state/map-selection.svelte';
@@ -12,8 +12,8 @@
 	import { createMapData } from '$state/map-data.svelte';
 	import { createMapPadding } from '$state/map-padding.svelte';
 	import { createSearchPause } from '$state/search-pause.svelte';
-	import { createPageErrorData, createValidationError } from '$utils/error';
-	import { validateCellId } from '$utils/utils';
+	import { isValidCellId } from '$utils/utils';
+	import { notifyOnce, notifyFailure, linkMessage } from '$lib/state/notify';
 	import { createMediaQuery, MOBILE_QUERY, MOBILE_MAX_WIDTH } from '$utils/media.svelte';
 	import FeaturesPanelResizeHandle, {
 		panelWidthCss,
@@ -28,21 +28,16 @@
 	import { mapSentence } from '$utils/announcements';
 	import NavContainer from '$components/NavContainer.svelte';
 	import FiltersStatusPanel from '$components/FiltersStatusPanel.svelte';
-	import ErrorHandler from '$components/ErrorHandler.svelte';
 	import Nav from '$components/Nav.svelte';
 	import NavItem from '$components/NavItem.svelte';
 	import type { PageData } from './$types';
 	import type { HeatmapTimeline } from '@atm/shared/types';
 	import type { PanelSubject } from '$lib/state/panel-features.svelte';
-	import type { AppError } from '$types/error';
 	import { env } from '$env/dynamic/public';
 	import { createEmptyHeatmap, getCellBoundsFromCellId, getCellIdFromLonLat } from '$utils/heatmap';
 
 
 	let { data }: { data: PageData } = $props();
-
-	// validation errors this page raises (a stale period or cell in the URL)
-	let pageErrors = $state<AppError[]>([]);
 
 	const isMobile = createMediaQuery(MOBILE_QUERY);
 
@@ -62,9 +57,6 @@
 		{
 			get params() {
 				return activeParams;
-			},
-			get recordTypes() {
-				return filters.recordTypes;
 			}
 		},
 		initializeFromHeatmap,
@@ -123,7 +115,6 @@
 	});
 
 	let recordTypes = $derived(data?.metadata?.recordTypes || []);
-	let validatedPeriod = $derived(data?.validatedPeriod);
 
 	const mapSelection = createMapSelection();
 	let currentPeriod = $derived(mapSelection.currentPeriod);
@@ -155,12 +146,6 @@
 		}
 	});
 
-	let allErrors = $derived.by(() => {
-		const serverErrors = data.errorData?.errors || [];
-		const controllerErrors = mapSelection.errors || [];
-		return createPageErrorData([...serverErrors, ...pageErrors, ...mapData.errors, ...controllerErrors]);
-	});
-
 	let currentHeatmap = $derived(
 		heatmapTimeline?.[currentPeriod] ?? (dimensions ? createEmptyHeatmap() : null)
 	);
@@ -181,37 +166,38 @@
 
 		// Period: the URL param if it names a loaded slice, else the most recent one.
 		// Slice keys derive from the bin configuration, so bookmarked URLs can go stale.
+		// The period is the one wrong value that gets corrected: the page needs a slice.
 		let initialPeriod = getLastAvailablePeriod(heatmapTimeline);
-		if (validatedPeriod) {
-			if (heatmapTimeline[validatedPeriod]) {
-				initialPeriod = validatedPeriod;
+		let replacedPeriod: string | null = null;
+		if (data.periodParam) {
+			if (heatmapTimeline[data.periodParam]) {
+				initialPeriod = data.periodParam;
 			} else {
-				pageErrors = [
-					...pageErrors,
-					createValidationError(
-						'period',
-						validatedPeriod,
-						`Period "${validatedPeriod}" not found. Showing the most recent period instead.`
-					)
-				];
+				replacedPeriod = data.periodParam;
 			}
 		}
 		mapSelection.initialize(initialPeriod);
 
 		tick().then(() => {
-			// Validate the deep-linked cell against the now-available dimensions (this used
-			// to be done in the loader, but dimensions arrive client-side now).
+			const unknownValues = [...data.unknownValues];
+			if (replacedPeriod) {
+				mapSelection.updateUrlParam('period', initialPeriod);
+			}
+
+			// the deep-linked cell, checked against the now-available grid; a wrong one is ignored
 			if (data.cellParam && dimensions && !placePanelOpen) {
-				const validation = validateCellId(data.cellParam, dimensions);
-				if (validation.isValid) {
+				if (isValidCellId(data.cellParam, dimensions)) {
 					const bounds = getCellBoundsFromCellId(data.cellParam, dimensions);
 					if (bounds) mapSelection.selectCell(data.cellParam, bounds);
 				} else {
-					pageErrors = [
-						...pageErrors,
-						createValidationError('cell', data.cellParam, validation.error || `Cell "${data.cellParam}" not found. Please select a valid cell from the map.`)
-					];
+					unknownValues.push(data.cellParam);
 				}
+			}
+
+			// everything wrong with the link, in one toast on arrival
+			const linkNotice = linkMessage(unknownValues, replacedPeriod);
+			if (linkNotice) {
+				notifyOnce(linkNotice);
 			}
 
 			// Set URL defaults if no parameters exist
@@ -272,11 +258,17 @@
 		}
 	});
 
-	// A filter change reloads the page data (new errorData); drop the previous load's
-	// client-side errors so they don't accumulate across navigations.
+	// The loaders' failures, which they cannot show themselves. The metadata loads once
+	// per visit; the place is looked up again on every navigation, so it reports each time.
+	onMount(() => {
+		if (data.metadataFailure) {
+			notifyFailure('indexNotLoaded', data.metadataFailure);
+		}
+	});
 	afterNavigate(() => {
-		pageErrors = [];
-		mapData.clearErrors();
+		if (data.placeRestoreFailure) {
+			notifyFailure('placeFilterNotRestored', data.placeRestoreFailure);
+		}
 	});
 
 	function handlePeriodChange(period: string) {
@@ -308,7 +300,6 @@
 			setPlacePanel(false);
 			return;
 		}
-		mapSelection.clearErrors();
 		mapSelection.selectCell(null);
 	}
 
@@ -394,7 +385,6 @@
 	<link rel="preload" as="fetch" href={mapData.histogramUrl} crossorigin="anonymous" />
 </svelte:head>
 
-<ErrorHandler errorData={allErrors} />
 
 <!-- inline 100dvh tracks the mobile browser chrome; browsers without dvh drop the
      declaration and fall back to the h-screen class -->

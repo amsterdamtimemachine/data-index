@@ -2,7 +2,6 @@
 import { browser } from '$app/environment';
 import { page } from '$app/state';
 import { replaceState } from '$app/navigation';
-import type { AppError } from '$types/error';
 
 /**
  * The map view's selection — period and selected cell — mirrored into the URL
@@ -17,7 +16,6 @@ export function createMapSelection() {
 		minLon: number;
 		maxLon: number;
 	} | null>(null);
-	let errors = $state<AppError[]>([]);
 
 	// Callback for cell selection
 	let onCellSelected = $state<
@@ -108,12 +106,6 @@ export function createMapSelection() {
 		}
 	}
 
-	/**
-	 * Clears all current errors. Useful when navigating or retrying operations.
-	 */
-	function clearErrors() {
-		errors = [];
-	}
 
 	/**
 	 * Updates URL parameters without triggering navigation.
@@ -155,15 +147,11 @@ export function createMapSelection() {
 		get showCellModal() {
 			return !!selectedCellId;
 		},
-		get errors() {
-			return errors;
-		},
 
 		// State management methods
 		initialize,
 		updatePeriod,
 		selectCell,
-		clearErrors,
 
 		// URL utilities
 		updateUrlParam,

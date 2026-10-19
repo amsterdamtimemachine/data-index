@@ -4,32 +4,23 @@
  * when the filter params change. One URL definition feeds the <head> preloads and
  * the fetches, so the browser's preload always matches.
  */
-import { untrack } from 'svelte';
-import type { Histogram, HeatmapTimeline, HeatmapDimensions, HeatmapResponse, RecordType } from '@atm/shared/types';
-import type { AppError } from '$types/error';
+import type { Histogram, HeatmapTimeline, HeatmapDimensions, HeatmapResponse } from '@atm/shared/types';
 import { apiUrl } from '$utils/api';
 import { fetchJson } from '$utils/fetchJson';
-import { createError } from '$utils/error';
+import { notifyFailure } from '$lib/state/notify';
 import { loadingState } from '$lib/state/loadingState.svelte';
 
 export type MapDataInputs = {
 	params: URLSearchParams;
-	// context for the load errors
-	recordTypes: RecordType[];
 };
 
 export function createMapData(inputs: MapDataInputs, onHeatmap?: () => void, onHistogram?: (histogram: Histogram) => void) {
 	let timeline = $state<HeatmapTimeline | null>(null);
 	let dimensions = $state<HeatmapDimensions | null>(null);
 	let histogram = $state<Histogram | null>(null);
-	let errors = $state<AppError[]>([]);
 
 	const heatmapUrl = $derived(apiUrl('/api/heatmaps', inputs.params));
 	const histogramUrl = $derived(apiUrl('/api/histogram', inputs.params));
-
-	function loadError(title: string, message: string) {
-		errors = [...errors, createError('warning', title, message, { recordTypes: untrack(() => inputs.recordTypes) })];
-	}
 
 	$effect(() => {
 		const url = heatmapUrl;
@@ -43,7 +34,7 @@ export function createMapData(inputs: MapDataInputs, onHeatmap?: () => void, onH
 					onHeatmap();
 				}
 			},
-			() => loadError('Heatmap Load Error', 'Could not load heatmap. Spatial visualization may be limited.'),
+			(failure) => notifyFailure('mapNotLoaded', failure),
 			() => loadingState.stopLoading()
 		);
 	});
@@ -58,13 +49,9 @@ export function createMapData(inputs: MapDataInputs, onHeatmap?: () => void, onH
 					onHistogram(res);
 				}
 			},
-			() => loadError('Histogram Load Error', 'Could not load histogram. Temporal data may be limited.')
+			(failure) => notifyFailure('timelineNotLoaded', failure)
 		);
 	});
-
-	function clearErrors() {
-		errors = [];
-	}
 
 	return {
 		get timeline() {
@@ -81,10 +68,6 @@ export function createMapData(inputs: MapDataInputs, onHeatmap?: () => void, onH
 		},
 		get histogramUrl() {
 			return histogramUrl;
-		},
-		get errors() {
-			return errors;
-		},
-		clearErrors
+		}
 	};
 }

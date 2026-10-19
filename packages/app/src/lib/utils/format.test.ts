@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { PlaceSearchMatch } from '@atm/shared/types';
-import { formatPlaceWindow, formatPlaceName, formatPlaceTitle, formatPartialDate, formatPeriod, foldLinesInline, subjectPhrase, formatNowKnownAs } from './format';
+import { formatPlaceWindow, formatPlaceTitle, formatPartialDate, formatPeriod, foldLinesInline, subjectPhrase, formatNowKnownAs } from './format';
 
 function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 	return {
@@ -70,13 +70,6 @@ describe('formatPlaceTitle', () => {
 	});
 });
 
-describe('formatPlaceName', () => {
-	test('prefers the matched name, then the current name, then the id', () => {
-		expect(formatPlaceName(match({ matchedName: 'Oude naam', name: 'Nieuwe naam' }))).toBe('Oude naam');
-		expect(formatPlaceName(match({ matchedName: '', name: 'Nieuwe naam' }))).toBe('Nieuwe naam');
-		expect(formatPlaceName(match({ matchedName: '', name: null }))).toBe('p');
-	});
-});
 
 describe('formatPartialDate', () => {
 	test('words a date at the precision it was recorded', () => {
