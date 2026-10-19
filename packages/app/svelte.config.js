@@ -1,7 +1,6 @@
 // Deploying to a non-Bun host? `bun add -d @sveltejs/adapter-auto` and swap the import below.
 import adapter from "svelte-adapter-bun";
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
-import { preprocessMeltUI, sequence } from '@melt-ui/pp';
 import { mdsvex } from 'mdsvex';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -15,13 +14,12 @@ const base = (process.env.BASE_PATH ?? '').replace(/\/+$/, '');
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
 	extensions: ['.svelte', '.svx'],
-	preprocess: sequence([
+	preprocess: [
 		vitePreprocess({
 			script: true // Make sure this is enabled for TypeScript
 		}),
-		mdsvex({ extensions: ['.svx'], layout: join(root, 'src/lib/components/markdown/MdsvexLayout.svelte') }),
-		preprocessMeltUI()
-	]),
+		mdsvex({ extensions: ['.svx'], layout: join(root, 'src/lib/components/markdown/MdsvexLayout.svelte') })
+	],
 
 	kit: {
 		adapter: adapter(),

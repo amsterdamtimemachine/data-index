@@ -1,61 +1,68 @@
+<!--
+	The topics' operator as a switch: on requires all chosen topics, off at least one.
+	The switch is one Tab stop and Space or Enter flips it; its name says what "on"
+	means. The side labels are pointer targets and hidden from screen readers, which
+	would otherwise hear the choice twice.
+-->
 <script lang="ts">
-	import { createSwitch, melt } from '@melt-ui/svelte';
 	import { mergeCss } from '$utils/utils';
 	import { translate } from '$utils/translations';
 
+	type Operator = 'AND' | 'OR';
+
 	interface Props {
-		operator: 'AND' | 'OR';
-		onOperatorChange: (operator: 'AND' | 'OR') => void;
+		operator: Operator;
+		onOperatorChange: (operator: Operator) => void;
+		anyLabel: string;
+		allLabel: string;
 		disabled?: boolean;
 		class?: string;
-		anyLabel?: string;
-		allLabel?: string;
 	}
 
-	let { 
-		operator, 
-		onOperatorChange, 
-		disabled = false, 
-		class: className,
-		anyLabel = 'Any',
-		allLabel = 'All'
-	}: Props = $props();
+	let { operator, onOperatorChange, anyLabel, allLabel, disabled = false, class: className }: Props = $props();
 
-	// Props seed the builder's initial config; the live state is the $checked store below.
-	const {
-		elements: { root, input },
-		states: { checked }
-	} = createSwitch({
-		// svelte-ignore state_referenced_locally
-		defaultChecked: operator === 'AND',
-		// svelte-ignore state_referenced_locally
-		disabled,
-		onCheckedChange: ({ next }) => {
-			const newOperator = next ? 'AND' : 'OR';
-			onOperatorChange(newOperator);
-			return next;
+	const all = $derived(operator === 'AND');
+
+	function choose(next: Operator) {
+		if (disabled || next === operator) {
+			return;
 		}
+		onOperatorChange(next);
+	}
+
+	function flip() {
+		if (all) {
+			choose('OR');
+		} else {
+			choose('AND');
+		}
+	}
+
+	// border and padding leave exactly the thumb's height, so it sits centred and
+	// travels the inner width less its own
+	const thumbClasses = $derived.by(() => {
+		const base = 'block h-4 w-4 rounded-full bg-atm-gold-dark shadow-sm transition-transform duration-200 ease-in-out';
+		if (all) {
+			return `${base} translate-x-4`;
+		}
+		return base;
 	});
+
+	const labelClasses = 'font-sans text-base text-black whitespace-nowrap cursor-pointer select-none';
 </script>
 
-<div class={mergeCss('flex items-center gap-1', className)}>
-	<span class="font-sans text-base text-black select-none whitespace-nowrap">{anyLabel}</span>
+<div class={mergeCss('flex items-center gap-1', className)} class:opacity-50={disabled}>
+	<span aria-hidden="true" onclick={() => choose('OR')} class={labelClasses}>{anyLabel}</span>
 	<button
-		use:melt={$root}
-		class="focus-ring relative h-5 w-9 cursor-pointer rounded-full bg-atm-sand-darkish hover:bg-atm-sand-dark border border-atm-gold transition-transform duration-200 ease-in-out
-			   data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
-		aria-label={translate('toggleTopicOperator')}
+		type="button"
+		role="switch"
+		aria-checked={all}
+		aria-label={translate('topicOperator')}
+		{disabled}
+		onclick={flip}
+		class="focus-ring relative inline-flex items-center h-5 w-9 p-px cursor-pointer rounded-full bg-atm-sand-darkish hover:bg-atm-sand-dark border border-atm-gold disabled:cursor-not-allowed"
 	>
-		<span
-			class="thumb block h-4 w-4 rounded-full bg-atm-gold-dark shadow-sm transition-transform duration-200 ease-in-out"
-		></span>
+		<span class={thumbClasses}></span>
 	</button>
-	<input use:melt={$input} />
-	<span class="font-sans text-base text-black select-none whitespace-nowrap">{allLabel}</span>
+	<span aria-hidden="true" onclick={() => choose('AND')} class={labelClasses}>{allLabel}</span>
 </div>
-
-<style>
-	:global([data-state='checked']) .thumb {
-		transform: translateX(1.125rem);
-	}
-</style>

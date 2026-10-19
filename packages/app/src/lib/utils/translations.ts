@@ -196,7 +196,8 @@ const TRANSLATIONS: Record<string, string> = {
 	topicsAny: 'Minimaal één',
 	topicsAll: 'Alle',
 	clearAll: 'Wis alles',
-	toggleTopicOperator: 'Wissel tussen minimaal één en alle onderwerpen',
+	// the topics' operator switch, named by what "on" means
+	topicOperator: 'Alle gekozen onderwerpen',
 
 	// Error titles
 	'Invalid Content Type Removed': 'Ongeldig inhoudstype verwijderd',
