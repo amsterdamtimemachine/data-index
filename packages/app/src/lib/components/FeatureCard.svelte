@@ -100,7 +100,8 @@
 	// expanded, the card is a column capped at the modal's height: head, fields and
 	// sources stay, the content region (image, rows, text) is what scrolls
 	const rootClasses = $derived.by(() => {
-		const base = 'w-full border rounded-sm border-atm-sand-border bg-atm-sand min-w-0';
+		// a long unbroken word wraps inside the card, its field grids and tag row included
+		const base = 'w-full border rounded-sm border-atm-sand-border bg-atm-sand min-w-0 [overflow-wrap:anywhere]';
 		if (expanded) {
 			return `${base} flex flex-col min-h-0 max-h-full`;
 		}
