@@ -9,6 +9,17 @@ export default defineConfig({
 	optimizeDeps: {
 		exclude: ['maplibre-gl']
 	},
+	// maplibre-gl in a chunk of its own, cached across deploys that change only our code
+	build: {
+		chunkSizeWarningLimit: 1200,
+		rolldownOptions: {
+			output: {
+				codeSplitting: {
+					groups: [{ name: 'maplibre-gl', test: /node_modules[\\/]maplibre-gl[\\/]/ }]
+				}
+			}
+		}
+	},
 	server: {
 		fs: {
 			allow: ['tailwind.config.js']
