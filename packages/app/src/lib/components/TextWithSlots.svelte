@@ -3,7 +3,7 @@
      so the translation decides where a picture or button goes in the sentence. -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { splitSlots } from '$utils/slots';
+	import { splitSlots } from '#lib/utils/slots.js';
 
 	interface Props {
 		text: string;

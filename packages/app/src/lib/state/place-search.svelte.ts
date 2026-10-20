@@ -1,9 +1,9 @@
 /** Reactive fetcher for place-name search. */
 import debounce from 'lodash.debounce';
 import type { PlaceSearchMatch } from '@atm/shared/types';
-import { notifyFailure } from '$lib/state/notify';
-import { apiUrl } from '$utils/api';
-import { MIN_QUERY_LENGTH } from '$utils/search-options';
+import { notifyFailure } from '#lib/state/notify.js';
+import { apiUrl } from '#lib/utils/api.js';
+import { MIN_QUERY_LENGTH } from '#lib/utils/search-options.js';
 
 const DEBOUNCE_MS = 300;
 const RESULT_LIMIT = 10;

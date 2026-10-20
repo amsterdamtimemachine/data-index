@@ -27,7 +27,7 @@
 </script>
 
 <script lang="ts">
-	import { translate } from '$utils/translations';
+	import { translate } from '#lib/utils/translations.js';
 	import { onMount } from 'svelte';
 
 	type Props = {

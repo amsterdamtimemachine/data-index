@@ -5,11 +5,8 @@
  * switch; a stale request cannot clear the loading state. A fake fetcher stands
  * in for the network and hands back the request callbacks.
  */
-import { describe, test, expect, afterEach, vi } from 'vitest';
+import { describe, test, expect, afterEach } from 'vitest';
 import { flushSync } from 'svelte';
-
-// the scope builds its request URLs with the app's base path, which only SvelteKit provides
-vi.mock('$app/paths', () => ({ base: '' }));
 
 import type { Histogram, HeatmapCellBounds } from '@atm/shared/types';
 import { createTimelineScope, type TimelineScopeInputs, type Fetcher } from './timeline-scope.svelte';

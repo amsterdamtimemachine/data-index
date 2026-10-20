@@ -2,7 +2,7 @@
 <script lang="ts">
 	import Check from 'phosphor-svelte/lib/Check';
 	import Tag from './Tag.svelte';
-	import { ToggleGroup } from '$lib/builders/toggle-group';
+	import { ToggleGroup } from '#lib/builders/toggle-group.js';
 
 	interface Props {
 		items: string[];

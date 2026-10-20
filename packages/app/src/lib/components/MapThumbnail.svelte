@@ -1,14 +1,14 @@
 <script lang="ts" module>
 	import resolveConfig from 'tailwindcss/resolveConfig';
-	import tailwindConfig from '$tailwindConfig';
+	import tailwindConfig from '../../../tailwind.config.js';
 	const colors = resolveConfig(tailwindConfig).theme.colors as unknown as Record<string, string>;
 </script>
 
 <script lang="ts">
-	import { translate } from '$utils/translations';
+	import { translate } from '#lib/utils/translations.js';
 	import type { HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
-	import { parseRowColFromCellId } from '$utils/heatmap';
-	import { mergeCss } from '$utils/utils';
+	import { parseRowColFromCellId } from '#lib/utils/heatmap.js';
+	import { mergeCss } from '#lib/utils/utils.js';
 
 	type Props = {
 		timeline: HeatmapTimeline;

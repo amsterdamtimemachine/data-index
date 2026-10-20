@@ -5,8 +5,8 @@
 -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import Link from '$components/Link.svelte';
-	import { mergeCss } from '$utils/utils';
+	import Link from '#lib/components/Link.svelte';
+	import { mergeCss } from '#lib/utils/utils.js';
 
 	type Props = {
 		href?: string;

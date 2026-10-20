@@ -4,9 +4,9 @@
  * between the two; the page only describes the subject.
  */
 import type { Histogram, HeatmapCellBounds } from '@atm/shared/types';
-import { translate } from '$utils/translations';
-import { apiUrl } from '$utils/api';
-import { fetchJson } from '$utils/fetchJson';
+import { translate } from '#lib/utils/translations.js';
+import { apiUrl } from '#lib/utils/api.js';
+import { fetchJson } from '#lib/utils/fetchJson.js';
 
 // read lazily, so an effect tracks only the fields it uses
 export type TimelineScopeInputs = {

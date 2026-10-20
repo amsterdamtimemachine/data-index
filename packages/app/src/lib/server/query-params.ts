@@ -111,13 +111,10 @@ export function parseBounds(url: URL): Bounds | undefined {
 	};
 
 	if (Object.values(bounds).some(isNaN)) {
-		throw error(400, { code: 'INVALID_BOUNDS', message: 'Bounds must be valid numbers' });
+		throw error(400, 'Bounds must be valid numbers', { code: 'INVALID_BOUNDS' });
 	}
 	if (bounds.minLon >= bounds.maxLon || bounds.minLat >= bounds.maxLat) {
-		throw error(400, {
-			code: 'INVALID_BOUNDS',
-			message: 'Bounds must have minLon < maxLon and minLat < maxLat'
-		});
+		throw error(400, 'Bounds must have minLon < maxLon and minLat < maxLat', { code: 'INVALID_BOUNDS' });
 	}
 	return bounds;
 }

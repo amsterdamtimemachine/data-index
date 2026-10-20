@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Heading from '$components/Heading.svelte';
+	import Heading from '#lib/components/Heading.svelte';
 	let { children } = $props();
 </script>
 

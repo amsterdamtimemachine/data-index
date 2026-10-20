@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { mergeCss } from '$utils/utils';
-	import { translate } from '$utils/translations';
+	import { mergeCss } from '#lib/utils/utils.js';
+	import { translate } from '#lib/utils/translations.js';
 	type Props = {
 		thumbnail: string;
 		alt?: string;

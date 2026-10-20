@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { translate } from '$utils/translations';
-	import { parseRowColFromCellId } from '$utils/heatmap';
+	import { translate } from '#lib/utils/translations.js';
+	import { parseRowColFromCellId } from '#lib/utils/heatmap.js';
 
 	function pluralised(count: number): string {
 		if (count === 1) {
@@ -10,7 +10,7 @@
 	}
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { onMount, onDestroy, untrack } from 'svelte';
-	import { env } from '$env/dynamic/public';
+	import { PUBLIC_TILE_SOURCE_URL, PUBLIC_EXACT_CELLS } from '$app/env/public';
 	// v6 is ESM-only with no default export — namespace import for maplibre.Map / .StyleSpecification.
 	import * as maplibre from 'maplibre-gl';
 	import type { Map as MapLibreMap } from 'maplibre-gl';
@@ -21,7 +21,7 @@
 	import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 	maplibre.setWorkerUrl(maplibreWorkerUrl);
 
-	const tileSourceUrl = env.PUBLIC_TILE_SOURCE_URL || 'https://tiles.openfreemap.org/planet';
+	const tileSourceUrl = PUBLIC_TILE_SOURCE_URL || 'https://tiles.openfreemap.org/planet';
 	const BASE_STYLE: maplibre.StyleSpecification = {
 		version: 8,
 		sources: {
@@ -34,11 +34,11 @@
 	};
 	import type { FeatureCollection, Feature, Polygon, GeoJsonProperties } from 'geojson';
 	import type { Heatmap, HeatmapDimensions, Coordinates } from '@atm/shared/types';
-	import { generateCellIdMap, generateCellGeometries, calculateDensity, placeOutlineGeometry, cellIdAtLonLat, staleCells, type CellGeometry } from '$utils/heatmap';
-	import { mergeCss } from '$utils/utils';
-	import { MOBILE_QUERY, HOVER_QUERY } from '$utils/media.svelte';
+	import { generateCellIdMap, generateCellGeometries, calculateDensity, placeOutlineGeometry, cellIdAtLonLat, staleCells, type CellGeometry } from '#lib/utils/heatmap.js';
+	import { mergeCss } from '#lib/utils/utils.js';
+	import { MOBILE_QUERY, HOVER_QUERY } from '#lib/utils/media.svelte.js';
 	import resolveConfig from 'tailwindcss/resolveConfig';
-	import tailwindConfig from '$tailwindConfig';
+	import tailwindConfig from '../../../tailwind.config.js';
 
 	interface CellProperties {
 		id: string;
@@ -357,7 +357,7 @@
 		// Generate geometries on-the-fly using client-side calculation.
 		// PUBLIC_EXACT_CELLS=true reprojects cells to their true RD footprint (proj4),
 		// removing the ~0.4° rotation skew; default draws axis-aligned lon/lat rects.
-		cellGeometries = generateCellGeometries(dims, env.PUBLIC_EXACT_CELLS === 'true');
+		cellGeometries = generateCellGeometries(dims, PUBLIC_EXACT_CELLS === 'true');
 		cellById = new Map(cellGeometries.map((cell) => [cell.cellId, cell]));
 		previousActive = new Set();
 
@@ -603,7 +603,7 @@
 
 			// Event handlers
 			let hoveredFeatureId: string | null = null;
-			const exactCells = env.PUBLIC_EXACT_CELLS === 'true';
+			const exactCells = PUBLIC_EXACT_CELLS === 'true';
 
 			function clearHover(): void {
 				if (hoveredFeatureId) {

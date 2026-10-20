@@ -9,11 +9,11 @@
 
 import type { PageLoad } from './$types';
 import type { PlaceSearchMatch } from '@atm/shared/types';
-import type { UiSortMode } from '$components/FeaturesSortSelect.svelte';
-import { parsePlaceSelection, parsePlacePanelFlag, parseSortSelection } from '$utils/page-params';
-import { parseFilterState } from '$utils/filters';
-import { apiUrl } from '$utils/api';
-import { describeFailure, type Failure } from '$utils/fetchJson';
+import type { UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
+import { parsePlaceSelection, parsePlacePanelFlag, parseSortSelection } from '#lib/utils/page-params.js';
+import { parseFilterState } from '#lib/utils/filters.js';
+import { apiUrl } from '#lib/utils/api.js';
+import { describeFailure, type Failure } from '#lib/utils/fetchJson.js';
 
 export const load: PageLoad = async ({ url, parent, fetch }) => {
 	const { metadata } = await parent();

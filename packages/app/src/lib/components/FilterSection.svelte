@@ -4,7 +4,7 @@
 	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
 	import Heading from './Heading.svelte';
 	import Tooltip from './Tooltip.svelte';
-	import { translate } from '$utils/translations';
+	import { translate } from '#lib/utils/translations.js';
 
 	interface Props {
 		heading: string;

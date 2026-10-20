@@ -1,10 +1,10 @@
 <script lang="ts">
-	import Tag from '$components/Tag.svelte';
-	import Button from '$components/Button.svelte';
+	import Tag from '#lib/components/Tag.svelte';
+	import Button from '#lib/components/Button.svelte';
 	import X from 'phosphor-svelte/lib/X';
 	import MapPin from 'phosphor-svelte/lib/MapPin';
-	import { translate } from '$utils/translations';
-	import { formatPlaceTitle } from '$utils/format';
+	import { translate } from '#lib/utils/translations.js';
+	import { formatPlaceTitle } from '#lib/utils/format.js';
 	import type { PlaceSearchMatch } from '@atm/shared/types';
 
 	type Props = {

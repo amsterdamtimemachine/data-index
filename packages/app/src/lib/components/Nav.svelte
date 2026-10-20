@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve, asset } from '$app/paths';
 	import Heading from './Heading.svelte';
-	import { mergeCss } from '$utils/utils';
+	import { mergeCss } from '#lib/utils/utils.js';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -18,8 +18,8 @@
 		className
 	)}
 >
-	<a href={resolve('/')} class="no-underline flex items-center">
-		<img src={asset('/logos/atm_logo_big.png')} alt="A logo reading Amsterdam Time Machine in black" class="h-[34px]" />
+	<a href={resolve('/(map)')} class="no-underline flex items-center">
+		<img src={asset('logos/atm_logo_big.png')} alt="A logo reading Amsterdam Time Machine in black" class="h-[34px]" />
 	</a>
 	<div class="flex items-center gap-2">
 		{@render children?.()}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { mergeCss } from '$utils/utils';
+	import { mergeCss } from '#lib/utils/utils.js';
 
 	interface Props {
 		level?: 1 | 2 | 3 | 4 | 5 | 6;

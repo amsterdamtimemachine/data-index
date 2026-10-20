@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { FieldRow } from '$utils/cardFields';
+	import type { FieldRow } from '#lib/utils/cardFields.js';
 	import Link from './Link.svelte';
 
 	type Props = {

@@ -6,7 +6,7 @@
 	import { Select as MeltSelect } from 'melt/builders';
 	import CaretDown from 'phosphor-svelte/lib/CaretDown';
 	import CaretUp from 'phosphor-svelte/lib/CaretUp';
-	import { mergeCss } from '$utils/utils';
+	import { mergeCss } from '#lib/utils/utils.js';
 
 	type Props = {
 		options: SelectOption<T>[];

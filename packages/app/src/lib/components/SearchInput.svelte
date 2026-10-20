@@ -4,16 +4,16 @@
 	first with its count under the current filters, then the places.
 -->
 <script lang="ts">
-	import Combobox from '$components/Combobox.svelte';
-	import SearchOptionRow from '$components/SearchOptionRow.svelte';
-	import TextWithSlots from '$components/TextWithSlots.svelte';
+	import Combobox from '#lib/components/Combobox.svelte';
+	import SearchOptionRow from '#lib/components/SearchOptionRow.svelte';
+	import TextWithSlots from '#lib/components/TextWithSlots.svelte';
 	import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass';
 	import MapPin from 'phosphor-svelte/lib/MapPin';
-	import { createPlaceSearch } from '$lib/state/place-search.svelte';
-	import { createSearchCount } from '$lib/state/search-count.svelte';
-	import { translate } from '$utils/translations';
-	import { formatPlaceWindow } from '$utils/format';
-	import { searchOptions, parseSearchChoice } from '$utils/search-options';
+	import { createPlaceSearch } from '#lib/state/place-search.svelte.js';
+	import { createSearchCount } from '#lib/state/search-count.svelte.js';
+	import { translate } from '#lib/utils/translations.js';
+	import { formatPlaceWindow } from '#lib/utils/format.js';
+	import { searchOptions, parseSearchChoice } from '#lib/utils/search-options.js';
 	import type { PlaceSearchMatch } from '@atm/shared/types';
 
 	type Props = {

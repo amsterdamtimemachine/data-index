@@ -516,7 +516,7 @@ bun run db:studio    # http://local.drizzle.studio
 ### URLs and the base path
 
 Never write an absolute app URL as a string. API calls build their URL with `apiUrl()` from
-`$utils/api`, internal links use `resolve()` and static files `asset()` from `$app/paths`, so
+`#lib/utils/api.js`, internal links use `resolve()` and static files `asset()` from `$app/paths`, so
 a build served under a path prefix reaches its own API and assets. A lint rule fails the
 build on a bare `/api/…` string or a static `href`/`src` starting with `/`.
 

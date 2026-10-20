@@ -1,7 +1,7 @@
 /** Reactive fetcher for the per-tag counts shown in the filter panel. */
 import type { AvailableTags } from '@atm/shared/types';
-import { apiUrl } from '$utils/api';
-import { notifyFailure } from '$lib/state/notify';
+import { apiUrl } from '#lib/utils/api.js';
+import { notifyFailure } from '#lib/state/notify.js';
 
 export function createTagCounts() {
 	// tag id → features carrying it under the current filters; null until loaded or after a failure

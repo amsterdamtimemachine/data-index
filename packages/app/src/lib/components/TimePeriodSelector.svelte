@@ -1,13 +1,13 @@
 <script lang="ts">
 	import type { Histogram, HistogramBin } from '@atm/shared/types';
-	import { mergeCss } from '$utils/utils';
-	import TimePeriodSelectorHistogram from '$components/TimePeriodSelectorHistogram.svelte';
-	import TimePeriodSelectorLabels from '$components/TimePeriodSelectorLabels.svelte';
-	import TimePeriodSelectorThumb from '$components/TimePeriodSelectorThumb.svelte';
-	import TimePeriodSelectorTrack from '$components/TimePeriodSelectorTrack.svelte';
-	import Button from '$components/Button.svelte';
+	import { mergeCss } from '#lib/utils/utils.js';
+	import TimePeriodSelectorHistogram from '#lib/components/TimePeriodSelectorHistogram.svelte';
+	import TimePeriodSelectorLabels from '#lib/components/TimePeriodSelectorLabels.svelte';
+	import TimePeriodSelectorThumb from '#lib/components/TimePeriodSelectorThumb.svelte';
+	import TimePeriodSelectorTrack from '#lib/components/TimePeriodSelectorTrack.svelte';
+	import Button from '#lib/components/Button.svelte';
 	import { asset } from '$app/paths';
-	import { translate } from '$utils/translations';
+	import { translate } from '#lib/utils/translations.js';
 
 	interface Props {
 		histogram: Histogram;
@@ -52,9 +52,9 @@
 	// the button shows the series a press leads to, not the one on screen
 	const toggleGlyph = $derived.by(() => {
 		if (localToggleOn) {
-			return asset('/glyphs/ToggleGlobalTimeline.svg');
+			return asset('glyphs/ToggleGlobalTimeline.svg');
 		}
-		return asset('/glyphs/ToggleLocalTimeline.svg');
+		return asset('glyphs/ToggleLocalTimeline.svg');
 	});
 	const toggleLabel = $derived.by(() => {
 		if (localToggleOn) {

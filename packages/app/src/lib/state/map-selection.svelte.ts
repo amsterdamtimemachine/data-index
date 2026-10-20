@@ -1,11 +1,11 @@
 
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 import { page } from '$app/state';
-import { replaceState } from '$app/navigation';
+import { goto } from '$app/navigation';
 
 /**
  * The map view's selection — period and selected cell — mirrored into the URL
- * (replaceState, no navigation). The component is responsible for navigation decisions.
+ * (a shallow replace, no navigation). The component is responsible for navigation decisions.
  */
 export function createMapSelection() {
 	let currentPeriod = $state<string>('');
@@ -115,22 +115,20 @@ export function createMapSelection() {
 	function updateUrlParams(params: Record<string, string | null>) {
 		if (!browser) return;
 
-		try {
-			const url = new URL(window.location.href);
+		const url = new URL(window.location.href);
 
-			Object.entries(params).forEach(([key, value]) => {
-				if (value) {
-					url.searchParams.set(key, value);
-				} else {
-					url.searchParams.delete(key);
-				}
-			});
+		Object.entries(params).forEach(([key, value]) => {
+			if (value) {
+				url.searchParams.set(key, value);
+			} else {
+				url.searchParams.delete(key);
+			}
+		});
 
-			replaceState(url.pathname + url.search, page.state);
-		} catch (error) {
+		goto(url.pathname + url.search, { shallow: true, replace: true, state: page.state }).catch((error) => {
 			// Router not initialized yet, skip URL update
 			console.debug('Router not ready, skipping URL update:', error);
-		}
+		});
 	}
 
 	return {

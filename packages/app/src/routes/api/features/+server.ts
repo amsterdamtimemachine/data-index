@@ -1,9 +1,9 @@
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { FeaturesSortField, SortDirection, FeaturesArea } from '@atm/shared/types';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_MAX } from '@atm/shared';
 import { getFeatures, UnknownTimeSliceError } from '@atm/db';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseTags, parseTagOperator, parseBounds, parseSeed, parseSearchQuery, parseGridCols } from '$lib/server/query-params';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseTags, parseTagOperator, parseBounds, parseSeed, parseSearchQuery, parseGridCols } from '#lib/server/query-params.js';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -17,10 +17,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		} else if (bounds) {
 			area = { kind: 'bounds', bounds };
 		} else {
-			throw error(400, {
-				code: 'MISSING_BOUNDS',
-				message: 'Missing required bounds parameters (minLon, maxLon, minLat, maxLat) or placeId'
-			});
+			throw error(400, 'Missing required bounds parameters (minLon, maxLon, minLat, maxLat) or placeId', { code: 'MISSING_BOUNDS' });
 		}
 
 		// Parse optional parameters
@@ -36,10 +33,10 @@ export const GET: RequestHandler = async ({ url }) => {
 		const searchQuery = parseSearchQuery(url);
 
 		if (!['sample', 'relevance', 'spatialFrequency', 'datePrecision', 'date', 'bestMatch'].includes(sort)) {
-			throw error(400, { code: 'INVALID_SORT', message: 'Invalid sort field' });
+			throw error(400, 'Invalid sort field', { code: 'INVALID_SORT' });
 		}
 		if (!['asc', 'desc'].includes(sortDirection)) {
-			throw error(400, { code: 'INVALID_SORT', message: 'Invalid sort direction' });
+			throw error(400, 'Invalid sort direction', { code: 'INVALID_SORT' });
 		}
 
 		const page = parseInt(url.searchParams.get('page') || '1', 10) || 1;
@@ -83,19 +80,16 @@ export const GET: RequestHandler = async ({ url }) => {
 			'Access-Control-Allow-Origin': '*'
 		};
 
-		return json(result, { headers });
+		return Response.json(result, { headers });
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) {
 			throw err; // Re-throw SvelteKit errors
 		}
 		if (err instanceof UnknownTimeSliceError) {
-			throw error(400, { code: 'INVALID_TIME_SLICE', message: err.message });
+			throw error(400, err.message, { code: 'INVALID_TIME_SLICE' });
 		}
 		console.error('Features API unexpected error:', err);
-		throw error(500, {
-			code: 'INTERNAL_ERROR',
-			message: 'Failed to load features'
-		});
+		throw error(500, 'Failed to load features', { code: 'INTERNAL_ERROR' });
 	}
 };
 

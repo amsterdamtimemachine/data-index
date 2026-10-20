@@ -1,5 +1,5 @@
 import type { PlaceSearchMatch } from '@atm/shared/types';
-import type { PanelSubject } from '$lib/state/panel-features.svelte';
+import type { PanelSubject } from '#lib/state/panel-features.svelte.js';
 import { translate, fill } from './translations';
 
 export function formatTimePeriod(per: [number, number]): string {

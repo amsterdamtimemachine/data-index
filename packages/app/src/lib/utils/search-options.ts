@@ -3,7 +3,7 @@
  * list of string values, so each value carries its kind as a prefix.
  */
 import type { PlaceSearchMatch } from '@atm/shared/types';
-import type { ComboboxOption } from '$components/Combobox.svelte';
+import type { ComboboxOption } from '#lib/components/Combobox.svelte';
 import { formatPlaceTitle } from './format';
 
 const TEXT_PREFIX = 'q:';

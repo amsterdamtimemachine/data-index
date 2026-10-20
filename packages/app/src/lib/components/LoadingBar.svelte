@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { Progress } from 'melt/builders';
-	import { loadingState } from '$state/loadingState.svelte';
+	import { loadingState } from '#lib/state/loadingState.svelte.js';
 	import { onDestroy } from 'svelte';
-	import { mergeCss } from '$utils/utils';
+	import { mergeCss } from '#lib/utils/utils.js';
 
 	interface Props {
 		class?: string;

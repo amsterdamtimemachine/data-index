@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { translate } from '$utils/translations';
+	import { translate } from '#lib/utils/translations.js';
 	import type { HistogramBin } from '@atm/shared/types';
-	import { createMediaQuery, HOVER_QUERY } from '$utils/media.svelte';
-	import TimePeriodTooltip from '$components/TimePeriodTooltip.svelte';
-	import { selectionCountFor } from '$utils/histogram';
-	import { periodValueText } from '$lib/a11y/announcements';
+	import { createMediaQuery, HOVER_QUERY } from '#lib/utils/media.svelte.js';
+	import TimePeriodTooltip from '#lib/components/TimePeriodTooltip.svelte';
+	import { selectionCountFor } from '#lib/utils/histogram.js';
+	import { periodValueText } from '#lib/a11y/announcements.js';
 
 	interface Props {
 		bins: HistogramBin[];

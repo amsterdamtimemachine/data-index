@@ -1,18 +1,18 @@
 <script lang="ts">
 	import type { FeatureResult } from '@atm/shared/types';
-	import { translate, translateAll } from '$utils/translations';
-	import { resolveCardFields, dataSourceFields, programmeBillRows, programmeBillHeading, relationLine } from '$utils/cardFields';
-	import { featureViewerState } from '$lib/state/featureState.svelte';
-	import FeatureCardHeader from '$components/FeatureCardHeader.svelte';
-	import FeatureCardImage from '$components/FeatureCardImage.svelte';
-	import FeatureCardText from '$components/FeatureCardText.svelte';
-	import FeatureCardExcerpt from '$components/FeatureCardExcerpt.svelte';
-	import { pickExcerpt, excerptWindow, segmentText, foldSegments, COLLAPSED_EXCERPT_LENGTH } from '$utils/excerpts';
-	import FieldList from '$components/FieldList.svelte';
-	import Link from '$components/Link.svelte';
-	import EvidenceHighlight from '$components/EvidenceHighlight.svelte';
-	import TagList from '$components/TagList.svelte';
-	import Heading from '$components/Heading.svelte';
+	import { translate, translateAll } from '#lib/utils/translations.js';
+	import { resolveCardFields, dataSourceFields, programmeBillRows, programmeBillHeading, relationLine } from '#lib/utils/cardFields.js';
+	import { featureViewerState } from '#lib/state/featureState.svelte.js';
+	import FeatureCardHeader from '#lib/components/FeatureCardHeader.svelte';
+	import FeatureCardImage from '#lib/components/FeatureCardImage.svelte';
+	import FeatureCardText from '#lib/components/FeatureCardText.svelte';
+	import FeatureCardExcerpt from '#lib/components/FeatureCardExcerpt.svelte';
+	import { pickExcerpt, excerptWindow, segmentText, foldSegments, COLLAPSED_EXCERPT_LENGTH } from '#lib/utils/excerpts.js';
+	import FieldList from '#lib/components/FieldList.svelte';
+	import Link from '#lib/components/Link.svelte';
+	import EvidenceHighlight from '#lib/components/EvidenceHighlight.svelte';
+	import TagList from '#lib/components/TagList.svelte';
+	import Heading from '#lib/components/Heading.svelte';
 
 	type Props = {
 		feature: FeatureResult;

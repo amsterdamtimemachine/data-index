@@ -1,7 +1,7 @@
 /** Reactive fetcher for the text-search preview count. */
 import debounce from 'lodash.debounce';
-import { apiUrl } from '$utils/api';
-import { MIN_QUERY_LENGTH } from '$utils/search-options';
+import { apiUrl } from '#lib/utils/api.js';
+import { MIN_QUERY_LENGTH } from '#lib/utils/search-options.js';
 
 const DEBOUNCE_MS = 300;
 

@@ -4,7 +4,7 @@
  * the truth; a press reports the next selection through onChange. Every checkbox is a
  * native button, so each is in the tab order and Space or Enter presses it.
  */
-import { toggleSelection } from '$utils/toggle-selection';
+import { toggleSelection } from '#lib/utils/toggle-selection.js';
 
 type Options = {
 	selected: () => string[];

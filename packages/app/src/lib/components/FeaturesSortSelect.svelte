@@ -1,13 +1,13 @@
 <script lang="ts" module>
-	export { UI_SORT_MODES, type UiSortMode } from '$utils/sort-modes';
+	export { UI_SORT_MODES, type UiSortMode } from '#lib/utils/sort-modes.js';
 </script>
 
 <script lang="ts">
-	import Select, { type SelectOption } from '$components/Select.svelte';
-	import Button from '$components/Button.svelte';
+	import Select, { type SelectOption } from '#lib/components/Select.svelte';
+	import Button from '#lib/components/Button.svelte';
 	import ArrowsClockwise from 'phosphor-svelte/lib/ArrowsClockwise';
-	import { translate } from '$utils/translations';
-	import type { UiSortMode } from '$utils/sort-modes';
+	import { translate } from '#lib/utils/translations.js';
+	import type { UiSortMode } from '#lib/utils/sort-modes.js';
 
 	type Props = {
 		value: UiSortMode;

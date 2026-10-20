@@ -1,15 +1,15 @@
 <script lang="ts">
-	import Pagination from '$components/Pagination.svelte';
-	import FeaturesCount from '$components/FeaturesCount.svelte';
-	import Button from '$components/Button.svelte';
+	import Pagination from '#lib/components/Pagination.svelte';
+	import FeaturesCount from '#lib/components/FeaturesCount.svelte';
+	import Button from '#lib/components/Button.svelte';
 	import X from 'phosphor-svelte/lib/X';
-	import MapThumbnail from '$components/MapThumbnail.svelte';
-	import FeaturesSortSelect, { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
-	import { createMediaQuery, MOBILE_QUERY } from '$utils/media.svelte';
-	import { translate } from '$utils/translations';
-	import { subjectPhrase } from '$utils/format';
+	import MapThumbnail from '#lib/components/MapThumbnail.svelte';
+	import FeaturesSortSelect, { type UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
+	import { createMediaQuery, MOBILE_QUERY } from '#lib/utils/media.svelte.js';
+	import { translate } from '#lib/utils/translations.js';
+	import { subjectPhrase } from '#lib/utils/format.js';
 	import type { HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
-	import type { PanelSubject } from '$lib/state/panel-features.svelte';
+	import type { PanelSubject } from '#lib/state/panel-features.svelte.js';
 
 	interface Props {
 		subject: PanelSubject;

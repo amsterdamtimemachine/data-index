@@ -3,10 +3,10 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { browser } from '$app/environment';
-	import { translate } from '$utils/translations';
-	import Heading from '$components/Heading.svelte';
-	import Link from '$components/Link.svelte';
+	import { browser } from '$app/env';
+	import { translate } from '#lib/utils/translations.js';
+	import Heading from '#lib/components/Heading.svelte';
+	import Link from '#lib/components/Link.svelte';
 
 	const title = $derived.by(() => {
 		if (page.status === 404) {
@@ -22,5 +22,5 @@
 
 <div class="min-h-screen bg-atm-sand flex flex-col items-center justify-center gap-4 p-6 text-center">
 	<Heading level={1}>{title}</Heading>
-	<Link href={resolve('/')}>{translate('backToMap')}</Link>
+	<Link href={resolve('/(map)')}>{translate('backToMap')}</Link>
 </div>

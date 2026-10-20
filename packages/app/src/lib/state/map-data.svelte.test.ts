@@ -11,11 +11,11 @@ type Call = { url: string; load: (data: unknown) => void; fail: (failure: unknow
 const calls: Call[] = [];
 const failures: Array<[string, unknown]> = [];
 
-vi.mock('$lib/state/notify', () => ({
+vi.mock('#lib/state/notify.js', () => ({
 	notifyFailure: (key: string, failure: unknown) => failures.push([key, failure])
 }));
 
-vi.mock('$utils/fetchJson', () => ({
+vi.mock('#lib/utils/fetchJson.js', () => ({
 	fetchJson: (url: string, onData: (d: unknown) => void, onError: (failure: unknown) => void, onSettled?: () => void) => {
 		calls.push({
 			url,

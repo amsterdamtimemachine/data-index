@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { translate } from '$utils/translations';
+	import { translate } from '#lib/utils/translations.js';
 	import { onMount, onDestroy, untrack } from 'svelte';
-	import FeatureCard from '$components/FeatureCard.svelte';
-	import { createMasonry, type MasonryInstance } from '$utils/masonry';
-	import { MAX_PANEL_COLS } from '$components/FeaturesPanelResizeHandle.svelte';
+	import FeatureCard from '#lib/components/FeatureCard.svelte';
+	import { createMasonry, type MasonryInstance } from '#lib/utils/masonry.js';
+	import { MAX_PANEL_COLS } from '#lib/components/FeaturesPanelResizeHandle.svelte';
 	import debounce from 'lodash.debounce';
 	import type { FeatureResult } from '@atm/shared/types';
 

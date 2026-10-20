@@ -5,10 +5,10 @@
  * the fetches, so the browser's preload always matches.
  */
 import type { Histogram, HeatmapTimeline, HeatmapDimensions, HeatmapResponse } from '@atm/shared/types';
-import { apiUrl } from '$utils/api';
-import { fetchJson } from '$utils/fetchJson';
-import { notifyFailure } from '$lib/state/notify';
-import { loadingState } from '$lib/state/loadingState.svelte';
+import { apiUrl } from '#lib/utils/api.js';
+import { fetchJson } from '#lib/utils/fetchJson.js';
+import { notifyFailure } from '#lib/state/notify.js';
+import { loadingState } from '#lib/state/loadingState.svelte.js';
 
 export type MapDataInputs = {
 	params: URLSearchParams;

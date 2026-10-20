@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { translate } from '$utils/translations';
+	import { translate } from '#lib/utils/translations.js';
 	type Props = {
 		text: string;
 		expanded?: boolean;

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { HistogramBin } from '@atm/shared/types';
-	import { calculateHistogramBarHeights } from '$lib/utils/histogram';
+	import { calculateHistogramBarHeights } from '#lib/utils/histogram.js';
 
 	interface Props {
 		bins: HistogramBin[];

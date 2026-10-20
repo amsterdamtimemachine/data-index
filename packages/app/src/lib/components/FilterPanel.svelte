@@ -6,10 +6,10 @@
 <script lang="ts">
 	import { asset } from '$app/paths';
 	import type { PlaceSearchMatch, VisualizationMetadata } from '@atm/shared/types';
-	import type { FilterState } from '$types/filters';
-	import { translate, translateAll, reverseTranslateAll } from '$utils/translations';
-	import { navigateParams, withoutPlace } from '$utils/navigate';
-	import { createTagCounts } from '$lib/state/tag-counts.svelte';
+	import type { FilterState } from '#lib/types/filters.js';
+	import { translate, translateAll, reverseTranslateAll } from '#lib/utils/translations.js';
+	import { navigateParams, withoutPlace } from '#lib/utils/navigate.js';
+	import { createTagCounts } from '#lib/state/tag-counts.svelte.js';
 	import Heading from './Heading.svelte';
 	import TextWithSlots from './TextWithSlots.svelte';
 	import FilterSection from './FilterSection.svelte';
@@ -203,7 +203,7 @@
 				<TextWithSlots text={translate('searchTooltip')}>
 					{#snippet children(slot)}
 						{#if slot === 'border'}
-							<img src={asset('/glyphs/PlaceBorder.svg')} alt="" width="24" height="24" class="inline align-middle mx-1" />
+							<img src={asset('glyphs/PlaceBorder.svg')} alt="" width="24" height="24" class="inline align-middle mx-1" />
 						{/if}
 					{/snippet}
 				</TextWithSlots>

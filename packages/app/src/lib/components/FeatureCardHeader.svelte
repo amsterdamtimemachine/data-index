@@ -4,10 +4,10 @@
 	opens a collapsed card or closes an expanded one.
 -->
 <script lang="ts">
-	import { translate } from '$utils/translations';
+	import { translate } from '#lib/utils/translations.js';
 	import type { FeatureResult } from '@atm/shared/types';
-	import { mergeCss } from '$utils/utils';
-	import { formatTimePeriod, formatDatasetTitle } from '$utils/format';
+	import { mergeCss } from '#lib/utils/utils.js';
+	import { formatTimePeriod, formatDatasetTitle } from '#lib/utils/format.js';
 	import Link from './Link.svelte';
 	import Button from './Button.svelte';
 	import ArrowsOut from 'phosphor-svelte/lib/ArrowsOut';

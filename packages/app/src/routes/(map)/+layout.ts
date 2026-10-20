@@ -1,7 +1,7 @@
 import type { LayoutLoad } from './$types';
 import type { VisualizationMetadata } from '@atm/shared/types';
-import { apiUrl } from '$utils/api';
-import { describeFailure, type Failure } from '$utils/fetchJson';
+import { apiUrl } from '#lib/utils/api.js';
+import { describeFailure, type Failure } from '#lib/utils/fetchJson.js';
 
 // No `url` here — that's the point. Without a dependency that changes on filter
 // navigations, SvelteKit runs this once and reuses the result across them (the page

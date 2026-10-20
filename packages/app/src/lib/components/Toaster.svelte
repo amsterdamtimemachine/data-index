@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { translate } from '$utils/translations';
+	import { translate } from '#lib/utils/translations.js';
 	import { fade } from 'svelte/transition';
 	import X from 'phosphor-svelte/lib/X';
 	import Bug from 'phosphor-svelte/lib/Bug';
-	import Button from '$components/Button.svelte';
-	import { toaster } from '$state/toaster.svelte';
+	import Button from '#lib/components/Button.svelte';
+	import { toaster } from '#lib/state/toaster.svelte.js';
 
 	// a failure is outlined red; the words still say what happened
 	function toastClasses(failure: boolean | undefined): string {

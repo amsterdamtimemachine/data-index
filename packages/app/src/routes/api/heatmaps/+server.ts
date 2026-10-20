@@ -1,10 +1,10 @@
 // src/routes/api/heatmaps/+server.ts
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { HeatmapResolutionConfig } from '@atm/shared/types';
 import { DISPLAY_TIME_BIN_DEFAULT_YEARS } from '@atm/shared';
 import { getHeatmap, getHeatmapTimeline } from '@atm/db/queries';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseMatchFilters, parseGridCols } from '$lib/server/query-params';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseMatchFilters, parseGridCols } from '#lib/server/query-params.js';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -35,7 +35,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			const cellCount = Object.values(heatmapResponse.timeline)[0]?.indices.length ?? 0;
 			console.log(`Heatmap for ${timeSliceParam}: ${cellCount} cells`);
 
-			return json(heatmapResponse, {
+			return Response.json(heatmapResponse, {
 				headers: {
 					'Cache-Control': 'no-cache',
 					'Access-Control-Allow-Origin': '*'
@@ -51,7 +51,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 			console.log(`Heatmap timeline: ${timeSliceCount} slices, ${totalCells} total cells`);
 
-			return json(heatmapResponse, {
+			return Response.json(heatmapResponse, {
 				headers: {
 					'Cache-Control': 'no-cache',
 					'Access-Control-Allow-Origin': '*'
@@ -61,10 +61,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
 		console.error('Heatmaps API error:', err);
-		throw error(500, {
-			code: 'INTERNAL_ERROR',
-			message: 'Failed to load heatmap data'
-		});
+		throw error(500, 'Failed to load heatmap data', { code: 'INTERNAL_ERROR' });
 	}
 };
 

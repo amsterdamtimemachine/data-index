@@ -1,12 +1,13 @@
 <!-- A picture of one of the app's glyph buttons, for text that points at it: the
      real Button, made inert so it is neither focusable nor clickable -->
 <script lang="ts">
-	import Button from '$components/Button.svelte';
+	import Button from '#lib/components/Button.svelte';
 	import { asset } from '$app/paths';
+	import type { AssetPath } from '$app/types';
 
 	interface Props {
-		// glyph path under static, e.g. /glyphs/ToggleLocalTimeline.svg
-		glyph: string;
+		// glyph path under static, e.g. glyphs/ToggleLocalTimeline.svg
+		glyph: AssetPath;
 	}
 	let { glyph }: Props = $props();
 </script>

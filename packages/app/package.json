@@ -4,8 +4,8 @@
 	"private": true,
 	"scripts": {
 		"dev": "bun --bun --env-file=../../.env vite dev --port 5175",
-		"build": "bun --env-file=../../.env vite build",
-		"preview": "bun --env-file=../../.env vite preview",
+		"build": "bun --bun --env-file=../../.env vite build",
+		"preview": "bun --bun --env-file=../../.env vite preview",
 		"test": "vitest run",
 		"test:unit": "vitest run",
 		"test:unit:watch": "vitest",
@@ -15,7 +15,8 @@
 		"format": "prettier --write \"src/**/*.{js,ts,svelte}\""
 	},
 	"devDependencies": {
-		"@sveltejs/kit": "^2.70.3",
+		"@sveltejs/adapter-bun": "^1.0.0",
+		"@sveltejs/kit": "^3.1.0",
 		"@sveltejs/vite-plugin-svelte": "^7.3.1",
 		"@types/bun": "^1.4.3",
 		"@types/eslint": "^9.6.1",
@@ -35,7 +36,6 @@
 		"prettier": "^3.9.10",
 		"prettier-plugin-svelte": "^3.5.2",
 		"svelte": "^5.57.2",
-		"svelte-adapter-bun": "^0.5.2",
 		"svelte-check": "^4.7.7",
 		"tailwindcss": "^3.4.19",
 		"typescript": "^6.0.3",
@@ -52,5 +52,9 @@
 		"melt": "^0.44.0",
 		"proj4": "^2.22.0",
 		"tailwind-merge": "^2.6.1"
+	},
+	"imports": {
+		"#lib": "./src/lib/index.js",
+		"#lib/*": "./src/lib/*"
 	}
 }

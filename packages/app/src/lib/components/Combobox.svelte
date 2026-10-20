@@ -15,7 +15,7 @@
 	import { Combobox as MeltCombobox } from 'melt/builders';
 	import { tick } from 'svelte';
 	import type { Snippet } from 'svelte';
-	import { mergeCss } from '$utils/utils';
+	import { mergeCss } from '#lib/utils/utils.js';
 
 	type Props = {
 		options: ComboboxOption<T>[];

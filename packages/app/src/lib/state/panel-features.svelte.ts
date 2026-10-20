@@ -1,15 +1,15 @@
 /** Reactive fetcher for the features panel's population. */
-import { loadingState } from '$lib/state/loadingState.svelte';
+import { loadingState } from '#lib/state/loadingState.svelte.js';
 import { untrack } from 'svelte';
 import type { FeatureResult, PlaceSearchMatch } from '@atm/shared/types';
-import type { FilterState } from '$types/filters';
-import { filterParams } from '$utils/filters';
-import type { UiSortMode } from '$components/FeaturesSortSelect.svelte';
-import { apiUrl } from '$utils/api';
-import { notifyFailure } from '$lib/state/notify';
-import { announcer } from '$lib/a11y/announcer.svelte';
-import { resultsSentence } from '$lib/a11y/announcements';
-import { subjectPhrase } from '$utils/format';
+import type { FilterState } from '#lib/types/filters.js';
+import { filterParams } from '#lib/utils/filters.js';
+import type { UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
+import { apiUrl } from '#lib/utils/api.js';
+import { notifyFailure } from '#lib/state/notify.js';
+import { announcer } from '#lib/a11y/announcer.svelte.js';
+import { resultsSentence } from '#lib/a11y/announcements.js';
+import { subjectPhrase } from '#lib/utils/format.js';
 
 /**
  * What the panel is showing: one display cell (picked on the map) or a place's

@@ -3,8 +3,8 @@
 	keeps focus inside it, closes it on Escape and makes the page behind it inert.
 -->
 <script lang="ts">
-	import { featureViewerState } from '$lib/state/featureState.svelte';
-	import FeatureCard from '$components/FeatureCard.svelte';
+	import { featureViewerState } from '#lib/state/featureState.svelte.js';
+	import FeatureCard from '#lib/components/FeatureCard.svelte';
 
 	// the dialog is named by the card's own heading, which carries this id
 	const TITLE_ID = 'feature-dialog-title';

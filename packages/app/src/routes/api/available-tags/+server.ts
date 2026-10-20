@@ -1,8 +1,8 @@
 // src/routes/api/available-tags/+server.ts
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getAvailableTags } from '@atm/db';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseSearchQuery } from '$lib/server/query-params';
+import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseSearchQuery } from '#lib/server/query-params.js';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -25,14 +25,11 @@ export const GET: RequestHandler = async ({ url }) => {
 			'Access-Control-Allow-Origin': '*'
 		};
 
-		return json(result, { headers });
+		return Response.json(result, { headers });
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
 		console.error('Available tags API error:', err);
-		throw error(500, {
-			code: 'INTERNAL_ERROR',
-			message: 'Failed to load available tags'
-		});
+		throw error(500, 'Failed to load available tags', { code: 'INTERNAL_ERROR' });
 	}
 };
 

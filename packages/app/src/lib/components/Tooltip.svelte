@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Tooltip } from 'melt/builders';
 	import type { Snippet } from 'svelte';
-	import { mergeCss } from '$utils/utils';
+	import { mergeCss } from '#lib/utils/utils.js';
 	import type { PhosphorIcon, PhosphorIconProps } from '@atm/shared/types';
 
 	interface Props {

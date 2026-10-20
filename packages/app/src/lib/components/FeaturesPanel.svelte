@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { translate } from '$utils/translations';
+	import { translate } from '#lib/utils/translations.js';
 	import { asset } from '$app/paths';
-	import FeaturesGrid from '$components/FeaturesGrid.svelte';
-	import Image from '$components/Image.svelte';
-	import ButtonIllustration from '$components/ButtonIllustration.svelte';
-	import TextWithSlots from '$components/TextWithSlots.svelte';
-	import FeaturesPanelHeader from '$components/FeaturesPanelHeader.svelte';
-	import { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
-	import { createPanelFeatures, type PanelSubject } from '$lib/state/panel-features.svelte';
+	import FeaturesGrid from '#lib/components/FeaturesGrid.svelte';
+	import Image from '#lib/components/Image.svelte';
+	import ButtonIllustration from '#lib/components/ButtonIllustration.svelte';
+	import TextWithSlots from '#lib/components/TextWithSlots.svelte';
+	import FeaturesPanelHeader from '#lib/components/FeaturesPanelHeader.svelte';
+	import { type UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
+	import { createPanelFeatures, type PanelSubject } from '#lib/state/panel-features.svelte.js';
 	import type { HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
-	import type { FilterState } from '$types/filters';
+	import type { FilterState } from '#lib/types/filters.js';
 
 	interface Props {
 		subject: PanelSubject;
@@ -95,7 +95,7 @@
 				<TextWithSlots text={translate('emptyPanelCityWideHint')}>
 					{#snippet children(slot)}
 						{#if slot === 'button'}
-							<ButtonIllustration glyph="/glyphs/ToggleLocalTimeline.svg" />
+							<ButtonIllustration glyph="glyphs/ToggleLocalTimeline.svg" />
 						{/if}
 					{/snippet}
 				</TextWithSlots>
@@ -103,7 +103,7 @@
 				<TextWithSlots text={translate('emptyPanelBarHint')}>
 					{#snippet children(slot)}
 						{#if slot === 'picture'}
-							<Image src={asset('/images/local-timeline-detail.png')} alt={translate('localTimelineAlt')} inline />
+							<Image src={asset('images/local-timeline-detail.png')} alt={translate('localTimelineAlt')} inline />
 						{/if}
 					{/snippet}
 				</TextWithSlots>

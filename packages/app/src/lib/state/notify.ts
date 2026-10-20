@@ -4,9 +4,9 @@
  * pile up toasts; what is wrong with a link is shown once per visit. Technical detail
  * goes to the console only.
  */
-import { addToast } from '$state/toaster.svelte';
-import { describeFailure, type Failure } from '$utils/fetchJson';
-import { translate, hasTranslation, fill } from '$utils/translations';
+import { addToast } from '#lib/state/toaster.svelte.js';
+import { describeFailure, type Failure } from '#lib/utils/fetchJson.js';
+import { translate, hasTranslation, fill } from '#lib/utils/translations.js';
 
 /** What a toast says: a title, and a sentence when the title needs one. */
 export type Message = { title: string; text?: string };

@@ -2,7 +2,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { HTMLButtonAttributes } from 'svelte/elements';
-	import { mergeCss } from '$utils/utils';
+	import { mergeCss } from '#lib/utils/utils.js';
 	import type { PhosphorIcon, PhosphorIconProps } from '@atm/shared/types';
 
 	type Props = Omit<HTMLButtonAttributes, 'class' | 'color' | 'children'> & {

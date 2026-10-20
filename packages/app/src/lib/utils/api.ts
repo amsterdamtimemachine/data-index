@@ -1,16 +1,17 @@
 /**
  * API URLs, prefixed with the app's base path. The only place an `/api/…` string
  * may be written: every fetch, loader and preload builds its URL here, so a build
- * served under a prefix (see BASE_PATH in svelte.config.js) reaches its own API.
+ * served under a prefix (see BASE_PATH in vite.config.ts) reaches its own API.
  * Links use resolve() and static files asset() from $app/paths for the same reason.
  */
-import { base } from '$app/paths';
+import { resolve } from '$app/paths';
+import type { RouteId } from '$app/types';
 
-type ApiPath = `/api/${string}`;
+type ApiPath = Extract<RouteId, `/api/${string}`>;
 
 export function apiUrl(path: ApiPath, params?: URLSearchParams): string {
 	if (params === undefined || params.size === 0) {
-		return `${base}${path}`;
+		return resolve(path);
 	}
-	return `${base}${path}?${params}`;
+	return `${resolve(path)}?${params}`;
 }

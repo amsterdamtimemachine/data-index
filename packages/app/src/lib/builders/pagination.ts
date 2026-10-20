@@ -7,7 +7,7 @@
  * buttons in order, Home and End to the first and last; every button also stays in
  * the Tab order. Labels are the caller's, so they come from its translations.
  */
-import { clampPage } from '$utils/pagination';
+import { clampPage } from '#lib/utils/pagination.js';
 
 type Options = {
 	page: () => number;

@@ -4,11 +4,11 @@
 	a link to the entry's page at the source.
 -->
 <script lang="ts">
-	import Link from '$components/Link.svelte';
-	import EvidenceHighlight from '$components/EvidenceHighlight.svelte';
+	import Link from '#lib/components/Link.svelte';
+	import EvidenceHighlight from '#lib/components/EvidenceHighlight.svelte';
 	import ArrowUpRight from 'phosphor-svelte/lib/ArrowUpRight';
-	import { translate } from '$utils/translations';
-	import type { TextSegment } from '$utils/excerpts';
+	import { translate } from '#lib/utils/translations.js';
+	import type { TextSegment } from '#lib/utils/excerpts.js';
 
 	type Props = {
 		segments: TextSegment[];

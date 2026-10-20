@@ -2,8 +2,8 @@
  * The sentences screen readers hear when results change, worded for speech: no
  * ranges or slashes, the new part first so it can be cut off early.
  */
-import { translate } from '$utils/translations';
-import { totalPages } from '$utils/pagination';
+import { translate } from '#lib/utils/translations.js';
+import { totalPages } from '#lib/utils/pagination.js';
 
 function countWords(count: number): string {
 	if (count === 0) {

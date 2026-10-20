@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const toasts: Array<{ title: string; description?: string; failure?: boolean }> = [];
-vi.mock('$state/toaster.svelte', () => ({
+vi.mock('#lib/state/toaster.svelte.js', () => ({
 	addToast: ({ data }: { data: { title: string; description?: string; failure?: boolean } }) => toasts.push(data)
 }));
 

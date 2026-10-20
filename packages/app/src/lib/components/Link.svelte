@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { mergeCss } from '$utils/utils';
-	import { translate } from '$utils/translations';
+	import { mergeCss } from '#lib/utils/utils.js';
+	import { translate } from '#lib/utils/translations.js';
 	import type { PhosphorIcon, PhosphorIconProps } from '@atm/shared/types';
 
 	interface Props {

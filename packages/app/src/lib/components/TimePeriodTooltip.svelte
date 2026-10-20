@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { HistogramBin } from '@atm/shared/types';
-	import { translate } from '$utils/translations';
-	import DataTooltip from '$components/DataTooltip.svelte';
+	import { translate } from '#lib/utils/translations.js';
+	import DataTooltip from '#lib/components/DataTooltip.svelte';
 
 	type Props = {
 		bin: HistogramBin;

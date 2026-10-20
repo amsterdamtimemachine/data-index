@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { mergeCss } from '$utils/utils';
-	import Tag from '$components/Tag.svelte';
+	import { mergeCss } from '#lib/utils/utils.js';
+	import Tag from '#lib/components/Tag.svelte';
 
 	interface Props {
 		tags: string[];

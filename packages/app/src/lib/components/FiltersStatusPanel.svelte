@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { mergeCss } from '$utils/utils';
-	import { translate, translateAll } from '$utils/translations';
-	import { selectsAll } from '$utils/filters';
-	import { formatPlaceTitle } from '$utils/format';
+	import { mergeCss } from '#lib/utils/utils.js';
+	import { translate, translateAll } from '#lib/utils/translations.js';
+	import { selectsAll } from '#lib/utils/filters.js';
+	import { formatPlaceTitle } from '#lib/utils/format.js';
 	import Tag from './Tag.svelte';
 	import MapPin from 'phosphor-svelte/lib/MapPin';
 	import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass';
-	import type { FiltersStatus } from '$types/filters';
+	import type { FiltersStatus } from '#lib/types/filters.js';
 
 	interface Props {
 		// everything the line describes, with a paused search term already left out

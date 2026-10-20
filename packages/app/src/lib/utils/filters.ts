@@ -4,7 +4,7 @@
  * universal, so the loader, the page and the panels share one definition.
  */
 import type { VisualizationMetadata } from '@atm/shared/types';
-import type { FilterState } from '$types/filters';
+import type { FilterState } from '#lib/types/filters.js';
 import { parseSearchQuery, parseTagSelection } from './page-params';
 
 function parseList(url: URL, name: string): string[] | null {

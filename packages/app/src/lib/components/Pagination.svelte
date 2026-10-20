@@ -4,12 +4,12 @@
 	count are read live and the strip follows them.
 -->
 <script lang="ts">
-	import { translate } from '$utils/translations';
-	import { pageStrip, totalPages } from '$utils/pagination';
-	import { Pagination } from '$lib/builders/pagination';
+	import { translate } from '#lib/utils/translations.js';
+	import { pageStrip, totalPages } from '#lib/utils/pagination.js';
+	import { Pagination } from '#lib/builders/pagination.js';
 	import CaretLeft from 'phosphor-svelte/lib/CaretLeft';
 	import CaretRight from 'phosphor-svelte/lib/CaretRight';
-	import Button from '$components/Button.svelte';
+	import Button from '#lib/components/Button.svelte';
 
 	interface Props {
 		totalItems: number;

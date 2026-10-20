@@ -8,7 +8,7 @@ import { goto } from '$app/navigation';
 export function navigateParams(mutate: (params: URLSearchParams) => void) {
 	const url = new URL(window.location.href);
 	mutate(url.searchParams);
-	goto(url.pathname + url.search, { keepFocus: true, noScroll: true });
+	goto(url.pathname + url.search, { reset: false });
 }
 
 /** Drops the place selection from the params. */
