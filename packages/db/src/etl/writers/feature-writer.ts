@@ -47,7 +47,7 @@ export async function upsertSource(opts: {
  *
  * Idempotent re-ingest (features carry a deterministic id from featureId()):
  *  - features upsert (onConflictDoUpdate) so a corrected file refreshes content
- *    in place — but NOT temporal_frequency, which rebuild-index owns.
+ *    in place.
  *  - links are reconciled: the first time a feature is seen this run its existing
  *    feature_to_place rows are deleted, so a corrected place assignment replaces
  *    the old link instead of accumulating a second one. The delete happens once

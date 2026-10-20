@@ -39,9 +39,6 @@ function sortParams(query: PanelFeaturesQuery): Record<string, string> {
 	if (query.sortMode === 'temporal') {
 		return { sort: 'datePrecision', sortDirection: 'desc' };
 	}
-	if (query.sortMode === 'relevance') {
-		return { sort: 'relevance', sortDirection: 'desc' };
-	}
 	if (query.sortMode === 'bestMatch') {
 		return { sort: 'bestMatch', sortDirection: 'desc' };
 	}

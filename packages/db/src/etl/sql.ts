@@ -20,8 +20,8 @@ export function wktToRd(wkt: string, srid: number): SQL {
 
 /**
  * Floor a date's year onto the base time-bin grid (multiples of
- * PRECOMP_TIME_BIN_YEARS) — the binning cell_features is built on, and the unit
- * temporal_frequency counts in. generateTimeSlices (JS) mirrors this anchoring.
+ * PRECOMP_TIME_BIN_YEARS) — the binning cell_features is built on.
+ * generateTimeSlices (JS) mirrors this anchoring.
  */
 export function yearBin(dateCol: SQL): SQL {
   return sql`(FLOOR(EXTRACT(YEAR FROM ${dateCol}) / ${PRECOMP_TIME_BIN_YEARS}::int) * ${PRECOMP_TIME_BIN_YEARS}::int)::int`;

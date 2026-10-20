@@ -206,38 +206,6 @@ describe('feature sorting', () => {
     }
   });
 
-  function relevanceScore(f: FeatureResult, maxSpatial: number, maxTemporal: number): number {
-    return f.spatialFrequency / maxSpatial + f.temporalFrequency / maxTemporal;
-  }
-
-  test('relevance: rotates record types and orders each lane most-unique first', async () => {
-    const cfg = await getGridConfig();
-    const data = await fetchAll('relevance');
-    expect(data.length).toBe(16);
-    assertRoundRobin(data.map((f) => f.recordType));
-    for (const type of TYPES) {
-      const lane = data.filter((f) => f.recordType === type);
-      for (let i = 1; i < lane.length; i++) {
-        const prev = relevanceScore(lane[i - 1], cfg.maxSpatialFrequency, cfg.maxTemporalFrequency);
-        const curr = relevanceScore(lane[i], cfg.maxSpatialFrequency, cfg.maxTemporalFrequency);
-        expect(curr).toBeGreaterThanOrEqual(prev - 1e-9);
-      }
-    }
-  });
-
-  test('relevance: asc direction flips each lane to least-unique first', async () => {
-    const cfg = await getGridConfig();
-    const data = await fetchAll('relevance', { sortDirection: 'asc' });
-    for (const type of TYPES) {
-      const lane = data.filter((f) => f.recordType === type);
-      for (let i = 1; i < lane.length; i++) {
-        const prev = relevanceScore(lane[i - 1], cfg.maxSpatialFrequency, cfg.maxTemporalFrequency);
-        const curr = relevanceScore(lane[i], cfg.maxSpatialFrequency, cfg.maxTemporalFrequency);
-        expect(curr).toBeLessThanOrEqual(prev + 1e-9);
-      }
-    }
-  });
-
   test('date: flat chronology, NOT interleaved by record type', async () => {
     const data = await fetchAll('date', { sortDirection: 'asc' });
     for (let i = 1; i < data.length; i++) {

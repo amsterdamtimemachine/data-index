@@ -1,6 +1,6 @@
 // Time bin configuration.
 //
-// PRECOMP_* shapes the precomputed index (cell_features / temporal_frequency) and is
+// PRECOMP_* shapes the precomputed index (cell_features) and is
 // baked in by db:rebuild-index — changing it requires a rebuild. DISPLAY_* only affects
 // how a request folds those base bins for rendering — a restart is enough.
 

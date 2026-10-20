@@ -28,7 +28,7 @@ beforeAll(async () => {
   await cleanTestDb();
   await seedTestData();
 
-  // Compute spatial_frequency and temporal_frequency
+  // Compute spatial_frequency
   const { rebuildIndex } = await import('../etl/post-process/rebuild-index');
   await rebuildIndex();
 });
@@ -142,13 +142,6 @@ describe('rebuild-index', () => {
     const matches = await dbq.placesWithMatchingSpatialFrequencyCount();
     const total = await dbq.featuredPlaceCount();
     expect(matches).toBe(total);
-  });
-
-  test('temporal_frequency reflects year span / base_bin', async () => {
-    // JM features: 1900-1945 span = 45 years, base bin 10y → 5 (rounded up)
-    const tf = await dbq.firstFeatureTemporalFrequency('joods-monument');
-    expect(tf).toBeGreaterThanOrEqual(4);
-    expect(tf).toBeLessThanOrEqual(6);
   });
 });
 

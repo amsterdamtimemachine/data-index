@@ -8,7 +8,7 @@ program
 
 program
   .command('rebuild-index')
-  .description('Rebuild the spatial grid index and compute temporal and spatial frequencies')
+  .description('Rebuild the spatial grid index and compute spatial frequencies')
   .action(async () => {
     try {
       await rebuildIndex();

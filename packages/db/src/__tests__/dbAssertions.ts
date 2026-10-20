@@ -241,14 +241,6 @@ export async function featuredPlaceCount(): Promise<number> {
   return parseInt(r.rows[0].count);
 }
 
-export async function firstFeatureTemporalFrequency(datasetId: string): Promise<number> {
-  const r = await db.execute<{ temporal_frequency: number }>(sql`
-    SELECT temporal_frequency FROM features
-    WHERE dataset_id = ${datasetId} LIMIT 1
-  `);
-  return r.rows[0].temporal_frequency;
-}
-
 // ─── test setup helpers ─────────────────────────────────────────────────────
 
 /** Find any feature whose date range crosses a bin boundary at the given size. */

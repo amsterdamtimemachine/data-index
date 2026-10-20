@@ -147,7 +147,6 @@ export const features = pgTable('features', {
   startDate: date('start_date').notNull(),
   endDate: date('end_date').notNull(),
   datasetId: text('dataset_id').notNull().references(() => datasets.id),
-  temporalFrequency: integer('temporal_frequency'),
   entity: jsonb('entity'),
 }, (table) => [
   index('idx_features_dates').on(table.startDate, table.endDate),
@@ -262,8 +261,6 @@ export const gridConfig = pgTable('grid_config', {
   maxLon: real('max_lon').notNull(),
   minLat: real('min_lat').notNull(),
   maxLat: real('max_lat').notNull(),
-  maxSpatialFrequency: integer('max_spatial_frequency').notNull(),
-  maxTemporalFrequency: integer('max_temporal_frequency').notNull(),
 });
 
 // ============================================================================

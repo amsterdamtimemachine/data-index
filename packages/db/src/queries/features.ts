@@ -37,12 +37,10 @@ type FeatureRow = {
   start_date: string | null;
   end_date: string | null;
   spatial_frequency: number | null;
-  temporal_frequency: number | null;
   dataset_label: string | null;
   dataset_distribution_url: string | null;
   provider_label: string | null;
   provider_url: string | null;
-  relevance_score: number | null;
   entity: Entity | null;
   relation_id: string | null;
   name: string | null;
@@ -151,17 +149,6 @@ function doubleRotationCte(laneKey: SQL): SQL {
     )`;
 }
 
-function singleRotationCte(laneKey: SQL): SQL {
-  return sql`ranked AS (
-      SELECT *,
-        ROW_NUMBER() OVER (
-          PARTITION BY record_type
-          ORDER BY ${laneKey}, id ASC
-        ) as type_rank
-      FROM filtered
-    )`;
-}
-
 const INTERLEAVED_ORDER = sql`type_rank, record_type, id`;
 
 /**
@@ -210,21 +197,13 @@ function sortPlan(
     }
     return { rankedCte: sql`ranked AS (SELECT * FROM filtered)`, orderBy };
   }
-  if (sort === 'bestMatch') {
-    // flat match-quality order: selected tags carried, then ts_rank against the
-    // search term; without either every key is 0 and this degrades to date order
-    let orderBy = sql`tag_matches DESC, match_score DESC, start_date DESC NULLS LAST, id`;
-    if (sortDirection === 'asc') {
-      orderBy = sql`tag_matches ASC, match_score ASC, start_date ASC NULLS LAST, id`;
-    }
-    return { rankedCte: sql`ranked AS (SELECT * FROM filtered)`, orderBy };
-  }
-  // relevance: the legacy blended score, single rotation (API-only, no UI entry)
-  let laneKey = sql`relevance_score ASC NULLS LAST, start_date ASC NULLS LAST`;
+  // bestMatch: flat match-quality order: selected tags carried, then ts_rank against
+  // the search term; without either every key is 0 and this degrades to date order
+  let orderBy = sql`tag_matches DESC, match_score DESC, start_date DESC NULLS LAST, id`;
   if (sortDirection === 'asc') {
-    laneKey = sql`relevance_score DESC NULLS LAST, start_date DESC NULLS LAST`;
+    orderBy = sql`tag_matches ASC, match_score ASC, start_date ASC NULLS LAST, id`;
   }
-  return { rankedCte: singleRotationCte(laneKey), orderBy: INTERLEAVED_ORDER };
+  return { rankedCte: sql`ranked AS (SELECT * FROM filtered)`, orderBy };
 }
 
 /**
@@ -339,9 +318,6 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     return { data: [], total: 0, page, pageSize, totalPages: 0 };
   }
 
-  // Get max frequencies for relevance score normalisation
-  const { maxSpatialFrequency: maxSpatial, maxTemporalFrequency: maxTemporal } = await getGridConfig();
-
   const { rankedCte, orderBy } = sortPlan(sort, sortDirection, seed);
 
   // filtered/ranked/page decide membership and order on narrow rows; the final
@@ -355,9 +331,6 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         f.start_date,
         f.end_date,
         pg.spatial_frequency,
-        f.temporal_frequency,
-        (COALESCE(pg.spatial_frequency::float, 0) / ${maxSpatial}
-         + COALESCE(f.temporal_frequency::float, 0) / ${maxTemporal}) as relevance_score,
         ${matchScoreExpr} as match_score,
         ${tagMatchesExpr} as tag_matches,
         p.type as place_type,
@@ -369,7 +342,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       -- DISTINCT ON needs a deterministic survivor: for a multi-linked feature, keep
       -- the finest place (matching the resolution spec's most-specific rule), then
       -- place id as a stable tiebreak. Without this the surviving row — and with it
-      -- place_type and relevance_score — varied per execution, shifting page
+      -- place_type and spatial_frequency — varied per execution, shifting page
       -- boundaries between otherwise identical requests.
       ORDER BY f.id,
         CASE p.type WHEN 'address' THEN 0 WHEN 'street' THEN 1 WHEN 'neighbourhood' THEN 2 ELSE 3 END,
@@ -395,8 +368,6 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       page.start_date,
       page.end_date,
       page.spatial_frequency,
-      page.temporal_frequency,
-      page.relevance_score,
       d.label as dataset_label,
       d.distribution_url as dataset_distribution_url,
       o.label as provider_label,
@@ -459,7 +430,6 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     providerLabel: row.provider_label || undefined,
     providerUrl: row.provider_url || undefined,
     spatialFrequency: row.spatial_frequency || 1,
-    temporalFrequency: row.temporal_frequency || 1,
     entity: row.entity || undefined,
     relationId: row.relation_id || undefined,
     relationDated: row.relation_dated === true,

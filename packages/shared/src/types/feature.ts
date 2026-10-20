@@ -13,10 +13,9 @@ export interface Classifier {
 }
 
 // 'sample' and 'spatialFrequency' interleave record types and datasets (double
-// rotation); 'date' is flat chronology; 'relevance' is the legacy blended score
-// (API-only, no UI entry); 'bestMatch' is flat ts_rank order, only meaningful with
-// a searchQuery.
-export type FeaturesSortField = 'sample' | 'relevance' | 'spatialFrequency' | 'datePrecision' | 'date' | 'bestMatch';
+// rotation); 'date' is flat chronology; 'bestMatch' is flat ts_rank order, only
+// meaningful with a searchQuery.
+export type FeaturesSortField = 'sample' | 'spatialFrequency' | 'datePrecision' | 'date' | 'bestMatch';
 export type SortDirection = 'asc' | 'desc';
 export type TagOperator = 'AND' | 'OR';
 
@@ -225,7 +224,6 @@ export interface FeatureResult {
   providerLabel?: string;
   providerUrl?: string;
   spatialFrequency: number;
-  temporalFrequency: number;
   entity?: Entity;
   relationId?: string;
   // the date belongs to the relation (screened at a place on a day): the card words it with the place

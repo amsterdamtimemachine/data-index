@@ -66,7 +66,7 @@ describe('programme cards', () => {
 
 describe('relationLine', () => {
 	const base = {
-		id: 'f', recordType: 'event', label: 'x', dateRange: [1934, 1934], tags: [], classifiers: [], spatialFrequency: 1, temporalFrequency: 1,
+		id: 'f', recordType: 'event', label: 'x', dateRange: [1934, 1934], tags: [], classifiers: [], spatialFrequency: 1,
 		relationId: 'screenedAt', displayName: 'Ceintuurbaan 338', placeUrl: 'https://adamlink.nl/geo/address/A1',
 		startDate: '1934-01-05', endDate: '1934-01-05', entity: screening
 	} as FeatureResult;
@@ -97,7 +97,7 @@ describe('relationLine', () => {
 
 describe('provenance rows', () => {
 	const beeldbank = {
-		id: 'f', recordType: 'image', label: 'x', dateRange: [1900, 1900], tags: ['maps'], spatialFrequency: 1, temporalFrequency: 1,
+		id: 'f', recordType: 'image', label: 'x', dateRange: [1900, 1900], tags: ['maps'], spatialFrequency: 1,
 		url: 'https://id.archief.amsterdam/f', providerLabel: 'Amsterdam Stadsarchief', providerUrl: 'https://archief.amsterdam', datasetLabel: 'Beeldbank',
 		placeType: 'street', displayName: 'Keizersgracht', placeUrl: 'https://adamlink.nl/geo/street/keizersgracht/2337',
 		placeProviderLabel: 'Adamlink', placeProviderUrl: 'https://adamlink.nl',

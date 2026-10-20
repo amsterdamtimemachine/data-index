@@ -22,7 +22,6 @@
 		{ value: 'sample', label: translate('sortSample') },
 		{ value: 'spatial', label: translate('sortSpatial') },
 		{ value: 'temporal', label: translate('sortTemporal') },
-		{ value: 'relevance', label: translate('sortRelevance') },
 		{ value: 'oldest', label: translate('sortOldest') },
 		{ value: 'newest', label: translate('sortNewest') }
 	];
