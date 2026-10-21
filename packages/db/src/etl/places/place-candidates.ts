@@ -10,7 +10,7 @@
  * expression indexes on place and place_historical_name.
  */
 import { db } from '../../client';
-import { sql } from 'drizzle-orm/sql';
+import { sql, type SQL } from 'drizzle-orm/sql';
 import { ADDRESS_MAX_DISTANCE_M, STREET_MAX_DISTANCE_M, ERA_CUTOFF, CURRENT_ANCHOR } from '@atm/shared';
 import { wktToRd } from '../sql';
 
@@ -41,7 +41,7 @@ export interface Candidate {
 
 export interface NameCandidate {
   placeId: string; name: string | null; type: PlaceType; source: PlaceSource;
-  via: 'current' | 'historical'; gapDays: number;
+  via: 'current' | 'historical'; gapDays: number; eraFit: boolean;
 }
 
 // ── temporal terms (the spec §4 vocabulary) — each reads the surrounding row's
@@ -65,6 +65,13 @@ const nameGapDays = (start: string, end: string) => sql`CASE
   WHEN via = 'current' THEN GREATEST(${start}::date - ${CURRENT_ANCHOR}::date, ${CURRENT_ANCHOR}::date - ${end}::date, 0)
   ELSE GREATEST(since - ${end}::date, ${start}::date - (until - 1), 0)
 END`;
+
+// An address register covers the feature range: adamlink reaches before ERA_CUTOFF,
+// bag on/after it; a range straddling the cut fits both. Reads the row's source.
+const addressEraFit = (start: string, end: string) => sql`CASE source
+  WHEN 'adamlink' THEN ${start}::date < ${ERA_CUTOFF}::date
+  WHEN 'bag'      THEN ${end}::date >= ${ERA_CUTOFF}::date
+  ELSE false END`;
 
 // ══ FETCHERS ══════════════════════════════════════════════════════════════════
 
@@ -94,10 +101,7 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
     )
     SELECT id AS place_id, name, type, source, dist, NULL::int AS overlap_days,
            CASE type
-             WHEN 'address' THEN CASE source
-                                   WHEN 'adamlink' THEN ${start}::date < ${ERA_CUTOFF}::date
-                                   WHEN 'bag'      THEN ${end}::date >= ${ERA_CUTOFF}::date
-                                   ELSE false END
+             WHEN 'address' THEN ${addressEraFit(start, end)}
              WHEN 'street'  THEN source = 'adamlink'
            END AS era_fit,
            FALSE AS dated
@@ -124,7 +128,7 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
 export async function getCandidatesByName(name: string, start: string, end: string): Promise<NameCandidate[]> {
   const rows = await db.execute<{
     place_id: string; name: string | null; type: PlaceType;
-    source: PlaceSource; via: 'current' | 'historical'; gap_days: number;
+    source: PlaceSource; via: 'current' | 'historical'; gap_days: number; era_fit: boolean;
   }>(sql`
     WITH cand AS (
       SELECT p.id, p.name, p.type, p.source, 'current' AS via, NULL::date AS since, NULL::date AS until
@@ -137,17 +141,42 @@ export async function getCandidatesByName(name: string, start: string, end: stri
     ),
     scored AS (
       SELECT id, name, type, source, via,
-             ${nameGapDays(start, end)} AS gap_days
+             ${nameGapDays(start, end)} AS gap_days,
+             CASE WHEN type = 'address' THEN ${addressEraFit(start, end)} ELSE TRUE END AS era_fit
       FROM cand
     )
-    SELECT DISTINCT ON (id) id AS place_id, name, type, source, via, gap_days
+    SELECT DISTINCT ON (id) id AS place_id, name, type, source, via, gap_days, era_fit
     FROM scored
     ORDER BY id, gap_days   -- keep each place's nearest-in-time observation
   `);
   return rows.rows.map((r) => ({
     placeId: r.place_id, name: r.name, type: r.type,
-    source: r.source, via: r.via, gapDays: Number(r.gap_days),
+    source: r.source, via: r.via, gapDays: Number(r.gap_days), eraFit: r.era_fit,
   }));
+}
+
+// the house designation a name ends in: "113", "2a", "113-h"
+const houseNumber = (name: SQL) =>
+  sql`regexp_replace(substring(lower(${name}) from '(\\d\\S*(?: [a-z])?)$'), ' ', '', 'g')`;
+
+/**
+ * The same address as the other source records it: an address in the same BAG building,
+ * as both sources state it, with the same house designation. At most one from bag to
+ * adamlink; several from adamlink to bag when the house was later split into units.
+ */
+export async function twinOf(placeId: string): Promise<string[]> {
+  const rows = await db.execute<{ id: string }>(sql`
+    SELECT o.id
+    FROM place p
+    JOIN place_geometry pg ON pg.place_id = p.id
+    JOIN place_geometry og ON og.building_id = pg.building_id AND og.place_id <> p.id
+    JOIN place o ON o.id = og.place_id
+    WHERE p.id = ${placeId} AND p.type = 'address' AND o.type = 'address'
+      AND o.source <> p.source
+      AND ${houseNumber(sql`o.name`)} = ${houseNumber(sql`p.name`)}
+    ORDER BY o.id
+  `);
+  return rows.rows.map((r) => r.id);
 }
 
 // ── every name a place has gone by: the current one and each historical row, dated or not ──

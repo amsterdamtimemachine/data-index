@@ -83,9 +83,15 @@ export const placeGeometry = pgTable('place_geometry', {
   // neighbourhood/district, the street's existence for Adamlink streets; null for
   // addresses. until null = open/current.
   since: date('since'),
-  until: date('until')
+  until: date('until'),
+  // The BAG building (pand) the point stands in, as the source states it: Adamlink's
+  // geoWithin link for an LP, BAG's pandidentificatie for an address. Null for
+  // streets and areas. An address from each source in one building with the same
+  // house number is one address recorded twice (see twinOf).
+  buildingId: text('building_id')
 }, (table) => [
-  index('idx_place_geometry_geom').using('gist', table.geometry)
+  index('idx_place_geometry_geom').using('gist', table.geometry),
+  index('idx_place_geometry_building').on(table.buildingId).where(sql`${table.buildingId} is not null`)
 ]);
 
 // ============================================================================

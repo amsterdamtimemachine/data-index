@@ -9,6 +9,7 @@ type BagProps = {
   huisletter?: string;
   toevoeging?: string;
   rdf_seealso?: string;
+  pandidentificatie?: string;
 };
 
 const SERVICE = 'https://service.pdok.nl/lv/bag/wfs/v2_0';
@@ -66,6 +67,7 @@ export class BagAddressesFetcher extends PdokFetcher<BagProps> {
       type: 'address',
       name: addressLabel(p),
       url: p.rdf_seealso ?? null,
+      buildingId: p.pandidentificatie || null,
       geometry: feature.geometry,
     };
   }

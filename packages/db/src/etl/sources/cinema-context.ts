@@ -10,9 +10,10 @@
  * ScreeningEvent screened at its venue, one opening with an act a TheaterEvent
  * performed there.
  *
- * The place is the venue's address, matched by name against the dated address names
- * (Adamlink before 1943, BAG after, as for any era match); an address written as a
- * range or a description matches nothing and falls back to the point. Dates keep the
+ * The place is the venue's address, matched by name against the dated address names;
+ * a match outside its register's era moves to the same address as the other source
+ * records it (see eraTwin). An address written as a range or a description matches
+ * nothing and falls back to the point. Dates keep the
  * source's precision: a day, a month for "1907-05-xx", a year for "1907".
  *
  * Usage: bun run db:ingest -s cinema-context -f <path-to-cinema-context.jsonl>

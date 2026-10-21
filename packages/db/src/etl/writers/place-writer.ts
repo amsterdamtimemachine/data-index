@@ -58,6 +58,8 @@ export interface PlaceInsert {
   // existence for Adamlink streets. Left undefined for addresses. Dates as 'YYYY-MM-DD'.
   since?: string | null;
   until?: string | null;
+  // The BAG building the point stands in, as the source states it. Addresses only.
+  buildingId?: string | null;
 }
 
 /**
@@ -115,13 +117,14 @@ export async function insertPlaces(
         url: r.geometryUrl ?? null,
         since: r.since ?? null,
         until: r.until ?? null,
+        buildingId: r.buildingId ?? null,
       }))
     );
     if (opts.onConflict === 'replaceGeometry') {
       await geomQuery.onConflictDoUpdate({
         target: placeGeometry.placeId,
-        // provenance travels with the geometry; period (since/until) is preserved
-        set: { geometry: sql`excluded.geometry`, source: sql`excluded.source`, url: sql`excluded.url` },
+        // provenance and building travel with the geometry; period (since/until) is preserved
+        set: { geometry: sql`excluded.geometry`, source: sql`excluded.source`, url: sql`excluded.url`, buildingId: sql`excluded.building_id` },
       });
     } else {
       await geomQuery.onConflictDoUpdate({
@@ -132,6 +135,7 @@ export async function insertPlaces(
           url: sql`excluded.url`,
           since: sql`excluded.since`,
           until: sql`excluded.until`,
+          buildingId: sql`excluded.building_id`,
         },
       });
     }

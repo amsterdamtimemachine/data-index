@@ -101,6 +101,7 @@ erDiagram
         text url  "link to the geometry's source record; null = same as place.url"
         date since  "neighbourhood/district era start; null for address/street"
         date until  "era end; null = open/current"
+        text building_id  "BAG building (pand) an address stands in, as its source states; null otherwise"
     }
 
     place_historical_name {
@@ -325,7 +326,7 @@ A street or address feature shows its historical name (from `place_historical_na
 
 Neighbourhood and district geometry, unlike a street's or address's, changes across history: each era's division is its own `place` row with its own `place_geometry` (polygon + `[since, until)` window). Which era a feature attaches to is decided **at ingest, not query time** — it's linked to the `place` whose window overlaps the feature's `[start, end]` the most. At query time the heatmap then counts that feature against its historical geometry's footprint, **even though the basemap shows the modern city**.
 
-A feature located by **coordinate** links to the place of its own era: addresses exist in two layers — historical Adamlink (up to 1943) and present-day BAG — so a feature dated before `ERA_CUTOFF` (1943) resolves to the Adamlink address, on/after it to the BAG address at the same point, always at the finest granularity that resolves (address > street > neighbourhood > district) within a per-type distance cap. A feature located by **name** instead resolves to the place whose name was in force nearest its date. Either way, a name matching two equally-plausible places, or a coordinate with nothing in range, is skipped rather than linked to a guess.
+A feature located by **coordinate** links to the place of its own era: addresses exist in two layers — historical Adamlink (up to 1943) and present-day BAG — so a feature dated before `ERA_CUTOFF` (1943) resolves to the Adamlink address, on/after it to the BAG address at the same point, always at the finest granularity that resolves (address > street > neighbourhood > district) within a per-type distance cap. A feature located by **name** instead resolves to the place whose name was in force nearest its date. An address matched outside its register's era, such as an 1898 programme at "Amstel 115", a name only BAG has since Adamlink recorded the house as "Binnen Amstel 115", moves to its **twin**: the address the other source records in the same BAG building with the same house number. Both sources state the building (`place_geometry.building_id`), so the pairing is theirs, not a distance guess. Without a twin, or with several (a house later split into units), the match stands. Either way, a name matching two equally-plausible places, or a coordinate with nothing in range, is skipped rather than linked to a guess.
 
 Both name- and geometry-windows run from `since` up to but not including `until` (at year granularity), so a boundary year falls in exactly one window; `until = null` means "still current".
 
@@ -385,7 +386,7 @@ Three PDOK base registries fill the gaps, fetched with `db:fetch` (scope Amsterd
   - **backfill** — streets Adamlink *names* but has no line for keep their Adamlink id, name, and dated names, and borrow the NWB geometry; that borrowed line is recorded on `place_geometry.source` = `nwb` (with a link to the BAG record), so it reads as an Adamlink street with NWB geometry.
 
   Streets Adamlink already draws are skipped, as are NWB segments without a `bagOrl` (bridges/locks).
-- **[BAG](https://service.pdok.nl/lv/bag/wfs/v2_0)** (`source` = `bag`, NDJSON) — current addresses; Adamlink's address history stops at 1943.
+- **[BAG](https://service.pdok.nl/lv/bag/wfs/v2_0)** (`source` = `bag`, NDJSON) — current addresses with the building (pand) each stands in; Adamlink's address history stops at 1943. An Adamlink LP carries the same building link, which pairs the two records of one address (see [Dates resolution](#dates-resolution)).
 
 ### Minimum required fields per feature
 

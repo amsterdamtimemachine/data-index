@@ -84,6 +84,18 @@ describe('street name aliases', () => {
     expect(named.rows[0].n).toBeGreaterThan(0);
   });
 
+  test("an LP's BAG building link is kept; an LP without one has none", async () => {
+    const lps = await import('../etl/sources/lps');
+    await lps.ingest(resolve(__dirname, 'fixtures/lps.ttl'));
+    const r = await db.execute<{ id: string; building_id: string | null }>(sql`
+      SELECT place_id AS id, building_id FROM place_geometry
+      WHERE place_id IN ('https://adamlink.nl/geo/lp/1019888', 'https://adamlink.nl/geo/lp/1040232') ORDER BY 1`);
+    expect(r.rows).toEqual([
+      { id: 'https://adamlink.nl/geo/lp/1019888', building_id: '0363100012182332' },
+      { id: 'https://adamlink.nl/geo/lp/1040232', building_id: null }
+    ]);
+  });
+
   test("a street's existence dates become its geometry window", () => {
     const streets = parseAdamlinkStreets(readFileSync(FIXTURE, 'utf8'));
     expect(streets.find(s => s.uri === MEDIEVAL)).toMatchObject({ since: '1380', until: '1663' });

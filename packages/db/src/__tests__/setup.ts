@@ -91,10 +91,12 @@ export async function setupTestDb() {
       spatial_frequency INTEGER,
       source TEXT REFERENCES agents(id),
       url TEXT,
-      since DATE, until DATE
+      since DATE, until DATE,
+      building_id TEXT
     )
   `);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_geometry_geom ON place_geometry USING gist(geometry)`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_geometry_building ON place_geometry(building_id) WHERE building_id IS NOT NULL`);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS place_historical_name (
       id TEXT PRIMARY KEY, place_id TEXT NOT NULL REFERENCES place(id),
