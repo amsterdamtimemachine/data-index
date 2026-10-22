@@ -21,6 +21,8 @@
 		options: ComboboxOption<T>[];
 		onInput: (text: string) => void;
 		onSelect?: (value: T) => void;
+		// the option under the pointer or the arrow keys; null when none, or the list is closed
+		onHighlight?: (value: T | null) => void;
 		// empty the input after a choice, so the same option can be picked again
 		clearOnSelect?: boolean;
 		placeholder?: string;
@@ -32,6 +34,7 @@
 		options,
 		onInput,
 		onSelect,
+		onHighlight,
 		clearOnSelect = false,
 		placeholder,
 		'aria-label': ariaLabel,
@@ -117,6 +120,17 @@
 
 	$effect(() => {
 		onInput(combobox.inputValue);
+	});
+
+	$effect(() => {
+		if (!onHighlight) {
+			return;
+		}
+		if (!combobox.open) {
+			onHighlight(null);
+			return;
+		}
+		onHighlight(combobox.highlighted ?? null);
 	});
 
 	function getOption(option: ComboboxOption<T>): OptionAttributes {

@@ -64,6 +64,7 @@
 		outlineLayerColor: string; // hex
 		placeOutlineWidth: number; // px, thicker than the cell selection so both read when they overlap
 		placeOutlineCasingColor: string; // hex, darker band under the place outline
+		placeHoverColor: string; // hex, the dark gold outline while a search result is pointed at
 		cellSelectedCasingColor: string; // hex, darker band under the cell selection
 		outlineCasingExtra: number; // px added around a cased line
 		backgroundColor: string; // hex
@@ -82,6 +83,8 @@
 		selectedCellId: string | null;
 		// display-cell indices of the selected place (the gold outline)
 		placeCells?: number[];
+		// display-cell indices of the search result under the pointer (a faint gold outline)
+		hoverCells?: number[];
 		// screen space the nav and the panel cover: the camera centres and fits within
 		// the strip between them, and eases there when the padding changes
 		padding?: { left: number; right: number };
@@ -113,6 +116,7 @@
 		outlineLayerColor: colors['map-place-outline'],
 		placeOutlineWidth: 5,
 		placeOutlineCasingColor: colors['map-place-outline-casing'],
+		placeHoverColor: colors['map-place-outline-casing'],
 		cellSelectedCasingColor: colors['map-selected-outline-casing'],
 		outlineCasingExtra: 4,
 		backgroundColor: colors['map-background'],
@@ -130,6 +134,7 @@
 		dimensions,
 		selectedCellId = null,
 		placeCells = undefined,
+		hoverCells = undefined,
 		padding = { left: 0, right: 0 },
 		placeSelected = false,
 		class: className,
@@ -306,6 +311,18 @@
 		let cells: number[] = [];
 		if (placeCells) {
 			cells = placeCells;
+		}
+		source.setData(placeOutlineGeometry(cells, cellGeometries, dimensions.colsAmount));
+	});
+
+	// Sync the hover outline with the pointed-at search result's cells
+	$effect(() => {
+		if (!isMapLoaded || !map || !dimensions) return;
+		const source = map.getSource('place-hover') as maplibre.GeoJSONSource | undefined;
+		if (!source) return;
+		let cells: number[] = [];
+		if (hoverCells) {
+			cells = hoverCells;
 		}
 		source.setData(placeOutlineGeometry(cells, cellGeometries, dimensions.colsAmount));
 	});
@@ -511,6 +528,23 @@
 					'line-color': mapStyle.transportationColor,
 					'line-opacity': mapStyle.transportationOpacity,
 					'line-width': mapStyle.transportationOutlineWidth
+				}
+			});
+
+			// The search result under the pointer: a dark gold perimeter, under the selection
+			mapInstance.addSource('place-hover', {
+				type: 'geojson',
+				data: placeOutlineGeometry([], cellGeometries, dimensions.colsAmount),
+				maxzoom: mapStyle.maxZoom
+			});
+			mapInstance.addLayer({
+				id: 'place-hover',
+				type: 'line',
+				source: 'place-hover',
+				layout: { 'line-cap': 'square' },
+				paint: {
+					'line-color': mapStyle.placeHoverColor,
+					'line-width': mapStyle.placeOutlineWidth
 				}
 			});
 

@@ -7,7 +7,7 @@
 	import { tick, untrack, onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { navigateParams } from '#lib/utils/navigate.js';
-	import { createMapSelection } from '#lib/state/map-selection.svelte.js';
+	import { mapSelection } from '#lib/state/map-selection.svelte.js';
 	import { createTimelineScope } from '#lib/state/timeline-scope.svelte.js';
 	import { createMapData } from '#lib/state/map-data.svelte.js';
 	import { createMapPadding } from '#lib/state/map-padding.svelte.js';
@@ -34,7 +34,7 @@
 	import type { HeatmapTimeline } from '@atm/shared/types';
 	import type { PanelSubject } from '#lib/state/panel-features.svelte.js';
 	import { PUBLIC_DEFAULT_CENTER } from '$app/env/public';
-	import { createEmptyHeatmap, getCellBoundsFromCellId, getCellIdFromLonLat } from '#lib/utils/heatmap.js';
+	import { createEmptyHeatmap, getCellIdFromLonLat } from '#lib/utils/heatmap.js';
 
 
 	let { data }: { data: PageData } = $props();
@@ -69,6 +69,9 @@
 	);
 	const heatmapTimeline = $derived(mapData.timeline);
 	const dimensions = $derived(mapData.dimensions);
+	$effect(() => {
+		mapSelection.setDimensions(dimensions ?? null);
+	});
 	const histogram = $derived(mapData.histogram);
 
 	// Page-owned so the chosen size survives the panel's open/close cycles.
@@ -116,7 +119,6 @@
 
 	let recordTypes = $derived(data?.metadata?.recordTypes || []);
 
-	const mapSelection = createMapSelection();
 	let currentPeriod = $derived(mapSelection.currentPeriod);
 	let selectedCellId = $derived(mapSelection.selectedCellId);
 	let selectedCellBounds = $derived(mapSelection.selectedCellBounds);
@@ -163,6 +165,7 @@
 	function initializeFromHeatmap() {
 		if (hasInitialized || !dimensions || !heatmapTimeline) return;
 		hasInitialized = true;
+		mapSelection.setDimensions(dimensions);
 
 		// Period: the URL param if it names a loaded slice, else the most recent one.
 		// Slice keys derive from the bin configuration, so bookmarked URLs can go stale.
@@ -187,8 +190,7 @@
 			// the deep-linked cell, checked against the now-available grid; a wrong one is ignored
 			if (data.cellParam && dimensions && !placePanelOpen) {
 				if (isValidCellId(data.cellParam, dimensions)) {
-					const bounds = getCellBoundsFromCellId(data.cellParam, dimensions);
-					if (bounds) mapSelection.selectCell(data.cellParam, bounds);
+					mapSelection.selectCell(data.cellParam);
 				} else {
 					unknownValues.push(data.cellParam);
 				}
@@ -216,9 +218,7 @@
 					if (window.innerWidth > MOBILE_MAX_WIDTH && PUBLIC_DEFAULT_CENTER && dimensions) {
 						const [lon, lat] = PUBLIC_DEFAULT_CENTER.split(',').map(Number);
 						if (Number.isFinite(lon) && Number.isFinite(lat)) {
-							const cellId = getCellIdFromLonLat(lon, lat, dimensions);
-							const bounds = getCellBoundsFromCellId(cellId, dimensions);
-							if (bounds) mapSelection.selectCell(cellId, bounds);
+							mapSelection.selectCell(getCellIdFromLonLat(lon, lat, dimensions));
 						}
 					}
 				}
@@ -283,17 +283,7 @@
 	// Handle cell selection from map; selecting a cell takes over the panel from
 	// the place view, but never clears the place filter itself.
 	function handleCellClick(cellId: string | null) {
-		if (cellId && dimensions) {
-			// Calculate bounds on-demand from dimensions
-			const bounds = getCellBoundsFromCellId(cellId, dimensions);
-			if (bounds) {
-				mapSelection.selectCell(cellId, bounds);
-			} else {
-				mapSelection.selectCell(cellId);
-			}
-		} else {
-			mapSelection.selectCell(null);
-		}
+		mapSelection.selectCell(cellId);
 		if (cellId && placePanelOpen) {
 			setPlacePanel(false);
 		}
@@ -401,6 +391,7 @@
 				{dimensions}
 				{selectedCellId}
 				placeCells={data.selectedPlace?.cells}
+				hoverCells={mapSelection.hoveredCells ?? undefined}
 				placeSelected={placePanelOpen}
 				padding={mapPadding.padding}
 				{handleCellClick}

@@ -14,6 +14,7 @@
 	import { translate } from '#lib/utils/translations.js';
 	import { formatPlaceWindow } from '#lib/utils/format.js';
 	import { searchOptions, parseSearchChoice } from '#lib/utils/search-options.js';
+	import { mapSelection } from '#lib/state/map-selection.svelte.js';
 	import type { PlaceSearchMatch } from '@atm/shared/types';
 
 	type Props = {
@@ -52,6 +53,25 @@
 		return detail;
 	}
 
+	// the highlighted result outlines its cells on the map
+	function handleHighlight(value: string | null) {
+		let place = null;
+		if (value) {
+			const choice = parseSearchChoice(value);
+			if (choice?.kind === 'place') {
+				place = optionSet.places.find((p) => p.match.placeId === choice.placeId) ?? null;
+			}
+		}
+		if (place) {
+			mapSelection.hoverPlace(place.match);
+		} else {
+			mapSelection.hoverPlace(null);
+		}
+	}
+	$effect(() => {
+		return () => mapSelection.hoverPlace(null);
+	});
+
 	function handleSelect(value: string) {
 		const choice = parseSearchChoice(value);
 		if (!choice) {
@@ -72,6 +92,7 @@
 	options={optionSet.options}
 	onInput={handleInput}
 	onSelect={handleSelect}
+	onHighlight={handleHighlight}
 	clearOnSelect={true}
 	placeholder={translate('searchPlaceholder')}
 	aria-label={translate('searchPlaceholder')}
