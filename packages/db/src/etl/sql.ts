@@ -7,6 +7,11 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { PRECOMP_TIME_BIN_YEARS, PRECOMP_GRID_CELL_METERS } from '@atm/shared';
 
+/** The house designation an address name ends in: "113", "2a", "113-h". */
+export function houseNumber(name: SQL): SQL {
+  return sql`regexp_replace(substring(lower(${name}) from '(\\d\\S*(?: [a-z])?)$'), ' ', '', 'g')`;
+}
+
 /**
  * WKT → stored RD/28992 geometry. RD input is inserted as-is; any other SRID is
  * transformed. One definition for both the place writers and the point resolver,

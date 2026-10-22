@@ -21,4 +21,9 @@ export type PlaceSearchMatch = {
    * coordinate space as heatmap indices at the requested resolution.
    */
   cells: number[];
+  /**
+   * [since, until] over the place's dated name records: the first and last year a name
+   * of it was noted on a register. Null when it has none.
+   */
+  recordedWindow: [string | null, string | null] | null;
 };

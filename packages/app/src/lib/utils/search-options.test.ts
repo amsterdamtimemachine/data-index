@@ -14,6 +14,7 @@ function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 		geometryWindow: null,
 		featureCount: 0,
 		cells: [],
+		recordedWindow: null,
 		...overrides
 	};
 }

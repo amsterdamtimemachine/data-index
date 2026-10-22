@@ -90,21 +90,11 @@ export function formatPlaceTitle(match: PlaceSearchMatch): string {
 	return shown;
 }
 
-/**
- * Era label for a place search match: the period of the name the row shows. A match
- * on the current name carries the place's own window (a street's existence, a
- * division's years in force); a match on a historical name row carries that row's
- * window, so an undated variant carries none. "1850 tot 1909", "in 1853" (both ends
- * in one year), "tot 1850", "vanaf 1921", or '' without a window.
- */
-export function formatPlaceWindow(match: PlaceSearchMatch): string {
-	let window = match.geometryWindow;
-	if (match.matchedNameId) {
-		window = match.matchedWindow;
-	}
-	if (!window) {
-		return '';
-	}
+// the registers of today: a place from one carries no dates of its own
+const CURRENT_REGISTERS = new Set(['bag', 'nwb', 'cbs']);
+
+// "in 1853" (both ends in one year), "1850 tot 1909", "tot 1850" or "vanaf 1921"
+function windowYears(window: [string | null, string | null]): string {
 	const [since, until] = window;
 	if (since && until) {
 		const sinceYear = since.slice(0, 4);
@@ -119,6 +109,40 @@ export function formatPlaceWindow(match: PlaceSearchMatch): string {
 	}
 	if (since) {
 		return `${translate('windowSince')} ${since.slice(0, 4)}`;
+	}
+	return '';
+}
+
+/**
+ * What a place search row's years mean, in the source's terms. A street or area's
+ * window is its existence: "bestaat vanaf 1663", "bestond 1850 tot 1909". A street's
+ * old name carries the years it held: "naam 1850 tot 1943". An address has no
+ * validity, only the registers it was noted on: "vermeld in 1853" for the matched
+ * record, "vermeld 1832 tot 1943" over all of them. A place from a current register
+ * carries no dates: "huidig". '' when the source gave none.
+ */
+export function formatPlaceWindow(match: PlaceSearchMatch): string {
+	if (match.type === 'address') {
+		let window = match.recordedWindow;
+		if (match.matchedNameId && match.matchedWindow) {
+			window = match.matchedWindow;
+		}
+		if (window) {
+			return `${translate('recorded')} ${windowYears(window)}`;
+		}
+	} else if (match.matchedNameId) {
+		if (match.matchedWindow) {
+			return `${translate('nameHeld')} ${windowYears(match.matchedWindow)}`;
+		}
+	} else if (match.geometryWindow) {
+		const [since, until] = match.geometryWindow;
+		if (since && !until) {
+			return `${translate('existsSince')} ${since.slice(0, 4)}`;
+		}
+		return `${translate('existed')} ${windowYears(match.geometryWindow)}`;
+	}
+	if (match.source && CURRENT_REGISTERS.has(match.source)) {
+		return translate('currentRegister');
 	}
 	return '';
 }

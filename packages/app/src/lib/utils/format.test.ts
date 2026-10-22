@@ -14,29 +14,35 @@ function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 		geometryWindow: null,
 		featureCount: 0,
 		cells: [],
+		recordedWindow: null,
 		...overrides
 	};
 }
 
 describe('formatPlaceWindow', () => {
-	test('a current-name match shows the place window', () => {
-		expect(formatPlaceWindow(match({ geometryWindow: ['1850-01-01', '1909-12-31'] }))).toBe('1850 tot 1909');
+	test("a street or area's window is its existence", () => {
+		expect(formatPlaceWindow(match({ geometryWindow: ['1850-01-01', '1909-12-31'] }))).toBe('bestond 1850 tot 1909');
+		expect(formatPlaceWindow(match({ geometryWindow: ['1921-01-01', null] }))).toBe('bestaat vanaf 1921');
+		expect(formatPlaceWindow(match({ geometryWindow: [null, '1850-01-01'] }))).toBe('bestond tot 1850');
 	});
 
-	test('both ends in one year render "in"', () => {
-		const m = match({ matchedNameId: 'n', matchedWindow: ['1853-01-01', '1853-12-31'] });
-		expect(formatPlaceWindow(m)).toBe('in 1853');
+	test("a street's old name carries the years it held", () => {
+		const m = match({ matchedNameId: 'n', matchedWindow: ['1850-01-01', '1943-01-01'], geometryWindow: ['1600-01-01', null] });
+		expect(formatPlaceWindow(m)).toBe('naam 1850 tot 1943');
+		expect(formatPlaceWindow(match({ matchedNameId: 'n', matchedWindow: [null, '1850-01-01'] }))).toBe('naam tot 1850');
 	});
 
-	test('until-only renders "tot"', () => {
-		expect(formatPlaceWindow(match({ matchedNameId: 'n', matchedWindow: [null, '1850-01-01'] }))).toBe('tot 1850');
+	test('an address shows the registers it was noted on: the matched record, else all of them', () => {
+		const record = match({ type: 'address', matchedNameId: 'n', matchedWindow: ['1853-01-01', '1853-12-31'], recordedWindow: ['1832-01-01', '1943-12-31'] });
+		expect(formatPlaceWindow(record)).toBe('vermeld in 1853');
+		const span = match({ type: 'address', recordedWindow: ['1832-01-01', '1943-12-31'] });
+		expect(formatPlaceWindow(span)).toBe('vermeld 1832 tot 1943');
 	});
 
-	test('since-only renders "vanaf"', () => {
-		expect(formatPlaceWindow(match({ geometryWindow: ['1921-01-01', null] }))).toBe('vanaf 1921');
-	});
-
-	test('no window renders nothing', () => {
+	test('a place from a current register reads "huidig"; an undated Adamlink place nothing', () => {
+		expect(formatPlaceWindow(match({ type: 'address', source: 'bag' }))).toBe('huidig');
+		expect(formatPlaceWindow(match({ source: 'nwb' }))).toBe('huidig');
+		expect(formatPlaceWindow(match({ type: 'neighbourhood', source: 'cbs' }))).toBe('huidig');
 		expect(formatPlaceWindow(match({}))).toBe('');
 	});
 
@@ -46,7 +52,7 @@ describe('formatPlaceWindow', () => {
 			matchedWindow: [null, '1943-01-01'],
 			geometryWindow: ['1850-01-01', '1909-12-31']
 		});
-		expect(formatPlaceWindow(m)).toBe('tot 1943');
+		expect(formatPlaceWindow(m)).toBe('naam tot 1943');
 	});
 
 	test('an undated variant shows no window even when the place has one', () => {

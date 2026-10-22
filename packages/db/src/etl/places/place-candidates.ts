@@ -12,7 +12,7 @@
 import { db } from '../../client';
 import { sql, type SQL } from 'drizzle-orm/sql';
 import { ADDRESS_MAX_DISTANCE_M, STREET_MAX_DISTANCE_M, ERA_CUTOFF, CURRENT_ANCHOR, type PlaceType, type PlaceSource } from '@atm/shared';
-import { wktToRd } from '../sql';
+import { wktToRd, houseNumber } from '../sql';
 
 export type { PlaceType, PlaceSource };
 
@@ -153,10 +153,6 @@ export async function getCandidatesByName(name: string, start: string, end: stri
     source: r.source, via: r.via, gapDays: Number(r.gap_days), eraFit: r.era_fit,
   }));
 }
-
-// the house designation a name ends in: "113", "2a", "113-h"
-const houseNumber = (name: SQL) =>
-  sql`regexp_replace(substring(lower(${name}) from '(\\d\\S*(?: [a-z])?)$'), ' ', '', 'g')`;
 
 export interface Twin {
   placeId: string;

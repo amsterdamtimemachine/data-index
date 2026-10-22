@@ -181,6 +181,14 @@ const TRANSLATIONS: Record<string, string> = {
 	windowSince: 'vanaf',
 	windowUntil: 'tot',
 	windowIn: 'in',
+	// what a search row's years mean: a street or area's existence ("bestaat vanaf 1663",
+	// "bestond 1850 tot 1909"), the years a name held ("naam 1850 tot 1943"), the years an
+	// address was noted on a register ("vermeld in 1853"), or a current register
+	existsSince: 'bestaat vanaf',
+	existed: 'bestond',
+	nameHeld: 'naam',
+	recorded: 'vermeld',
+	currentRegister: 'huidig',
 	filters: 'Filters',
 	// the heading over an expanded card's provenance
 	provenance: 'Herkomst',
