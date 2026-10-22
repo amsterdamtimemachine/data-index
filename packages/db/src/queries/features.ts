@@ -235,9 +235,10 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
 
   // Default to every record type in the data — same fallback as the heatmap and
   // histogram, so an unfiltered feature list always matches an unfiltered heatmap.
-  const types = recordTypes && recordTypes.length > 0
-    ? recordTypes
-    : await getRecordTypes();
+  let types = recordTypes;
+  if (!types || types.length === 0) {
+    types = await getRecordTypes();
+  }
 
   if (types.length === 0) {
     return { data: [], total: 0, page, pageSize, totalPages: 0 };
@@ -259,17 +260,20 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
 
   const typeCondition = sql`f.record_type IN ${types}`;
 
-  const datasetCondition = datasetIds && datasetIds.length > 0
-    ? sql`f.dataset_id IN ${datasetIds}`
-    : sql`TRUE`;
+  let datasetCondition = sql`TRUE`;
+  if (datasetIds && datasetIds.length > 0) {
+    datasetCondition = sql`f.dataset_id IN ${datasetIds}`;
+  }
 
-  const placeTypeCondition = placeTypes && placeTypes.length > 0
-    ? sql`p.type IN ${placeTypes}`
-    : sql`TRUE`;
+  let placeTypeCondition = sql`TRUE`;
+  if (placeTypes && placeTypes.length > 0) {
+    placeTypeCondition = sql`p.type IN ${placeTypes}`;
+  }
 
-  const dateCondition = dateRange
-    ? featureYearOverlap(sql`f.start_date`, sql`f.end_date`, dateRange.startYear, dateRange.endYear)
-    : sql`TRUE`;
+  let dateCondition = sql`TRUE`;
+  if (dateRange) {
+    dateCondition = featureYearOverlap(sql`f.start_date`, sql`f.end_date`, dateRange.startYear, dateRange.endYear);
+  }
 
   let tagCondition: SQL = sql`TRUE`;
   // selected tags the feature carries; weights the sample sort

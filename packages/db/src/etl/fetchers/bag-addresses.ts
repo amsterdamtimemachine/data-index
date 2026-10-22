@@ -48,9 +48,10 @@ export class BagAddressesFetcher extends PdokFetcher<BagProps> {
     const layer = this.layers[0];
     let cursor: string | null = null;
     for (;;) {
-      const filter = cursor
-        ? wrap(`<fes:And>${likeIdent(code)}${gtIdent(cursor)}</fes:And>`)
-        : this.gemeenteFilter(g);
+      let filter = this.gemeenteFilter(g);
+      if (cursor) {
+        filter = wrap(`<fes:And>${likeIdent(code)}${gtIdent(cursor)}</fes:And>`);
+      }
       const features = await this.fetchFeatures(this.service(), layer,
         `count=${PAGE}&sortBy=identificatie&filter=${encodeURIComponent(filter)}`);
       if (!features.length) break;

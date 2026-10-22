@@ -72,7 +72,6 @@ export async function ingest(filePath: string, opts: TagsIngestOptions = {}): Pr
 
   const report = { ...written, records, invalid, untagged };
   console.log(`\nDone: ${report.rows} tag rows for tagger '${tagger}' on ${report.matched} ${dataset} features`);
-  console.log(`  records ${records} — untagged ${untagged}, unmatched ${report.unmatched}` +
-    (invalid ? `, invalid ${invalid}` : ''));
+  console.log(`  records ${records} — untagged ${untagged}, unmatched ${report.unmatched}${invalid ? `, invalid ${invalid}` : ''}`);
   return report;
 }

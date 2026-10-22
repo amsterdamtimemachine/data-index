@@ -13,9 +13,10 @@ import { PRECOMP_TIME_BIN_YEARS, PRECOMP_GRID_CELL_METERS } from '@atm/shared';
  * so read and write sides normalise identically.
  */
 export function wktToRd(wkt: string, srid: number): SQL {
-  return srid === 28992
-    ? sql`ST_GeomFromText(${wkt}, 28992)`
-    : sql`ST_Transform(ST_GeomFromText(${wkt}, ${srid}), 28992)`;
+  if (srid === 28992) {
+    return sql`ST_GeomFromText(${wkt}, 28992)`;
+  }
+  return sql`ST_Transform(ST_GeomFromText(${wkt}, ${srid}), 28992)`;
 }
 
 /**

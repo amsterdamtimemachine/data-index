@@ -7,8 +7,11 @@
 // `parseInt(x) || 10` turned 0 into 10 (0 is falsy), so the test env's
 // CACHE_TTL_MINUTES=0 silently cached for 10 minutes. Parse explicitly instead.
 const rawMinutes = process.env.CACHE_TTL_MINUTES;
-const parsedMinutes = rawMinutes === undefined || rawMinutes === '' ? 10 : parseInt(rawMinutes, 10);
-const CACHE_TTL_MS = (Number.isNaN(parsedMinutes) ? 10 : parsedMinutes) * 60 * 1000;
+let ttlMinutes = 10;
+if (rawMinutes !== undefined && rawMinutes !== '' && !Number.isNaN(parseInt(rawMinutes, 10))) {
+  ttlMinutes = parseInt(rawMinutes, 10);
+}
+const CACHE_TTL_MS = ttlMinutes * 60 * 1000;
 
 export function createTTLCache<T>(ttlMs: number = CACHE_TTL_MS) {
   let data: T | null = null;

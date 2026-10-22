@@ -112,16 +112,11 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
            (since IS NOT NULL OR until IS NOT NULL) AS dated
     FROM area
   `);
-  return rows.rows.map((r) => {
-    let overlapDays: number | null = null;
-    if (r.overlap_days !== null) {
-      overlapDays = Number(r.overlap_days);
-    }
-    return {
-      placeId: r.place_id, name: r.name, type: r.type, source: r.source,
-      distanceM: Number(r.dist), overlapDays, eraFit: r.era_fit, dated: r.dated,
-    };
-  });
+  return rows.rows.map((r) => ({
+    placeId: r.place_id, name: r.name, type: r.type, source: r.source,
+    distanceM: Number(r.dist), overlapDays: r.overlap_days === null ? null : Number(r.overlap_days),
+    eraFit: r.era_fit, dated: r.dated,
+  }));
 }
 
 // ── NAME signal: match current + dated historical names; nearest-by-overlap wins.
@@ -218,13 +213,10 @@ export async function twinOf(placeId: string, start: string, end: string): Promi
     FROM cand c
     ORDER BY c.id
   `);
-  return rows.rows.map((r) => {
-    let gapDays: number | null = null;
-    if (r.gap_days !== null) {
-      gapDays = Number(r.gap_days);
-    }
-    return { placeId: r.id, sharesName: r.shares_name, gapDays };
-  });
+  return rows.rows.map((r) => ({
+    placeId: r.id, sharesName: r.shares_name,
+    gapDays: r.gap_days === null ? null : Number(r.gap_days),
+  }));
 }
 
 // ── every name a place has gone by: the current one and each historical row, dated or not ──
@@ -285,10 +277,7 @@ export function resolveNamePool(pool: NameCandidate[]): NameResolution {
   });
   const top = sorted[0];
   const tied = sorted.filter((c) => c.gapDays === top.gapDays && c.type === top.type);
-  if (tied.length > 1) {
-    return { kind: 'ambiguous', tied };
-  }
-  return { kind: 'resolved', winner: top };
+  return tied.length > 1 ? { kind: 'ambiguous', tied } : { kind: 'resolved', winner: top };
 }
 
 // ── point-pool → the single most-specific place to link (spec req 15), or undefined ──
@@ -300,8 +289,5 @@ export function pickFinest(pool: Candidate[]): Candidate | undefined {
     best[t] = pool.filter((c) => c.type === t && (cap === null || c.distanceM <= cap)).sort(rank)[0];
   }
   const type = finestResolvable(best);
-  if (!type) {
-    return undefined;
-  }
-  return best[type];
+  return type ? best[type] : undefined;
 }

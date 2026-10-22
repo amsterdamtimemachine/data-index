@@ -67,11 +67,17 @@ export class NwbStreetsFetcher extends PdokFetcher<NwbProps> {
   protected toPlace(feature: Feature<Geometry, NwbProps>): PlaceDraft {
     const p = feature.properties;
     const bagOrl = p.bagOrl?.trim() || null;
+    let id = `nwb-${p.gmeId}-${slug(p.sttNaam!)}`;
+    let url: string | null = null;
+    if (bagOrl) {
+      id = `nwb-${bagOrl}`;
+      url = `https://bagviewer.kadaster.nl/lvbag/bag-viewer/#?searchQuery=${bagOrl}`;
+    }
     return {
-      id: bagOrl ? `nwb-${bagOrl}` : `nwb-${p.gmeId}-${slug(p.sttNaam!)}`,
+      id,
       type: 'street',
       name: p.sttNaam!,
-      url: bagOrl ? `https://bagviewer.kadaster.nl/lvbag/bag-viewer/#?searchQuery=${bagOrl}` : null,
+      url,
       geometry: feature.geometry,
     };
   }

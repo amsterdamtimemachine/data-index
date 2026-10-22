@@ -156,8 +156,14 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
         await this.writer.flush()
         const skipped = skips.ambiguous + skips['cap-miss'] + skips.undated + skips['no-match'] + noData + errors
         console.log(`\nDone: ${fMap.size} features linked, ${skipped} skipped`)
-        console.log(`  unresolved — no-match ${skips['no-match']}, ambiguous ${skips.ambiguous}, cap-miss ${skips['cap-miss']}, undated ${skips.undated}` +
-            (noData ? `; no-data ${noData}` : '') + (errors ? `; errors ${errors}` : ''))
+        let tail = ''
+        if (noData) {
+            tail += `; no-data ${noData}`
+        }
+        if (errors) {
+            tail += `; errors ${errors}`
+        }
+        console.log(`  unresolved — no-match ${skips['no-match']}, ambiguous ${skips.ambiguous}, cap-miss ${skips['cap-miss']}, undated ${skips.undated}${tail}`)
     }
 
     /**

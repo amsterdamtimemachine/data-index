@@ -59,8 +59,7 @@ export const inferByName = createCachedResolver(async (key: string): Promise<Res
     if (!start || !end) { return { skip: 'undated' } }
     const r = resolveNamePool(await getCandidatesByName(area, start, end));
     if (r.kind === 'resolved') { return { placeId: await eraTwin(r.winner.placeId, r.winner.type, r.winner.eraFit, start, end) } }
-    if (r.kind === 'ambiguous') { return { skip: 'ambiguous' } }
-    return { skip: 'no-match' };
+    return { skip: r.kind === 'ambiguous' ? 'ambiguous' : 'no-match' };
 })
 
 /**
@@ -76,8 +75,7 @@ export const inferByPoint = createCachedResolver(async (key: string): Promise<Re
     if (!wkt) { return { skip: 'no-match' } }
     if (!start || !end) { return { skip: 'undated' } }
     const best = pickFinest(await getCandidatesByPoint(wkt, start, end));
-    if (!best) { return { skip: 'cap-miss' } }
-    return { placeId: await eraTwin(best.placeId, best.type, best.eraFit, start, end) };
+    return best ? { placeId: await eraTwin(best.placeId, best.type, best.eraFit, start, end) } : { skip: 'cap-miss' };
 });
 
 const pointPool = createCachedResolver(async (key: string): Promise<Candidate[]> => {
@@ -93,8 +91,7 @@ export async function inferByPointConfirmed(wkt: string, text: string, start: st
     const named = pool.filter((c) => c.type === 'address' || c.type === 'street').map((c) => c.placeId);
     const names = await getNamesForPlaces(named);
     const best = pickFinest(confirmByText(pool, names, text));
-    if (!best) { return { skip: 'cap-miss' } }
-    return { placeId: await eraTwin(best.placeId, best.type, best.eraFit, start, end) };
+    return best ? { placeId: await eraTwin(best.placeId, best.type, best.eraFit, start, end) } : { skip: 'cap-miss' };
 }
 
 /**
@@ -118,8 +115,7 @@ export const inferByAdamURI = createCachedResolver(async (adamlinkUri: string): 
     `);
 
     const id = result.rows[0]?.place_id;
-    if (!id) { return { skip: 'no-match' } }
-    return { placeId: id };
+    return id ? { placeId: id } : { skip: 'no-match' };
 });
 
 /**

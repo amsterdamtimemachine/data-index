@@ -62,7 +62,10 @@ export async function ingest(filePath: string) {
     const since = preds.find(p => p.predicate.endsWith('hasEarliestBeginTimeStamp'))?.object || null;
     const until = preds.find(p => p.predicate.endsWith('hasLatestEndTimeStamp'))?.object || null;
     const sourceRef = preds.find(p => p.predicate.endsWith('documentedIn'))?.object;
-    const source = sourceRef ? (sourceLabels.get(sourceRef) ?? sourceRef.split('/geo/source/')[1]) : null;
+    let source: string | null = null;
+    if (sourceRef) {
+      source = sourceLabels.get(sourceRef) ?? sourceRef.split('/geo/source/')[1];
+    }
 
     names.add({ id: subj, placeId, name, since, until, source });
     await names.flushIfFull();
