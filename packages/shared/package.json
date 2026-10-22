@@ -16,6 +16,10 @@
     "./vocab": {
       "types": "./dist/vocab/index.d.ts",
       "import": "./dist/vocab/index.js"
+    },
+    "./dates": {
+      "types": "./dist/dates.d.ts",
+      "import": "./dist/dates.js"
     }
   },
   "scripts": {

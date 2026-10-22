@@ -1,4 +1,4 @@
-import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, TheaterEventEntity, BillItem, ManuscriptEntity, Excerpt, RecordType } from "@atm/shared";
+import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, TheaterEventEntity, BillItem, ManuscriptEntity, Excerpt, RecordType, parsePartialDate, formatIsoDate } from "@atm/shared";
 import { formatDateRange } from "../util/dates";
 import { Draft } from "./ingestor";
 
@@ -101,9 +101,13 @@ export class ProgrammeEntityFactory extends EntityFactory<ScreeningEventEntity |
         if (leadsWithFilm(bill)) {
             type = 'ScreeningEvent';
         }
+        // the source's own precision, with its xx placeholders dropped
         let startDate = feature.startDate;
         if (typeof date === 'string') {
-            startDate = date.replace(/-xx-xx$/, '').replace(/-xx$/, '');
+            const parsed = parsePartialDate(date);
+            if (parsed) {
+                startDate = formatIsoDate(parsed);
+            }
         }
 
         return {

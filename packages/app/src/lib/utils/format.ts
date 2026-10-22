@@ -1,6 +1,7 @@
 import type { PlaceSearchMatch } from '@atm/shared/types';
 import type { PanelSubject } from '#lib/state/panel-features.svelte.js';
 import { translate, fill } from './translations';
+import { parsePartialDate, periodAsPartialDate, type PartialDate } from '@atm/shared/dates';
 
 export function formatTimePeriod(per: [number, number]): string {
 	const [start, end] = per;
@@ -15,17 +16,17 @@ const MONTH_KEYS = ['january', 'february', 'march', 'april', 'may', 'june', 'jul
  * "januari 1934" for YYYY-MM, "1934" for YYYY. Anything else comes back as is.
  */
 export function formatPartialDate(date: string): string {
-	const match = date.match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/);
-	if (!match) return date;
-	const [, year, month, day] = match;
-	if (!month) return year;
-	const monthName = translate(MONTH_KEYS[parseInt(month, 10) - 1] ?? '');
-	if (!day) return `${monthName} ${year}`;
-	return `${parseInt(day, 10)} ${monthName} ${year}`;
+	const parsed = parsePartialDate(date);
+	if (!parsed) return date;
+	return wordDate(parsed);
 }
 
-function lastDayOfMonth(year: number, month: number): number {
-	return new Date(Date.UTC(year, month, 0)).getUTCDate();
+function wordDate(date: PartialDate): string {
+	const { year, month, day } = date;
+	if (!month) return String(year);
+	const monthName = translate(MONTH_KEYS[month - 1] ?? '');
+	if (!day) return `${monthName} ${year}`;
+	return `${day} ${monthName} ${year}`;
 }
 
 /**
@@ -37,18 +38,9 @@ export function formatPeriod(start: string, end: string): string {
 	if (start === end) {
 		return formatPartialDate(start);
 	}
-	const s = start.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-	const e = end.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-	if (!s || !e) {
-		return `${start} ${translate('windowUntil')} ${end}`;
-	}
-	const sameYear = s[1] === e[1];
-	if (sameYear && s[2] === '01' && s[3] === '01' && e[2] === '12' && e[3] === '31') {
-		return s[1];
-	}
-	const lastDay = lastDayOfMonth(parseInt(e[1], 10), parseInt(e[2], 10));
-	if (sameYear && s[2] === e[2] && s[3] === '01' && parseInt(e[3], 10) === lastDay) {
-		return formatPartialDate(`${s[1]}-${s[2]}`);
+	const whole = periodAsPartialDate(start, end);
+	if (whole) {
+		return wordDate(whole);
 	}
 	return `${formatPartialDate(start)} ${translate('windowUntil')} ${formatPartialDate(end)}`;
 }

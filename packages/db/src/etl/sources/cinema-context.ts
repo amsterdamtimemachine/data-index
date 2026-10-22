@@ -21,7 +21,7 @@
 import { Draft, Ingestor } from '../ingest/ingestor';
 import { ProgrammeEntityFactory, programmeBill, leadsWithFilm, type ProgrammeItem } from '../ingest/entity-factory';
 import { ExtractionArgs, PlaceExtractionMethod } from '../places/place-index';
-import { RecordType } from '@atm/shared';
+import { RecordType, parsePartialDate, partialDateRange } from '@atm/shared';
 
 type CinemaContextRecord = {
   perm_id: string | null;
@@ -48,34 +48,12 @@ function firstOnBill(items: ProgrammeItem[]): string | undefined {
   return undefined;
 }
 
-function lastDayOfMonth(year: number, month: number): number {
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
-}
-
 /** The programme's period at the source's precision; null when unparseable. */
 export function parseProgrammeDate(raw: string | null): { startDate: string; endDate: string } | null {
   if (!raw) return null;
-  const day = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (day) {
-    const [, y, m, d] = day;
-    const month = parseInt(m, 10);
-    if (month < 1 || month > 12 || parseInt(d, 10) < 1 || parseInt(d, 10) > lastDayOfMonth(parseInt(y, 10), month)) return null;
-    return { startDate: raw, endDate: raw };
-  }
-  const month = raw.match(/^(\d{4})-(\d{2})(?:-xx)?$/);
-  if (month) {
-    const [, y, m] = month;
-    const mm = parseInt(m, 10);
-    if (mm < 1 || mm > 12) return null;
-    const last = String(lastDayOfMonth(parseInt(y, 10), mm)).padStart(2, '0');
-    return { startDate: `${y}-${m}-01`, endDate: `${y}-${m}-${last}` };
-  }
-  const year = raw.match(/^(\d{4})(?:-xx-xx)?$/);
-  if (year) {
-    const y = year[1];
-    return { startDate: `${y}-01-01`, endDate: `${y}-12-31` };
-  }
-  return null;
+  const date = parsePartialDate(raw);
+  if (!date) return null;
+  return partialDateRange(date);
 }
 
 export class CinemaContextIngestor extends Ingestor<CinemaContextRecord> {

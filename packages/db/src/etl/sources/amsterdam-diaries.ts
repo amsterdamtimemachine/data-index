@@ -18,7 +18,7 @@ import { Draft, Ingestor } from '../ingest/ingestor';
 import { ManuscriptEntityFactory } from '../ingest/entity-factory';
 import { ExtractionArgs, PlaceExtractionMethod, Resolved } from '../places/place-index';
 import { NewFeature } from '../../schema';
-import { Excerpt, ManuscriptEntity, RecordType } from '@atm/shared';
+import { Excerpt, ManuscriptEntity, RecordType, parsePartialDate, partialDateRange } from '@atm/shared';
 
 type DiaryPlace = { uri: string; name: string; kind: string; geom_wkt: string };
 
@@ -42,33 +42,12 @@ type DiaryEntryRecord = {
 
 const EXCERPT_LENGTH = 128;
 
-function lastDayOfMonth(year: number, month: number): number {
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
-}
-
 /** The entry's period at the source's precision; null when unparseable. */
 export function parseEntryDate(raw: string | null): { startDate: string; endDate: string } | null {
   if (!raw) return null;
-  const day = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (day) {
-    const [, y, m, d] = day;
-    const month = parseInt(m, 10);
-    if (month < 1 || month > 12 || parseInt(d, 10) < 1 || parseInt(d, 10) > lastDayOfMonth(parseInt(y, 10), month)) return null;
-    return { startDate: raw, endDate: raw };
-  }
-  const month = raw.match(/^(\d{4})-(\d{2})$/);
-  if (month) {
-    const [, y, m] = month;
-    const mm = parseInt(m, 10);
-    if (mm < 1 || mm > 12) return null;
-    const last = String(lastDayOfMonth(parseInt(y, 10), mm)).padStart(2, '0');
-    return { startDate: `${y}-${m}-01`, endDate: `${y}-${m}-${last}` };
-  }
-  const year = raw.match(/^(\d{4})$/);
-  if (year) {
-    return { startDate: `${year[1]}-01-01`, endDate: `${year[1]}-12-31` };
-  }
-  return null;
+  const date = parsePartialDate(raw);
+  if (!date) return null;
+  return partialDateRange(date);
 }
 
 export class AmsterdamDiariesIngestor extends Ingestor<DiaryEntryRecord> {
