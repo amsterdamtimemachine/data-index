@@ -64,3 +64,27 @@ export function periodAsPartialDate(startDate: string, endDate: string): Partial
   if (start.month === end.month && end.day === lastDayOfMonth(end.year, end.month!)) return { year: start.year, month: start.month };
   return null;
 }
+
+// a Postgres daterange literal: "[1900-01-01,1900-12-31)"; a ")" end is exclusive
+const DATE_RANGE = /^\s*([\[(])\s*(\d{4}-\d{2}-\d{2})\s*,\s*(\d{4}-\d{2}-\d{2})\s*([)\]])\s*$/;
+
+function dayBefore(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * The inclusive period a daterange literal covers: an exclusive end becomes the day
+ * before. Null when it is not a range, or empty, such as "[d,d)".
+ */
+export function parseDateRange(raw: string): { startDate: string; endDate: string } | null {
+  const match = raw.match(DATE_RANGE);
+  if (!match) return null;
+  const [, , start, end, closer] = match;
+  if (!parsePartialDate(start)?.day || !parsePartialDate(end)?.day) return null;
+  let endDate = end;
+  if (closer === ')') endDate = dayBefore(end);
+  if (endDate < start) return null;
+  return { startDate: start, endDate };
+}

@@ -29,8 +29,12 @@ export type SkipReason = 'ambiguous' | 'cap-miss' | 'undated' | 'no-match';
 export type Resolved = { placeId: string } | { skip: SkipReason };
 
 const SKIP_PRECEDENCE: SkipReason[] = ['ambiguous', 'cap-miss', 'undated', 'no-match'];
-const moreSpecificSkip = (a: SkipReason | undefined, b: SkipReason): SkipReason =>
-    a !== undefined && SKIP_PRECEDENCE.indexOf(a) <= SKIP_PRECEDENCE.indexOf(b) ? a : b;
+function moreSpecificSkip(a: SkipReason | undefined, b: SkipReason): SkipReason {
+    if (a !== undefined && SKIP_PRECEDENCE.indexOf(a) <= SKIP_PRECEDENCE.indexOf(b)) {
+        return a;
+    }
+    return b;
+}
 
 type InferPlaceArgs = {
     area: string;

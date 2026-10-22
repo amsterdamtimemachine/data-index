@@ -20,15 +20,26 @@ const allPlacesCTE = sql`
       AND (pn.since IS NOT NULL OR pn.until IS NOT NULL);
 `
 
-const twins = createCachedResolver(twinOf);
+const twins = createCachedResolver(async (key: string) => {
+    const { placeId, start, end } = JSON.parse(key);
+    return twinOf(placeId, start, end);
+});
 
 // An address matched outside its register's era moves to the same address as the other
-// source records it, when the sources name exactly one; otherwise the match stands,
+// source records it. Among several twins, those that share one of the place's names
+// (the same street, not another street in the building), then those nearest the
+// feature date (the register closest in time); the match stands unless one is left,
 // being the only evidence there is. Streets and areas have no register split.
-async function eraTwin(placeId: string, type: PlaceType, eraFit: boolean): Promise<string> {
+async function eraTwin(placeId: string, type: PlaceType, eraFit: boolean, start: string, end: string): Promise<string> {
     if (type !== 'address' || eraFit) { return placeId }
-    const found = await twins(placeId);
-    if (found.length === 1) { return found[0] }
+    let found = await twins(JSON.stringify({ placeId, start, end }));
+    const named = found.filter((t) => t.sharesName);
+    if (named.length > 0) { found = named }
+    if (found.length > 1) {
+        const nearest = Math.min(...found.map((t) => t.gapDays ?? Infinity));
+        found = found.filter((t) => (t.gapDays ?? Infinity) === nearest);
+    }
+    if (found.length === 1) { return found[0].placeId }
     return placeId;
 }
 
@@ -47,8 +58,9 @@ export const inferByName = createCachedResolver(async (key: string): Promise<Res
     if (!area) { return { skip: 'no-match' } }
     if (!start || !end) { return { skip: 'undated' } }
     const r = resolveNamePool(await getCandidatesByName(area, start, end));
-    if (r.kind === 'resolved') { return { placeId: await eraTwin(r.winner.placeId, r.winner.type, r.winner.eraFit) } }
-    return { skip: r.kind === 'ambiguous' ? 'ambiguous' : 'no-match' };
+    if (r.kind === 'resolved') { return { placeId: await eraTwin(r.winner.placeId, r.winner.type, r.winner.eraFit, start, end) } }
+    if (r.kind === 'ambiguous') { return { skip: 'ambiguous' } }
+    return { skip: 'no-match' };
 })
 
 /**
@@ -64,7 +76,8 @@ export const inferByPoint = createCachedResolver(async (key: string): Promise<Re
     if (!wkt) { return { skip: 'no-match' } }
     if (!start || !end) { return { skip: 'undated' } }
     const best = pickFinest(await getCandidatesByPoint(wkt, start, end));
-    return best ? { placeId: await eraTwin(best.placeId, best.type, best.eraFit) } : { skip: 'cap-miss' };
+    if (!best) { return { skip: 'cap-miss' } }
+    return { placeId: await eraTwin(best.placeId, best.type, best.eraFit, start, end) };
 });
 
 const pointPool = createCachedResolver(async (key: string): Promise<Candidate[]> => {
@@ -80,7 +93,8 @@ export async function inferByPointConfirmed(wkt: string, text: string, start: st
     const named = pool.filter((c) => c.type === 'address' || c.type === 'street').map((c) => c.placeId);
     const names = await getNamesForPlaces(named);
     const best = pickFinest(confirmByText(pool, names, text));
-    return best ? { placeId: await eraTwin(best.placeId, best.type, best.eraFit) } : { skip: 'cap-miss' };
+    if (!best) { return { skip: 'cap-miss' } }
+    return { placeId: await eraTwin(best.placeId, best.type, best.eraFit, start, end) };
 }
 
 /**
@@ -104,7 +118,8 @@ export const inferByAdamURI = createCachedResolver(async (adamlinkUri: string): 
     `);
 
     const id = result.rows[0]?.place_id;
-    return id ? { placeId: id } : { skip: 'no-match' };
+    if (!id) { return { skip: 'no-match' } }
+    return { placeId: id };
 });
 
 /**

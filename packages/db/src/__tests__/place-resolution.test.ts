@@ -238,10 +238,21 @@ describe('feature → place resolution', () => {
     await building('bag-115-h', 'B1');
     await place('bag-117', 'address', 'bag', 'Amstel 117', 'POINT(120000 485007)');
     await building('bag-117', 'B1');
-    expect(await twinOf('bag-115')).toEqual(['lp-115']);
-    expect(await twinOf('lp-115')).toEqual(['bag-115']);
-    expect(await twinOf('bag-115-h')).toEqual([]);
-    expect(await twinOf('bag-117')).toEqual([]);
+    const ids = async (id: string) => (await twinOf(id, '1898-04-01', '1898-04-01')).map((t) => t.placeId);
+    expect(await ids('bag-115')).toEqual(['lp-115']);
+    expect(await ids('lp-115')).toEqual(['bag-115']);
+    expect(await ids('bag-115-h')).toEqual([]);
+    expect(await ids('bag-117')).toEqual([]);
+  });
+
+  test('twins: a shared name and the days to the nearest name record', async () => {
+    await seedTwins();
+    const [twin] = await twinOf('bag-115', '1898-04-01', '1898-04-01');
+    // the days from 1898-04-01 to the 1943 register
+    expect(twin).toEqual({ placeId: 'lp-115', sharesName: false, gapDays: 16345 });
+    const [back] = await twinOf('lp-115', '1898-04-01', '1898-04-01');
+    expect(back.sharesName).toBe(false);
+    expect(back.gapDays).toBeGreaterThan(365 * 100);
   });
 
   test('twins: a house number after a numbered street name', async () => {
@@ -251,7 +262,32 @@ describe('feature → place resolution', () => {
     await building('bag-12', 'B2');
     await place('bag-1', 'address', 'bag', '1e Helmersstraat 1', 'POINT(120000 485008)');
     await building('bag-1', 'B2');
-    expect(await twinOf('lp-12')).toEqual(['bag-12']);
+    expect((await twinOf('lp-12', '1990-01-01', '1990-01-01')).map((t) => t.placeId)).toEqual(['bag-12']);
+  });
+
+  test('several twins: the one that shares a name wins over another street in the building', async () => {
+    await place('lp-munt', 'address', 'adamlink', 'Muntplein 2', 'POINT(120000 485010)');
+    await histName('n-munt', 'lp-munt', 'Munt 2', '1943-01-01', '1943-12-31');
+    await building('lp-munt', 'B4');
+    await place('bag-munt', 'address', 'bag', 'Muntplein 2', 'POINT(120000 485009)');
+    await building('bag-munt', 'B4');
+    await place('bag-joris', 'address', 'bag', 'Sint Jorissteeg 2', 'POINT(120000 485008)');
+    await building('bag-joris', 'B4');
+    // only Adamlink knows the old name; the 1990 feature moves to the BAG twin on the same street
+    expect(await inferByName(nkey('Munt 2', '1990-01-01', '1990-01-01'))).toEqual({ placeId: 'bag-munt' });
+  });
+
+  test('several twins: the register nearest the feature date wins', async () => {
+    await place('bag-115', 'address', 'bag', 'Amstel 115', 'POINT(120000 485009)');
+    await building('bag-115', 'B1');
+    await place('lp-1909', 'address', 'adamlink', 'Binnen Amstel 115', 'POINT(120000 485010)');
+    await histName('n-1909', 'lp-1909', 'Binnen Amstel 115', '1909-01-01', '1909-12-31');
+    await building('lp-1909', 'B1');
+    await place('lp-1943', 'address', 'adamlink', 'Binnen Amstel 115', 'POINT(120000 485011)');
+    await histName('n-1943', 'lp-1943', 'Binnen Amstel 115', '1943-01-01', '1943-12-31');
+    await building('lp-1943', 'B1');
+    expect(await inferByName(nkey('Amstel 115', '1898-04-01', '1898-04-01'))).toEqual({ placeId: 'lp-1909' });
+    expect(await inferByName(nkey('Amstel 115', '1930-01-01', '1930-01-01'))).toEqual({ placeId: 'lp-1943' });
   });
 
   test('name match outside its era yields to its twin: a renamed street finds the old address', async () => {

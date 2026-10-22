@@ -1,6 +1,6 @@
 /** The shared date parser: a source's year, month or day, its period, and the reverse. */
 import { describe, test, expect } from 'bun:test';
-import { parsePartialDate, partialDateRange, periodAsPartialDate, formatIsoDate } from '@atm/shared';
+import { parsePartialDate, partialDateRange, periodAsPartialDate, formatIsoDate, parseDateRange } from '@atm/shared';
 
 describe('parsePartialDate', () => {
   test('a day, a month and a year, with or without xx placeholders', () => {
@@ -47,5 +47,20 @@ describe('formatIsoDate', () => {
     expect(formatIsoDate({ year: 1907, month: 5, day: 2 })).toBe('1907-05-02');
     expect(formatIsoDate({ year: 1907, month: 5 })).toBe('1907-05');
     expect(formatIsoDate({ year: 1907 })).toBe('1907');
+  });
+});
+
+describe('parseDateRange', () => {
+  test('an exclusive end becomes the day before; an inclusive one stays', () => {
+    expect(parseDateRange('[1900-01-01,1901-01-01)')).toEqual({ startDate: '1900-01-01', endDate: '1900-12-31' });
+    expect(parseDateRange('[1900-01-01,1900-12-31]')).toEqual({ startDate: '1900-01-01', endDate: '1900-12-31' });
+    expect(parseDateRange('[1934-01-05,1934-01-06)')).toEqual({ startDate: '1934-01-05', endDate: '1934-01-05' });
+  });
+
+  test('an empty range, a bad date or anything else is null', () => {
+    expect(parseDateRange('[1934-01-05,1934-01-05)')).toBeNull();
+    expect(parseDateRange('[1934-02-30,1934-03-01)')).toBeNull();
+    expect(parseDateRange('1934-01-05')).toBeNull();
+    expect(parseDateRange('')).toBeNull();
   });
 });

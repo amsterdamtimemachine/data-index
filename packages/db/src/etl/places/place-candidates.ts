@@ -11,11 +11,10 @@
  */
 import { db } from '../../client';
 import { sql, type SQL } from 'drizzle-orm/sql';
-import { ADDRESS_MAX_DISTANCE_M, STREET_MAX_DISTANCE_M, ERA_CUTOFF, CURRENT_ANCHOR } from '@atm/shared';
+import { ADDRESS_MAX_DISTANCE_M, STREET_MAX_DISTANCE_M, ERA_CUTOFF, CURRENT_ANCHOR, type PlaceType, type PlaceSource } from '@atm/shared';
 import { wktToRd } from '../sql';
 
-export type PlaceType = 'address' | 'street' | 'neighbourhood' | 'district';
-export type PlaceSource = 'adamlink' | 'bag' | 'nwb' | 'cbs';
+export type { PlaceType, PlaceSource };
 
 // address > street > neighbourhood > district — the finest-first priority
 export const GRANULARITIES: PlaceType[] = ['address', 'street', 'neighbourhood', 'district'];
@@ -113,11 +112,16 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
            (since IS NOT NULL OR until IS NOT NULL) AS dated
     FROM area
   `);
-  return rows.rows.map((r) => ({
-    placeId: r.place_id, name: r.name, type: r.type, source: r.source,
-    distanceM: Number(r.dist), overlapDays: r.overlap_days === null ? null : Number(r.overlap_days),
-    eraFit: r.era_fit, dated: r.dated,
-  }));
+  return rows.rows.map((r) => {
+    let overlapDays: number | null = null;
+    if (r.overlap_days !== null) {
+      overlapDays = Number(r.overlap_days);
+    }
+    return {
+      placeId: r.place_id, name: r.name, type: r.type, source: r.source,
+      distanceM: Number(r.dist), overlapDays, eraFit: r.era_fit, dated: r.dated,
+    };
+  });
 }
 
 // ── NAME signal: match current + dated historical names; nearest-by-overlap wins.
@@ -159,24 +163,68 @@ export async function getCandidatesByName(name: string, start: string, end: stri
 const houseNumber = (name: SQL) =>
   sql`regexp_replace(substring(lower(${name}) from '(\\d\\S*(?: [a-z])?)$'), ' ', '', 'g')`;
 
+export interface Twin {
+  placeId: string;
+  // the twin has gone by a name the place itself has had
+  sharesName: boolean;
+  // days from the feature range to the twin's nearest name record; null without a dated one
+  gapDays: number | null;
+}
+
 /**
- * The same address as the other source records it: an address in the same BAG building,
- * as both sources state it, with the same house designation. At most one from bag to
- * adamlink; several from adamlink to bag when the house was later split into units.
+ * The same address as the other source records it: every address in the same BAG
+ * building, as both sources state it, with the same house designation. Several when
+ * one building has that number on two streets, when Adamlink keeps a point per
+ * register, or when BAG holds a unit in use and one formed; sharesName and gapDays
+ * tell them apart.
  */
-export async function twinOf(placeId: string): Promise<string[]> {
-  const rows = await db.execute<{ id: string }>(sql`
-    SELECT o.id
-    FROM place p
-    JOIN place_geometry pg ON pg.place_id = p.id
-    JOIN place_geometry og ON og.building_id = pg.building_id AND og.place_id <> p.id
-    JOIN place o ON o.id = og.place_id
-    WHERE p.id = ${placeId} AND p.type = 'address' AND o.type = 'address'
-      AND o.source <> p.source
-      AND ${houseNumber(sql`o.name`)} = ${houseNumber(sql`p.name`)}
-    ORDER BY o.id
+export async function twinOf(placeId: string, start: string, end: string): Promise<Twin[]> {
+  const rows = await db.execute<{ id: string; shares_name: boolean; gap_days: number | null }>(sql`
+    WITH me AS (
+      SELECT p.id, p.source, pg.building_id, ${houseNumber(sql`p.name`)} AS house
+      FROM place p JOIN place_geometry pg ON pg.place_id = p.id
+      WHERE p.id = ${placeId} AND p.type = 'address'
+    ),
+    my_names AS (
+      SELECT LOWER(p.name) AS n FROM place p WHERE p.id = ${placeId} AND p.name IS NOT NULL
+      UNION
+      SELECT LOWER(hn.name) FROM place_historical_name hn WHERE hn.place_id = ${placeId} AND hn.name IS NOT NULL
+    ),
+    cand AS (
+      SELECT o.id, o.name
+      FROM me
+      JOIN place_geometry og ON og.building_id = me.building_id AND og.place_id <> me.id
+      JOIN place o ON o.id = og.place_id
+      WHERE o.type = 'address' AND o.source <> me.source
+        AND ${houseNumber(sql`o.name`)} = me.house
+    ),
+    cand_names AS (
+      SELECT c.id, LOWER(c.name) AS n, 'current' AS via, NULL::date AS since, NULL::date AS until
+      FROM cand c WHERE c.name IS NOT NULL
+      UNION ALL
+      SELECT c.id, LOWER(hn.name), 'historical', hn.since, hn.until
+      FROM cand c JOIN place_historical_name hn ON hn.place_id = c.id WHERE hn.name IS NOT NULL
+    ),
+    -- an undated historical row is a label, not an observation: no gap
+    scored AS (
+      SELECT id, n,
+             CASE WHEN via = 'historical' AND since IS NULL AND until IS NULL THEN NULL
+                  ELSE ${nameGapDays(start, end)} END AS gap
+      FROM cand_names
+    )
+    SELECT c.id,
+           EXISTS (SELECT 1 FROM scored s JOIN my_names m ON m.n = s.n WHERE s.id = c.id) AS shares_name,
+           (SELECT MIN(s.gap) FROM scored s WHERE s.id = c.id) AS gap_days
+    FROM cand c
+    ORDER BY c.id
   `);
-  return rows.rows.map((r) => r.id);
+  return rows.rows.map((r) => {
+    let gapDays: number | null = null;
+    if (r.gap_days !== null) {
+      gapDays = Number(r.gap_days);
+    }
+    return { placeId: r.id, sharesName: r.shares_name, gapDays };
+  });
 }
 
 // ── every name a place has gone by: the current one and each historical row, dated or not ──
@@ -202,11 +250,18 @@ export async function getNamesForPlaces(placeIds: string[]): Promise<Map<string,
 // (turn a pool into resolved links — the resolver layer wires these together)
 
 // point-pool comparator: era-fit first, then longest overlap (areas) or nearest distance
-export const rank = (a: Candidate, b: Candidate) =>
-  Number(b.eraFit) - Number(a.eraFit)
-  || (a.overlapDays != null && b.overlapDays != null
-        ? (b.overlapDays - a.overlapDays) || (Number(b.dated) - Number(a.dated))
-        : a.distanceM - b.distanceM);
+export function rank(a: Candidate, b: Candidate): number {
+  if (a.eraFit !== b.eraFit) {
+    return Number(b.eraFit) - Number(a.eraFit);
+  }
+  if (a.overlapDays === null || b.overlapDays === null) {
+    return a.distanceM - b.distanceM;
+  }
+  if (a.overlapDays !== b.overlapDays) {
+    return b.overlapDays - a.overlapDays;
+  }
+  return Number(b.dated) - Number(a.dated);
+}
 
 // finest granularity present in `best`, following the address>street>… priority
 export function finestResolvable(best: Partial<Record<PlaceType, unknown>>): PlaceType | undefined {
@@ -222,11 +277,18 @@ export type NameResolution =
 
 export function resolveNamePool(pool: NameCandidate[]): NameResolution {
   if (pool.length === 0) return { kind: 'none' };
-  const sorted = [...pool].sort((a, b) =>
-    a.gapDays - b.gapDays || GRANULARITIES.indexOf(a.type) - GRANULARITIES.indexOf(b.type));
+  const sorted = [...pool].sort((a, b) => {
+    if (a.gapDays !== b.gapDays) {
+      return a.gapDays - b.gapDays;
+    }
+    return GRANULARITIES.indexOf(a.type) - GRANULARITIES.indexOf(b.type);
+  });
   const top = sorted[0];
   const tied = sorted.filter((c) => c.gapDays === top.gapDays && c.type === top.type);
-  return tied.length > 1 ? { kind: 'ambiguous', tied } : { kind: 'resolved', winner: top };
+  if (tied.length > 1) {
+    return { kind: 'ambiguous', tied };
+  }
+  return { kind: 'resolved', winner: top };
 }
 
 // ── point-pool → the single most-specific place to link (spec req 15), or undefined ──
@@ -238,5 +300,8 @@ export function pickFinest(pool: Candidate[]): Candidate | undefined {
     best[t] = pool.filter((c) => c.type === t && (cap === null || c.distanceM <= cap)).sort(rank)[0];
   }
   const type = finestResolvable(best);
-  return type ? best[type] : undefined;
+  if (!type) {
+    return undefined;
+  }
+  return best[type];
 }
