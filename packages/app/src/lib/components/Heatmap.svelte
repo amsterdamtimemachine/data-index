@@ -58,13 +58,14 @@
 		center: Coordinates;
 		cellSelectedOutlineColor: string; // hex
 		cellSelectedOutlineWidth: number; // px
-		cellHoveredOutlineColor: string; //hex
-		cellHoveredOutlineOpacity: number; // 0.0 - 1.0
 		cellValueColor: string; // hex
 		outlineLayerColor: string; // hex
 		placeOutlineWidth: number; // px, thicker than the cell selection so both read when they overlap
 		placeOutlineCasingColor: string; // hex, darker band under the place outline
-		placeHoverColor: string; // hex, the dark gold outline while a search result is pointed at
+		// a hovered cell or search result is drawn as its selection would be, lifted by a drop shadow
+		hoverShadowColor: string; // hex
+		hoverShadowOpacity: number; // 0.0 - 1.0
+		hoverShadowOffset: [number, number]; // px right and down
 		cellSelectedCasingColor: string; // hex, darker band under the cell selection
 		outlineCasingExtra: number; // px added around a cased line
 		backgroundColor: string; // hex
@@ -109,14 +110,14 @@
 		defaultZoomMobile: 11,
 		center: { lon: 4.895645, lat: 52.372219 },
 		cellSelectedOutlineColor: colors['atm-red'],
-		cellHoveredOutlineColor: colors['map-selected-outline-casing'],
-		cellHoveredOutlineOpacity: 0.8,
 		cellSelectedOutlineWidth: 3,
 		cellValueColor: colors['map-cell-value'],
 		outlineLayerColor: colors['map-place-outline'],
 		placeOutlineWidth: 5,
 		placeOutlineCasingColor: colors['map-place-outline-casing'],
-		placeHoverColor: colors['map-place-outline-casing'],
+		hoverShadowColor: colors['atm-black'],
+		hoverShadowOpacity: 0.7,
+		hoverShadowOffset: [2, 2],
 		cellSelectedCasingColor: colors['map-selected-outline-casing'],
 		outlineCasingExtra: 4,
 		backgroundColor: colors['map-background'],
@@ -303,28 +304,12 @@
 		}
 	});
 
-	// Sync the place outline with the selected place's cells
+	// The gold perimeter follows the selected place, the hover one the pointed-at result
 	$effect(() => {
-		if (!isMapLoaded || !map || !dimensions) return;
-		const source = map.getSource('place-outline') as maplibre.GeoJSONSource | undefined;
-		if (!source) return;
-		let cells: number[] = [];
-		if (placeCells) {
-			cells = placeCells;
-		}
-		source.setData(placeOutlineGeometry(cells, cellGeometries, dimensions.colsAmount));
+		setOutlineCells('place-outline', placeCells);
 	});
-
-	// Sync the hover outline with the pointed-at search result's cells
 	$effect(() => {
-		if (!isMapLoaded || !map || !dimensions) return;
-		const source = map.getSource('place-hover') as maplibre.GeoJSONSource | undefined;
-		if (!source) return;
-		let cells: number[] = [];
-		if (hoverCells) {
-			cells = hoverCells;
-		}
-		source.setData(placeOutlineGeometry(cells, cellGeometries, dimensions.colsAmount));
+		setOutlineCells('place-hover', hoverCells);
 	});
 
 	// Handle selected cell changes - THIS FIXES THE HIGHLIGHTING ISSUE
@@ -355,6 +340,51 @@
 			mapInstance.setFeatureState({ source: 'heatmap', id: cellId }, stateValues);
 		});
 		previousActive = new Set(activeCells.keys());
+	}
+
+	// A cased outline: a wider casing under the stroke, and under both a drop shadow
+	// when the outline marks a hover. Layer ids are <id>-shadow, <id>-casing, <id>.
+	function addOutline(
+		target: maplibre.Map,
+		id: string,
+		source: string,
+		stroke: { color: string; casingColor: string; width: number },
+		shadow = false
+	) {
+		const casingWidth = stroke.width + mapStyle.outlineCasingExtra;
+		if (shadow) {
+			target.addLayer({
+				id: `${id}-shadow`,
+				type: 'line',
+				source,
+				paint: {
+					'line-color': mapStyle.hoverShadowColor,
+					'line-width': casingWidth,
+					'line-opacity': mapStyle.hoverShadowOpacity,
+					'line-translate': mapStyle.hoverShadowOffset
+				}
+			});
+		}
+		target.addLayer({
+			id: `${id}-casing`,
+			type: 'line',
+			source,
+			paint: { 'line-color': stroke.casingColor, 'line-width': casingWidth }
+		});
+		target.addLayer({
+			id,
+			type: 'line',
+			source,
+			paint: { 'line-color': stroke.color, 'line-width': stroke.width }
+		});
+	}
+
+	// the perimeter of a cell set as a source's data: the selected place, the hovered result
+	function setOutlineCells(sourceId: string, cells: number[] | undefined) {
+		if (!isMapLoaded || !map || !dimensions) return;
+		const source = map.getSource(sourceId) as maplibre.GeoJSONSource | undefined;
+		if (!source) return;
+		source.setData(placeOutlineGeometry(cells ?? [], cellGeometries, dimensions.colsAmount));
 	}
 
 	// One cell as a source's whole data set (selection, hover), or empty
@@ -531,51 +561,28 @@
 				}
 			});
 
-			// The search result under the pointer: a dark gold perimeter, under the selection
-			mapInstance.addSource('place-hover', {
-				type: 'geojson',
-				data: placeOutlineGeometry([], cellGeometries, dimensions.colsAmount),
-				maxzoom: mapStyle.maxZoom
-			});
-			mapInstance.addLayer({
-				id: 'place-hover',
-				type: 'line',
-				source: 'place-hover',
-				layout: { 'line-cap': 'square' },
-				paint: {
-					'line-color': mapStyle.placeHoverColor,
-					'line-width': mapStyle.placeOutlineWidth
-				}
-			});
+			const placeStroke = {
+				color: mapStyle.outlineLayerColor,
+				casingColor: mapStyle.placeOutlineCasingColor,
+				width: mapStyle.placeOutlineWidth
+			};
+			const cellStroke = {
+				color: mapStyle.cellSelectedOutlineColor,
+				casingColor: mapStyle.cellSelectedCasingColor,
+				width: mapStyle.cellSelectedOutlineWidth
+			};
 
-			// Place-filter outline: gold perimeter, under the red cell selection
-			mapInstance.addSource('place-outline', {
-				type: 'geojson',
-				data: placeOutlineGeometry([], cellGeometries, dimensions.colsAmount),
-				maxzoom: mapStyle.maxZoom
-			});
-			mapInstance.addLayer({
-				id: 'place-outline-casing',
-				type: 'line',
-				source: 'place-outline',
-				// square caps: the perimeter is independent edge segments, and butt caps
-				// leave unpainted notches where two meet at a corner
-				layout: { 'line-cap': 'square' },
-				paint: {
-					'line-color': mapStyle.placeOutlineCasingColor,
-					'line-width': mapStyle.placeOutlineWidth + mapStyle.outlineCasingExtra
-				}
-			});
-			mapInstance.addLayer({
-				id: 'place-outline',
-				type: 'line',
-				source: 'place-outline',
-				layout: { 'line-cap': 'square' },
-				paint: {
-					'line-color': mapStyle.outlineLayerColor,
-					'line-width': mapStyle.placeOutlineWidth
-				}
-			});
+			// The search result under the pointer, then the place filter's gold perimeter;
+			// each a perimeter of cells, one source apiece
+			for (const id of ['place-hover', 'place-outline']) {
+				mapInstance.addSource(id, {
+					type: 'geojson',
+					data: placeOutlineGeometry([], cellGeometries, dimensions.colsAmount),
+					maxzoom: mapStyle.maxZoom
+				});
+			}
+			addOutline(mapInstance, 'place-hover', 'place-hover', placeStroke, true);
+			addOutline(mapInstance, 'place-outline', 'place-outline', placeStroke);
 
 			// Red selection core inside the gold band while the place is the panel's
 			// subject; the gold outline itself is the contrast ring, so no casing.
@@ -583,7 +590,7 @@
 				id: 'place-selected',
 				type: 'line',
 				source: 'place-outline',
-				layout: { 'line-cap': 'square', visibility: 'none' },
+				layout: { visibility: 'none' },
 				paint: {
 					'line-color': mapStyle.cellSelectedOutlineColor,
 					'line-width': mapStyle.cellSelectedOutlineWidth
@@ -592,48 +599,15 @@
 
 			// Selection and hover each get a one-cell source: a line layer over the whole
 			// grid would tessellate every cell's outline each frame, invisible or not
-			mapInstance.addSource('selection', {
-				type: 'geojson',
-				data: cellCollection(undefined),
-				maxzoom: mapStyle.maxZoom
-			});
-			mapInstance.addSource('hover', {
-				type: 'geojson',
-				data: cellCollection(undefined),
-				maxzoom: mapStyle.maxZoom
-			});
-
-			// Active cell
-			mapInstance.addLayer({
-				id: 'selected-cell-casing',
-				type: 'line',
-				source: 'selection',
-				paint: {
-					'line-color': mapStyle.cellSelectedCasingColor,
-					'line-width': mapStyle.cellSelectedOutlineWidth + mapStyle.outlineCasingExtra
-				}
-			});
-			mapInstance.addLayer({
-				id: 'selected-cell',
-				type: 'line',
-				source: 'selection',
-				paint: {
-					'line-color': mapStyle.cellSelectedOutlineColor,
-					'line-width': mapStyle.cellSelectedOutlineWidth
-				}
-			});
-
-			// Hover cell
-			mapInstance.addLayer({
-				id: 'hovered-cell',
-				type: 'line',
-				source: 'hover',
-				paint: {
-					'line-color': mapStyle.cellHoveredOutlineColor,
-					'line-width': mapStyle.cellSelectedOutlineWidth,
-					'line-opacity': mapStyle.cellHoveredOutlineOpacity
-				}
-			});
+			for (const id of ['selection', 'hover']) {
+				mapInstance.addSource(id, {
+					type: 'geojson',
+					data: cellCollection(undefined),
+					maxzoom: mapStyle.maxZoom
+				});
+			}
+			addOutline(mapInstance, 'selected-cell', 'selection', cellStroke);
+			addOutline(mapInstance, 'hovered-cell', 'hover', cellStroke, true);
 
 			// Event handlers
 			let hoveredFeatureId: string | null = null;

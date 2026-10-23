@@ -199,32 +199,44 @@ describe('placeOutlineGeometry', () => {
 	};
 	const geoms = generateCellGeometries(DIMS);
 
-	test('a single cell yields its four edges', () => {
+	test('a single cell yields one closed ring of its four edges', () => {
 		const outline = placeOutlineGeometry([5], geoms, DIMS.colsAmount);
-		expect(outline.geometry.coordinates.length).toBe(4);
+		expect(outline.geometry.coordinates.length).toBe(1);
+		const ring = outline.geometry.coordinates[0][0];
+		expect(ring.length).toBe(5);
+		expect(ring[0]).toEqual(ring[4]);
 	});
 
-	test('shared edges vanish: a horizontal pair yields six edges', () => {
+	test('shared edges vanish: a horizontal pair is one ring of six edges', () => {
 		const outline = placeOutlineGeometry([5, 6], geoms, DIMS.colsAmount);
-		expect(outline.geometry.coordinates.length).toBe(6);
+		expect(outline.geometry.coordinates.length).toBe(1);
+		expect(outline.geometry.coordinates[0][0].length).toBe(7);
 	});
 
-	test('a solid 2x2 block yields its eight border edges, none interior', () => {
+	test('a solid 2x2 block is one ring on its border, nothing interior', () => {
 		const outline = placeOutlineGeometry([0, 1, 4, 5], geoms, DIMS.colsAmount);
-		expect(outline.geometry.coordinates.length).toBe(8);
-		// no edge may lie strictly inside the block: every segment touches the border box
-		for (const [a, b] of outline.geometry.coordinates) {
-			const onBorder =
-				a[0] === 0 || a[0] === 2 || a[1] === 0 || a[1] === 2 ||
-				b[0] === 0 || b[0] === 2 || b[1] === 0 || b[1] === 2;
+		expect(outline.geometry.coordinates.length).toBe(1);
+		const ring = outline.geometry.coordinates[0][0];
+		expect(ring.length).toBe(9);
+		for (const [x, y] of ring) {
+			const onBorder = x === 0 || x === 2 || y === 0 || y === 2;
 			expect(onBorder).toBe(true);
 		}
 	});
 
-	test('row wrap is not adjacency: end of one row and start of the next stay separate', () => {
+	test('row wrap is not adjacency: end of one row and start of the next are two rings', () => {
 		// index 3 = (row 0, col 3), index 4 = (row 1, col 0) — consecutive indices, not neighbours
 		const outline = placeOutlineGeometry([3, 4], geoms, DIMS.colsAmount);
-		expect(outline.geometry.coordinates.length).toBe(8);
+		expect(outline.geometry.coordinates.length).toBe(2);
+	});
+
+	test('cells touching only at a corner stay two rings', () => {
+		// index 0 = (row 0, col 0), index 5 = (row 1, col 1)
+		const outline = placeOutlineGeometry([0, 5], geoms, DIMS.colsAmount);
+		expect(outline.geometry.coordinates.length).toBe(2);
+		for (const [ring] of outline.geometry.coordinates) {
+			expect(ring.length).toBe(5);
+		}
 	});
 });
 

@@ -258,9 +258,11 @@ export function generateCellGeometries(
  * cell in the set. Consumes the CellGeometry rings the map renders, so the
  * outline lands exactly on drawn cell borders (also in exact-reproject mode).
  */
+// the perimeter as polygon rings: a line layer outlines a polygon closed, with a
+// joint at every corner, where a line string would end in two caps
 export interface PlaceOutline {
 	type: 'Feature';
-	geometry: { type: 'MultiLineString'; coordinates: [number, number][][] };
+	geometry: { type: 'MultiPolygon'; coordinates: [number, number][][][] };
 	properties: Record<string, never>;
 }
 
@@ -270,7 +272,9 @@ export function placeOutlineGeometry(
 	colsAmount: number
 ): PlaceOutline {
 	const inSet = new Set(cells);
-	const lines: [number, number][][] = [];
+	// the perimeter's edges, each pointing counter-clockwise around its cell, so a walk
+	// along them keeps the region on its left
+	const edges: [number, number][][] = [];
 	for (const idx of cells) {
 		const cell = geometries[idx];
 		if (!cell) {
@@ -279,19 +283,69 @@ export function placeOutlineGeometry(
 		// ring is SW→SE→NE→NW→SW; an edge is kept when its neighbour is not in the set
 		const ring = cell.coordinates[0];
 		if (!inSet.has(idx - colsAmount)) {
-			lines.push([ring[0], ring[1]]); // south
+			edges.push([ring[0], ring[1]]); // south
 		}
 		if (cell.col === colsAmount - 1 || !inSet.has(idx + 1)) {
-			lines.push([ring[1], ring[2]]); // east
+			edges.push([ring[1], ring[2]]); // east
 		}
 		if (!inSet.has(idx + colsAmount)) {
-			lines.push([ring[2], ring[3]]); // north
+			edges.push([ring[2], ring[3]]); // north
 		}
 		if (cell.col === 0 || !inSet.has(idx - 1)) {
-			lines.push([ring[3], ring[0]]); // west
+			edges.push([ring[3], ring[0]]); // west
 		}
 	}
-	return { type: 'Feature', geometry: { type: 'MultiLineString', coordinates: lines }, properties: {} };
+	const rings = joinRings(edges).map((ring) => [ring]);
+	return { type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: rings }, properties: {} };
+}
+
+const pointKey = (p: [number, number]) => `${p[0]},${p[1]}`;
+
+// the turn from one direction to the next: positive left, negative right
+function turn(from: [number, number], via: [number, number], to: [number, number]): number {
+	return (via[0] - from[0]) * (to[1] - via[1]) - (via[1] - from[1]) * (to[0] - via[0]);
+}
+
+// The edges chained into closed rings, so a corner is one joint and no two segments
+// overlap. Where two cells touch only at a corner the perimeter passes it twice; the
+// walk takes the left turn there, which keeps each cell group its own ring.
+function joinRings(edges: [number, number][][]): [number, number][][] {
+	const unused = new Map<string, [number, number][][]>();
+	for (const edge of edges) {
+		const key = pointKey(edge[0]);
+		const list = unused.get(key) ?? [];
+		list.push(edge);
+		unused.set(key, list);
+	}
+	const rings: [number, number][][] = [];
+	for (const first of edges) {
+		const fromFirst = unused.get(pointKey(first[0]));
+		if (!fromFirst || !fromFirst.includes(first)) {
+			continue;
+		}
+		fromFirst.splice(fromFirst.indexOf(first), 1);
+		const ring: [number, number][] = [first[0], first[1]];
+		let previous = first[0];
+		let current = first[1];
+		while (pointKey(current) !== pointKey(first[0])) {
+			const candidates = unused.get(pointKey(current));
+			if (!candidates || candidates.length === 0) {
+				break;
+			}
+			let next = candidates[0];
+			for (const candidate of candidates) {
+				if (turn(previous, current, candidate[1]) > turn(previous, current, next[1])) {
+					next = candidate;
+				}
+			}
+			candidates.splice(candidates.indexOf(next), 1);
+			ring.push(next[1]);
+			previous = current;
+			current = next[1];
+		}
+		rings.push(ring);
+	}
+	return rings;
 }
 
 /**

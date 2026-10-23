@@ -13,6 +13,7 @@ export default {
 			colors: {
 				'link': '#6D5026',
 				'link-hover': '#78481e',
+				'atm-black': '#000000', // ink: text, icons, the map's drop shadows
 				'atm-sand': '#fcf8f7',
 				'atm-sand-darkish': '#f9f2f0',
 				'atm-sand-dark': '#f6e8df',
