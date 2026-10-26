@@ -141,6 +141,8 @@ const TRANSLATIONS: Record<string, string> = {
 	emptyPanelOtherCell: 'Of kies een andere cel op de kaart.',
 	localTimelineAlt: 'Tijdlijn van de selectie met rode balken',
 	// the timeline hover
+	// the cell under the pointer, in the order its id has in a link (cell=51_53)
+	cellPosition: 'rij {row}, kolom {col}',
 	featureOne: 'feature',
 	featureMany: 'features',
 	showing: 'Toont',

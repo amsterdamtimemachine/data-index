@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { translate } from '#lib/utils/translations.js';
+	import { translate, fill } from '#lib/utils/translations.js';
 	import { parseRowColFromCellId } from '#lib/utils/heatmap.js';
 
 	function pluralised(count: number): string {
@@ -711,7 +711,7 @@
 		>
 			<div class="font-medium">{hoverTooltip.count} {pluralised(hoverTooltip.count)}</div>
 			{#if cell}
-				<div class="text-xs opacity-75">x:{cell.col} y:{cell.row}</div>
+				<div class="text-xs opacity-75">{fill(translate('cellPosition'), { row: String(cell.row), col: String(cell.col) })}</div>
 			{/if}
 		</div>
 	{/if}
