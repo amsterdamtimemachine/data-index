@@ -230,6 +230,26 @@ describe('placeOutlineGeometry', () => {
 		expect(outline.geometry.coordinates.length).toBe(2);
 	});
 
+	test('a real-world grid, where neighbouring corners differ in the last decimal, still closes', () => {
+		// the city's bounds: cell edges come from two different sums and rarely agree exactly
+		const CITY: HeatmapDimensions = {
+			colsAmount: 125,
+			rowsAmount: 83,
+			minLon: 4.727581842727254,
+			maxLon: 5.1079051517864,
+			minLat: 52.27655601547094,
+			maxLat: 52.43263852195789
+		};
+		const city = generateCellGeometries(CITY);
+		// cells 2 and 3 meet where the two sums disagree
+		expect(city[2].coordinates[0][1]).not.toEqual(city[3].coordinates[0][0]);
+		const outline = placeOutlineGeometry([2, 3, 4], city, CITY.colsAmount);
+		expect(outline.geometry.coordinates.length).toBe(1);
+		const [ring] = outline.geometry.coordinates[0];
+		expect(ring[0]).toEqual(ring[ring.length - 1]);
+		expect(ring.length).toBe(9);
+	});
+
 	test('cells touching only at a corner stay two rings', () => {
 		// index 0 = (row 0, col 0), index 5 = (row 1, col 1)
 		const outline = placeOutlineGeometry([0, 5], geoms, DIMS.colsAmount);
