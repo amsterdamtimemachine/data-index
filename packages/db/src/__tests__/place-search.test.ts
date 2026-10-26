@@ -32,6 +32,7 @@ const TOREN_1700 = 'ps-toren-1700';
 const TOREN_HIST = 'ps-toren-hist';      // still-open street that was called Torenstraat until 1850
 const TOREN_ALIAS = 'ps-toren-alias';    // street begun 1950 with Torenstraat as an undated variant
 const TOREN_UNDATED = 'ps-toren-undated';
+const TOREN_SUPERSEDED = 'ps-toren-superseded'; // Torenstraat from 1890, no end; Torenlaan from 1920 is its name now
 const BAG_TWIN = 'ps-bag-9';           // the current register's row for Kerkstraat 9
 const BAG_ALONE = 'ps-bag-7';          // a current address no historical register knows
 const FID = '22222222-2222-2222-2222-2222222222aa';
@@ -67,6 +68,10 @@ describe('place search', () => {
       (${TOREN_ALIAS}, 'street', 'Torenplein'),
       (${TOREN_UNDATED}, 'street', 'Torenstraat')`);
     await db.execute(sql`UPDATE place SET source = 'adamlink' WHERE id IN (${RENUMBERED}, ${BOTH})`);
+    await db.execute(sql`INSERT INTO place (id, type, name, source) VALUES (${TOREN_SUPERSEDED}, 'street', 'Torenlaan', 'adamlink')`);
+    await db.execute(sql`INSERT INTO place_historical_name (id, place_id, name, since, until) VALUES
+      ('ps-hist-8', ${TOREN_SUPERSEDED}, 'Torenstraat', '1890-01-01', NULL),
+      ('ps-hist-9', ${TOREN_SUPERSEDED}, 'Torenlaan', '1920-01-01', NULL)`);
     await db.execute(sql`INSERT INTO place (id, type, name, source) VALUES
       (${BAG_TWIN}, 'address', 'Kerkstraat 9', 'bag'),
       (${BAG_ALONE}, 'address', 'Kerkstraat 7', 'bag')`);
@@ -131,11 +136,12 @@ describe('place search', () => {
   });
 
   test('exact matches follow a timeline: current youngest first, ended latest end first, undated last', async () => {
+    // an adamlink name without an end that the street no longer carries sorts as ended
     // the variant of the 1950 street sorts with its place; the historical match sorts
     // on its name's end (1850), not on its still-open geometry
     const matches = await searchPlaces('Torenstraat');
     const ids = matches.map((m) => m.placeId);
-    expect(ids).toEqual([TOREN_YOUNG, TOREN_ALIAS, TOREN_OPEN, TOREN_1900, TOREN_HIST, TOREN_1700, TOREN_UNDATED]);
+    expect(ids).toEqual([TOREN_YOUNG, TOREN_ALIAS, TOREN_OPEN, TOREN_1900, TOREN_HIST, TOREN_1700, TOREN_SUPERSEDED, TOREN_UNDATED]);
     expect(matches[1].matchedNameId).toBe('ps-hist-7');
     expect(matches[1].matchedWindow).toBeNull();
   });

@@ -10,13 +10,13 @@ const MAX_QUERY_LENGTH = 100;
 const MAX_RESULTS = 20;
 
 // exact name matches first; among them a current register's rows, then a timeline:
-// rows still current, youngest first; then ended rows, latest end first; then
-// undated rows. Finest granularity and the name only break ties; whether a place
-// has features plays no part
+// rows still current, youngest first; then ended rows, latest end first, a
+// superseded name without an end last among them; then undated rows. Finest
+// granularity and the name only break ties; whether a place has features plays no part
 const SEARCH_ORDER = sql`exact_match DESC,
   CASE WHEN source IN ('bag', 'nwb', 'cbs') THEN 0 ELSE 1 END,
-  CASE WHEN sort_until IS NOT NULL THEN 1 WHEN sort_since IS NOT NULL THEN 0 ELSE 2 END,
-  sort_until DESC, sort_since DESC,
+  CASE WHEN superseded OR sort_until IS NOT NULL THEN 1 WHEN sort_since IS NOT NULL THEN 0 ELSE 2 END,
+  sort_until DESC NULLS LAST, sort_since DESC,
   CASE type WHEN 'address' THEN 0 WHEN 'street' THEN 1 WHEN 'neighbourhood' THEN 2 ELSE 3 END,
   lower(matched_name), id`;
 
@@ -160,7 +160,11 @@ export async function searchPlaces(query: string, options: PlaceSearchOptions = 
         CASE WHEN d.matched_since IS NOT NULL OR d.matched_until IS NOT NULL
           THEN d.matched_since ELSE pg.since END AS sort_since,
         CASE WHEN d.matched_since IS NOT NULL OR d.matched_until IS NOT NULL
-          THEN d.matched_until ELSE pg.until END AS sort_until
+          THEN d.matched_until ELSE pg.until END AS sort_until,
+        -- an adamlink name without an end that is not the place's name: the rebuild
+        -- picked a later open-ended name as current, so this one is no longer in use
+        (d.matched_historical AND d.source = 'adamlink' AND d.matched_since IS NOT NULL
+          AND d.matched_until IS NULL AND lower(d.matched_name) <> lower(d.name)) AS superseded
       FROM deduped d
       LEFT JOIN place_geometry pg ON pg.place_id = d.id
     ),
