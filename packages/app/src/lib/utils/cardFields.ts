@@ -198,6 +198,19 @@ export type RelationLine = {
 	date?: string;
 };
 
+// A BAG address links to the BAG viewer: the identifier the source gives
+// (bag.basisregistraties.overheid.nl/bag/id/…) serves data, but its page for
+// browsers is gone. Other places link where their source points.
+const BAG_PLACE_PREFIX = 'bag-';
+const BAG_VIEWER = 'https://bagviewer.kadaster.nl/lvbag/bag-viewer/#?searchQuery=';
+
+function placeHref(feature: FeatureResult): string | undefined {
+	if (feature.placeSource === 'bag' && feature.placeId?.startsWith(BAG_PLACE_PREFIX)) {
+		return `${BAG_VIEWER}${feature.placeId.slice(BAG_PLACE_PREFIX.length)}`;
+	}
+	return feature.placeUrl;
+}
+
 export function relationLine(feature: FeatureResult): RelationLine {
 	const line: RelationLine = { type: typeLabel(feature) };
 	if (feature.relationId) {
@@ -206,7 +219,7 @@ export function relationLine(feature: FeatureResult): RelationLine {
 	const placeName = feature.historicalLabel || feature.displayName;
 	if (placeName) {
 		line.place = placeName;
-		line.placeHref = feature.placeUrl;
+		line.placeHref = placeHref(feature);
 	}
 	if (feature.historicalLabel && feature.displayName && feature.historicalLabel !== feature.displayName) {
 		line.now = ` ${formatNowKnownAs(feature.displayName)}`;

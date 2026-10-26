@@ -88,6 +88,16 @@ describe('relationLine', () => {
 		});
 	});
 
+	test('a BAG address links to the BAG viewer, not its identifier', () => {
+		const bag = {
+			...base,
+			placeSource: 'bag',
+			placeId: 'bag-0363010000596932',
+			placeUrl: 'http://bag.basisregistraties.overheid.nl/bag/id/verblijfsobject/0363010000596932'
+		} as FeatureResult;
+		expect(relationLine(bag).placeHref).toBe('https://bagviewer.kadaster.nl/lvbag/bag-viewer/#?searchQuery=0363010000596932');
+	});
+
 	test('the type is the most specific one: the subtype where there is one', () => {
 		expect(typeLabel(base)).toBe('Filmvertoning');
 		expect(typeLabel({ ...base, entity: theatre } as FeatureResult)).toBe('Voorstelling');
