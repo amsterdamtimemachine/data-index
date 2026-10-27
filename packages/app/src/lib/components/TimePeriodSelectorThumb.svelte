@@ -26,7 +26,7 @@
 </script>
 
 <div
-	class="absolute z-10 pointer-events-none bg-transparent border-[3px] border-atm-red-darkest"
+	class="absolute z-10 pointer-events-none bg-transparent border-[3px] border-atm-red-darkest peer-focus-visible:ring-[3px] peer-focus-visible:ring-inset peer-focus-visible:ring-map-selected-outline-casing"
 	style="left: {thumbPosition}%; width: {thumbWidth}%; height: {timelineHeight}px; top: 0;"
 	aria-hidden="true"
 ></div>
