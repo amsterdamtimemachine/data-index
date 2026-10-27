@@ -85,11 +85,11 @@
 	}
 </script>
 
-<!-- One Tab stop: the slider. The arrow keys, Home and End step it; the ring is drawn
-     inside, so the scrolling row around the timeline cannot clip it. -->
+<!-- One Tab stop: the slider. The arrow keys, Home and End step it; focus shows on
+     the selected bin's frame (TimePeriodSelectorThumb, a later sibling: peer). -->
 <div
 	bind:this={slider}
-	class="absolute top-0 inset-x-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-atm-gold-darkest"
+	class="peer absolute top-0 inset-x-0 cursor-pointer focus-visible:outline-none"
 	style="height: {timelineHeight}px;"
 	role="slider"
 	tabindex="0"
