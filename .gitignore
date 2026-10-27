@@ -39,3 +39,7 @@ reingest.sh
 # Binaries
 *.bin
 bench-cells.ts
+
+# local only
+packages/db/src/etl/proto/
+reingest-staging-docker.sh
