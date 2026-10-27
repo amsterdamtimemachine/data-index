@@ -20,6 +20,18 @@
 	let imageLoading = $state(true);
 	// the picture's own width / height, once it has loaded; the box takes this shape
 	let aspect = $state(4 / 3);
+	// the collapsed frame; a picture taller than it is fitted whole, a wider one fills it
+	const COLLAPSED_ASPECT = 4 / 3;
+	// expanded, a tall picture's box is at most this many times as tall as it is wide
+	const MAX_PORTRAIT_HEIGHT = 1.25;
+
+	const collapsedFit = $derived.by(() => {
+		if (aspect < COLLAPSED_ASPECT) {
+			return 'object-contain';
+		}
+		return 'object-cover';
+	});
+	const expandedAspect = $derived(Math.max(aspect, 1 / MAX_PORTRAIT_HEIGHT));
 
 	const handleImageLoad = (event: Event) => {
 		const img = event.currentTarget as HTMLImageElement;
@@ -43,11 +55,13 @@
 	{:else if expanded}
 		<!-- a box of the picture's shape, which shrinks when the card runs out of room;
 		     the picture is drawn whole inside it, on a gold-gray passe-partout -->
-		<div class="relative w-full min-h-0 shrink overflow-hidden border-y border-atm-sand-border bg-atm-gold-gray" style:aspect-ratio={aspect}>
+		<!-- a tall picture's box is capped in height, the picture fitted whole with bands at
+		     its sides; it is never drawn larger than its own pixels, so a small scan stays sharp -->
+		<div class="relative w-full min-h-0 max-h-[70vh] shrink overflow-hidden border-y border-atm-sand-border bg-atm-gold-gray flex items-center justify-center" style:aspect-ratio={expandedAspect}>
 			<img
 				src={thumbnail}
 				{alt}
-				class="absolute inset-0 w-full h-full object-contain rounded"
+				class="max-w-full max-h-full object-contain rounded"
 				class:hidden={imageLoading}
 				onload={handleImageLoad}
 				onerror={handleImageError}
@@ -72,7 +86,7 @@
 							src={thumbnail}
 							{alt}
 							loading="lazy"
-							class="w-full h-full object-cover"
+							class={mergeCss('w-full h-full', collapsedFit)}
 							onload={handleImageLoad}
 							onerror={handleImageError}
 						/>
@@ -84,7 +98,7 @@
 						src={thumbnail}
 						{alt}
 						loading="lazy"
-						class="w-full h-full object-cover"
+						class={mergeCss('w-full h-full', collapsedFit)}
 						onload={handleImageLoad}
 						onerror={handleImageError}
 					/>

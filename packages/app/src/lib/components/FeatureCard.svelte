@@ -7,7 +7,8 @@
 	import FeatureCardImage from '#lib/components/FeatureCardImage.svelte';
 	import FeatureCardText from '#lib/components/FeatureCardText.svelte';
 	import FeatureCardExcerpt from '#lib/components/FeatureCardExcerpt.svelte';
-	import { pickExcerpt, excerptWindow, segmentText, foldSegments, COLLAPSED_EXCERPT_LENGTH } from '#lib/utils/excerpts.js';
+	import { pickExcerpt, excerptWindow, COLLAPSED_EXCERPT_LENGTH, excerptBlocks, nearestImage } from '#lib/utils/excerpts.js';
+	import { iiifImageUrl } from '#lib/utils/iiif.js';
 	import FieldList from '#lib/components/FieldList.svelte';
 	import Link from '#lib/components/Link.svelte';
 	import EvidenceHighlight from '#lib/components/EvidenceHighlight.svelte';
@@ -76,11 +77,22 @@
 	});
 	// the place is marked in the text shown, so the relation line takes the same colour
 	const hasEvidence = $derived(storyExcerpt !== null && storyExcerpt.mentions.length > 0);
-	const storySegments = $derived.by(() => {
+	// collapsed, the image anchored nearest the place stands above the text as the
+	// card's picture; expanded, every image of the excerpt sits in the text
+	const storyImage = $derived.by(() => {
+		if (expanded || !storyExcerpt) {
+			return null;
+		}
+		return nearestImage(storyExcerpt);
+	});
+	const storyBlocks = $derived.by(() => {
 		if (!storyExcerpt) {
 			return [];
 		}
-		return foldSegments(segmentText(storyExcerpt.text, storyExcerpt.mentions));
+		if (expanded) {
+			return excerptBlocks(storyExcerpt);
+		}
+		return excerptBlocks({ ...storyExcerpt, images: [] });
 	});
 	// the content region scrolls for these: the blocks above and below it cast the edge shadows
 	const scrollingContent = $derived(expanded && (billRows.length > 0 || storyExcerpt !== null));
@@ -183,9 +195,17 @@
 				{/if}
 				<FieldList fields={billRows} class="px-2 py-3" />
 			{/if}
+			{#if storyImage}
+				<FeatureCardImage
+					thumbnail={iiifImageUrl(storyImage, ',600')}
+					alt={translate('diaryImage')}
+					{expanded}
+					onExpand={handleExpand}
+				/>
+			{/if}
 			{#if storyExcerpt}
 				<FeatureCardExcerpt
-					segments={storySegments}
+					blocks={storyBlocks}
 					truncatedBefore={storyExcerpt.truncatedBefore}
 					truncatedAfter={storyExcerpt.truncatedAfter}
 					sourceUrl={feature.url}

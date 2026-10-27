@@ -1,9 +1,9 @@
 /**
  * A story's excerpt on the card: which of the entry's excerpts belongs to the shown
- * place, the shorter window the collapsed card shows, and the text split into plain
- * and marked pieces around the place's mentions.
+ * place, the shorter window the collapsed card shows, the text split into plain and
+ * marked pieces around the place's mentions, and the images it shows.
  */
-import type { Excerpt, ExcerptMention, ManuscriptEntity } from '@atm/shared/types';
+import type { Excerpt, ExcerptImage, ExcerptMention, ManuscriptEntity } from '@atm/shared/types';
 import { foldLinesInline } from './format';
 
 export const COLLAPSED_EXCERPT_LENGTH = 250;
@@ -71,6 +71,15 @@ export function excerptWindow(excerpt: Excerpt, length: number): Excerpt {
 	while (hi > lo && isSpace(text[hi - 1])) {
 		hi--;
 	}
+	// an image separated from the shown text by whitespace only still sits beside it
+	let imagesLo = lo;
+	while (imagesLo > 0 && isSpace(text[imagesLo - 1])) {
+		imagesLo--;
+	}
+	let imagesHi = hi;
+	while (imagesHi < text.length && isSpace(text[imagesHi])) {
+		imagesHi++;
+	}
 	return {
 		...excerpt,
 		text: text.slice(lo, hi),
@@ -78,8 +87,53 @@ export function excerptWindow(excerpt: Excerpt, length: number): Excerpt {
 		truncatedAfter: excerpt.truncatedAfter || hi < textEnd,
 		mentions: excerpt.mentions
 			.filter((m) => m.start >= lo && m.end <= hi)
-			.map((m) => ({ ...m, start: m.start - lo, end: m.end - lo }))
+			.map((m) => ({ ...m, start: m.start - lo, end: m.end - lo })),
+		images: (excerpt.images ?? [])
+			.filter((img) => img.anchor >= imagesLo && img.anchor <= imagesHi)
+			.map((img) => ({ ...img, anchor: Math.min(Math.max(img.anchor, lo), hi) - lo }))
 	};
+}
+
+/** The image anchored nearest the place's first mention, for the collapsed card. */
+export function nearestImage(excerpt: Excerpt): ExcerptImage | null {
+	const images = excerpt.images ?? [];
+	if (images.length === 0) {
+		return null;
+	}
+	const mention = excerpt.mentions[0]?.start ?? 0;
+	let nearest = images[0];
+	for (const image of images) {
+		if (Math.abs(image.anchor - mention) < Math.abs(nearest.anchor - mention)) {
+			nearest = image;
+		}
+	}
+	return nearest;
+}
+
+export type ExcerptBlock = { kind: 'text'; segments: TextSegment[] } | { kind: 'image'; image: ExcerptImage };
+
+/** The excerpt in reading order: its text, cut where an image sits, and the images between. */
+export function excerptBlocks(excerpt: Excerpt): ExcerptBlock[] {
+	const blocks: ExcerptBlock[] = [];
+	const pushText = (from: number, to: number) => {
+		const text = excerpt.text.slice(from, to);
+		if (!text.trim()) {
+			return;
+		}
+		const mentions = excerpt.mentions
+			.filter((m) => m.start >= from && m.end <= to)
+			.map((m) => ({ ...m, start: m.start - from, end: m.end - from }));
+		blocks.push({ kind: 'text', segments: foldSegments(segmentText(text, mentions)) });
+	};
+	let at = 0;
+	const images = [...(excerpt.images ?? [])].sort((a, b) => a.anchor - b.anchor);
+	for (const image of images) {
+		pushText(at, image.anchor);
+		blocks.push({ kind: 'image', image });
+		at = image.anchor;
+	}
+	pushText(at, excerpt.text.length);
+	return blocks;
 }
 
 /** The text in order, the mentions as marked pieces. */
