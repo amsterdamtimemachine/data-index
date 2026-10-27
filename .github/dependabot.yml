@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # Bun reads bun.lock; without this Dependabot falls back to npm and cannot see the
+  # installed versions. Only security updates: no scheduled version PRs, and no major
+  # versions, which need a deliberate upgrade and testing.
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

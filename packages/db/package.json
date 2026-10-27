@@ -18,7 +18,7 @@
   "dependencies": {
     "@atm/shared": "workspace:*",
     "commander": "^12.1.0",
-    "csv-parse": "^6.2.1",
+    "csv-parse": "^7.0.3",
     "drizzle-orm": "^0.45.4",
     "n3": "^2.13.12",
     "pg": "^8.23.1"
