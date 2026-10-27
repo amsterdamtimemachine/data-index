@@ -4,7 +4,7 @@
 # CI can pull the same artifact instead of rebuilding it per job.
 services:
   test-db:
-    image: ghcr.io/amsterdamtimemachine/data-index/db:16-3.4
+    image: ghcr.io/amsterdamtimemachine/data-index/db:16
     build:
       context: ..
       dockerfile: docker/Dockerfile.db
