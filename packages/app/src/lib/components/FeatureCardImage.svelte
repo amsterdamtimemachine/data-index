@@ -88,7 +88,7 @@
 			{#if onExpand}
 				<button
 					type="button"
-					class="w-full block cursor-pointer hover:opacity-80 transition-opacity"
+					class="group relative w-full block cursor-pointer"
 					onclick={onExpand}
 					aria-label={translate('expandImage')}
 					title={translate('expandImage')}
@@ -103,6 +103,7 @@
 							onerror={handleImageError}
 						/>
 					</div>
+					<span class="absolute inset-0 bg-atm-gold-deep opacity-0 group-hover:opacity-20 transition-opacity pointer-events-none"></span>
 				</button>
 			{:else}
 				<div class={mergeCss('w-full overflow-hidden bg-atm-sand-mat flex items-center justify-center [container-type:inline-size]', collapsedPlaceholder)}>
