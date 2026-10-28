@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { Excerpt, ManuscriptEntity } from '@atm/shared/types';
-import { pickExcerpt, excerptWindow, segmentText, foldSegments, nearestImage, excerptBlocks } from './excerpts';
+import { pickExcerpt, excerptWindow, segmentText, foldSegments, precedingImage, excerptBlocks } from './excerpts';
 import { iiifImageUrl } from './iiif';
 
 const excerpt = (over: Partial<Excerpt>): Excerpt => ({
@@ -111,16 +111,24 @@ describe('images in the excerpt', () => {
 		expect(shown.images).toEqual([img(0)]);
 	});
 
-	test('the collapsed card takes the image nearest the first mention', () => {
-		const x = excerpt({ text: long, mentions, images: [img(0), img(at - 5), img(at + 300)] });
-		expect(nearestImage(x)).toEqual(img(at - 5));
-		expect(nearestImage(excerpt({ text: 'x' }))).toBeNull();
+	test('the collapsed card takes the last image before the text', () => {
+		const text = '\n\nOctober 1944\nRozenstraat\n';
+		expect(precedingImage(excerpt({ text, images: [img(0), img(1), img(text.length)] }))).toEqual(img(1));
+		expect(precedingImage(excerpt({ text, images: [img(text.length)] }))).toBeNull();
+		expect(precedingImage(excerpt({ text: long, images: [img(at)] }))).toBeNull();
+		expect(precedingImage(excerpt({ text: 'x' }))).toBeNull();
 	});
 
 	test('the text is cut where an image sits, in reading order', () => {
 		const text = 'Vondelpark, Rosarium\n29 Oct 44';
 		const blocks = excerptBlocks(excerpt({ text, images: [img(21), img(0)] }));
 		expect(blocks.map((b) => b.kind)).toEqual(['image', 'text', 'image', 'text']);
+	});
+
+	test('an image after the last text stays after it', () => {
+		const text = '\n\nOctober 1944\nRozenstraat\n';
+		const blocks = excerptBlocks(excerpt({ text, images: [img(0), img(1), img(text.length)] }));
+		expect(blocks.map((b) => b.kind)).toEqual(['image', 'image', 'text', 'image']);
 	});
 
 	test('a IIIF URL asks the scan for the box at a size', () => {

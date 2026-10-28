@@ -10,7 +10,7 @@
 	import ArrowUpRight from 'phosphor-svelte/lib/ArrowUpRight';
 	import FeatureCardImage from '#lib/components/FeatureCardImage.svelte';
 	import { translate } from '#lib/utils/translations.js';
-	import { iiifImageUrl } from '#lib/utils/iiif.js';
+	import { getExcerptImageUrl } from '#lib/utils/image-sizes.js';
 	import type { ExcerptBlock } from '#lib/utils/excerpts.js';
 
 	type Props = {
@@ -19,12 +19,20 @@
 		truncatedAfter: boolean;
 		sourceUrl?: string;
 		expanded?: boolean;
+		onExpand?: () => void;
 	};
-	let { blocks, truncatedBefore, truncatedAfter, sourceUrl, expanded = false }: Props = $props();
+	let { blocks, truncatedBefore, truncatedAfter, sourceUrl, expanded = false, onExpand }: Props = $props();
 
 	// the ellipses go on the first and last text, whatever images sit around them
 	const firstText = $derived(blocks.findIndex((b) => b.kind === 'text'));
 	const lastText = $derived(blocks.findLastIndex((b) => b.kind === 'text'));
+
+	const pictureUse = $derived.by(() => {
+		if (expanded) {
+			return 'full' as const;
+		}
+		return 'card' as const;
+	});
 
 	const wrapperClasses = $derived.by(() => {
 		// a reading measure: about 75 characters a line on desktop, the full width on a phone
@@ -38,7 +46,7 @@
 <div class={wrapperClasses}>
 	{#each blocks as block, b (b)}
 		{#if block.kind === 'image'}
-			<FeatureCardImage thumbnail={iiifImageUrl(block.image)} alt={translate('diaryImage')} expanded={true} />
+			<FeatureCardImage thumbnail={getExcerptImageUrl(block.image, pictureUse)} alt={translate('diaryImage')} {expanded} inline={expanded} {onExpand} />
 		{:else}
 			<p class="p-2 text-base text-gray-700 leading-relaxed whitespace-pre-wrap">
 				{#if truncatedBefore && b === firstText}{'… '}{/if}{#each block.segments as segment, i (i)}{#if segment.marked}<EvidenceHighlight inText={true}>{segment.text}</EvidenceHighlight>{:else}{segment.text}{/if}{/each}{#if truncatedAfter && b === lastText}{' …'}{/if}

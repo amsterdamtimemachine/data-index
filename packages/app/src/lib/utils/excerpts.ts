@@ -94,20 +94,19 @@ export function excerptWindow(excerpt: Excerpt, length: number): Excerpt {
 	};
 }
 
-/** The image anchored nearest the place's first mention, for the collapsed card. */
-export function nearestImage(excerpt: Excerpt): ExcerptImage | null {
-	const images = excerpt.images ?? [];
-	if (images.length === 0) {
-		return null;
+/** The last image before the text begins, for the collapsed card; null when none precedes it. */
+export function precedingImage(excerpt: Excerpt): ExcerptImage | null {
+	let textStart = 0;
+	while (textStart < excerpt.text.length && isSpace(excerpt.text[textStart])) {
+		textStart++;
 	}
-	const mention = excerpt.mentions[0]?.start ?? 0;
-	let nearest = images[0];
-	for (const image of images) {
-		if (Math.abs(image.anchor - mention) < Math.abs(nearest.anchor - mention)) {
-			nearest = image;
+	let preceding: ExcerptImage | null = null;
+	for (const image of excerpt.images ?? []) {
+		if (image.anchor <= textStart && (!preceding || image.anchor >= preceding.anchor)) {
+			preceding = image;
 		}
 	}
-	return nearest;
+	return preceding;
 }
 
 export type ExcerptBlock = { kind: 'text'; segments: TextSegment[] } | { kind: 'image'; image: ExcerptImage };

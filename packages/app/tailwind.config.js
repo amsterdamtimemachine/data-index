@@ -19,6 +19,7 @@ export default {
 				'atm-sand-dark': '#f6e8df',
 				'atm-sand-darkest': '#af8e74', 
 				'atm-sand-border': '#d7c5b8',
+				'atm-sand-mat': '#f4f0eb', // behind pictures
 				'atm-gold': '#dcb27d', 
 				'atm-gold-dark': '#cca36e', 
 				'atm-gold-darkest': '#58401a',
