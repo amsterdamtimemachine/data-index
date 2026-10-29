@@ -3,7 +3,7 @@ import { createCachedResolver } from './cache';
 import { PlaceIdRow } from '../../row-types';
 import { sql } from 'drizzle-orm/sql';
 import { getCandidatesByPoint, getCandidatesByName, getNamesForPlaces, pickFinest, resolveNamePool, twinOf, type Candidate, type PlaceType } from './place-candidates';
-import { confirmByText } from './place-confirm';
+import { confirmByText, nameQualifies } from './place-confirm';
 import type { Resolved } from './place-index';
 
 const allPlacesCTE = sql`
@@ -119,7 +119,8 @@ export const inferByAdamURI = createCachedResolver(async (adamlinkUri: string): 
 });
 
 /**
- * Retrieves all existing place-names in database from both places & historic places table
+ * Retrieves all existing place-names in database from both places & historic places table,
+ * leaving out a name that cannot serve as evidence in a text (nameQualifies)
  * @returns map of places and their type (address, street, etc)
  */
 export async function getPlaceMap() {
@@ -128,7 +129,7 @@ export async function getPlaceMap() {
     const placeMap = new Map<string, string>();
 
     for (const row of results.rows) {
-        if (row.name) {
+        if (row.name && nameQualifies(row.name, row.type as PlaceType)) {
             placeMap.set(row.name, row.type);
         }
     }

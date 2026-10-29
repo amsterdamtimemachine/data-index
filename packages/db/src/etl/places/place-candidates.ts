@@ -11,13 +11,16 @@
  */
 import { db } from '../../client';
 import { sql, type SQL } from 'drizzle-orm/sql';
-import { ADDRESS_MAX_DISTANCE_M, STREET_MAX_DISTANCE_M, ERA_CUTOFF, CURRENT_ANCHOR, type PlaceType, type PlaceSource } from '@atm/shared';
+import { ADDRESS_MAX_DISTANCE_M, STREET_MAX_DISTANCE_M, POINT_CAPS_M, ERA_CUTOFF, CURRENT_ANCHOR, PLACE_TYPES, PLACE_TYPE_SPECS, type PlaceType, type PlaceSource } from '@atm/shared';
 import { wktToRd, houseNumber } from '../sql';
 
 export type { PlaceType, PlaceSource };
 
-// address > street > neighbourhood > district — the finest-first priority
-export const GRANULARITIES: PlaceType[] = ['address', 'street', 'neighbourhood', 'district'];
+// the finest-first priority, as the registry orders it
+export const GRANULARITIES = PLACE_TYPES;
+// how a point finds each type: the nearest within its cap, or the place containing it
+export const DISTANCE_TYPES = PLACE_TYPES.filter((t) => PLACE_TYPE_SPECS[t].point === 'distance');
+export const CONTAINMENT_TYPES = PLACE_TYPES.filter((t) => PLACE_TYPE_SPECS[t].point === 'containment');
 
 // ── tuning knobs ──────────────────────────────────────────────────────────────
 // ERA_CUTOFF (historical↔current address cut) and CURRENT_ANCHOR (present-day reference
@@ -27,11 +30,13 @@ export { ERA_CUTOFF, CURRENT_ANCHOR };
 // Proximity caps (metres, RD/28992) — env-configurable via @atm/shared (defaults 30/50);
 // re-exported here. Areas match by containment, so they have no radius.
 export { ADDRESS_MAX_DISTANCE_M, STREET_MAX_DISTANCE_M };
-export const MAX_DISTANCE_M: Record<PlaceType, number | null> = {
-  address: ADDRESS_MAX_DISTANCE_M, street: STREET_MAX_DISTANCE_M, neighbourhood: null, district: null,
-};
+export const MAX_DISTANCE_M = Object.fromEntries(
+  PLACE_TYPES.map((t) => [t, POINT_CAPS_M[t] ?? null])
+) as Record<PlaceType, number | null>;
 // Widest per-type cap; constant keeps ST_DWithin index-usable (exact cap is a post-filter).
-export const MAX_POINT_CAP_M = Math.max(ADDRESS_MAX_DISTANCE_M, STREET_MAX_DISTANCE_M);
+export const MAX_POINT_CAP_M = Math.max(...DISTANCE_TYPES.map((t) => POINT_CAPS_M[t] ?? 0));
+// the cap of the row's type, the post-filter
+const capByType = sql`CASE p.type ${sql.join(DISTANCE_TYPES.map((t) => sql`WHEN ${t} THEN ${POINT_CAPS_M[t]}::float8`), sql` `)} END`;
 
 export interface Candidate {
   placeId: string; name: string | null; type: PlaceType; source: PlaceSource;
@@ -87,16 +92,15 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
     near AS (
       SELECT p.id, p.name, p.type, p.source, ST_Distance(pg.geometry, q.g) AS dist
       FROM q, place_geometry pg JOIN place p ON p.id = pg.place_id
-      WHERE p.type IN ('address', 'street')
+      WHERE p.type IN ${DISTANCE_TYPES}
         AND ST_DWithin(pg.geometry, q.g, ${MAX_POINT_CAP_M}::float8)
-        AND ST_Distance(pg.geometry, q.g) <=
-              CASE p.type WHEN 'address' THEN ${ADDRESS_MAX_DISTANCE_M}::float8 ELSE ${STREET_MAX_DISTANCE_M}::float8 END
+        AND ST_Distance(pg.geometry, q.g) <= ${capByType}
       ORDER BY p.type, p.source, pg.geometry <-> q.g
     ),
     area AS (
       SELECT p.id, p.name, p.type, p.source, pg.since, pg.until
       FROM q, place_geometry pg JOIN place p ON p.id = pg.place_id
-      WHERE p.type IN ('neighbourhood', 'district') AND ST_Intersects(pg.geometry, q.g)
+      WHERE p.type IN ${CONTAINMENT_TYPES} AND ST_Intersects(pg.geometry, q.g)
     )
     SELECT id AS place_id, name, type, source, dist, NULL::int AS overlap_days,
            CASE type

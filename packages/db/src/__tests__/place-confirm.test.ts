@@ -31,12 +31,12 @@ describe('nameInText', () => {
 });
 
 describe('nameQualifies', () => {
-  test('addresses need a number, streets a minimum length', () => {
+  test('addresses need a number; a street or area name of any length counts', () => {
     expect(nameQualifies('Kalverstraat 97', 'address')).toBe(true);
     expect(nameQualifies('Kalverstraat', 'address')).toBe(false);
     expect(nameQualifies('Kalverstraat', 'street')).toBe(true);
-    expect(nameQualifies('Dam', 'street')).toBe(false);
-    expect(nameQualifies('Jordaan', 'neighbourhood')).toBe(false);
+    expect(nameQualifies('Dam', 'street')).toBe(true);
+    expect(nameQualifies('Jordaan', 'neighbourhood')).toBe(true);
   });
 });
 

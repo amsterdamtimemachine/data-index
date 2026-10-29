@@ -171,10 +171,9 @@ export interface ManuscriptEntity extends EntityBase {
 export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity | ScreeningEventEntity | TheaterEventEntity | ManuscriptEntity;
 
 
-/**
- * Query parameters for fetching features
- */
-export type PlaceType = 'address' | 'street' | 'neighbourhood' | 'district';
+// the place types, as the registry in vocab orders them
+import type { PlaceType } from '../vocab/place-types';
+export type { PlaceType };
 
 /** Where a place came from — Adamlink (historical) or a PDOK base registry. */
 export type PlaceSource = 'adamlink' | 'cbs' | 'nwb' | 'bag';

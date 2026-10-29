@@ -4,6 +4,7 @@ import { NewFeature } from '../../schema';
 import { createEntityFactory, EntityFactory } from './entity-factory';
 import { EntityBase, RecordType } from '@atm/shared';
 import { FileReader } from './file-reader';
+import { countOutOfPeriodLinks } from './link-audit';
 import { DateRange, ExtractionArgs, PlaceIndex, Resolved, SkipReason } from '../places/place-index';
 
 export type Draft = Omit<NewFeature, 'recordType' | 'datasetId'>
@@ -164,6 +165,8 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
             tail += `; errors ${errors}`
         }
         console.log(`  unresolved — no-match ${skips['no-match']}, ambiguous ${skips.ambiguous}, cap-miss ${skips['cap-miss']}, undated ${skips.undated}${tail}`)
+        const outOfPeriod = await countOutOfPeriodLinks(this.DATASET_ID)
+        console.log(`  out of period — ${outOfPeriod} links to a place that did not exist at the feature's date`)
     }
 
     /**

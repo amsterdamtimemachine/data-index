@@ -3,11 +3,9 @@
  * feature's text outranks its unnamed neighbours. Only names the point already put in
  * the pool are looked for; the text is never scanned for places in general.
  */
-import { GRANULARITIES, type Candidate } from './place-candidates';
+import { PLACE_TYPE_SPECS } from '@atm/shared';
+import { GRANULARITIES, DISTANCE_TYPES, type Candidate } from './place-candidates';
 import { normalizeName } from './normalize';
-
-// a street name this short ("Dam", "IJ") is too easy to find by accident
-export const MIN_STREET_NAME_LENGTH = 4;
 
 const BOUNDARY_BEFORE = '(?<![\\p{L}\\p{N}])';
 const BOUNDARY_AFTER = '(?![\\p{L}\\p{N}])';
@@ -31,11 +29,11 @@ export function namePattern(name: string): RegExp {
   return pattern;
 }
 
-/** Whether a place name counts as evidence at all for its granularity. */
+/** Whether a place name counts as evidence at all, by its type's rule (PLACE_TYPE_SPECS). */
 export function nameQualifies(name: string, type: Candidate['type']): boolean {
-  if (type === 'address') return /\p{N}/u.test(name);
-  if (type === 'street') return normalizeName(name).length >= MIN_STREET_NAME_LENGTH;
-  return false;
+  const evidence = PLACE_TYPE_SPECS[type].nameEvidence;
+  if (evidence.kind === 'number') return /\p{N}/u.test(name);
+  return true;
 }
 
 export function nameInText(name: string, normalizedText: string): boolean {
@@ -43,15 +41,16 @@ export function nameInText(name: string, normalizedText: string): boolean {
 }
 
 /**
- * The pool with each granularity narrowed to its confirmed candidates, when it has
- * any; a granularity with no name in the text keeps its full set, so a text naming
- * only the street still links to the nearest address as before. Areas pass through.
+ * The pool with each distance-found granularity narrowed to its confirmed candidates,
+ * when it has any; a granularity with no name in the text keeps its full set, so a
+ * text naming only the street still links to the nearest address as before. A place
+ * found by containment is not in doubt, so it passes through.
  */
 export function confirmByText(pool: Candidate[], names: Map<string, string[]>, text: string): Candidate[] {
   const normalized = normalizeName(text);
   const confirmed = new Set<string>();
   for (const c of pool) {
-    if (c.type !== 'address' && c.type !== 'street') continue;
+    if (!DISTANCE_TYPES.includes(c.type)) continue;
     const known = names.get(c.placeId) ?? [];
     if (known.some((n) => nameQualifies(n, c.type) && nameInText(n, normalized))) {
       confirmed.add(c.placeId);

@@ -1,4 +1,5 @@
 // Feature → place resolution config.
+import type { PlaceType } from '../vocab/place-types';
 
 // parse an int env that ALLOWS 0 (a `|| default` would swallow it); falls back on unset/NaN.
 const intEnv = (name: string, def: number): number => {
@@ -20,6 +21,11 @@ const dateEnv = (name: string, def: string): string => {
 // sit from a candidate before we refuse to link it. Areas match by containment (no radius).
 export const ADDRESS_MAX_DISTANCE_M = intEnv('ADDRESS_MAX_DISTANCE_M', 30);
 export const STREET_MAX_DISTANCE_M = intEnv('STREET_MAX_DISTANCE_M', 50);
+// the cap by type; a type a point finds by containment (PLACE_TYPE_SPECS) has none
+export const POINT_CAPS_M: Partial<Record<PlaceType, number>> = {
+  address: ADDRESS_MAX_DISTANCE_M,
+  street: STREET_MAX_DISTANCE_M,
+};
 
 // Historical↔contemporary boundary for point sources (address adamlink↔bag): a range
 // reaching before this is adamlink-era, on/after it is bag-era. Domain anchor (WWII).
