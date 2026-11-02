@@ -16,7 +16,7 @@
 import { readFileSync } from 'fs';
 import { insertPlaces, type PlaceInsert } from '../writers/place-writer';
 import { readFeatures, pdokRow } from './pdok-places';
-import { parseAdamlinkStreets, insertStreetNames, type AdamlinkStreet, streetWindow } from './adamlink-streets';
+import { parseAdamlinkStreets, insertAdamlinkNames, type AdamlinkStreet, existenceWindow } from './adamlink-streets';
 
 // NWB place ids are `nwb-<bagOrl>` (16-digit) or `nwb-<gmeId>-<slug>` for segments without
 // one. Only the former can be crosswalked to Adamlink.
@@ -60,7 +60,7 @@ export async function ingest(filePath: string, opts?: { adamlinkStreets?: string
         source: 'adamlink', url: adamStreet.uri,
         wkt: pdokRow(f).wkt,
         geometrySource: 'nwb', geometryUrl: bagViewer(bagOrl),
-        ...streetWindow(adamStreet),
+        ...existenceWindow(adamStreet),
       });
       backfilledStreets.push(adamStreet);
       backfilled++;
@@ -72,6 +72,6 @@ export async function ingest(filePath: string, opts?: { adamlinkStreets?: string
 
   console.log(`Inserting ${rows.length} streets (${backfilled} Adamlink backfills + ${gapFilled} gap-fills; skipped ${dupBagOrl} already drawn + ${noCrosswalk} without a bagOrl)`);
   const inserted = await insertPlaces(rows, { sourceSrid: 28992, onConflict: 'replaceAll' });
-  const nameCount = await insertStreetNames(backfilledStreets);
+  const nameCount = await insertAdamlinkNames(backfilledStreets, 'adamlink-straten');
   console.log(`\nDone: ${inserted} streets, ${nameCount} backfilled name variants`);
 }

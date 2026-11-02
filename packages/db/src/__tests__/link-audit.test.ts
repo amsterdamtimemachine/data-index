@@ -1,13 +1,14 @@
 /**
  * The out-of-period count in the ingest summary: links to a place whose period
  * excludes the feature's date. A period's until is exclusive; a place without a
- * period (an address) never counts; another dataset's links are not this one's.
+ * period (an address) never counts, nor does a version of an area (a vintage);
+ * another dataset's links are not this one's.
  */
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
 import { upsertSource } from '../etl/writers/feature-writer';
-import { countOutOfPeriodLinks } from '../etl/ingest/link-audit';
+import { countOutOfPeriodLinks } from '../etl/ingest/ingestor';
 
 const F = (n: number) => `44444444-4444-4444-4444-44444444440${n}`;
 const LINE = 'LINESTRING(120150.5 485050.5, 120250.5 485050.5)';
@@ -41,12 +42,15 @@ describe('countOutOfPeriodLinks', () => {
     await street('undated', null, null);
     await db.execute(sql`INSERT INTO place (id, type, source, name) VALUES ('addr', 'address', 'adamlink', 'Ergens 1')`);
     await db.execute(sql`INSERT INTO place_geometry (place_id, geometry) VALUES ('addr', ST_GeomFromText('POINT(120050.5 485050.5)', 28992))`);
+    await db.execute(sql`INSERT INTO place (id, type, source, name) VALUES ('later-buurt', 'neighbourhood', 'adamlink', 'Buurt')`);
+    await db.execute(sql`INSERT INTO place_geometry (place_id, geometry, since) VALUES ('later-buurt', ST_GeomFromText(${LINE}, 28992), '1965-01-01')`);
 
     await link(F(1), 'la-ds', 'not-yet');
     await link(F(2), 'la-ds', 'gone');
     await link(F(3), 'la-ds', 'standing');
     await link(F(4), 'la-ds', 'undated');
     await link(F(5), 'la-ds', 'addr');
+    await link(F(7), 'la-ds', 'later-buurt');
     await link(F(6), 'la-other', 'not-yet');
   });
 
@@ -55,7 +59,7 @@ describe('countOutOfPeriodLinks', () => {
     await teardownTestDb();
   });
 
-  test('counts the links to a place not yet built or already gone, for the dataset alone', async () => {
+  test('counts the links to a street not yet built or already gone, for the dataset alone', async () => {
     expect(await countOutOfPeriodLinks('la-ds')).toBe(2);
     expect(await countOutOfPeriodLinks('la-other')).toBe(1);
     expect(await countOutOfPeriodLinks('la-none')).toBe(0);

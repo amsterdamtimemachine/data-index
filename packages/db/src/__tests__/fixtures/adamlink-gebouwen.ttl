@@ -1,0 +1,93 @@
+@prefix hg: <http://rdf.histograph.io/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix sem: <http://semanticweb.cs.vu.nl/2009/11/sem/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix schema: <https://schema.org/> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://adamlink.nl/geo/building/plaats-royaal/437>
+  a hg:Building, skos:Concept ;
+  rdfs:label "'Plaats Royaal'" ;
+  skos:prefLabel "'Plaats Royaal'" ;
+  owl:sameAs <http://bag.basisregistraties.overheid.nl/bag/id/pand/0363100012182635> ;
+  geo:hasGeometry [ geo:asWKT "POLYGON((4.9014386960906 52.36367319252,4.901225285744 52.363631710164,4.9012384439055 52.363607254663,4.9013060872294 52.363620115114,4.9013257354404 52.363580829537,4.9014730933938 52.363610284793,4.9014647143626 52.363626005889,4.9014631760296 52.36362571197,4.9014386960906 52.36367319252))" ] ;
+  sem:hasEarliestBeginTimeStamp "1005"^^xsd:gYear ;
+  sem:hasLatestBeginTimeStamp "1005"^^xsd:gYear ;
+  schema:name [ rdfs:label "'Plaats Royaal'" ] .
+
+<https://adamlink.nl/geo/building/scheepvaartmuseum/343>
+  a hg:Building, skos:Concept ;
+  rdfs:label "'s Lands Zeemagazijn" ;
+  skos:prefLabel "'s Lands Zeemagazijn" ;
+  owl:sameAs <http://bag.basisregistraties.overheid.nl/bag/id/pand/0363100012170236>, <http://www.wikidata.org/entity/Q1616123> ;
+  geo:hasGeometry [ geo:asWKT "POLYGON((4.9154269142068 52.371614881041,4.9152708783577 52.371793204292,4.9153040223376 52.3718040677,4.9152168843279 52.371903654594,4.9151837402951 52.371892791162,4.9151639846731 52.371915379379,4.9150263646049 52.372072645641,4.9147049919457 52.371967295103,4.9146830212931 52.371992399944,4.9144849624521 52.371927491159,4.9145069479638 52.371902377426,4.9141881237927 52.371797871504,4.9143270691852 52.371639074599,4.9143453683124 52.371618152415,4.9143099859012 52.371606551793,4.9143982588558 52.371506700458,4.9144329535806 52.371518064627,4.9144523673685 52.371495879612,4.9145899136824 52.37133866763,4.9149071581633 52.371443750385,4.9149281287026 52.371418758352,4.9151288931722 52.371484540012,4.9151065964253 52.371509976178,4.9154269142068 52.371614881041),(4.9145429950755 52.371730352985,4.9147027583097 52.371782723817,4.9148215786081 52.371821674244,4.9149183762891 52.371853409467,4.9151199599959 52.371623013811,4.9147445801693 52.371499957963,4.9145429950755 52.371730352985))" ] ;
+  sem:hasEarliestBeginTimeStamp "1656"^^xsd:gYear ;
+  sem:hasLatestBeginTimeStamp "1656"^^xsd:gYear ;
+  schema:name [ rdfs:label "'s Lands Zeemagazijn" ], [ rdfs:label "Admiraliteitsmagazijn" ], [ rdfs:label "Lands Zeemagazijn" ], [
+    rdfs:label "Scheepvaartmuseum" ;
+    sem:hasEarliestBeginTimeStamp "1973"^^xsd:gYear ;
+    sem:hasLatestBeginTimeStamp "1973"^^xsd:gYear
+  ], [ rdfs:label "Rijksmuseum 'Nederlands Scheepvaart Museum'" ] ;
+  skos:altLabel "Admiraliteitsmagazijn", "Lands Zeemagazijn", "Scheepvaartmuseum", "Rijksmuseum 'Nederlands Scheepvaart Museum'" .
+
+<https://adamlink.nl/geo/building/t-haasje/713>
+  a hg:Building, skos:Concept ;
+  rdfs:label "'t Haasje" ;
+  skos:prefLabel "'t Haasje" ;
+  owl:sameAs <http://verdwenengebouwen.nl/gebouw/4158> ;
+  geo:hasGeometry [ geo:asWKT "POINT(4.90658 52.415)" ] ;
+  sem:hasEarliestEndTimeStamp "1924"^^xsd:gYear ;
+  sem:hasLatestEndTimeStamp "1924"^^xsd:gYear ;
+  schema:name [ rdfs:label "'t Haasje" ] ;
+  dc:type <http://vocab.getty.edu/aat/300006273> .
+
+<https://adamlink.nl/geo/building/aalmoezeniershuis/1249>
+  a hg:Building, skos:Concept ;
+  rdfs:label "Aalmoezeniershuis" ;
+  skos:prefLabel "Aalmoezeniershuis" ;
+  owl:sameAs <http://verdwenengebouwen.nl/gebouw/6161> ;
+  geo:hasGeometry [ geo:asWKT "POINT(4.891138 52.367258)" ] ;
+  sem:hasEarliestBeginTimeStamp "1613"^^xsd:gYear ;
+  sem:hasLatestBeginTimeStamp "1613"^^xsd:gYear ;
+  sem:hasEarliestEndTimeStamp "1897"^^xsd:gYear ;
+  sem:hasLatestEndTimeStamp "1897"^^xsd:gYear ;
+  skos:altLabel "Latijnse School", "Latijnsche School" ;
+  schema:name [ rdfs:label "Latijnse School" ], [
+    rdfs:label "Aalmoezeniershuis" ;
+    sem:hasEarliestBeginTimeStamp "1613"^^xsd:gYear ;
+    sem:hasLatestBeginTimeStamp "1613"^^xsd:gYear ;
+    sem:hasEarliestEndTimeStamp "1666"^^xsd:gYear ;
+    sem:hasLatestEndTimeStamp "1666"^^xsd:gYear
+  ], [
+    rdfs:label "Latijnsche School" ;
+    sem:hasEarliestBeginTimeStamp "1666"^^xsd:gYear ;
+    sem:hasLatestBeginTimeStamp "1666"^^xsd:gYear ;
+    sem:hasEarliestEndTimeStamp "1885"^^xsd:gYear ;
+    sem:hasLatestEndTimeStamp "1885"^^xsd:gYear
+  ] .
+
+<https://adamlink.nl/geo/building/metrostation-amstelveen-centrum/1201>
+  a hg:Building, skos:Concept ;
+  rdfs:label "Metrostation Amstelveen Centrum" ;
+  skos:prefLabel "Metrostation Amstelveen Centrum" ;
+  owl:sameAs <http://www.wikidata.org/entity/Q2219232> ;
+  geo:hasGeometry [ geo:asWKT "POINT(4.869722 52.299722)" ] ;
+  sem:hasEarliestBeginTimeStamp "1990"^^xsd:gYear ;
+  sem:hasLatestBeginTimeStamp "1990"^^xsd:gYear ;
+  schema:name [ rdfs:label "Metrostation Amstelveen Centrum" ], [ rdfs:label "Amstelveen Centrum" ] ;
+  skos:altLabel "Amstelveen Centrum" ;
+  dc:type <http://vocab.getty.edu/aat/300007780> .
+
+<https://adamlink.nl/geo/building/oostergasfabriek/242>
+  a hg:Building, skos:Concept ;
+  rdfs:label "Oostergasfabriek" ;
+  skos:prefLabel "Oostergasfabriek" ;
+  owl:sameAs <http://bag.basisregistraties.overheid.nl/bag/id/pand/0363100012236879> ;
+  geo:hasGeometry [ geo:asWKT "POLYGON((4.929198569408 52.356485969596,4.9288512979421 52.356412957441,4.9288995526399 52.356327212699,4.928720827567 52.356289653009,4.928709549622 52.356287245558,4.9287079679765 52.356286888911,4.9287128261983 52.356278414334,4.9287252759058 52.356281068991,4.9287420155929 52.356252103493,4.9287248790233 52.356248442037,4.928712175683 52.356241921679,4.9287102315444 52.356242552277,4.9287082006354 52.356243056711,4.9287060830489 52.356243425994,4.9287039229128 52.356243651308,4.9287017201343 52.356243741641,4.9286995335199 52.356243688233,4.9286973630695 52.356243491084,4.9286952234615 52.356243150252,4.9286931732238 52.356242683937,4.9286912124492 52.356242083153,4.9286893557234 52.356241356944,4.9286876469885 52.356240514468,4.9286860860588 52.356239573699,4.9286846877057 52.356238525707,4.9286834955928 52.356237406613,4.9286824951345 52.356236207371,4.9286817007307 52.356234955001,4.9286811270598 52.35623364956,4.9286807884287 52.356232327054,4.9286806849301 52.356230978495,4.9286808015144 52.356229639777,4.9286811528598 52.356228310956,4.9286817387806 52.356227010006,4.9286825296415 52.356225763776,4.9286835402137 52.356224563336,4.9286847554473 52.356223444579,4.928686160664 52.356222407446,4.9286877263214 52.3562214698,4.9286894524194 52.35622063164,4.9286913094156 52.356219910828,4.9286932678604 52.356219316236,4.9286953423393 52.35621885691,4.9286974595534 52.356218523577,4.9286996486736 52.356218334326,4.9287018363082 52.356218288873,4.9287040224571 52.356218387217,4.9287061925349 52.356218620316,4.9287083024136 52.356218996984,4.9287103375078 52.356219508178,4.9287122685535 52.356220144798,4.9287140809652 52.356220897798,4.9287157599717 52.356221776109,4.9287172619093 52.356222743612,4.9287186012707 52.356223818338,4.9287197490704 52.356224964224,4.9287206906302 52.356226181213,4.9287214114574 52.356227451273,4.9287219264159 52.356228756486,4.9287221915635 52.356230087695,4.9287222363498 52.356231436027,4.9287220463749 52.356232774461,4.92872163641 52.356234094068,4.9287369098587 52.356240489562,4.9287406158307 52.356234140611,4.9287514097488 52.356236510232,4.9287779041751 52.35619114397,4.9287671102666 52.35618877435,4.928798176201 52.356129998136,4.9288118993604 52.356132999248,4.928816399417 52.356125089505,4.9288165788989 52.356124766643,4.9288173698585 52.356124931484,4.9288231262863 52.356126131165,4.9288280770765 52.356127165948,4.9288270282424 52.356129229062,4.928944056708 52.35615403887,4.9289452523207 52.356151976324,4.9289574093677 52.356154539946,4.9289562137555 52.356156602492,4.9290733891494 52.356181412741,4.9290744379733 52.356179349625,4.9290867418189 52.356181913802,4.9290855462119 52.35618397635,4.9292025749672 52.356208785903,4.9292037705694 52.356206723354,4.9292159276464 52.356209286949,4.9292147320447 52.356211349499,4.9293325232005 52.356236260737,4.929333911749 52.356233992215,4.9293373540282 52.356234697584,4.9293393316222 52.356235091705,4.929198569408 52.356485969596))" ] ;
+  sem:hasEarliestBeginTimeStamp "1887"^^xsd:gYear ;
+  sem:hasLatestBeginTimeStamp "1887"^^xsd:gYear ;
+  schema:name [ rdfs:label "Oostergasfabriek" ], [ rdfs:label "Sportfondsenbad Oost" ], [ rdfs:label "Melkfabriek Sterovita" ] ;
+  skos:altLabel "Sportfondsenbad Oost", "Melkfabriek Sterovita" .

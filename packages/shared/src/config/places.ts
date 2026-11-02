@@ -21,9 +21,11 @@ const dateEnv = (name: string, def: string): string => {
 // sit from a candidate before we refuse to link it. Areas match by containment (no radius).
 export const ADDRESS_MAX_DISTANCE_M = intEnv('ADDRESS_MAX_DISTANCE_M', 30);
 export const STREET_MAX_DISTANCE_M = intEnv('STREET_MAX_DISTANCE_M', 50);
-// the cap by type; a type a point finds by containment (PLACE_TYPE_SPECS) has none
+// the cap by type; an area, found by containment alone, has none. A building known
+// only by a point (demolished, its footprint lost) counts within the address cap.
 export const POINT_CAPS_M: Partial<Record<PlaceType, number>> = {
   address: ADDRESS_MAX_DISTANCE_M,
+  building: ADDRESS_MAX_DISTANCE_M,
   street: STREET_MAX_DISTANCE_M,
 };
 

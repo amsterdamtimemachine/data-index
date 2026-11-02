@@ -50,11 +50,13 @@ describe('place cascade (PlaceIndex.extract)', () => {
     expect(await idx.extract({ text: 'Kerkstraat', wkt: W }, dated)).toEqual({ placeId: 'wkt-hit' });
   });
 
-  test('TEXT: a street name of any length is in the trie', async () => {
+  test('TEXT: a street name of any length is in the trie; a building, which needs the coordinate too, is not', async () => {
     await place('nes', 'street', 'adamlink', 'Nes');
+    await place('casino', 'building', 'adamlink', 'Casino');
 
     const idx = await PlaceIndex.create<Rec>([TEXT]);
     expect(await idx.extract({ text: 'op de Nes' }, dated)).toEqual({ placeId: 'nes' });
+    expect(await idx.extract({ text: 'in het Casino' }, dated)).toEqual({ skip: 'no-match' });
   });
 
   test('NAME: the whole value is one place name, matched exactly', async () => {

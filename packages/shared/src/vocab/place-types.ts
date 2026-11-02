@@ -4,7 +4,7 @@
  * by, and of how a type is found and named. A type added here must be described in
  * PLACE_TYPE_SPECS; the compiler holds the two together.
  */
-export const PLACE_TYPES = ['address', 'street', 'neighbourhood', 'district'] as const;
+export const PLACE_TYPES = ['address', 'building', 'street', 'neighbourhood', 'district'] as const;
 
 export type PlaceType = (typeof PLACE_TYPES)[number];
 
@@ -28,15 +28,23 @@ export type PlaceTime = 'register' | 'lifespan' | 'vintage';
 
 export interface PlaceTypeSpec {
   // how a feature's coordinate finds a place of this type: the nearest within the
-  // type's cap (POINT_CAPS_M, config), or the place whose geometry contains the point
+  // type's cap (POINT_CAPS_M, config), or the place whose geometry contains the point;
+  // a containment type with a cap also takes a point geometry within the cap
   point: 'distance' | 'containment';
   time: PlaceTime;
   nameEvidence: NameEvidence;
+  // by coordinate the place is a candidate only when the feature's text names it,
+  // and named it outranks an unnamed finer candidate
+  needsEvidence: boolean;
+  // the name the index shows: the latest open-ended dated name (a renamed street), or
+  // the source's own label (a building, whose names follow its use)
+  currentName: 'latestOpenName' | 'sourceLabel';
 }
 
 export const PLACE_TYPE_SPECS: Record<PlaceType, PlaceTypeSpec> = {
-  address: { point: 'distance', time: 'register', nameEvidence: { kind: 'number' } },
-  street: { point: 'distance', time: 'lifespan', nameEvidence: { kind: 'any' } },
-  neighbourhood: { point: 'containment', time: 'vintage', nameEvidence: { kind: 'any' } },
-  district: { point: 'containment', time: 'vintage', nameEvidence: { kind: 'any' } },
+  address: { point: 'distance', time: 'register', nameEvidence: { kind: 'number' }, needsEvidence: false, currentName: 'latestOpenName' },
+  building: { point: 'containment', time: 'lifespan', nameEvidence: { kind: 'any' }, needsEvidence: true, currentName: 'sourceLabel' },
+  street: { point: 'distance', time: 'lifespan', nameEvidence: { kind: 'any' }, needsEvidence: false, currentName: 'latestOpenName' },
+  neighbourhood: { point: 'containment', time: 'vintage', nameEvidence: { kind: 'any' }, needsEvidence: false, currentName: 'latestOpenName' },
+  district: { point: 'containment', time: 'vintage', nameEvidence: { kind: 'any' }, needsEvidence: false, currentName: 'latestOpenName' },
 };

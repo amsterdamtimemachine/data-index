@@ -1,6 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { memorixThumbUrl } from './memorix';
-import { getPictureUrl, getExcerptImageUrl } from './image-sizes';
+import { memorixThumbUrl, getPictureUrl, getExcerptImageUrl } from './image-sizes';
 
 describe('memorixThumbUrl', () => {
 	const thumb = 'https://images.memorix.nl/ams/thumb/350x350/d22581c6-fb2e-9e1b-a8eb-e4d8b527fe64.jpg';

@@ -93,6 +93,14 @@ export function formatPlaceTitle(match: PlaceSearchMatch): string {
 // the registers of today: a place from one carries no dates of its own
 const CURRENT_REGISTERS = new Set(['bag', 'nwb', 'cbs']);
 
+// an existence window ends on the first day the place was gone (until is exclusive);
+// the year to show is the last one it stood
+function dayBefore(date: string): string {
+	const d = new Date(`${date}T00:00:00Z`);
+	d.setUTCDate(d.getUTCDate() - 1);
+	return d.toISOString().slice(0, 10);
+}
+
 // "in 1853" (both ends in one year), "1850 tot 1909", "tot 1850" or "vanaf 1921"
 function windowYears(window: [string | null, string | null]): string {
 	const [since, until] = window;
@@ -139,7 +147,11 @@ export function formatPlaceWindow(match: PlaceSearchMatch): string {
 		if (since && !until) {
 			return `${translate('existsSince')} ${since.slice(0, 4)}`;
 		}
-		return `${translate('existed')} ${windowYears(match.geometryWindow)}`;
+		let last = until;
+		if (until) {
+			last = dayBefore(until);
+		}
+		return `${translate('existed')} ${windowYears([since, last])}`;
 	}
 	if (match.source && CURRENT_REGISTERS.has(match.source)) {
 		return translate('currentRegister');

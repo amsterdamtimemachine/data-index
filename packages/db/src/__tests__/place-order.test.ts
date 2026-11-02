@@ -17,14 +17,11 @@ describe('place-type registry', () => {
     expect([...DISTANCE_TYPES, ...CONTAINMENT_TYPES].sort()).toEqual([...PLACE_TYPES].sort());
   });
 
-  test('a distance-found type has a cap, a containment-found type none', () => {
+  test('a type has the cap config gives it; an area, found by containment alone, none', () => {
     for (const t of PLACE_TYPES) {
-      if (PLACE_TYPE_SPECS[t].point === 'distance') {
-        expect(MAX_DISTANCE_M[t]).toBe(POINT_CAPS_M[t]!);
-      } else {
-        expect(MAX_DISTANCE_M[t]).toBeNull();
-      }
+      expect(MAX_DISTANCE_M[t]).toBe(POINT_CAPS_M[t] ?? null);
     }
+    expect(MAX_DISTANCE_M.district).toBeNull();
   });
 
   test('the SQL rank numbers the types in registry order, unknown types last', () => {

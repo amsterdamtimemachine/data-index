@@ -10,24 +10,8 @@
  * Usage: bun run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
  */
 import { readFileSync } from 'fs';
-import { Parser } from 'n3';
-import { insertPlaces, createNameWriter } from '../writers/place-writer';
-import { parseAdamlinkStreets, insertStreetNames, streetWindow } from './adamlink-streets';
-
-const BATCH_SIZE = 100;
-
-interface StreetName {
-  label: string;
-  since: string | null;
-  until: string | null;
-}
-
-interface Street {
-  uri: string;
-  prefLabel: string;
-  wkt: string;
-  names: StreetName[];
-}
+import { insertPlaces } from '../writers/place-writer';
+import { parseAdamlinkStreets, insertAdamlinkNames, existenceWindow } from './adamlink-streets';
 
 export async function ingest(filePath: string) {
   console.log(`Parsing ${filePath}...`);
@@ -38,12 +22,12 @@ export async function ingest(filePath: string) {
 
   // Insert place rows (geometry transformed from WGS84 to RD).
   const placeCount = await insertPlaces(
-    streets.map(s => ({ id: s.uri, type: 'street', label: s.prefLabel, source: 'adamlink', url: s.uri, wkt: s.wkt!, ...streetWindow(s) })),
+    streets.map(s => ({ id: s.uri, type: 'street', label: s.prefLabel, source: 'adamlink', url: s.uri, wkt: s.wkt!, ...existenceWindow(s) })),
     { sourceSrid: 4326, onConflict: 'replaceAll' }
   );
   console.log(`  ${placeCount} street places created`);
 
-  const nameCount = await insertStreetNames(streets);
+  const nameCount = await insertAdamlinkNames(streets, 'adamlink-straten');
   console.log(`  ${nameCount} place_historical_name entries created`);
   console.log(`\nDone: ${placeCount} streets, ${nameCount} name variants`);
 }

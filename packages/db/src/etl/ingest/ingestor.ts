@@ -4,7 +4,10 @@ import { NewFeature } from '../../schema';
 import { createEntityFactory, EntityFactory } from './entity-factory';
 import { EntityBase, RecordType } from '@atm/shared';
 import { FileReader } from './file-reader';
-import { countOutOfPeriodLinks } from './link-audit';
+import { sql, type SQL } from 'drizzle-orm';
+import { db } from '../../client';
+import type { CountRow } from '../../row-types';
+import { LIFESPAN_TYPES } from '../places/place-candidates';
 import { DateRange, ExtractionArgs, PlaceIndex, Resolved, SkipReason } from '../places/place-index';
 
 export type Draft = Omit<NewFeature, 'recordType' | 'datasetId'>
@@ -175,6 +178,10 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
      * @returns -
      */
     public async ingest(filePath: string) {
+        await requireInIndex(
+            sql`SELECT COUNT(*) AS count FROM place`,
+            'ingest the place layers first: the index holds no place a feature could link to'
+        )
         await this.upsertDatasource();
 
         this.pi = await PlaceIndex.create(this.PLACE_EXTRACTION_METHODS)
@@ -187,4 +194,37 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
         
         await this.ingestSourceRecords(fileStream)
     }
+}
+
+/**
+ * What a source needs in the index before it can run, checked first so a wrong order
+ * stops with the command to run instead of failing mid-batch or linking nothing.
+ * `count` is a query returning one `count`; zero is the missing prerequisite.
+ */
+export async function requireInIndex(count: SQL, message: string): Promise<void> {
+    const result = await db.execute<CountRow>(count)
+    if (parseInt(result.rows[0].count) === 0) {
+        throw new Error(message)
+    }
+}
+
+/**
+ * Links a dataset holds to a place that did not exist at the feature's date: the
+ * source and the place data disagree about when the place existed. Counted for the
+ * ingest summary and never acted on; the source's link stands. Only lifespan types
+ * count (PLACE_TYPE_SPECS): an address has no period of its own, and an area's dates
+ * are a version's, which the resolver itself may pick out of period.
+ */
+export async function countOutOfPeriodLinks(datasetId: string): Promise<number> {
+    // until is exclusive, as place_geometry records it
+    const result = await db.execute<CountRow>(sql`
+        SELECT COUNT(*) AS count
+        FROM feature_to_place fp
+        JOIN features f ON f.id = fp.feature_id
+        JOIN place p ON p.id = fp.place_id
+        JOIN place_geometry pg ON pg.place_id = fp.place_id
+        WHERE f.dataset_id = ${datasetId} AND p.type IN ${LIFESPAN_TYPES}
+          AND (pg.since > f.end_date OR pg.until <= f.start_date)
+    `)
+    return parseInt(result.rows[0].count)
 }

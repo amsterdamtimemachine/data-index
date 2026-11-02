@@ -23,7 +23,10 @@ describe('formatPlaceWindow', () => {
 	test("a street or area's window is its existence", () => {
 		expect(formatPlaceWindow(match({ geometryWindow: ['1850-01-01', '1909-12-31'] }))).toBe('bestond 1850 tot 1909');
 		expect(formatPlaceWindow(match({ geometryWindow: ['1921-01-01', null] }))).toBe('bestaat vanaf 1921');
-		expect(formatPlaceWindow(match({ geometryWindow: [null, '1850-01-01'] }))).toBe('bestond tot 1850');
+		// an existence until is exclusive: gone from the first day of the year after its last
+		expect(formatPlaceWindow(match({ geometryWindow: [null, '1850-01-01'] }))).toBe('bestond tot 1849');
+		expect(formatPlaceWindow(match({ geometryWindow: ['1593-01-01', '1883-01-01'] }))).toBe('bestond 1593 tot 1882');
+		expect(formatPlaceWindow(match({ geometryWindow: ['1900-01-01', '1901-01-01'] }))).toBe('bestond in 1900');
 	});
 
 	test("a street's old name carries the years it held", () => {

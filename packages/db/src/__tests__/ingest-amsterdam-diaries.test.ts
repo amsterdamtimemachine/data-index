@@ -19,12 +19,15 @@ describe('amsterdam-diaries ingestion', () => {
     await setupTestDb();
     await cleanTestDb();
     await db.execute(sql`INSERT INTO agents (id, label) VALUES ('adamlink', 'Adamlink')`);
-    // the street by its Adamlink id, and an address at the building's point
+    // the street and the building by their Adamlink ids; an address at the building's
+    // point, which the id outranks
     await db.execute(sql`INSERT INTO place (id, type, source, name) VALUES
       ('https://adamlink.nl/geo/street/prinsengracht/3684', 'street', 'adamlink', 'Prinsengracht'),
+      ('https://adamlink.nl/geo/building/koninklijk-concertgebouw/30', 'building', 'adamlink', 'Koninklijk Concertgebouw'),
       ('ad-concertgebouw', 'address', 'adamlink', 'Concertgebouwplein 10')`);
     await db.execute(sql`INSERT INTO place_geometry (place_id, geometry) VALUES
       ('https://adamlink.nl/geo/street/prinsengracht/3684', ST_Transform(ST_GeomFromText('LINESTRING(4.88 52.36, 4.885 52.365)', 4326), 28992)),
+      ('https://adamlink.nl/geo/building/koninklijk-concertgebouw/30', ST_Transform(ST_GeomFromText('POINT(4.9 52.37)', 4326), 28992)),
       ('ad-concertgebouw', ST_Transform(ST_GeomFromText('POINT(4.9 52.37)', 4326), 28992))`);
     const { ingest } = await import('../etl/sources/amsterdam-diaries');
     await ingest(resolve(__dirname, 'fixtures/amsterdam-diaries.jsonl'));
@@ -49,11 +52,11 @@ describe('amsterdam-diaries ingestion', () => {
     expect(all.map((f) => f.label)).toEqual(['Dagboek Els Polak, deel 2', 'Dagboek Els Polak, deel 2']);
   });
 
-  test('an entry is linked to each place it mentions: the street by id, the building by point', async () => {
+  test('an entry is linked to each place it mentions: the street and the building by id', async () => {
     const r = await db.execute<{ place_id: string; relation_id: string }>(sql`
       SELECT fp.place_id, fp.relation_id FROM feature_to_place fp JOIN features f ON f.id = fp.feature_id
       WHERE f.start_date = '1941-03-19' ORDER BY fp.place_id`);
-    expect(r.rows.map((x) => x.place_id)).toEqual(['ad-concertgebouw', 'https://adamlink.nl/geo/street/prinsengracht/3684']);
+    expect(r.rows.map((x) => x.place_id)).toEqual(['https://adamlink.nl/geo/building/koninklijk-concertgebouw/30', 'https://adamlink.nl/geo/street/prinsengracht/3684']);
     expect(r.rows.every((x) => x.relation_id === 'mentions')).toBe(true);
   });
 
@@ -85,7 +88,7 @@ describe('amsterdam-diaries ingestion', () => {
     const all = await rows();
     const e = all.find((f) => f.start === '1941-03-19')!.entity;
     // the street by its id, the building by its point, in the row's order
-    expect(e.excerpts.map((x: { placeId?: string }) => x.placeId)).toEqual(['https://adamlink.nl/geo/street/prinsengracht/3684', 'ad-concertgebouw']);
+    expect(e.excerpts.map((x: { placeId?: string }) => x.placeId)).toEqual(['https://adamlink.nl/geo/street/prinsengracht/3684', 'https://adamlink.nl/geo/building/koninklijk-concertgebouw/30']);
     const single = all.find((f) => f.start === '1943-01-01')!.entity;
     expect(single.excerpts.map((x: { placeId?: string }) => x.placeId)).toEqual(['https://adamlink.nl/geo/street/prinsengracht/3684']);
   });

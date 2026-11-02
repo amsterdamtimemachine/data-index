@@ -5,9 +5,9 @@
  *
  * Reads the JSONL exported from the Amsterdam Diaries Time Machine dump: one line
  * per entry and place, the same entry fields repeated with a different `place`, so
- * the writer links the one feature to each place in turn. A street or address
- * resolves by its Adamlink id, a building or a Wikidata place by its point through
- * the era cascade. The entity carries an excerpt of the transcription per place,
+ * the writer links the one feature to each place in turn. A street, address or
+ * building resolves by its Adamlink id, a Wikidata place by its point through the
+ * era cascade. The entity carries an excerpt of the transcription per place,
  * each stamped with the index place its mention resolved to, so the card can open
  * the text at the place it shows; the description holds the first excerpt's
  * opening. Dates keep the source's precision: a day, a month, or a year.
@@ -34,8 +34,8 @@ type DiaryEntryRecord = {
   // this row's place, and every Amsterdam place of the entry
   place: DiaryPlace;
   places: DiaryPlace[];
-  // the place's Adamlink id when it is one the index holds by id (a street or an
-  // address); empty otherwise, so the point takes over
+  // the place's Adamlink id when it is one the index holds by id (a street, an
+  // address or a building); empty otherwise, so the point takes over
   place_uri?: string;
   geom_wkt?: string;
 };
@@ -77,7 +77,7 @@ export class AmsterdamDiariesIngestor extends Ingestor<DiaryEntryRecord> {
   // the place methods read columns of the row: lift the place's id and point to the top
   private placeColumns(row: DiaryEntryRecord, place: DiaryPlace): DiaryEntryRecord {
     row.geom_wkt = place.geom_wkt;
-    if (place.kind === 'street' || place.kind === 'address') {
+    if (place.kind === 'street' || place.kind === 'address' || place.kind === 'building') {
       row.place_uri = place.uri;
     } else {
       row.place_uri = '';

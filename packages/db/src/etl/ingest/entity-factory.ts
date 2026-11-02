@@ -25,7 +25,7 @@ export class PersonEntityFactory extends EntityFactory<PersonEntity> {
 }
 
 export class CreativeWorkEntityFactory extends EntityFactory<CreativeWorkEntity> {
-    create(feature: Draft, data: Map<string, unknown>): CreativeWorkEntity {
+    create(feature: Draft): CreativeWorkEntity {
         // a text's date is the issue it was published in
         const datePublished = formatDateRange(feature.startDate, feature.endDate);
 
