@@ -173,6 +173,30 @@ describe('feature → place resolution', () => {
     expect(pickFinest(await point(Q, '1990-01-01', '1990-01-01'))?.placeId).toBe('s');
   });
 
+  // ── existence: a lifespan type is a candidate only while it existed; a vintage prefers its version in force ──
+  test('point existence: a street outside its period is not a candidate, one within is', async () => {
+    await place('later-s', 'street', 'adamlink', 'Later St', 'LINESTRING(119950 485020, 120050 485020)', '1965-01-01', null);
+    expect(pickFinest(await point(Q, '1920-01-01', '1920-01-01'))).toBeUndefined();
+    await place('then-s', 'street', 'adamlink', 'Then St', 'LINESTRING(119950 485040, 120050 485040)', '1900-01-01', '1930-01-01');
+    expect(pickFinest(await point(Q, '1920-01-01', '1920-01-01'))?.placeId).toBe('then-s');
+  });
+
+  test('name existence: a name two streets bore in different periods resolves to the one that existed', async () => {
+    await place('old-lg', 'street', 'adamlink', 'Leprozengracht', 'LINESTRING(119950 485040, 120050 485040)', '1600-01-01', '1883-01-01');
+    await place('new-lg', 'street', 'adamlink', 'Leprozengracht', 'LINESTRING(119950 485020, 120050 485020)', '1950-01-01', null);
+    expect(await inferByName(nkey('Leprozengracht', '1870-01-01', '1870-01-01'))).toEqual({ placeId: 'old-lg' });
+    expect(await inferByName(nkey('Leprozengracht', '1960-01-01', '1960-01-01'))).toEqual({ placeId: 'new-lg' });
+    expect(await inferByName(nkey('Leprozengracht', '1920-01-01', '1920-01-01'))).toEqual({ skip: 'no-match' });
+  });
+
+  test('name vintage: two versions of an area resolve to the one in force, and stay ambiguous when neither is', async () => {
+    await place('j1', 'neighbourhood', 'adamlink', 'Jordaan', AREA, '1850-01-01', '1900-01-01');
+    await place('j2', 'neighbourhood', 'adamlink', 'Jordaan', AREA, '1900-01-01', null);
+    expect(await inferByName(nkey('Jordaan', '1920-01-01', '1920-01-01'))).toEqual({ placeId: 'j2' });
+    expect(await inferByName(nkey('Jordaan', '1870-01-01', '1870-01-01'))).toEqual({ placeId: 'j1' });
+    expect(await inferByName(nkey('Jordaan', '1700-01-01', '1700-01-01'))).toEqual({ skip: 'ambiguous' });
+  });
+
   // ── §5: dirty name strings ──
   test('name matching folds diacritic case (collation-dependent)', async () => {
     await place('cur', 'street', 'adamlink', 'Curaçaostraat');

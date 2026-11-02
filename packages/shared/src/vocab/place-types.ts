@@ -15,16 +15,28 @@ export type NameEvidence =
   | { kind: 'number' }
   | { kind: 'any' };
 
+/**
+ * What a type's dates mean, and so what a resolver may do with them.
+ * - register: the place has no period of its own; its dates are the records that
+ *   noted it (an address, in the registers of 1802 to 1943)
+ * - lifespan: the place existed from since to until (a street); outside that it is
+ *   not a candidate
+ * - vintage: a version of a division (a neighbourhood as drawn in one period); the
+ *   version in force at the date is preferred, any version stands when none is
+ */
+export type PlaceTime = 'register' | 'lifespan' | 'vintage';
+
 export interface PlaceTypeSpec {
   // how a feature's coordinate finds a place of this type: the nearest within the
   // type's cap (POINT_CAPS_M, config), or the place whose geometry contains the point
   point: 'distance' | 'containment';
+  time: PlaceTime;
   nameEvidence: NameEvidence;
 }
 
 export const PLACE_TYPE_SPECS: Record<PlaceType, PlaceTypeSpec> = {
-  address: { point: 'distance', nameEvidence: { kind: 'number' } },
-  street: { point: 'distance', nameEvidence: { kind: 'any' } },
-  neighbourhood: { point: 'containment', nameEvidence: { kind: 'any' } },
-  district: { point: 'containment', nameEvidence: { kind: 'any' } },
+  address: { point: 'distance', time: 'register', nameEvidence: { kind: 'number' } },
+  street: { point: 'distance', time: 'lifespan', nameEvidence: { kind: 'any' } },
+  neighbourhood: { point: 'containment', time: 'vintage', nameEvidence: { kind: 'any' } },
+  district: { point: 'containment', time: 'vintage', nameEvidence: { kind: 'any' } },
 };

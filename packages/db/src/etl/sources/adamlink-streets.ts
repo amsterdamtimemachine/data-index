@@ -113,7 +113,11 @@ export function parseAdamlinkStreets(ttl: string): AdamlinkStreet[] {
 // undated alike: a row without a period is a label, and readers that need a period
 // (resolution, canonicalisation) skip it by that. Shared so backfilled streets get the
 // same names native streets do.
-/** A street's existence window as place_geometry dates: year strings to first-of-January dates. */
+/**
+ * A street's existence window as place_geometry dates. Years become first-of-January
+ * dates; the end year is still a year the street existed, and until is exclusive, so
+ * it ends on the first day of the year after.
+ */
 export function streetWindow(s: Pick<AdamlinkStreet, 'since' | 'until'>): { since: string | null; until: string | null } {
   let since: string | null = null;
   if (s.since) {
@@ -121,7 +125,7 @@ export function streetWindow(s: Pick<AdamlinkStreet, 'since' | 'until'>): { sinc
   }
   let until: string | null = null;
   if (s.until) {
-    until = `${s.until}-01-01`;
+    until = `${Number(s.until) + 1}-01-01`;
   }
   return { since, until };
 }

@@ -105,7 +105,7 @@ describe('street name aliases', () => {
 
   test('the search returns the window, so two streets sharing a name can be told apart', async () => {
     const matches = await searchPlaces('Deventer Houtmarkt');
-    expect(matches.find(m => m.placeId === MEDIEVAL)?.geometryWindow).toEqual(['1380-01-01', '1663-01-01']);
+    expect(matches.find(m => m.placeId === MEDIEVAL)?.geometryWindow).toEqual(['1380-01-01', '1664-01-01']);
     expect(matches.find(m => m.placeId === SQUARE)?.geometryWindow).toEqual(['1873-01-01', null]);
   });
 
