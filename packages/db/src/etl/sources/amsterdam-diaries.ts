@@ -6,8 +6,9 @@
  * Reads the JSONL exported from the Amsterdam Diaries Time Machine dump: one line
  * per entry and place, the same entry fields repeated with a different `place`, so
  * the writer links the one feature to each place in turn. A street, address or
- * building resolves by its Adamlink id, a Wikidata place by its point through the
- * era cascade. The entity carries an excerpt of the transcription per place,
+ * building resolves by its Adamlink id; a Wikidata place by the name the source gives
+ * it, when the index holds a place of that name, else by its point through the era
+ * cascade. The entity carries an excerpt of the transcription per place,
  * each stamped with the index place its mention resolved to, so the card can open
  * the text at the place it shows; the description holds the first excerpt's
  * opening. Dates keep the source's precision: a day, a month, or a year.
@@ -35,8 +36,9 @@ type DiaryEntryRecord = {
   place: DiaryPlace;
   places: DiaryPlace[];
   // the place's Adamlink id when it is one the index holds by id (a street, an
-  // address or a building); empty otherwise, so the point takes over
+  // address or a building); empty otherwise, so the name, then the point, takes over
   place_uri?: string;
+  place_name?: string;
   geom_wkt?: string;
 };
 
@@ -67,6 +69,7 @@ export class AmsterdamDiariesIngestor extends Ingestor<DiaryEntryRecord> {
 
   protected PLACE_EXTRACTION_METHODS: ExtractionArgs<DiaryEntryRecord> = [
     { method: PlaceExtractionMethod.URI, column: 'place_uri' },
+    { method: PlaceExtractionMethod.NAME, column: 'place_name' },
     { method: PlaceExtractionMethod.WKT, column: 'geom_wkt' },
   ];
 
@@ -74,9 +77,10 @@ export class AmsterdamDiariesIngestor extends Ingestor<DiaryEntryRecord> {
     return new ManuscriptEntityFactory();
   }
 
-  // the place methods read columns of the row: lift the place's id and point to the top
+  // the place methods read columns of the row: lift the place's id, name and point to the top
   private placeColumns(row: DiaryEntryRecord, place: DiaryPlace): DiaryEntryRecord {
     row.geom_wkt = place.geom_wkt;
+    row.place_name = place.name;
     if (place.kind === 'street' || place.kind === 'address' || place.kind === 'building') {
       row.place_uri = place.uri;
     } else {
