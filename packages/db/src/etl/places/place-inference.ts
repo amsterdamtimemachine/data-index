@@ -46,8 +46,9 @@ async function eraTwin(placeId: string, type: PlaceType, eraFit: boolean, start:
 /**
  * Resolve a place-name string to the single place it names — exact case-insensitive
  * match (LOWER(name) =), nearest-in-time by the feature date range, unique winner by
- * gap → finest type; an address outside its era yields to its twin (eraTwin). Returns a tagged skip (→ the cascade tries the next method, else
- * the feature is skipped): 'no-match' when the name matches nothing (or is empty),
+ * gap → finest type; an address outside its era yields to its twin (eraTwin). Returns
+ * a tagged skip (→ the cascade tries the next method, else the feature is skipped):
+ * 'no-match' when the name matches nothing (or is empty),
  * 'ambiguous' for two equal-gap same-type places, 'undated' when the feature has no date.
  * Cache key is JSON `{area, start, end}` — the trie's type is NOT a filter (a
  * name-collision map makes it unreliable; resolveNamePool's finest-type tiebreak decides).
@@ -65,8 +66,9 @@ export const inferByName = createCachedResolver(async (key: string): Promise<Res
 /**
  * Resolve a point WKT (WGS84) to the single most-specific place — nearest address
  * (≤30m) / street (≤50m) per source, else the containing area — era-ranked by the
- * feature date range. A type that needs naming (a building) is no candidate without a text. Returns a tagged skip (→ the cascade tries the next method, else
- * the feature is skipped): 'cap-miss' when nothing sits within the caps, 'undated' when
+ * feature date range. A type that needs naming (a building) is no candidate without a
+ * text. Returns a tagged skip (→ the cascade tries the next method, else the feature is
+ * skipped): 'cap-miss' when nothing sits within the caps, 'undated' when
  * the feature has no date (a point can't be era-placed without one; spec §5), 'no-match'
  * when no coordinate was given. Cache key is JSON `{wkt, start, end}`.
  */

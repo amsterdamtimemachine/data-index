@@ -16,7 +16,7 @@
 import { readFileSync } from 'fs';
 import { insertPlaces, type PlaceInsert } from '../writers/place-writer';
 import { readFeatures, pdokRow } from './pdok-places';
-import { parseAdamlinkStreets, insertAdamlinkNames, type AdamlinkStreet, existenceWindow } from './adamlink-streets';
+import { parseAdamlinkStreets, insertAdamlinkNames, type AdamlinkStreet, existenceWindow } from './adamlink-places';
 
 // NWB place ids are `nwb-<bagOrl>` (16-digit) or `nwb-<gmeId>-<slug>` for segments without
 // one. Only the former can be crosswalked to Adamlink.

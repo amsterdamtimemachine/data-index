@@ -8,7 +8,7 @@ import { sql } from 'drizzle-orm';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
-import { parseAdamlinkStreets } from '../etl/sources/adamlink-streets';
+import { parseAdamlinkStreets } from '../etl/sources/adamlink-places';
 import { rebuildIndex } from '../etl/post-process/rebuild-index';
 import { getCandidatesByName } from '../etl/places/place-candidates';
 import { searchPlaces } from '../queries/place-search';

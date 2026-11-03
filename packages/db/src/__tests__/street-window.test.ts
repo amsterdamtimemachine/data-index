@@ -3,7 +3,7 @@
  * the place existed, and until is exclusive, so it ends on the first day of the year after.
  */
 import { describe, test, expect } from 'bun:test';
-import { existenceWindow } from '../etl/sources/adamlink-streets';
+import { existenceWindow } from '../etl/sources/adamlink-places';
 
 describe('existenceWindow', () => {
   test('the end year is included, the window stays open without one', () => {

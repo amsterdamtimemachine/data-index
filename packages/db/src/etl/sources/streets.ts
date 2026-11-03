@@ -11,7 +11,7 @@
  */
 import { readFileSync } from 'fs';
 import { insertPlaces } from '../writers/place-writer';
-import { parseAdamlinkStreets, insertAdamlinkNames, existenceWindow } from './adamlink-streets';
+import { parseAdamlinkStreets, insertAdamlinkNames, existenceWindow } from './adamlink-places';
 
 export async function ingest(filePath: string) {
   console.log(`Parsing ${filePath}...`);

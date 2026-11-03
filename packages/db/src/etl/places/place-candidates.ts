@@ -88,7 +88,8 @@ const addressEraFit = (start: string, end: string) => sql`CASE source
 
 // ══ FETCHERS ══════════════════════════════════════════════════════════════════
 
-// ── POINT signal: every address/street within cap, nearest first, + containing areas ──
+// ── POINT signal: every distance-found type within its cap, nearest first, + the areas
+// and buildings containing the point ──
 // Address era-fit is OVERLAP-based: adamlink if the range reaches before ERA_CUTOFF,
 // bag if it reaches on/after it — a range straddling 1943 surfaces both, distance decides.
 // A lifespan type (a street, a building) is only a candidate while it existed; one
@@ -105,7 +106,8 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
   }>(sql`
     WITH q AS (SELECT ${wktToRd(wkt, srid)} AS g),
     near AS (
-      SELECT p.id, p.name, p.type, p.source, pg.since, pg.until, ST_Distance(pg.geometry, q.g) AS dist
+      SELECT p.id, p.name, p.type, p.source, (pg.since IS NOT NULL OR pg.until IS NOT NULL) AS dated,
+             ST_Distance(pg.geometry, q.g) AS dist
       FROM q, place_geometry pg JOIN place p ON p.id = pg.place_id
       WHERE p.type IN ${DISTANCE_TYPES}
         AND (p.type NOT IN ${LIFESPAN_TYPES} OR ${windowOverlaps(start, end, sql`pg.since`, sql`pg.until`)})
@@ -124,10 +126,10 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
     )
     SELECT id AS place_id, name, type, source, dist, NULL::int AS overlap_days,
            CASE WHEN type = 'address' THEN ${addressEraFit(start, end)}
-                WHEN type IN ${LIFESPAN_TYPES} THEN (since IS NOT NULL OR until IS NOT NULL)
+                WHEN type IN ${LIFESPAN_TYPES} THEN dated
                 ELSE TRUE
            END AS era_fit,
-           (since IS NOT NULL OR until IS NOT NULL) AS dated
+           dated
     FROM near
     UNION ALL
     SELECT id, name, type, source, dist,

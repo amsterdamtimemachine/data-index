@@ -12,7 +12,7 @@ import { readFileSync } from 'fs';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
 import { insertPlaces } from '../writers/place-writer';
-import { parseAdamlinkPlaces, insertAdamlinkNames, existenceWindow, type AdamlinkPlace } from './adamlink-streets';
+import { parseAdamlinkPlaces, insertAdamlinkNames, existenceWindow, type AdamlinkPlace } from './adamlink-places';
 
 // BAG gives 1005 for a build year it does not know; one record says 9950
 const UNKNOWN_YEARS = new Set(['1005', '9950']);

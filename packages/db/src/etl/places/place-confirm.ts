@@ -37,6 +37,7 @@ export function nameQualifies(name: string, type: Candidate['type']): boolean {
   return true;
 }
 
+/** Whether a name is written in a text, word for word. */
 export function nameInText(name: string, text: string): boolean {
   return nameInTokens(tokens(name), nameTokens(text));
 }
