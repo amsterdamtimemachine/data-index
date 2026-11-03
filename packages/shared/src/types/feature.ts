@@ -173,6 +173,7 @@ export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity | Scr
 
 // the place types, as the registry in vocab orders them
 import type { PlaceType } from '../vocab/place-types';
+import type { SearchHit } from '../vocab/search-fields';
 export type { PlaceType };
 
 /** Where a place came from — Adamlink (historical) or a PDOK base registry. */
@@ -239,6 +240,8 @@ export interface FeatureResult {
   relationDated?: boolean;
   displayName?: string;
   historicalLabel?: string;
+  // with a search active: the feature's values that match it, the matching words marked
+  foundBy?: SearchHit[];
   placeSource?: PlaceSource;
   placeUrl?: string;
   placeProviderLabel?: string;

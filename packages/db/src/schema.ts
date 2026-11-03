@@ -2,6 +2,7 @@ import type { AgentKind } from '@atm/shared';
 import { pgTable, text, date, smallint, integer, boolean, uuid, jsonb, real, doublePrecision, customType, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { PlaceSource } from '@atm/shared';
+import { searchVectorDdl } from './search-vector';
 
 // Custom PostGIS geometry type - stored in RD (Dutch) coordinates
 // Transform to WGS84 (4326) for frontend display
@@ -145,9 +146,10 @@ export const features = pgTable('features', {
   url: text('url').notNull(),
   recordType: text('record_type').notNull(),
   label: text('label').notNull(),
-  // stemmed label, kept in sync by the DB; the text-search predicate and ts_rank
-  // both read this column (see queries/feature-search.ts)
-  labelTsv: tsvector('label_tsv').generatedAlwaysAs(sql`to_tsvector('dutch', label)`),
+  // the stemmed, weighted text of the feature (title, description, the entity's
+  // searchable fields), kept in sync by the DB; the text-search predicate and ts_rank
+  // both read this column (see queries/feature-search.ts, search-vector.ts)
+  searchTsv: tsvector('search_tsv').generatedAlwaysAs(sql.raw(searchVectorDdl())),
   description: text('description'),
   contentUrl: text('content_url'),
   startDate: date('start_date').notNull(),
@@ -158,7 +160,7 @@ export const features = pgTable('features', {
   index('idx_features_dates').on(table.startDate, table.endDate),
   index('idx_features_record_type').on(table.recordType),
   uniqueIndex('idx_features_int_id').on(table.featureIntId),
-  index('idx_features_label_fts').using('gin', table.labelTsv)
+  index('idx_features_search_fts').using('gin', table.searchTsv)
 ]);
 
 // ============================================================================

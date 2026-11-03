@@ -183,7 +183,7 @@ erDiagram
         text dataset_id FK "e.g. stadsarchief-beeldbank"
         jsonb entity  "e.g. Person | CreativeWork | MediaObject | ScreeningEvent | TheaterEvent | Manuscript"
         integer feature_int_id  "identity # the surrogate the bitmaps store"
-        tsvector label_tsv  "generated from label # dutch FTS"
+        tsvector search_tsv "generated: title, description, searchable entity fields # dutch FTS"
     }
 
     agents||--o{datasets:"provides"
@@ -288,7 +288,7 @@ Each match carries the matched name, the id of the matched historical name row w
 
 ### Text search
 
-`/api/heatmaps`, `/api/histogram` and `/api/features` accept `q`: a free-text search over feature labels. All three share one definition of what matches, so the heatmap, the timeline and the feature list always describe the same population.
+`/api/heatmaps`, `/api/histogram` and `/api/features` accept `q`: a free-text search over a feature's title, description and the entity fields its card shows (`SEARCH_FIELDS` in `@atm/shared`). All three share one definition of what matches, so the heatmap, the timeline and the feature list always describe the same population. With `q`, each listed feature carries `foundBy`: the values that matched, with the matching words marked.
 
 The same three accept `tags` (comma-separated tag ids) with `tagOperator` (`OR`, the default, or `AND`). Tags are classifier output ingested per dataset (see the `tags` source); the count endpoints intersect the precomputed per-tag bitmaps with their buckets, and an unknown tag id matches nothing. `/api/available-tags` lists every tag with its feature count under the same category filters and `q`, so the filter panel's counts always agree with the map.
 

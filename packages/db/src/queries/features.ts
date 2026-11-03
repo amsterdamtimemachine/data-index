@@ -12,6 +12,7 @@ import type {
   FeatureResult,
   FeaturesResponse,
   Entity,
+  SearchHit,
 } from '@atm/shared';
 import { computeTimeSlices } from './time-slices';
 import { getRecordTypes } from './record-types';
@@ -20,7 +21,7 @@ import { featureYearOverlap } from './time-filter';
 import { tagMatch, tagMatchCount } from './tag-filter';
 import { UnknownTimeSliceError } from './errors';
 import { cellRangeCondition, placeCellsCondition, displayGrid, displayCellBaseRange } from './cell-features';
-import { searchMatch, searchRank } from './feature-search';
+import { searchMatch, searchRank, foundBy } from './feature-search';
 import { db } from '../client';
 import { featureToPlace, place, placeGeometry, placeCells } from '../schema';
 import type { CountRow } from '../row-types';
@@ -46,6 +47,7 @@ type FeatureRow = {
   relation_id: string | null;
   name: string | null;
   historical_label: string | null;
+  found_by: SearchHit[] | null;
   place_source: PlaceSource | null;
   place_url: string | null;
   place_provider_label: string | null;
@@ -289,9 +291,12 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
 
   let searchCondition: SQL = sql`TRUE`;
   let matchScoreExpr: SQL = sql`0::float`;
+  // the card's explanation of the hit, for the listed rows only
+  let foundByExpr: SQL = sql`NULL`;
   if (searchQuery) {
-    searchCondition = searchMatch(sql`f.label_tsv`, searchQuery);
-    matchScoreExpr = searchRank(sql`f.label_tsv`, searchQuery);
+    searchCondition = searchMatch(sql`f.search_tsv`, searchQuery);
+    matchScoreExpr = searchRank(sql`f.search_tsv`, searchQuery);
+    foundByExpr = foundBy(sql`f`, searchQuery);
   }
 
   // The join spine and filter bundle the count and page queries MUST share —
@@ -382,6 +387,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       r.dated as relation_dated,
       p.name,
       ${historicalLabelSql(sql`page.place_id`, sql`page.place_type`, sql`page.start_date`, sql`page.end_date`)} as historical_label,
+      ${foundByExpr} as found_by,
       p.source as place_source,
       p.url as place_url,
       po.label as place_provider_label,
@@ -445,7 +451,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     placeProviderUrl: row.place_provider_url || undefined,
     geometryProviderLabel: row.geometry_provider_label || undefined,
     geometryProviderUrl: row.geometry_provider_url || undefined,
-    historicalLabel: row.historical_label || undefined
+    historicalLabel: row.historical_label || undefined,
+    foundBy: row.found_by || undefined
   }));
 
   return {
