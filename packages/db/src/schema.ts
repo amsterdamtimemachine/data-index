@@ -146,7 +146,7 @@ export const features = pgTable('features', {
   url: text('url').notNull(),
   recordType: text('record_type').notNull(),
   label: text('label').notNull(),
-  // the stemmed, weighted text of the feature (title, description, the entity's
+  // the weighted text of the feature, words as written (title, description, the entity's
   // searchable fields), kept in sync by the DB; the text-search predicate and ts_rank
   // both read this column (see queries/feature-search.ts, search-vector.ts)
   searchTsv: tsvector('search_tsv').generatedAlwaysAs(sql.raw(searchVectorDdl())),

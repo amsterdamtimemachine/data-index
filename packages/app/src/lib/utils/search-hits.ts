@@ -1,14 +1,12 @@
 /**
  * A search hit on a card. The server marks the matching words of each matched value
  * between SEARCH_MARK_START and SEARCH_MARK_END; here those marks become the card's
- * underlines: as marked strings in the title, the description and the entity's
- * fields, which the card's formatters pass through untouched, and as ranges on a
- * diary's excerpt, whose text the window and the mentions address by offset.
+ * marks: as marked strings in the title, the description and the entity's fields,
+ * which the card's formatters pass through untouched, and as ranges on a diary's
+ * excerpt, whose text the window addresses by offset.
  */
-import type { Entity, Excerpt, FeatureResult } from '@atm/shared/types';
-import { SEARCH_FIELDS, SEARCH_FIELD_DESCRIPTION, SEARCH_FIELD_TITLE, SEARCH_MARK_END, SEARCH_MARK_START } from '@atm/shared/vocab';
-import type { FieldRow } from './cardFields';
-import { translate } from './translations';
+import type { Excerpt, FeatureResult } from '@atm/shared/types';
+import { SEARCH_FIELD_DESCRIPTION, SEARCH_FIELD_TITLE, SEARCH_MARK_END, SEARCH_MARK_START } from '@atm/shared/vocab';
 import { wordWindow, TEXT_WINDOWS } from './excerpts';
 
 export type MarkRange = { start: number; end: number };
@@ -101,7 +99,7 @@ function markPath(node: unknown, steps: string[], texts: string[]): void {
 
 /**
  * The feature with its matched values marked: the label, the description and the
- * entity's string fields the hits name, so the card shows them underlined wherever it
+ * entity's string fields the hits name, so the card shows them marked wherever it
  * shows them. Without hits, the feature itself.
  */
 export function markFeature(feature: FeatureResult): FeatureResult {
@@ -143,53 +141,19 @@ export function shiftRanges(ranges: MarkRange[], offset: number, length: number)
 	return shifted;
 }
 
-// the words around the first range, with the marks put back and an ellipsis where the text was cut
-function snippet(text: string, ranges: MarkRange[]): string {
-	const { start: from, end: to } = wordWindow(text, ranges[0], TEXT_WINDOWS.snippet);
-	const marked = markText(text.slice(from, to), shiftRanges(ranges, from, to - from));
-	return `${from > 0 ? '…' : ''}${marked}${to < text.length ? '…' : ''}`;
-}
-
-// the label of a programme item's hit, by the item the plain text names
-function itemLabel(entity: Entity, plain: string): string {
-	if ((entity.type === 'ScreeningEvent' || entity.type === 'TheaterEvent') && entity.items.some((i) => i.name === plain && i.type === 'Movie')) {
-		return 'film';
-	}
-	return 'performer';
+/** Whether a search is on, as the card sees it: the feature came with hits. */
+export function hasSearchHits(feature: FeatureResult): boolean {
+	return (feature.foundBy?.length ?? 0) > 0;
 }
 
 /**
- * Every match of the search as a row for the collapsed card to list under its content,
- * whether or not the value shows on the card too (a title can be clamped, a window
- * can leave a passage out): the title, a description or a diary's text as a snippet
- * around the match, a field or a programme item by its label. Expanded, the
- * card shows everything underlined in place, so nothing. A diary's description is its
- * excerpt's opening and is left out.
+ * A marked string cut to the words around its first mark, with the marks kept and an
+ * ellipsis where the text was cut; unmarked, the string as it is.
  */
-export function foundByRows(feature: FeatureResult, expanded: boolean): FieldRow[] {
-	const entity = feature.entity;
-	if (expanded || !entity || !feature.foundBy?.length) return [];
-	const fields = SEARCH_FIELDS[entity.type] ?? [];
-	const rows: FieldRow[] = [];
-	for (const hit of feature.foundBy) {
-		const { text: plain, ranges } = parseMarks(hit.text);
-		if (hit.field === SEARCH_FIELD_TITLE) {
-			rows.push({ label: translate('title'), value: snippet(plain, ranges) });
-			continue;
-		}
-		if (hit.field === SEARCH_FIELD_DESCRIPTION) {
-			if (entity.type !== 'Manuscript') rows.push({ label: translate('description'), value: snippet(plain, ranges) });
-			continue;
-		}
-		const spec = fields.find((f) => f.path === hit.field);
-		if (!spec) continue;
-		if (hit.field === EXCERPT_TEXT) {
-			rows.push({ label: translate(spec.label), value: snippet(plain, ranges) });
-		} else if (hit.field === '$.items[*].name') {
-			rows.push({ label: translate(itemLabel(entity, plain)), value: hit.text });
-		} else {
-			rows.push({ label: translate(spec.label), value: hit.text });
-		}
-	}
-	return rows;
+export function matchWindow(marked: string, margin: number = TEXT_WINDOWS.title): string {
+	const { text, ranges } = parseMarks(marked);
+	if (ranges.length === 0) return marked;
+	const { start: from, end: to } = wordWindow(text, ranges[0], margin);
+	const cut = markText(text.slice(from, to), shiftRanges(ranges, from, to - from));
+	return `${from > 0 ? '…' : ''}${cut}${to < text.length ? '…' : ''}`;
 }

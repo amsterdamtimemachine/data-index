@@ -1,7 +1,7 @@
 /**
- * Feature text search (dutch FTS over the title, the description and the entity's
- * searchable fields) and its bitmap integration: websearch semantics (stemming,
- * phrase, OR, exclusion, stopwords), the searchable scope, heatmap/histogram counts
+ * Feature text search (words as written over the title, the description and the
+ * entity's searchable fields) and its bitmap integration: websearch semantics (exact words,
+ * phrase, OR, exclusion, common words), the searchable scope, heatmap/histogram counts
  * intersected with the search set, composition with category filters, the bestMatch
  * sort lane, and the hit explained for the card. The cross-validation test pins
  * the surrogate mapping end to end: bitmap-intersected counts must equal a live
@@ -17,6 +17,7 @@ import { getHeatmapTimeline } from '../queries/heatmap';
 import { getHistogram } from '../queries/histogram';
 import { getFeatures } from '../queries/features';
 import { getGridConfig } from '../queries/grid-config';
+import { searchQuery } from '../queries/feature-search';
 
 const P1 = 'fs-place-1';
 const P2 = 'fs-place-2';
@@ -88,9 +89,9 @@ describe('feature text search', () => {
     await teardownTestDb();
   });
 
-  test('stemming unifies inflections: verkooping matches Verkoopingen', async () => {
+  test('a word matches itself, not its inflections: verkooping finds Verkooping, not Verkoopingen', async () => {
     const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkooping' });
-    expect(hist.totalFeatures).toBe(3); // F1 + F4 by title, F3 by description
+    expect(hist.totalFeatures).toBe(2); // F1 by title, F3 by description
   });
 
   test('the description is searched: a term present only there matches', async () => {
@@ -107,9 +108,9 @@ describe('feature text search', () => {
     expect(film.totalFeatures).toBe(1); // F6
   });
 
-  test('websearch exclusion: -amsterdam drops the Amsterdam verkooping', async () => {
-    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkooping -amsterdam' });
-    expect(hist.totalFeatures).toBe(2); // F1, and F3 by its description
+  test('websearch exclusion: -nieuwe drops the Zeedijk title that has it', async () => {
+    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'zeedijk -nieuwe' });
+    expect(hist.totalFeatures).toBe(1); // F3 by its description; F2's title carries nieuwe
   });
 
   test('websearch phrase: quoted words must be adjacent and in order', async () => {
@@ -121,21 +122,34 @@ describe('feature text search', () => {
 
   test('websearch OR: either term matches', async () => {
     const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkooping OR zeedijk' });
-    expect(hist.totalFeatures).toBe(4); // F1, F4 (stemmed), F2, and F3 by its description
+    expect(hist.totalFeatures).toBe(3); // F1, F2, and F3 by its description
   });
 
-  test('a stopword-only query matches nothing', async () => {
-    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'de van het' });
+  test('common words are words like any other: a query needs them all', async () => {
+    const two = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'van het' });
+    expect(two.totalFeatures).toBe(1); // F1
+    const three = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'de van het' });
+    expect(three.totalFeatures).toBe(0);
+  });
+
+  test('a word matches as written: not the words it begins, nor a word it is part of', async () => {
+    const start = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkoop' });
+    expect(start.totalFeatures).toBe(0);
+    const inside = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'eedijk' });
+    expect(inside.totalFeatures).toBe(0);
+    const whole = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'de' });
+    expect(whole.totalFeatures).toBe(2); // F2 and F6 (De Koning van Thule), not Zeedijk
+  });
+
+  test('a query without a word in it matches nothing', async () => {
+    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: '!! --' });
     expect(hist.totalFeatures).toBe(0);
-    for (const bin of hist.bins) {
-      expect(bin.count).toBe(0);
-    }
   });
 
   test('histogram bins carry only matching features, in their bins', async () => {
     const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkooping' });
     const byYear = new Map(hist.bins.map(b => [b.timeSlice.startYear, b.count]));
-    expect(byYear.get(1900)).toBe(2); // F1 + F4
+    expect(byYear.get(1900)).toBe(1); // F1
     expect(byYear.get(1950) ?? 0).toBe(1); // F3, by its description
   });
 
@@ -164,7 +178,7 @@ describe('feature text search', () => {
     const live = await db.execute<{ n: string }>(sql`
       SELECT COUNT(DISTINCT f.id) AS n
       FROM features f
-      WHERE f.search_tsv @@ websearch_to_tsquery('dutch', 'verkooping')
+      WHERE f.search_tsv @@ ${searchQuery('verkooping')}
         AND EXISTS (
           SELECT 1 FROM feature_to_place fp
           JOIN place_cells pc ON pc.place_id = fp.place_id
@@ -182,10 +196,10 @@ describe('feature text search', () => {
       sort: 'bestMatch',
       pageSize: 10
     });
-    expect(res.total).toBe(3);
+    expect(res.total).toBe(2);
     const labels = res.data.map(f => f.label);
-    // F1 matches both OR terms in its title, F4 one, F3 one in its description — ts_rank with the weights
-    expect(labels).toEqual(['Verkooping van het huis', 'Verkoopingen te Amsterdam', 'Onopvallend gebouw']);
+    // F1 matches both OR terms in its title, F3 one in its description — ts_rank with the weights
+    expect(labels).toEqual(['Verkooping van het huis', 'Onopvallend gebouw']);
   });
 
   test('getFeatures count and page agree under a search filter', async () => {

@@ -1,13 +1,12 @@
 <!--
-	A story's excerpt: the text around the place it is shown at, with the place's
-	mentions marked as the link's evidence and an ellipsis on each cut side, and the
-	page's images where they sit in the text. Expanded, a cut excerpt ends with a link
+	A story's excerpt: the text around the place it is shown at, its mentions in bold,
+	or around a search match, marked, with an ellipsis on each cut side, and the page's
+	images where they sit in the text. Expanded, a cut excerpt ends with a link
 	to the entry's page at the source.
 -->
 <script lang="ts">
 	import Link from '#lib/components/Link.svelte';
-	import EvidenceHighlight from '#lib/components/EvidenceHighlight.svelte';
-	import SearchMark from '#lib/components/SearchMark.svelte';
+	import Mark from '#lib/components/Mark.svelte';
 	import ArrowUpRight from 'phosphor-svelte/lib/ArrowUpRight';
 	import FeatureCardImage from '#lib/components/FeatureCardImage.svelte';
 	import { translate } from '#lib/utils/translations.js';
@@ -20,9 +19,11 @@
 		truncatedAfter: boolean;
 		sourceUrl?: string;
 		expanded?: boolean;
+		// the marked pieces are a search's matches rather than the place's mentions
+		searching?: boolean;
 		onExpand?: () => void;
 	};
-	let { blocks, truncatedBefore, truncatedAfter, sourceUrl, expanded = false, onExpand }: Props = $props();
+	let { blocks, truncatedBefore, truncatedAfter, sourceUrl, expanded = false, searching = false, onExpand }: Props = $props();
 
 	// the ellipses go on the first and last text, whatever images sit around them
 	const firstText = $derived(blocks.findIndex((b) => b.kind === 'text'));
@@ -43,7 +44,7 @@
 			<FeatureCardImage thumbnail={getExcerptImageUrl(block.image, pictureUse(expanded))} alt={translate('diaryImage')} {expanded} inline={expanded} {onExpand} />
 		{:else}
 			<p class="p-2 text-base text-gray-700 leading-relaxed whitespace-pre-wrap">
-				{#if truncatedBefore && b === firstText}{'… '}{/if}{#each block.segments as segment, i (i)}{#if segment.marked}<EvidenceHighlight inText={true}>{#if segment.search}<SearchMark>{segment.text}</SearchMark>{:else}{segment.text}{/if}</EvidenceHighlight>{:else if segment.search}<SearchMark>{segment.text}</SearchMark>{:else}{segment.text}{/if}{/each}{#if truncatedAfter && b === lastText}{' …'}{/if}
+				{#if truncatedBefore && b === firstText}{'… '}{/if}{#each block.segments as segment, i (i)}{#if !segment.marked}{segment.text}{:else if searching}<Mark>{segment.text}</Mark>{:else}<b class="font-semibold">{segment.text}</b>{/if}{/each}{#if truncatedAfter && b === lastText}{' …'}{/if}
 			</p>
 		{/if}
 	{/each}

@@ -42,6 +42,12 @@ describe('excerptWindow', () => {
 		expect(w.truncatedAfter).toBe(true);
 	});
 
+	test('a given anchor takes the place of the mention: a search match, or nothing for the opening', () => {
+		const tien = text.indexOf('tien');
+		expect(excerptWindow(ex, 24, { start: tien, end: tien + 4 }).text).toBe('negen tien elf');
+		expect(excerptWindow(ex, 24, { start: 0, end: 0 }).text).toBe('een twee drie vier vijf');
+	});
+
 	test('a mention near the start keeps the opening and flags only the end', () => {
 		const w = excerptWindow(excerpt({ text, mentions: [{ start: 0, end: 3, quote: 'een' }] }), 14);
 		expect(w.text).toBe('een twee drie');
@@ -65,7 +71,7 @@ describe('excerptWindow', () => {
 
 describe('segmentText', () => {
 	test('plain and marked pieces in order', () => {
-		expect(segmentText('naar de Dam en terug', [{ start: 8, end: 11, quote: 'Dam' }])).toEqual([
+		expect(segmentText('naar de Dam en terug', [{ start: 8, end: 11 }])).toEqual([
 			{ text: 'naar de ', marked: false },
 			{ text: 'Dam', marked: true },
 			{ text: ' en terug', marked: false }
@@ -73,7 +79,7 @@ describe('segmentText', () => {
 	});
 
 	test('a mention at the very start, and an invalid one skipped', () => {
-		expect(segmentText('Dam.', [{ start: 0, end: 3, quote: 'Dam' }, { start: 2, end: 9, quote: 'x' }])).toEqual([
+		expect(segmentText('Dam.', [{ start: 0, end: 3 }, { start: 2, end: 9 }])).toEqual([
 			{ text: 'Dam', marked: true },
 			{ text: '.', marked: false }
 		]);
@@ -82,7 +88,7 @@ describe('segmentText', () => {
 
 describe('foldSegments', () => {
 	test('folds each piece and keeps the spaces at the marks', () => {
-		const folded = foldSegments(segmentText('\nenkele bruggen\nopgeblazen. Zorgvliet; allen\nniet meer\n', [{ start: 28, end: 37, quote: 'Zorgvliet' }]));
+		const folded = foldSegments(segmentText('\nenkele bruggen\nopgeblazen. Zorgvliet; allen\nniet meer\n', [{ start: 28, end: 37 }]));
 		expect(folded).toEqual([
 			{ text: 'enkele bruggen opgeblazen. ', marked: false },
 			{ text: 'Zorgvliet', marked: true },
@@ -137,29 +143,18 @@ describe('images in the excerpt', () => {
 	});
 });
 
-describe('search ranges in the text', () => {
-	test('a search piece, a mention piece, and a piece that is both', () => {
-		const text = 'naar de Dam en terug';
-		const segments = segmentText(text, [{ start: 8, end: 11, quote: 'Dam' }], [{ start: 0, end: 4 }, { start: 8, end: 11 }]);
-		expect(segments).toEqual([
-			{ text: 'naar', marked: false, search: true },
-			{ text: ' de ', marked: false },
-			{ text: 'Dam', marked: true, search: true },
-			{ text: ' en terug', marked: false }
-		]);
+describe('marks on the blocks', () => {
+	test('the mentions unless given; given ranges, a search\'s, take their place', () => {
+		const shown = { text: 'naar de Dam en terug', truncatedBefore: false, truncatedAfter: false, mentions: [{ start: 8, end: 11, quote: 'Dam' }] };
+		expect(excerptBlocks(shown)).toEqual([{ kind: 'text', segments: [{ text: 'naar de ', marked: false }, { text: 'Dam', marked: true }, { text: ' en terug', marked: false }] }]);
+		expect(excerptBlocks(shown, [{ start: 0, end: 4 }])).toEqual([{ kind: 'text', segments: [{ text: 'naar', marked: true }, { text: ' de Dam en terug', marked: false }] }]);
 	});
 
-	test('a range cutting through a mention splits both into pieces with the right flags', () => {
-		const segments = segmentText('Damrak', [{ start: 0, end: 6, quote: 'Damrak' }], [{ start: 0, end: 3 }]);
-		expect(segments).toEqual([{ text: 'Dam', marked: true, search: true }, { text: 'rak', marked: true }]);
-	});
-
-	test('blocks carry the ranges onto each text block, and a window offset moves ranges onto its text', () => {
+	test('a window offset moves ranges on the whole text onto the shown text', () => {
 		const whole = { text: 'Eerst de brand\nbij de gashouder', truncatedBefore: false, truncatedAfter: false, mentions: [] };
 		const shown = { ...whole, text: 'bij de gashouder' };
 		expect(windowOffset(whole, shown)).toBe(15);
-		const blocks = excerptBlocks(shown, [{ start: 7, end: 16 }]);
-		expect(blocks).toEqual([{ kind: 'text', segments: [{ text: 'bij de ', marked: false }, { text: 'gashouder', marked: false, search: true }] }]);
+		expect(excerptBlocks(shown, [{ start: 7, end: 16 }])).toEqual([{ kind: 'text', segments: [{ text: 'bij de ', marked: false }, { text: 'gashouder', marked: true }] }]);
 	});
 });
 

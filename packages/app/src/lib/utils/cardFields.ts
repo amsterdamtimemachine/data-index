@@ -1,6 +1,8 @@
 import type { Entity, PersonEntity, MediaObjectEntity, CreativeWorkEntity, ScreeningEventEntity, TheaterEventEntity, ManuscriptEntity, FeatureResult } from '@atm/shared/types';
 import { formatPartialDate, formatPeriod, formatNowKnownAs } from './format';
+import { SEARCH_MARK_START } from '@atm/shared/vocab';
 import { pickExcerpt } from './excerpts';
+import { parseMarks } from './search-hits';
 import { translate } from './translations';
 
 /**
@@ -58,8 +60,6 @@ type CardFieldSpec = {
 	value: (entity: Entity) => string | null;
 	// a link for the value
 	href?: (entity: Entity) => string | undefined;
-	// one row per item, for a field that repeats (the films on a programme); the label and value are per row
-	rows?: (entity: Entity) => FieldRow[];
 	summary?: boolean; // also show on the collapsed card, not just the expanded detail
 };
 
@@ -97,27 +97,52 @@ const CARD_FIELDS: Partial<Record<Entity['type'], CardFieldSpec[]>> = {
 	],
 };
 
-/** Entity fields to render for the given mode (collapsed keeps only `summary` fields). */
 /** The labels of the fields the card can show for this entity type, collapsed or expanded. */
 export function cardFieldLabels(type: Entity['type']): string[] {
 	return (CARD_FIELDS[type] ?? []).map((spec) => spec.label);
 }
 
-export function resolveCardFields(entity: Entity, expanded: boolean): FieldRow[] {
-	const specs = CARD_FIELDS[entity.type] ?? [];
+// the entity's fields in their order, those `keep` says, as rows
+function fieldRows(entity: Entity, keep: (spec: CardFieldSpec, value: string) => boolean): FieldRow[] {
 	const fields: FieldRow[] = [];
-	for (const spec of specs) {
-		if (!expanded && !spec.summary) continue;
-		if (spec.rows) {
-			fields.push(...spec.rows(entity));
-			continue;
-		}
+	for (const spec of CARD_FIELDS[entity.type] ?? []) {
 		const value = spec.value(entity);
-		if (value == null) continue;
+		if (value == null || !keep(spec, value)) continue;
 		const href = spec.href ? spec.href(entity) : undefined;
 		fields.push({ label: translate(spec.label), value, href });
 	}
 	return fields;
+}
+
+/** Entity fields to render for the given mode (collapsed keeps only `summary` fields). */
+export function resolveCardFields(entity: Entity, expanded: boolean): FieldRow[] {
+	return fieldRows(entity, (spec) => expanded || spec.summary === true);
+}
+
+// how many rows the small card takes on for a search's matches
+const MAX_JOINING_FIELDS = 2;
+
+/**
+ * The collapsed card's fields with a search on: its summary fields, and up to two of
+ * the rows only the expanded card shows whose value the search marked, in the expanded
+ * order (a programme's items first, then its fields), so a match is never out of sight.
+ * A marked row that repeats the title is left out: the title already shows it.
+ */
+export function collapsedFields(feature: FeatureResult): FieldRow[] {
+	const entity = feature.entity;
+	if (!entity) return [];
+	const title = parseMarks(feature.label).text;
+	let joined = 0;
+	const joins = (value: string): boolean => {
+		if (joined >= MAX_JOINING_FIELDS || !value.includes(SEARCH_MARK_START) || parseMarks(value).text === title) {
+			return false;
+		}
+		joined++;
+		return true;
+	};
+	const items = programmeRows(entity).filter((row) => joins(row.value));
+	const fields = fieldRows(entity, (spec, value) => spec.summary === true || joins(value));
+	return [...items, ...fields];
 }
 
 /** An entity's subtype as a translate() key, its most specific type; null without one. */
@@ -198,8 +223,6 @@ export type RelationLine = {
 	relation?: string;
 	place?: string;
 	placeHref?: string;
-	// the place is named in the text the card shows, so the place takes the evidence colour
-	evidence?: boolean;
 	// " (nu Dam)", when the name shown is an old one
 	now?: string;
 	// ", 5 januari 1934", when the date belongs to the relation
@@ -228,12 +251,6 @@ export function relationLine(feature: FeatureResult): RelationLine {
 	if (placeName) {
 		line.place = placeName;
 		line.placeHref = placeHref(feature);
-	}
-	if (feature.entity && isManuscript(feature.entity)) {
-		const excerpt = pickExcerpt(feature.entity, feature.placeId);
-		if (excerpt && excerpt.mentions.length > 0) {
-			line.evidence = true;
-		}
 	}
 	if (feature.historicalLabel && feature.displayName && feature.historicalLabel !== feature.displayName) {
 		line.now = ` ${formatNowKnownAs(feature.displayName)}`;

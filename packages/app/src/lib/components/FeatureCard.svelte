@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { FeatureResult } from '@atm/shared/types';
 	import { translate, translateAll } from '#lib/utils/translations.js';
-	import { resolveCardFields, dataSourceFields, relationLine, contentKind, scrollingContent } from '#lib/utils/cardFields.js';
+	import { resolveCardFields, collapsedFields, dataSourceFields, relationLine, contentKind, scrollingContent } from '#lib/utils/cardFields.js';
 	import { featureViewerState } from '#lib/state/featureState.svelte.js';
 	import FeatureCardHeader from '#lib/components/FeatureCardHeader.svelte';
 	import FeatureCardPlaceLine from '#lib/components/FeatureCardPlaceLine.svelte';
@@ -10,8 +10,7 @@
 	import TagList from '#lib/components/TagList.svelte';
 	import Heading from '#lib/components/Heading.svelte';
 	import MarkedText from '#lib/components/MarkedText.svelte';
-	import FeatureCardFoundBy from '#lib/components/FeatureCardFoundBy.svelte';
-	import { markFeature } from '#lib/utils/search-hits.js';
+	import { markFeature, matchWindow } from '#lib/utils/search-hits.js';
 
 	type Props = {
 		feature: FeatureResult;
@@ -40,12 +39,20 @@
 	});
 
 	const placeLine = $derived(relationLine(feature));
-	// with a search active, the values it matched carry their marks, and show underlined wherever
-	// they show; a snapshot, so the copying works on plain data rather than the reactive proxy
+	// the values a search matched carry their marks and show marked wherever the card
+	// shows them; a snapshot, so the copying works on plain data rather than the reactive proxy
 	const marked = $derived(markFeature($state.snapshot(feature)));
+	// collapsed, a title with a match is cut to the words around it
+	const title = $derived(expanded ? marked.label : matchWindow(marked.label));
 
-	// collapsed: the summary fields; expanded: every field, between what and where and the sources
-	const entityFields = $derived(marked.entity ? resolveCardFields(marked.entity, expanded) : []);
+	// collapsed: the summary fields and the matched ones; expanded: every field, between
+	// what and where and the sources
+	const entityFields = $derived.by(() => {
+		if (expanded) {
+			return marked.entity ? resolveCardFields(marked.entity, true) : [];
+		}
+		return collapsedFields(marked);
+	});
 	// expanded, below the item's own fields: where it comes from
 	const provenanceFields = $derived(dataSourceFields(feature, expanded));
 	const scrolling = $derived(scrollingContent(feature, expanded));
@@ -123,7 +130,7 @@
 					? 'font-medium text-xl my-3 px-2 focus:outline-none'
 					: 'font-medium text-lg line-clamp-2 mb-0'}
 			>
-				<MarkedText text={marked.label} />
+				<MarkedText text={title} />
 			</Heading>
 			<FeatureCardPlaceLine line={placeLine} {expanded} />
 		</div>
@@ -145,8 +152,6 @@
 		{:else}
 			<FieldList fields={entityFields} class="mt-1" />
 		{/if}
-
-		<FeatureCardFoundBy {feature} {expanded} />
 
 		<TagList
 			tags={translateAll(feature.tags || [])}

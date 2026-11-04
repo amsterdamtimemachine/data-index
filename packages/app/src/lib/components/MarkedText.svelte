@@ -1,6 +1,6 @@
-<!-- A string that may carry search marks, printed with the marked words underlined. -->
+<!-- A string that may carry search marks, printed with the marked words marked. -->
 <script lang="ts">
-	import SearchMark from '#lib/components/SearchMark.svelte';
+	import Mark from '#lib/components/Mark.svelte';
 	import { parseMarks } from '#lib/utils/search-hits.js';
 
 	type Props = {
@@ -27,4 +27,4 @@
 	});
 </script>
 
-{#each runs as run, i (i)}{#if run.marked}<SearchMark>{run.text}</SearchMark>{:else}{run.text}{/if}{/each}
+{#each runs as run, i (i)}{#if run.marked}<Mark>{run.text}</Mark>{:else}{run.text}{/if}{/each}

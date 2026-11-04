@@ -183,7 +183,7 @@ erDiagram
         text dataset_id FK "e.g. stadsarchief-beeldbank"
         jsonb entity  "e.g. Person | CreativeWork | MediaObject | ScreeningEvent | TheaterEvent | Manuscript"
         integer feature_int_id  "identity # the surrogate the bitmaps store"
-        tsvector search_tsv "generated: title, description, searchable entity fields # dutch FTS"
+        tsvector search_tsv "generated: title, description, searchable entity fields # words as written, kept current by rebuild-index"
     }
 
     agents||--o{datasets:"provides"
@@ -292,7 +292,7 @@ Each match carries the matched name, the id of the matched historical name row w
 
 The same three accept `tags` (comma-separated tag ids) with `tagOperator` (`OR`, the default, or `AND`). Tags are classifier output ingested per dataset (see the `tags` source); the count endpoints intersect the precomputed per-tag bitmaps with their buckets, and an unknown tag id matches nothing. `/api/available-tags` lists every tag with its feature count under the same category filters and `q`, so the filter panel's counts always agree with the map.
 
-Matching uses Dutch full-text search with web search syntax: plain words must all appear, `"quoted phrases"` must appear side by side, `OR` offers alternatives, and `-word` excludes. Words are stemmed, so `verkooping` also finds `Verkoopingen`, and the stemmer folds doubled vowels, which lets old spellings find their modern forms. The search reads labels only, not article text or descriptions. A query that matches nothing, including one consisting only of stopwords, returns zero counts everywhere.
+Matching is on words as written, with web search syntax: plain words must all appear, `"quoted phrases"` must appear side by side, `OR` offers alternatives, and `-word` excludes. Nothing is stemmed and no word is dropped, so a name matches itself and not a lookalike (`Leeds` does not find `Leden`, `Kat` does not find `Katestraat`) and `haar` or `het` are words like any other. The words are indexed in the generated `search_tsv` column, which `rebuild-index` rebuilds whenever its definition in the code has changed, since a schema push cannot see that change. A query that matches nothing returns zero counts everywhere.
 
 Heatmap and histogram counts under a search are computed by intersecting each cell's precomputed feature set with the set of matching features, so a search request costs about the same as an unfiltered one regardless of how many features match.
 

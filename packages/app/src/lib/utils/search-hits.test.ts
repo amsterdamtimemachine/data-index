@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { FeatureResult, ScreeningEventEntity, ManuscriptEntity } from '@atm/shared/types';
-import { parseMarks, markText, markFeature, excerptSearchRanges, shiftRanges, foundByRows } from './search-hits';
+import { parseMarks, markText, markFeature, excerptSearchRanges, shiftRanges, matchWindow, hasSearchHits } from './search-hits';
 
 const S = '\u0001';
 const E = '\u0002';
@@ -62,42 +62,21 @@ describe('markFeature', () => {
 	});
 });
 
-describe('foundByRows', () => {
-	const S = '\u0001';
-	const E = '\u0002';
-	const at = (entity: unknown, foundBy: { field: string; text: string }[], placeId = 'p') =>
-		({ id: 'f', label: 'T', recordType: 'x', placeId, entity, foundBy } as unknown as FeatureResult);
-
-	test('expanded shows everything in place: nothing listed', () => {
-		const f = at({ type: 'MediaObject', name: 'Foto', author: 'Jacob Olie' }, [{ field: '$.author', text: `Jacob ${S}Olie${E}` }]);
-		expect(foundByRows(f, true)).toEqual([]);
-	});
-
-	test('collapsed, every match is a row: the title as a snippet, a field by its label, whether shown or not', () => {
-		const photo = at({ type: 'MediaObject', name: 'Foto', author: 'Jacob Olie' }, [{ field: 'title', text: `${S}Foto${E} van Olie` }, { field: '$.author', text: `Jacob ${S}Olie${E}` }]);
-		expect(foundByRows(photo, false)).toEqual([{ label: 'Titel', value: `${S}Foto${E} van Olie` }, { label: 'Auteur', value: `Jacob ${S}Olie${E}` }]);
+describe('matchWindow', () => {
+	test('the words around the first mark within the margin, cut with an ellipsis; unmarked, the string as it is', () => {
 		const long = `Panorama van de Dam tijdens de plechtige kerkgang van koningin Wilhelmina voorafgaand aan haar Inhuldiging in de Nieuwe ${S}Kerk${E}. Op de achtergrond het Koninklijk Paleis, Dam 14`;
-		expect(foundByRows(at({ type: 'MediaObject', name: 'P' }, [{ field: 'title', text: long }]), false)).toEqual([{ label: 'Titel', value: `…haar Inhuldiging in de Nieuwe ${S}Kerk${E}. Op de achtergrond het…` }]);
-		const person = at({ type: 'Person', name: 'Sara', birthPlace: 'Zaandam' }, [{ field: '$.birthPlace', text: `${S}Zaandam${E}` }]);
-		expect(foundByRows(person, false)).toEqual([{ label: 'Geboren', value: `${S}Zaandam${E}` }]);
+		expect(matchWindow(long)).toBe(`…in de Nieuwe ${S}Kerk${E}. Op de…`);
+		expect(matchWindow(long, 32)).toBe(`…haar Inhuldiging in de Nieuwe ${S}Kerk${E}. Op de achtergrond het…`);
+		expect(matchWindow(`Een ${S}dag${E} politiecommissaris`)).toBe(`Een ${S}dag${E} politiecommissaris`);
+		expect(matchWindow('Een dag politiecommissaris')).toBe('Een dag politiecommissaris');
 	});
+});
 
-	test('a programme item is listed by its kind, the venue by its label', () => {
-		const programme = { type: 'ScreeningEvent', name: 'P', startDate: '1950', location: { type: 'Place', name: 'Odeon' }, items: [{ type: 'Movie', name: 'Skippy' }, { type: 'LiveAct', name: 'Troep' }] };
-		const f = at(programme, [{ field: '$.items[*].name', text: `${S}Skippy${E}` }, { field: '$.items[*].name', text: `${S}Troep${E}` }, { field: '$.location.name', text: `${S}Odeon${E}` }]);
-		expect(foundByRows(f, false)).toEqual([{ label: 'Film', value: `${S}Skippy${E}` }, { label: 'Optreden', value: `${S}Troep${E}` }, { label: 'Venue', value: `${S}Odeon${E}` }]);
-	});
-
-	test('a description and a diary text are snippets around the match, cut with an ellipsis; a diary description is left out', () => {
-		const text = at({ type: 'CreativeWork', name: 'A' }, [{ field: 'description', text: `${'woord '.repeat(12)}de ${S}brand${E} in Oost ${'woord '.repeat(12)}` }]);
-		// at most 32 characters either side, whole words only, an ellipsis where cut
-		const [row] = foundByRows(text, false);
-		expect(row.label).toBe('Beschrijving');
-		expect(row.value).toBe(`…woord woord woord woord de ${S}brand${E} in Oost woord woord woord woord…`);
-		const short = at({ type: 'CreativeWork', name: 'A' }, [{ field: 'description', text: `de ${S}brand${E}` }]);
-		expect(foundByRows(short, false)).toEqual([{ label: 'Beschrijving', value: `de ${S}brand${E}` }]);
-		const story = { type: 'Manuscript', name: 'D', excerpts: [{ placeId: 'p', text: 'Eerst de brand bij de gashouder in Oost', truncatedBefore: false, truncatedAfter: false, mentions: [] }] };
-		const diary = at(story, [{ field: '$.excerpts[*].text', text: `Eerst de brand bij de ${S}gashouder${E} in Oost` }, { field: 'description', text: `Eerst de ${S}brand${E}` }]);
-		expect(foundByRows(diary, false)).toEqual([{ label: 'Tekst', value: `Eerst de brand bij de ${S}gashouder${E} in Oost` }]);
+describe('hasSearchHits', () => {
+	test('a feature that came with hits is under a search', () => {
+		const base = { id: 'f', label: 'T', recordType: 'x' } as unknown as FeatureResult;
+		expect(hasSearchHits(base)).toBe(false);
+		expect(hasSearchHits({ ...base, foundBy: [] })).toBe(false);
+		expect(hasSearchHits({ ...base, foundBy: [{ field: 'title', text: `${S}T${E}` }] })).toBe(true);
 	});
 });

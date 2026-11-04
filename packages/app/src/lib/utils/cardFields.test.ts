@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import type { ScreeningEventEntity, TheaterEventEntity, FeatureResult } from '@atm/shared/types';
-import { resolveCardFields, dataSourceFields, programmeRows, programmeHeading, entitySubtype, relationLine, typeLabel, contentKind, scrollingContent } from './cardFields';
+import { resolveCardFields, collapsedFields, dataSourceFields, programmeRows, programmeHeading, entitySubtype, relationLine, typeLabel, contentKind, scrollingContent } from './cardFields';
+import { markFeature } from './search-hits';
 import type { Entity, ManuscriptEntity } from '@atm/shared/types';
 
 const screening: ScreeningEventEntity = {
@@ -62,6 +63,32 @@ describe('programme cards', () => {
 			{ label: 'Geboren', value: '1 januari 1900', href: undefined },
 			{ label: 'Overleden', value: 'Onbekend', href: undefined }
 		]);
+	});
+});
+
+describe('collapsedFields', () => {
+	const S = '\u0001';
+	const E = '\u0002';
+	const at = (entity: Entity, label: string, foundBy: { field: string; text: string }[]) =>
+		markFeature({ id: 'f', label, recordType: 'x', entity, foundBy } as unknown as FeatureResult);
+
+	test('without a search, the summary fields', () => {
+		expect(collapsedFields(at(screening, 'Skippy (1931)', []))).toEqual(resolveCardFields(screening, false));
+	});
+
+	test('a hidden field the search marked joins the summary fields in the expanded order, marked', () => {
+		const photo: Entity = { type: 'MediaObject', name: 'Foto', author: 'Jacob Olie', contentUrl: 'u' };
+		expect(collapsedFields(at(photo, 'Foto', [{ field: '$.author', text: `Jacob ${S}Olie${E}` }]))).toEqual([{ label: 'Auteur', value: `Jacob ${S}Olie${E}`, href: undefined }]);
+		const entry: ManuscriptEntity = { type: 'Manuscript', name: 'x', excerpts: [], author: { type: 'Person', name: 'Els Polak' }, isPartOf: { type: 'Book', name: 'Dagboek Els Polak, deel 1' } };
+		expect(collapsedFields(at(entry, 'x', [{ field: '$.isPartOf.name', text: `Dagboek Els ${S}Polak${E}, deel 1` }])).map((r) => r.label)).toEqual(['Auteur', 'Dagboek']);
+	});
+
+	test('a programme\'s matched items come first, one that repeats the title is left out, and at most two join', () => {
+		const hits = screening.items.map((i) => ({ field: '$.items[*].name', text: i.name.replace(/^(\S+)/, `${S}$1${E}`) }));
+		const rows = collapsedFields(at(screening, 'Skippy (1931)', hits));
+		expect(rows.map((r) => r.label)).toEqual(['Optreden', 'Film', 'Venue']);
+		expect(rows[0].value).toBe(`${S}Mello${E} Wendini, komisch dressuur act`);
+		expect(collapsedFields(at(screening, 'Skippy (1931)', [{ field: '$.location.name', text: `${S}Rialto${E}` }]))).toEqual([{ label: 'Venue', value: `${S}Rialto${E}`, href: undefined }]);
 	});
 });
 
@@ -177,10 +204,4 @@ describe('content by entity type', () => {
 		expect(scrollingContent(at(undefined), true)).toBe(false);
 	});
 
-	test('the relation line carries evidence when the story names the place in the text it shows', () => {
-		const story: ManuscriptEntity = { type: 'Manuscript', name: 'Dagboek', excerpts: [{ placeId: 'p', text: 'Op de Dam.', truncatedBefore: false, truncatedAfter: false, mentions: [{ start: 6, end: 9, quote: 'Dam' }] }] };
-		const feature = { id: 'f', label: '', recordType: 'story', placeId: 'p', placeType: 'street', startDate: '', endDate: '', datasetId: 'd', datasetLabel: '', tags: [], classifiers: [], entity: story, displayName: 'Dam' } as unknown as FeatureResult;
-		expect(relationLine(feature).evidence).toBe(true);
-		expect(relationLine({ ...feature, entity: { ...story, excerpts: [{ ...story.excerpts[0], mentions: [] }] } }).evidence).toBeUndefined();
-	});
 });

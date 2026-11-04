@@ -149,9 +149,6 @@ const TRANSLATIONS: Record<string, string> = {
 	showing: 'Toont',
 	venue: 'Venue',
 	// the matches of a search the collapsed card does not show, listed under it
-	foundBy: 'Gevonden via',
-	title: 'Titel',
-	description: 'Beschrijving',
 	// a programme's heading: "2 films en 1 optreden op het programma"
 	filmOne: 'film',
 	filmMany: 'films',
@@ -176,7 +173,8 @@ const TRANSLATIONS: Record<string, string> = {
 	statusWithSearch: 'met zoekterm',
 	statusAboutTopics: 'over',
 	// the search tooltip; {border} stands for the map's outline glyph
-	searchTooltip: 'Een zoekterm doorzoekt titels, beschrijvingen en de gegevens op de kaart, zoals auteur, geboorteplaats, film of dagboektekst, binnen de toegepaste filters. Wat gevonden is, staat onderstreept op de kaart. Bij een gekozen plek markeert de gouden rand {border} op de kaart de cellen waarin de plek ligt.',
+	markTooltip: 'Gemarkeerde woorden zijn wat je zoekterm vond.',
+	searchTooltip: 'Een zoekterm doorzoekt titels, beschrijvingen en de gegevens op de kaart, zoals auteur, geboorteplaats, film of dagboektekst, binnen de toegepaste filters. Wat gevonden is, staat gemarkeerd op de kaart. Bij een gekozen plek markeert de gouden rand {border} op de kaart de cellen waarin de plek ligt.',
 	ofThisCell: 'van deze cel',
 	timelineOfCell: 'Tijdlijn van deze cel',
 	timelineOf: 'Tijdlijn van',
