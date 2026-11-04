@@ -6,11 +6,18 @@
 import type { Excerpt, ExcerptImage, ExcerptMention, ManuscriptEntity } from '@atm/shared/types';
 import { foldLinesInline } from './format';
 
-export const COLLAPSED_EXCERPT_LENGTH = 250;
+/**
+ * How much text the collapsed card shows around what matters, in characters: a diary
+ * excerpt's whole window around the place mention, and the margin either side of a
+ * search match in a "Gevonden via" snippet. A window is cut to whole words and never
+ * exceeds its size.
+ */
+export const TEXT_WINDOWS = { excerpt: 250, snippet: 32 };
+
+export type TextRange = { start: number; end: number };
 
 // marked: a place mention, the link's evidence; search: words a search matched (set only when true)
 export type TextSegment = { text: string; marked: boolean; search?: boolean };
-export type TextRange = { start: number; end: number };
 
 /** The excerpt cut for the shown place, else the entry's first. */
 export function pickExcerpt(entity: ManuscriptEntity, placeId?: string): Excerpt | null {
@@ -32,29 +39,21 @@ function isSpace(ch: string): boolean {
 }
 
 /** About `length` characters around the first mention, cut on word boundaries. */
-export function excerptWindow(excerpt: Excerpt, length: number): Excerpt {
-	const text = excerpt.text;
-	if (text.length <= length) {
-		return excerpt;
+/**
+ * The piece of a text around a range: up to `margin` characters more on each side,
+ * cut back to whole words and trimmed, so it never exceeds its size; when one side
+ * runs into the text's end, the other side takes the rest.
+ */
+export function wordWindow(text: string, range: TextRange, margin: number): TextRange {
+	let lo = range.start - margin;
+	let hi = range.end + margin;
+	if (hi > text.length) {
+		lo -= hi - text.length;
+		hi = text.length;
 	}
-	// the text's own edges, so skipped whitespace never counts as a cut
-	let textStart = 0;
-	while (textStart < text.length && isSpace(text[textStart])) {
-		textStart++;
-	}
-	let textEnd = text.length;
-	while (textEnd > textStart && isSpace(text[textEnd - 1])) {
-		textEnd--;
-	}
-	const first = excerpt.mentions[0];
-	let center = 0;
-	if (first) {
-		center = Math.floor((first.start + first.end) / 2);
-	}
-	let lo = Math.max(0, center - Math.floor(length / 2));
-	let hi = Math.min(text.length, lo + length);
-	if (hi === text.length) {
-		lo = Math.max(0, hi - length);
+	if (lo < 0) {
+		hi = Math.min(hi - lo, text.length);
+		lo = 0;
 	}
 	// start after the next space and end before the previous one, never inside a word
 	if (lo > 0 && !isSpace(text[lo - 1])) {
@@ -73,6 +72,31 @@ export function excerptWindow(excerpt: Excerpt, length: number): Excerpt {
 	while (hi > lo && isSpace(text[hi - 1])) {
 		hi--;
 	}
+	return { start: lo, end: hi };
+}
+
+export function excerptWindow(excerpt: Excerpt, length: number = TEXT_WINDOWS.excerpt): Excerpt {
+	const text = excerpt.text;
+	if (text.length <= length) {
+		return excerpt;
+	}
+	// the text's own edges, so skipped whitespace never counts as a cut
+	let textStart = 0;
+	while (textStart < text.length && isSpace(text[textStart])) {
+		textStart++;
+	}
+	let textEnd = text.length;
+	while (textEnd > textStart && isSpace(text[textEnd - 1])) {
+		textEnd--;
+	}
+	// the window around the first mention, the length shared over both its sides
+	const first = excerpt.mentions[0];
+	let anchor: TextRange = { start: 0, end: 0 };
+	if (first) {
+		anchor = { start: first.start, end: first.end };
+	}
+	const margin = Math.max(Math.floor((length - (anchor.end - anchor.start)) / 2), 0);
+	const { start: lo, end: hi } = wordWindow(text, anchor, margin);
 	// an image separated from the shown text by whitespace only still sits beside it
 	let imagesLo = lo;
 	while (imagesLo > 0 && isSpace(text[imagesLo - 1])) {

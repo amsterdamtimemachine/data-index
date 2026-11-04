@@ -103,11 +103,6 @@ export function cardFieldLabels(type: Entity['type']): string[] {
 	return (CARD_FIELDS[type] ?? []).map((spec) => spec.label);
 }
 
-/** Whether the collapsed card shows the field with this label for this entity type. */
-export function shownCollapsed(type: Entity['type'], label: string): boolean {
-	return (CARD_FIELDS[type] ?? []).some((spec) => spec.label === label && spec.summary === true);
-}
-
 export function resolveCardFields(entity: Entity, expanded: boolean): FieldRow[] {
 	const specs = CARD_FIELDS[entity.type] ?? [];
 	const fields: FieldRow[] = [];

@@ -7,7 +7,7 @@
 	import type { FeatureResult } from '@atm/shared/types';
 	import FeatureCardExcerpt from '#lib/components/FeatureCardExcerpt.svelte';
 	import FeatureCardText from '#lib/components/FeatureCardText.svelte';
-	import { pickExcerpt, excerptWindow, COLLAPSED_EXCERPT_LENGTH, excerptBlocks, precedingImage, windowOffset } from '#lib/utils/excerpts.js';
+	import { pickExcerpt, excerptWindow, excerptBlocks, precedingImage, windowOffset } from '#lib/utils/excerpts.js';
 	import { excerptSearchRanges, shiftRanges } from '#lib/utils/search-hits.js';
 
 	type Props = {
@@ -30,7 +30,7 @@
 		if (expanded) {
 			return whole;
 		}
-		return excerptWindow(whole, COLLAPSED_EXCERPT_LENGTH);
+		return excerptWindow(whole);
 	});
 	// the words a search matched, as ranges on the text shown
 	const searchRanges = $derived.by(() => {

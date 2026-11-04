@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { Excerpt, ManuscriptEntity } from '@atm/shared/types';
-import { pickExcerpt, excerptWindow, segmentText, foldSegments, precedingImage, excerptBlocks, windowOffset } from './excerpts';
+import { pickExcerpt, excerptWindow, segmentText, foldSegments, precedingImage, excerptBlocks, windowOffset, wordWindow } from './excerpts';
 import { iiifImageUrl } from './iiif';
 
 const excerpt = (over: Partial<Excerpt>): Excerpt => ({
@@ -160,5 +160,21 @@ describe('search ranges in the text', () => {
 		expect(windowOffset(whole, shown)).toBe(15);
 		const blocks = excerptBlocks(shown, [{ start: 7, end: 16 }]);
 		expect(blocks).toEqual([{ kind: 'text', segments: [{ text: 'bij de ', marked: false }, { text: 'gashouder', marked: false, search: true }] }]);
+	});
+});
+
+describe('wordWindow', () => {
+	const text = 'een twee drie vier vijf zes zeven acht negen tien elf twaalf';
+	test('around a range, whole words within the margin, trimmed', () => {
+		const zeven = { start: text.indexOf('zeven'), end: text.indexOf('zeven') + 5 };
+		const w = wordWindow(text, zeven, 9);
+		expect(text.slice(w.start, w.end)).toBe('vijf zes zeven acht');
+	});
+	test('a side that runs into the end hands its remainder to the other', () => {
+		const twaalf = { start: text.indexOf('twaalf'), end: text.length };
+		const w = wordWindow(text, twaalf, 5);
+		expect(text.slice(w.start, w.end)).toBe('tien elf twaalf');
+		const een = { start: 0, end: 3 };
+		expect(text.slice(...Object.values(wordWindow(text, een, 5)) as [number, number])).toBe('een twee drie');
 	});
 });

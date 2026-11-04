@@ -150,6 +150,8 @@ const TRANSLATIONS: Record<string, string> = {
 	venue: 'Venue',
 	// the matches of a search the collapsed card does not show, listed under it
 	foundBy: 'Gevonden via',
+	title: 'Titel',
+	description: 'Beschrijving',
 	// a programme's heading: "2 films en 1 optreden op het programma"
 	filmOne: 'film',
 	filmMany: 'films',

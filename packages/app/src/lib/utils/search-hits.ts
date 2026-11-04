@@ -7,9 +7,9 @@
  */
 import type { Entity, Excerpt, FeatureResult } from '@atm/shared/types';
 import { SEARCH_FIELDS, SEARCH_FIELD_DESCRIPTION, SEARCH_FIELD_TITLE, SEARCH_MARK_END, SEARCH_MARK_START } from '@atm/shared/vocab';
-import { shownCollapsed, type FieldRow } from './cardFields';
-import { pickExcerpt, excerptWindow, windowOffset, COLLAPSED_EXCERPT_LENGTH } from './excerpts';
+import type { FieldRow } from './cardFields';
 import { translate } from './translations';
+import { wordWindow, TEXT_WINDOWS } from './excerpts';
 
 export type MarkRange = { start: number; end: number };
 
@@ -143,16 +143,11 @@ export function shiftRanges(ranges: MarkRange[], offset: number, length: number)
 	return shifted;
 }
 
-// a window of the text around the first range, cut at word edges, with the marks put back
-const SNIPPET_RADIUS = 60;
+// the words around the first range, with the marks put back and an ellipsis where the text was cut
 function snippet(text: string, ranges: MarkRange[]): string {
-	const first = ranges[0];
-	let from = Math.max(first.start - SNIPPET_RADIUS, 0);
-	let to = Math.min(first.end + SNIPPET_RADIUS, text.length);
-	while (from > 0 && !/\s/.test(text[from - 1])) from--;
-	while (to < text.length && !/\s/.test(text[to])) to++;
+	const { start: from, end: to } = wordWindow(text, ranges[0], TEXT_WINDOWS.snippet);
 	const marked = markText(text.slice(from, to), shiftRanges(ranges, from, to - from));
-	return `${from > 0 ? '… ' : ''}${marked.trim()}${to < text.length ? ' …' : ''}`;
+	return `${from > 0 ? '…' : ''}${marked}${to < text.length ? '…' : ''}`;
 }
 
 // the label of a programme item's hit, by the item the plain text names
@@ -164,39 +159,37 @@ function itemLabel(entity: Entity, plain: string): string {
 }
 
 /**
- * The hits the current view does not show, as rows for the card to list under its
- * content: a value of a field the collapsed card leaves out, a programme item (shown
- * expanded only), a passage of a diary's text outside the window, as a snippet.
- * Expanded, the card shows everything, so nothing. The title and the description are
- * always shown; a diary's description is its excerpt's opening, shown as the excerpt.
+ * Every match of the search as a row for the collapsed card to list under its content,
+ * whether or not the value shows on the card too (a title can be clamped, a window
+ * can leave a passage out): the title, a description or a diary's text as a snippet
+ * around the match, a field or a programme item by its label. Expanded, the
+ * card shows everything underlined in place, so nothing. A diary's description is its
+ * excerpt's opening and is left out.
  */
-export function hiddenHits(feature: FeatureResult, expanded: boolean): FieldRow[] {
+export function foundByRows(feature: FeatureResult, expanded: boolean): FieldRow[] {
 	const entity = feature.entity;
 	if (expanded || !entity || !feature.foundBy?.length) return [];
 	const fields = SEARCH_FIELDS[entity.type] ?? [];
 	const rows: FieldRow[] = [];
 	for (const hit of feature.foundBy) {
-		if (hit.field === SEARCH_FIELD_TITLE || hit.field === SEARCH_FIELD_DESCRIPTION) continue;
+		const { text: plain, ranges } = parseMarks(hit.text);
+		if (hit.field === SEARCH_FIELD_TITLE) {
+			rows.push({ label: translate('title'), value: snippet(plain, ranges) });
+			continue;
+		}
+		if (hit.field === SEARCH_FIELD_DESCRIPTION) {
+			if (entity.type !== 'Manuscript') rows.push({ label: translate('description'), value: snippet(plain, ranges) });
+			continue;
+		}
 		const spec = fields.find((f) => f.path === hit.field);
 		if (!spec) continue;
-		const plain = parseMarks(hit.text).text;
 		if (hit.field === EXCERPT_TEXT) {
-			if (entity.type !== 'Manuscript') continue;
-			const whole = pickExcerpt(entity, feature.placeId);
-			const ranges = parseMarks(hit.text).ranges;
-			if (whole && whole.text === plain) {
-				const shown = excerptWindow(whole, COLLAPSED_EXCERPT_LENGTH);
-				if (shiftRanges(ranges, windowOffset(whole, shown), shown.text.length).length > 0) continue;
-			}
 			rows.push({ label: translate(spec.label), value: snippet(plain, ranges) });
-			continue;
-		}
-		if (hit.field === '$.items[*].name') {
+		} else if (hit.field === '$.items[*].name') {
 			rows.push({ label: translate(itemLabel(entity, plain)), value: hit.text });
-			continue;
+		} else {
+			rows.push({ label: translate(spec.label), value: hit.text });
 		}
-		if (shownCollapsed(entity.type, spec.label)) continue;
-		rows.push({ label: translate(spec.label), value: hit.text });
 	}
 	return rows;
 }
