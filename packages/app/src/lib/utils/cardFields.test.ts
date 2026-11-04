@@ -83,7 +83,7 @@ describe('collapsedFields', () => {
 		expect(collapsedFields(at(entry, 'x', [{ field: '$.isPartOf.name', text: `Dagboek Els ${S}Polak${E}, deel 1` }])).map((r) => r.label)).toEqual(['Auteur', 'Dagboek']);
 	});
 
-	test('a programme\'s matched items come first, one that repeats the title is left out, and at most two join', () => {
+	test('a programme\'s matched items come first, every one of them, and one that repeats the title is left out', () => {
 		const hits = screening.items.map((i) => ({ field: '$.items[*].name', text: i.name.replace(/^(\S+)/, `${S}$1${E}`) }));
 		const rows = collapsedFields(at(screening, 'Skippy (1931)', hits));
 		expect(rows.map((r) => r.label)).toEqual(['Optreden', 'Film', 'Venue']);

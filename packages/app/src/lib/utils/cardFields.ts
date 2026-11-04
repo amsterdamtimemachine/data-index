@@ -119,27 +119,17 @@ export function resolveCardFields(entity: Entity, expanded: boolean): FieldRow[]
 	return fieldRows(entity, (spec) => expanded || spec.summary === true);
 }
 
-// how many rows the small card takes on for a search's matches
-const MAX_JOINING_FIELDS = 2;
-
 /**
- * The collapsed card's fields with a search on: its summary fields, and up to two of
- * the rows only the expanded card shows whose value the search marked, in the expanded
- * order (a programme's items first, then its fields), so a match is never out of sight.
- * A marked row that repeats the title is left out: the title already shows it.
+ * The collapsed card's fields with a search on: its summary fields, and every row only
+ * the expanded card shows whose value the search marked, in the expanded order (a
+ * programme's items first, then its fields), so a match is never out of sight. A
+ * marked row that repeats the title is left out: the title already shows it.
  */
 export function collapsedFields(feature: FeatureResult): FieldRow[] {
 	const entity = feature.entity;
 	if (!entity) return [];
 	const title = parseMarks(feature.label).text;
-	let joined = 0;
-	const joins = (value: string): boolean => {
-		if (joined >= MAX_JOINING_FIELDS || !value.includes(SEARCH_MARK_START) || parseMarks(value).text === title) {
-			return false;
-		}
-		joined++;
-		return true;
-	};
+	const joins = (value: string): boolean => value.includes(SEARCH_MARK_START) && parseMarks(value).text !== title;
 	const items = programmeRows(entity).filter((row) => joins(row.value));
 	const fields = fieldRows(entity, (spec, value) => spec.summary === true || joins(value));
 	return [...items, ...fields];
