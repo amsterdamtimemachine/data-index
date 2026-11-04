@@ -25,7 +25,7 @@ const F2 = '22222222-2222-2222-2222-222222222202'; // 'Nieuwe woningen aan de Ze
 const F3 = '22222222-2222-2222-2222-222222222203'; // matching text only in description, text 1950 @P1
 const F4 = '22222222-2222-2222-2222-222222222204'; // 'Verkoopingen te Amsterdam' text 1900 @P2
 const F5 = '22222222-2222-2222-2222-222222222205'; // a person born in Zaandam, person 1900 @P1
-const F6 = '22222222-2222-2222-2222-222222222206'; // a programme at the Odeon with a film on the bill, event 1950 @P2
+const F6 = '22222222-2222-2222-2222-222222222206'; // a programme at the Odeon with a film on the programme, event 1950 @P2
 
 function timelineSum(timeline: Record<string, Heatmap>): number {
   let sum = 0;
@@ -71,7 +71,7 @@ describe('feature text search', () => {
         (${F5}, 'person', 'Sara Polak', '1900-01-01', '1900-12-31', 'fs-ds',
           ${JSON.stringify({ type: 'Person', name: 'Sara Polak', birthPlace: 'Zaandam' })}::jsonb),
         (${F6}, 'event', 'Programma', '1950-01-01', '1950-12-31', 'fs-ds',
-          ${JSON.stringify({ type: 'ScreeningEvent', name: 'Programma', startDate: '1950', location: { type: 'Place', name: 'Odeon' }, bill: [{ type: 'Movie', name: 'De Koning van Thule' }] })}::jsonb)
+          ${JSON.stringify({ type: 'ScreeningEvent', name: 'Programma', startDate: '1950', location: { type: 'Place', name: 'Odeon' }, items: [{ type: 'Movie', name: 'De Koning van Thule' }] })}::jsonb)
     `);
     await db.execute(sql`
       INSERT INTO feature_to_place (feature_id, place_id, relation_id) VALUES
@@ -98,7 +98,7 @@ describe('feature text search', () => {
     expect(hist.totalFeatures).toBe(2); // F2 by title, F3 by description
   });
 
-  test("the entity's searchable fields are searched: a birthplace, a venue, a film on the bill", async () => {
+  test("the entity's searchable fields are searched: a birthplace, a venue, a film on the programme", async () => {
     const born = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'zaandam' });
     expect(born.totalFeatures).toBe(1); // F5
     const venue = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'odeon' });
@@ -217,7 +217,7 @@ describe('feature text search', () => {
     const odeon = await byField('odeon');
     expect(odeon[F6]).toEqual([{ field: '$.location.name', text: '\u0001Odeon\u0002' }]);
     const film = await byField('koning');
-    expect(film[F6]).toEqual([{ field: '$.bill[*].name', text: 'De \u0001Koning\u0002 van Thule' }]);
+    expect(film[F6]).toEqual([{ field: '$.items[*].name', text: 'De \u0001Koning\u0002 van Thule' }]);
     const none = await getFeatures({ area: { kind: 'bounds', bounds }, pageSize: 10 });
     expect(none.data.every((f) => f.foundBy === undefined)).toBe(true);
   });

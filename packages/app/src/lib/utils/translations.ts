@@ -81,7 +81,7 @@ const TRANSLATIONS: Record<string, string> = {
 	// UI labels
 	searchPlaceholder: 'Zoek een plek of zoekterm',
 	// the dropdown's text search row; {term} stands for what was typed
-	searchInTitles: 'Zoek ‘{term}’ in titels',
+	searchInData: 'Zoek ‘{term}’ in gegevens',
 	clearSearchFilter: 'Verwijder zoekfilter',
 	cellsOf: 'Cellen van',
 	cellOf: 'Cel van',
@@ -148,7 +148,9 @@ const TRANSLATIONS: Record<string, string> = {
 	featureMany: 'features',
 	showing: 'Toont',
 	venue: 'Venue',
-	// a programme's bill heading: "2 films en 1 optreden op het programma"
+	// the matches of a search the collapsed card does not show, listed under it
+	foundBy: 'Gevonden via',
+	// a programme's heading: "2 films en 1 optreden op het programma"
 	filmOne: 'film',
 	filmMany: 'films',
 	actOne: 'optreden',
@@ -172,7 +174,7 @@ const TRANSLATIONS: Record<string, string> = {
 	statusWithSearch: 'met zoekterm',
 	statusAboutTopics: 'over',
 	// the search tooltip; {border} stands for the map's outline glyph
-	searchTooltip: 'Een zoekterm doorzoekt voorlopig alleen titels, binnen de toegepaste filters. Bij een gekozen plek markeert de gouden rand {border} op de kaart de cellen waarin de plek ligt.',
+	searchTooltip: 'Een zoekterm doorzoekt titels, beschrijvingen en de gegevens op de kaart, zoals auteur, geboorteplaats, film of dagboektekst, binnen de toegepaste filters. Wat gevonden is, staat onderstreept op de kaart. Bij een gekozen plek markeert de gouden rand {border} op de kaart de cellen waarin de plek ligt.',
 	ofThisCell: 'van deze cel',
 	timelineOfCell: 'Tijdlijn van deze cel',
 	timelineOf: 'Tijdlijn van',

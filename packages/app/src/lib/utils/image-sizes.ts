@@ -34,6 +34,14 @@ export function memorixThumbUrl(url: string, box: string): string {
 
 export type PictureUse = 'card' | 'full';
 
+/** Where a card's picture is shown: in the grid, or expanded in the full view. */
+export function pictureUse(expanded: boolean): PictureUse {
+	if (expanded) {
+		return 'full';
+	}
+	return 'card';
+}
+
 const MEMORIX_BOX: Record<PictureUse, string> = { card: '640x480', full: '1000x1000' };
 const IIIF_SIZE: Record<PictureUse, string> = { card: '!640,480', full: '!1000,1000' };
 

@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import type { ScreeningEventEntity, TheaterEventEntity, FeatureResult } from '@atm/shared/types';
-import { resolveCardFields, dataSourceFields, programmeBillRows, programmeBillHeading, entitySubtype, relationLine, typeLabel } from './cardFields';
+import { resolveCardFields, dataSourceFields, programmeRows, programmeHeading, entitySubtype, relationLine, typeLabel, contentKind, scrollingContent } from './cardFields';
+import type { Entity, ManuscriptEntity } from '@atm/shared/types';
 
 const screening: ScreeningEventEntity = {
 	type: 'ScreeningEvent',
@@ -8,7 +9,7 @@ const screening: ScreeningEventEntity = {
 	name: 'Skippy (1931)',
 	startDate: '1934-01-05',
 	location: { type: 'Place', name: 'Rialto', identifier: 'B1', additionalType: 'Cinema', address: 'Ceintuurbaan 338' },
-	bill: [
+	items: [
 		{ type: 'Movie', name: 'Skippy (1931)', url: 'https://cinemacontext.nl/id/F1' },
 		{ type: 'LiveAct', name: 'Mello Wendini, komisch dressuur act' },
 		{ type: 'Movie', name: 'Reis naar de maan, De' }
@@ -20,7 +21,7 @@ const theatre: TheaterEventEntity = {
 	name: 'Allison Troep, acrobaten',
 	startDate: '1907-05',
 	location: { type: 'Place', name: 'Carr', identifier: 'B2' },
-	bill: [{ type: 'LiveAct', name: 'Allison Troep, acrobaten' }]
+	items: [{ type: 'LiveAct', name: 'Allison Troep, acrobaten' }]
 };
 
 describe('programme cards', () => {
@@ -28,26 +29,26 @@ describe('programme cards', () => {
 		expect(resolveCardFields(screening, false)).toEqual([{ label: 'Venue', value: 'Rialto', href: undefined }]);
 	});
 
-	test('expanded adds nothing beyond the venue: the bill is the card content', () => {
+	test('expanded adds nothing beyond the venue: the programme is the card content', () => {
 		expect(resolveCardFields(screening, true).length).toBe(1);
 		expect(resolveCardFields(theatre, true).length).toBe(1);
 	});
 
-	test('a bill of several items gets a heading worded from it; one item gets none', () => {
-		expect(programmeBillHeading(screening)).toBe('2 films en 1 optreden op het programma');
-		expect(programmeBillHeading({ ...theatre, bill: [{ type: 'LiveAct', name: 'a' }, { type: 'LiveAct', name: 'b' }] })).toBe('2 optredens op het programma');
-		expect(programmeBillHeading(theatre)).toBeNull();
-		expect(programmeBillHeading({ type: 'Person', name: 'x' })).toBeNull();
+	test('a programme of several items gets a heading worded from it; one item gets none', () => {
+		expect(programmeHeading(screening)).toBe('2 films en 1 optreden op het programma');
+		expect(programmeHeading({ ...theatre, items: [{ type: 'LiveAct', name: 'a' }, { type: 'LiveAct', name: 'b' }] })).toBe('2 optredens op het programma');
+		expect(programmeHeading(theatre)).toBeNull();
+		expect(programmeHeading({ type: 'Person', name: 'x' })).toBeNull();
 	});
 
-	test("the bill in the source's order: a film linked where it has a page, an act as worded", () => {
-		expect(programmeBillRows(screening)).toEqual([
+	test("the items in the source's order: a film linked where it has a page, an act as worded", () => {
+		expect(programmeRows(screening)).toEqual([
 			{ label: 'Film', value: 'Skippy (1931)', href: 'https://cinemacontext.nl/id/F1' },
 			{ label: 'Optreden', value: 'Mello Wendini, komisch dressuur act' },
 			{ label: 'Film', value: 'Reis naar de maan, De', href: undefined }
 		]);
-		expect(programmeBillRows({ type: 'Person', name: 'x' })).toEqual([]);
-		expect(programmeBillRows(undefined)).toEqual([]);
+		expect(programmeRows({ type: 'Person', name: 'x' })).toEqual([]);
+		expect(programmeRows(undefined)).toEqual([]);
 	});
 
 	test('the subtype follows the type: a screening or a performance', () => {
@@ -152,5 +153,34 @@ describe('provenance rows', () => {
 		expect(resolveCardFields({ type: 'CreativeWork', name: 'x', datePublished: '1967-01-03' }, true)).toEqual([
 			{ label: 'Gepubliceerd', value: '3 januari 1967', href: undefined }
 		]);
+	});
+});
+
+describe('content by entity type', () => {
+	test('every entity type maps to a content kind; no entity shows the description', () => {
+		const kinds: Record<Entity['type'], string> = {
+			MediaObject: 'picture', ScreeningEvent: 'programme', TheaterEvent: 'programme', Manuscript: 'story', Person: 'text', CreativeWork: 'text',
+		};
+		for (const [type, kind] of Object.entries(kinds)) {
+			expect(contentKind({ type } as Entity)).toBe(kind);
+		}
+		expect(contentKind(undefined)).toBe('text');
+	});
+
+	test('expanded, a programme with items and a story with an excerpt scroll; a picture and a bare description do not', () => {
+		const story: ManuscriptEntity = { type: 'Manuscript', name: 'Dagboek', excerpts: [{ placeId: 'p', text: 'Op de Dam.', truncatedBefore: false, truncatedAfter: false, mentions: [{ start: 6, end: 9, quote: 'Dam' }] }] };
+		const at = (entity: Entity | undefined, placeId = 'p') => ({ id: 'f', label: '', recordType: 'story', placeId, placeType: 'street', startDate: '', endDate: '', datasetId: 'd', datasetLabel: '', tags: [], classifiers: [], entity } as unknown as FeatureResult);
+		expect(scrollingContent(at(screening), true)).toBe(true);
+		expect(scrollingContent(at(story), true)).toBe(true);
+		expect(scrollingContent(at(story), false)).toBe(false);
+		expect(scrollingContent(at({ type: 'MediaObject', name: 'Foto' } as Entity), true)).toBe(false);
+		expect(scrollingContent(at(undefined), true)).toBe(false);
+	});
+
+	test('the relation line carries evidence when the story names the place in the text it shows', () => {
+		const story: ManuscriptEntity = { type: 'Manuscript', name: 'Dagboek', excerpts: [{ placeId: 'p', text: 'Op de Dam.', truncatedBefore: false, truncatedAfter: false, mentions: [{ start: 6, end: 9, quote: 'Dam' }] }] };
+		const feature = { id: 'f', label: '', recordType: 'story', placeId: 'p', placeType: 'street', startDate: '', endDate: '', datasetId: 'd', datasetLabel: '', tags: [], classifiers: [], entity: story, displayName: 'Dam' } as unknown as FeatureResult;
+		expect(relationLine(feature).evidence).toBe(true);
+		expect(relationLine({ ...feature, entity: { ...story, excerpts: [{ ...story.excerpts[0], mentions: [] }] } }).evidence).toBeUndefined();
 	});
 });

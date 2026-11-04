@@ -7,10 +7,11 @@
 <script lang="ts">
 	import Link from '#lib/components/Link.svelte';
 	import EvidenceHighlight from '#lib/components/EvidenceHighlight.svelte';
+	import SearchMark from '#lib/components/SearchMark.svelte';
 	import ArrowUpRight from 'phosphor-svelte/lib/ArrowUpRight';
 	import FeatureCardImage from '#lib/components/FeatureCardImage.svelte';
 	import { translate } from '#lib/utils/translations.js';
-	import { getExcerptImageUrl } from '#lib/utils/image-sizes.js';
+	import { getExcerptImageUrl, pictureUse } from '#lib/utils/image-sizes.js';
 	import type { ExcerptBlock } from '#lib/utils/excerpts.js';
 
 	type Props = {
@@ -27,13 +28,6 @@
 	const firstText = $derived(blocks.findIndex((b) => b.kind === 'text'));
 	const lastText = $derived(blocks.findLastIndex((b) => b.kind === 'text'));
 
-	const pictureUse = $derived.by(() => {
-		if (expanded) {
-			return 'full' as const;
-		}
-		return 'card' as const;
-	});
-
 	const wrapperClasses = $derived.by(() => {
 		// a reading measure: about 75 characters a line on desktop, the full width on a phone
 		if (expanded) {
@@ -46,10 +40,10 @@
 <div class={wrapperClasses}>
 	{#each blocks as block, b (b)}
 		{#if block.kind === 'image'}
-			<FeatureCardImage thumbnail={getExcerptImageUrl(block.image, pictureUse)} alt={translate('diaryImage')} {expanded} inline={expanded} {onExpand} />
+			<FeatureCardImage thumbnail={getExcerptImageUrl(block.image, pictureUse(expanded))} alt={translate('diaryImage')} {expanded} inline={expanded} {onExpand} />
 		{:else}
 			<p class="p-2 text-base text-gray-700 leading-relaxed whitespace-pre-wrap">
-				{#if truncatedBefore && b === firstText}{'… '}{/if}{#each block.segments as segment, i (i)}{#if segment.marked}<EvidenceHighlight inText={true}>{segment.text}</EvidenceHighlight>{:else}{segment.text}{/if}{/each}{#if truncatedAfter && b === lastText}{' …'}{/if}
+				{#if truncatedBefore && b === firstText}{'… '}{/if}{#each block.segments as segment, i (i)}{#if segment.marked}<EvidenceHighlight inText={true}>{#if segment.search}<SearchMark>{segment.text}</SearchMark>{:else}{segment.text}{/if}</EvidenceHighlight>{:else if segment.search}<SearchMark>{segment.text}</SearchMark>{:else}{segment.text}{/if}{/each}{#if truncatedAfter && b === lastText}{' …'}{/if}
 			</p>
 		{/if}
 	{/each}

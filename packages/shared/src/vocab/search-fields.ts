@@ -9,7 +9,7 @@ export interface SearchField {
 /**
  * What the text search reads of each entity type beyond the title and the description:
  * only values the card shows, so a hit can always be pointed at on the card. An array
- * path yields one value per item (the films on a bill, the excerpts of an entry).
+ * path yields one value per item (the films on a programme, the excerpts of an entry).
  */
 export const SEARCH_FIELDS: Partial<Record<Entity['type'], SearchField[]>> = {
   Person: [
@@ -17,14 +17,14 @@ export const SEARCH_FIELDS: Partial<Record<Entity['type'], SearchField[]>> = {
     { path: '$.deathPlace', label: 'died' },
   ],
   MediaObject: [{ path: '$.author', label: 'author' }],
-  // a bill's items are films or live acts; the card labels each by its kind
+  // a programme's items are films or live acts; the card labels each by its kind
   ScreeningEvent: [
     { path: '$.location.name', label: 'venue' },
-    { path: '$.bill[*].name', label: 'film' },
+    { path: '$.items[*].name', label: 'film' },
   ],
   TheaterEvent: [
     { path: '$.location.name', label: 'venue' },
-    { path: '$.bill[*].name', label: 'performer' },
+    { path: '$.items[*].name', label: 'performer' },
   ],
   Manuscript: [
     { path: '$.author.name', label: 'author' },

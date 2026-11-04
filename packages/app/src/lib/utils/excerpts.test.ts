@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { Excerpt, ManuscriptEntity } from '@atm/shared/types';
-import { pickExcerpt, excerptWindow, segmentText, foldSegments, precedingImage, excerptBlocks } from './excerpts';
+import { pickExcerpt, excerptWindow, segmentText, foldSegments, precedingImage, excerptBlocks, windowOffset } from './excerpts';
 import { iiifImageUrl } from './iiif';
 
 const excerpt = (over: Partial<Excerpt>): Excerpt => ({
@@ -134,5 +134,31 @@ describe('images in the excerpt', () => {
 	test('a IIIF URL asks the scan for the box at a size', () => {
 		expect(iiifImageUrl(img(0), ',600')).toBe('https://iiif.example/scan.jpg/80,806,1083,654/,600/0/default.jpg');
 		expect(iiifImageUrl(img(0))).toBe('https://iiif.example/scan.jpg/80,806,1083,654/max/0/default.jpg');
+	});
+});
+
+describe('search ranges in the text', () => {
+	test('a search piece, a mention piece, and a piece that is both', () => {
+		const text = 'naar de Dam en terug';
+		const segments = segmentText(text, [{ start: 8, end: 11, quote: 'Dam' }], [{ start: 0, end: 4 }, { start: 8, end: 11 }]);
+		expect(segments).toEqual([
+			{ text: 'naar', marked: false, search: true },
+			{ text: ' de ', marked: false },
+			{ text: 'Dam', marked: true, search: true },
+			{ text: ' en terug', marked: false }
+		]);
+	});
+
+	test('a range cutting through a mention splits both into pieces with the right flags', () => {
+		const segments = segmentText('Damrak', [{ start: 0, end: 6, quote: 'Damrak' }], [{ start: 0, end: 3 }]);
+		expect(segments).toEqual([{ text: 'Dam', marked: true, search: true }, { text: 'rak', marked: true }]);
+	});
+
+	test('blocks carry the ranges onto each text block, and a window offset moves ranges onto its text', () => {
+		const whole = { text: 'Eerst de brand\nbij de gashouder', truncatedBefore: false, truncatedAfter: false, mentions: [] };
+		const shown = { ...whole, text: 'bij de gashouder' };
+		expect(windowOffset(whole, shown)).toBe(15);
+		const blocks = excerptBlocks(shown, [{ start: 7, end: 16 }]);
+		expect(blocks).toEqual([{ kind: 'text', segments: [{ text: 'bij de ', marked: false }, { text: 'gashouder', marked: false, search: true }] }]);
 	});
 });

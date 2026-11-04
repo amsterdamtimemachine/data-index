@@ -8,7 +8,9 @@ import { foldLinesInline } from './format';
 
 export const COLLAPSED_EXCERPT_LENGTH = 250;
 
-export type TextSegment = { text: string; marked: boolean };
+// marked: a place mention, the link's evidence; search: words a search matched (set only when true)
+export type TextSegment = { text: string; marked: boolean; search?: boolean };
+export type TextRange = { start: number; end: number };
 
 /** The excerpt cut for the shown place, else the entry's first. */
 export function pickExcerpt(entity: ManuscriptEntity, placeId?: string): Excerpt | null {
@@ -94,6 +96,14 @@ export function excerptWindow(excerpt: Excerpt, length: number): Excerpt {
 	};
 }
 
+/** Where a window's text starts in the whole excerpt's, so ranges on the whole can be moved onto the window. */
+export function windowOffset(whole: Excerpt, shown: Excerpt): number {
+	if (!shown.text) {
+		return 0;
+	}
+	return Math.max(whole.text.indexOf(shown.text), 0);
+}
+
 /** The last image before the text begins, for the collapsed card; null when none precedes it. */
 export function precedingImage(excerpt: Excerpt): ExcerptImage | null {
 	let textStart = 0;
@@ -111,8 +121,8 @@ export function precedingImage(excerpt: Excerpt): ExcerptImage | null {
 
 export type ExcerptBlock = { kind: 'text'; segments: TextSegment[] } | { kind: 'image'; image: ExcerptImage };
 
-/** The excerpt in reading order: its text, cut where an image sits, and the images between. */
-export function excerptBlocks(excerpt: Excerpt): ExcerptBlock[] {
+/** The excerpt in reading order: its text, cut where an image sits, and the images between; search ranges address the excerpt's text. */
+export function excerptBlocks(excerpt: Excerpt, searchRanges: TextRange[] = []): ExcerptBlock[] {
 	const blocks: ExcerptBlock[] = [];
 	const pushText = (from: number, to: number) => {
 		const text = excerpt.text.slice(from, to);
@@ -122,7 +132,10 @@ export function excerptBlocks(excerpt: Excerpt): ExcerptBlock[] {
 		const mentions = excerpt.mentions
 			.filter((m) => m.start >= from && m.end <= to)
 			.map((m) => ({ ...m, start: m.start - from, end: m.end - from }));
-		blocks.push({ kind: 'text', segments: foldSegments(segmentText(text, mentions)) });
+		const searches = searchRanges
+			.filter((r) => r.end > from && r.start < to)
+			.map((r) => ({ start: Math.max(r.start, from) - from, end: Math.min(r.end, to) - from }));
+		blocks.push({ kind: 'text', segments: foldSegments(segmentText(text, mentions, searches)) });
 	};
 	let at = 0;
 	const images = [...(excerpt.images ?? [])].sort((a, b) => a.anchor - b.anchor);
@@ -135,30 +148,42 @@ export function excerptBlocks(excerpt: Excerpt): ExcerptBlock[] {
 	return blocks;
 }
 
-/** The text in order, the mentions as marked pieces. */
-export function segmentText(text: string, mentions: ExcerptMention[]): TextSegment[] {
-	const segments: TextSegment[] = [];
+/** The text in order, the mentions as marked pieces and the search ranges as search pieces; a piece can be both. */
+export function segmentText(text: string, mentions: ExcerptMention[], searchRanges: TextRange[] = []): TextSegment[] {
+	// mentions as before: in order, an overlapping or malformed one skipped
+	const marks: TextRange[] = [];
 	let cursor = 0;
-	const sorted = [...mentions].sort((a, b) => a.start - b.start);
-	for (const m of sorted) {
+	for (const m of [...mentions].sort((a, b) => a.start - b.start)) {
 		if (m.start < cursor || m.end > text.length || m.end <= m.start) {
 			continue;
 		}
-		if (m.start > cursor) {
-			segments.push({ text: text.slice(cursor, m.start), marked: false });
-		}
-		segments.push({ text: text.slice(m.start, m.end), marked: true });
+		marks.push({ start: m.start, end: m.end });
 		cursor = m.end;
 	}
-	if (cursor < text.length) {
-		segments.push({ text: text.slice(cursor), marked: false });
+	const searches = searchRanges.filter((r) => r.start < r.end && r.start >= 0 && r.end <= text.length);
+	const cuts = new Set<number>([0, text.length]);
+	for (const r of [...marks, ...searches]) {
+		cuts.add(r.start);
+		cuts.add(r.end);
+	}
+	const edges = [...cuts].sort((a, b) => a - b);
+	const within = (ranges: TextRange[], a: number, b: number) => ranges.some((r) => r.start <= a && r.end >= b);
+	const segments: TextSegment[] = [];
+	for (let i = 0; i + 1 < edges.length; i++) {
+		const [a, b] = [edges[i], edges[i + 1]];
+		if (b <= a) continue;
+		const segment: TextSegment = { text: text.slice(a, b), marked: within(marks, a, b) };
+		if (within(searches, a, b)) {
+			segment.search = true;
+		}
+		segments.push(segment);
 	}
 	return segments;
 }
 
 /** Each piece folded to prose; only the outer edges are trimmed, so the marks keep their spacing. */
 export function foldSegments(segments: TextSegment[]): TextSegment[] {
-	const folded = segments.map((s) => ({ text: foldLinesInline(s.text), marked: s.marked }));
+	const folded = segments.map((s) => ({ ...s, text: foldLinesInline(s.text) }));
 	if (folded.length > 0) {
 		folded[0].text = folded[0].text.trimStart();
 		folded[folded.length - 1].text = folded[folded.length - 1].text.trimEnd();
