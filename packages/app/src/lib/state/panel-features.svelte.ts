@@ -129,9 +129,12 @@ export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 		void loadPage(page);
 	}
 
+	// the query by value: a navigation hands the page new filter objects with the same
+	// content, which must not reload the list
+	const key = $derived(JSON.stringify(getQuery()));
+
 	$effect(() => {
-		// the getter's reads register the reload triggers
-		getQuery();
+		void key;
 		features = [];
 		currentPage = 1;
 		totalCount = 0;

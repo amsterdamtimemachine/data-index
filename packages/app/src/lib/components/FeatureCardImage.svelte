@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { mergeCss } from '#lib/utils/utils.js';
 	import { translate } from '#lib/utils/translations.js';
+	import { loadingState } from '#lib/state/loadingState.svelte.js';
 	type Props = {
 		thumbnail: string;
 		alt?: string;
@@ -34,17 +35,39 @@
 		return '';
 	});
 
+	// the expanded picture is the large one and can take a while: it counts in the
+	// page's loading bar from the moment it is asked for until it arrives, fails, or
+	// the card closes
+	let settle = () => {};
+	$effect(() => {
+		if (!expanded) {
+			return;
+		}
+		void thumbnail;
+		loadingState.startLoading();
+		let pending = true;
+		settle = () => {
+			if (pending) {
+				pending = false;
+				loadingState.stopLoading();
+			}
+		};
+		return settle;
+	});
+
 	const handleImageLoad = (event: Event) => {
 		const img = event.currentTarget as HTMLImageElement;
 		if (img.naturalWidth > 0 && img.naturalHeight > 0) {
 			aspect = img.naturalWidth / img.naturalHeight;
 		}
 		imageLoading = false;
+		settle();
 	};
 
 	const handleImageError = () => {
 		imageError = true;
 		imageLoading = false;
+		settle();
 	};
 </script>
 

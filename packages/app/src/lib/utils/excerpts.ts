@@ -5,14 +5,7 @@
  */
 import type { Excerpt, ExcerptImage, ManuscriptEntity } from '@atm/shared/types';
 import { foldLinesInline } from './format';
-
-/**
- * How much text the collapsed card shows around what matters, in characters: a diary
- * excerpt's whole window around the place mention or the search match, and the margin
- * either side of a search match in the title. A window is cut to whole words and
- * never exceeds its size.
- */
-export const TEXT_WINDOWS = { excerpt: 250, title: 16 };
+import { TEXT_WINDOWS } from '#lib/config/text.js';
 
 export type TextRange = { start: number; end: number };
 

@@ -12,17 +12,22 @@
 
 	const progress = new Progress({ value: 0, max: 100 });
 
-	// rAF is the only thing that moves the bar — no CSS transition on the transform, so
-	// the two never fight. Opacity has its own transition (a different property).
-	let visible = $state(false);
-	let phase: 'idle' | 'trickle' | 'complete' = 'idle';
+	// while something loads the bar fills at a steady pace up to FILL_CAP, where it
+	// waits; when the loading ends it runs on to the end at the same pace, shows there
+	// for a moment, and is gone. No real percentage is known.
+	const FILL_CAP = 90;
+	const FILL_MS = 400;
+	const DONE_MS = 100;
 	let rafId: number | null = null;
-	let hideTimer: ReturnType<typeof setTimeout> | null = null;
-	let resetTimer: ReturnType<typeof setTimeout> | null = null;
+	let visible = $state(false);
+	let doneTimer: ReturnType<typeof setTimeout> | null = null;
 
 	$effect(() => {
-		if (loadingState.isLoading) start();
-		else complete();
+		if (loadingState.isLoading) {
+			start();
+		} else {
+			stop();
+		}
 	});
 
 	function stopRaf() {
@@ -32,76 +37,63 @@
 		}
 	}
 
-	function clearTimers() {
-		if (hideTimer) clearTimeout(hideTimer);
-		if (resetTimer) clearTimeout(resetTimer);
-		hideTimer = null;
-		resetTimer = null;
+	function clearDone() {
+		if (doneTimer) {
+			clearTimeout(doneTimer);
+			doneTimer = null;
+		}
 	}
 
-	// Ease toward ~90% and never quite arrive: fast at first, slowing to a crawl, so the
-	// bar keeps moving while we wait without pretending to know the real percentage.
-	function start() {
-		clearTimers();
-		if (phase === 'trickle') return; // already trickling — don't restart from 0
+	// from the start, or from where the bar was, at FILL_CAP per FILL_MS, up to `to`
+	function fill(to: number, onDone?: () => void) {
 		stopRaf();
-		phase = 'trickle';
-		visible = true;
-		progress.value = 0;
+		const from = progress.value;
 		const t0 = performance.now();
 		const step = () => {
-			progress.value = 90 * (1 - Math.exp(-(performance.now() - t0) / 1000));
-			rafId = requestAnimationFrame(step);
+			progress.value = Math.min(to, from + (FILL_CAP * (performance.now() - t0)) / FILL_MS);
+			if (progress.value < to) {
+				rafId = requestAnimationFrame(step);
+			} else {
+				rafId = null;
+				onDone?.();
+			}
 		};
 		rafId = requestAnimationFrame(step);
 	}
 
-	// Fill from wherever the trickle reached up to 100, hold a beat, fade out, then reset
-	// to 0 — the reset happens while invisible so the rewind is never seen.
-	function complete() {
-		if (phase === 'idle') return;
-		stopRaf();
-		clearTimers();
-		phase = 'complete';
-		const from = progress.value;
-		const t0 = performance.now();
-		const fill = () => {
-			const t = Math.min((performance.now() - t0) / 200, 1);
-			progress.value = from + (100 - from) * t;
-			if (t < 1) {
-				rafId = requestAnimationFrame(fill);
-				return;
-			}
-			rafId = null;
-			hideTimer = setTimeout(() => {
+	function start() {
+		clearDone();
+		visible = true;
+		if (progress.value >= FILL_CAP) {
+			progress.value = 0;
+		}
+		fill(FILL_CAP);
+	}
+
+	function stop() {
+		if (!visible) {
+			return;
+		}
+		fill(100, () => {
+			doneTimer = setTimeout(() => {
 				visible = false;
-				resetTimer = setTimeout(() => {
-					phase = 'idle';
-					progress.value = 0;
-				}, 250);
-			}, 150);
-		};
-		rafId = requestAnimationFrame(fill);
+				progress.value = 0;
+			}, DONE_MS);
+		});
 	}
 
 	onDestroy(() => {
 		stopRaf();
-		clearTimers();
+		clearDone();
 	});
 </script>
 
-<!-- visual only: its value is an easing animation, not real progress; the results
-     are announced when they land -->
+<!-- visual only: the results are announced when they land -->
 <div
 	{...progress.root}
 	aria-hidden="true"
 	class={mergeCss('w-full h-[3px] overflow-hidden', className)}
-	style:opacity={visible ? '1' : '0'}
-	style:transition="opacity 250ms ease-in-out"
+	style:visibility={visible ? 'visible' : 'hidden'}
 >
-	<div
-		{...progress.progress}
-		class="h-full w-full bg-atm-blue"
-		style:transform="translateX(calc(var(--progress) * -1))"
-	></div>
+	<div {...progress.progress} class="h-full w-full bg-atm-blue" style:transform="translateX(calc(var(--progress) * -1))"></div>
 </div>
