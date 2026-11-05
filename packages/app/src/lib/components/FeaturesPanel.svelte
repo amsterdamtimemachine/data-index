@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Category } from '#lib/utils/filters.js';
 	import { translate } from '#lib/utils/translations.js';
 	import { asset } from '$app/paths';
 	import FeaturesGrid from '#lib/components/FeaturesGrid.svelte';
@@ -29,6 +30,8 @@
 		// what the timeline shows, when an empty panel can point the user at it: the
 		// city-wide series with the switch (desktop), or the selection's own series
 		timelineView?: 'cityWide' | 'local';
+		// the filter categories with nothing selected: there is nothing to list, and the panel says so
+		emptyCategories?: Category[];
 	}
 
 	let {
@@ -45,7 +48,8 @@
 		sampleSeed,
 		onSortChange,
 		onShuffle,
-		timelineView = undefined
+		timelineView = undefined,
+		emptyCategories = []
 	}: Props = $props();
 
 	const panelFeatures = createPanelFeatures(() => ({
@@ -53,8 +57,11 @@
 		period,
 		filters,
 		sortMode,
-		sampleSeed
+		sampleSeed,
+		idle: emptyCategories.length > 0
 	}));
+
+	const emptyCategoryNames = $derived(emptyCategories.map((c) => translate(`${c}Category`)).join(` ${translate('and')} `));
 
 	function handleClose() {
 		if (onClose) {
@@ -86,7 +93,9 @@
 />
 
 <div class="min-h-full bg-atm-sand-dark">
-	{#if panelFeatures.features.length > 0}
+	{#if emptyCategories.length > 0}
+		<p class="text-base text-black p-4 leading-loose">{translate('noneSelected').replace('{filter}', emptyCategoryNames)}</p>
+	{:else if panelFeatures.features.length > 0}
 		<FeaturesGrid features={panelFeatures.features} columns={gridColumns} />
 	{:else if !panelFeatures.initialLoading && !panelFeatures.loading}
 		<p class="text-base text-black p-4 leading-loose">

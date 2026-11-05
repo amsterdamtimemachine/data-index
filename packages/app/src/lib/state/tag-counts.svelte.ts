@@ -31,10 +31,17 @@ export function createTagCounts() {
 		}
 	}
 
+	// nothing to count: no counts, and a response still under way is ignored
+	function reset() {
+		++requestId;
+		counts = null;
+	}
+
 	return {
 		get counts() {
 			return counts;
 		},
-		load
+		load,
+		reset
 	};
 }

@@ -44,8 +44,8 @@ afterEach(() => {
 	failures.length = 0;
 });
 
-function harness(query = 'recordTypes=image') {
-	const inputs = $state({ params: new URLSearchParams(query) });
+function harness(query: string | null = 'recordTypes=image') {
+	const inputs = $state<{ params: URLSearchParams | null }>({ params: query === null ? null : new URLSearchParams(query) });
 	let setups = 0;
 	let data!: ReturnType<typeof createMapData>;
 	cleanups.push($effect.root(() => {
@@ -92,6 +92,18 @@ describe('map data', () => {
 			['mapNotLoaded', lost],
 			['timelineNotLoaded', lost]
 		]);
+	});
+
+	test('without params nothing is fetched, there is nothing to preload, and the map and timeline are empty', () => {
+		const { data, inputs } = harness(null);
+		expect(calls).toEqual([]);
+		expect(data.heatmapUrl).toBeNull();
+		expect(data.histogramUrl).toBeNull();
+		expect(data.timeline).toEqual({});
+		expect(data.histogram?.totalFeatures).toBe(0);
+		inputs.params = new URLSearchParams('recordTypes=text');
+		flushSync();
+		expect(calls.map((c) => c.url)).toEqual(['/api/heatmaps?recordTypes=text', '/api/histogram?recordTypes=text']);
 	});
 
 	test('a params change refetches both', () => {

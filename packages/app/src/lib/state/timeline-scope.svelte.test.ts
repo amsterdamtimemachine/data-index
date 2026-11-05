@@ -79,6 +79,15 @@ describe('timeline scope', () => {
 		expect(requests).toEqual([]);
 	});
 
+	test('without params (a category is empty) a subject fetches nothing and the band stays city-wide', () => {
+		const { scope, requests, inputs } = harness({ cellBounds: CELL, params: null });
+		expect(requests).toEqual([]);
+		expect(scope.available).toBe(false);
+		inputs.params = 'recordTypes=image';
+		flushSync();
+		expect(requests).toHaveLength(1);
+	});
+
 	test('desktop: a loaded cell series waits for the switch, but is there for the hover\'s selection count', () => {
 		const { inputs, scope, requests } = harness();
 		inputs.cellBounds = CELL;

@@ -2,7 +2,7 @@
 <script lang="ts">
 	import { translate } from '#lib/utils/translations.js';
 	import { resolve } from '$app/paths';
-	import { filterParams } from '#lib/utils/filters.js';
+	import { filterParams, emptyCategories } from '#lib/utils/filters.js';
 	import { formatPlaceTitle } from '#lib/utils/format.js';
 	import { tick, untrack, onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
@@ -47,6 +47,9 @@
 	const searchPaused = $derived(search.paused);
 	const activeFilters = $derived(search.activeFilters);
 	const activeParams = $derived(filterParams(activeFilters, data.metadata));
+	// a category with nothing selected: nothing is fetched, the panels say so
+	const emptyFilters = $derived(emptyCategories(activeFilters, data.metadata));
+	const idle = $derived(emptyFilters.length > 0);
 
 	// the collapsed filters line, in one piece
 	const filtersStatus = $derived({ filters: activeFilters, metadata: data.metadata, place: data.selectedPlace });
@@ -56,7 +59,7 @@
 	const mapData = createMapData(
 		{
 			get params() {
-				return activeParams;
+				return idle ? null : activeParams;
 			}
 		},
 		initializeFromHeatmap,
@@ -117,7 +120,6 @@
 		return panelCols;
 	});
 
-	let recordTypes = $derived(data?.metadata?.recordTypes || []);
 
 	let currentPeriod = $derived(mapSelection.currentPeriod);
 	let selectedCellId = $derived(mapSelection.selectedCellId);
@@ -204,15 +206,10 @@
 
 			// Set URL defaults if no parameters exist
 			const hasUrlParams = window.location.search.length > 0;
-			if (!hasUrlParams && heatmapTimeline && recordTypes.length > 0) {
+			if (!hasUrlParams && heatmapTimeline) {
 				const lastPeriod = getLastAvailablePeriod(heatmapTimeline);
-				let defaultRecordTypes = recordTypes;
-				if (filters.recordTypes.length > 0) {
-					defaultRecordTypes = filters.recordTypes;
-				}
-
-				if (lastPeriod && defaultRecordTypes.length > 0) {
-					mapSelection.syncUrlParameters(lastPeriod, defaultRecordTypes);
+				if (lastPeriod) {
+					mapSelection.syncUrlParameters(lastPeriod);
 
 					// Skip the default cell on mobile — the map opens unfiltered there.
 					if (window.innerWidth > MOBILE_MAX_WIDTH && PUBLIC_DEFAULT_CENTER && dimensions) {
@@ -254,7 +251,7 @@
 			return null;
 		},
 		get params() {
-			return activeParams.toString();
+			return idle ? null : activeParams.toString();
 		}
 	});
 
@@ -375,8 +372,10 @@
 <!-- Preloaded from the SSR head: the map data downloads alongside the app bundle
      instead of after hydration. crossorigin matches fetch()'s cors/same-origin mode. -->
 <svelte:head>
-	<link rel="preload" as="fetch" href={mapData.heatmapUrl} crossorigin="anonymous" />
-	<link rel="preload" as="fetch" href={mapData.histogramUrl} crossorigin="anonymous" />
+	{#if mapData.heatmapUrl && mapData.histogramUrl}
+		<link rel="preload" as="fetch" href={mapData.heatmapUrl} crossorigin="anonymous" />
+		<link rel="preload" as="fetch" href={mapData.histogramUrl} crossorigin="anonymous" />
+	{/if}
 </svelte:head>
 
 
@@ -413,6 +412,7 @@
 				{placePanelOpen}
 				{searchPaused}
 				onToggleSearch={search.toggle}
+				{idle}
 			/>
 		</NavContainer>
 
@@ -437,6 +437,7 @@
 						dimensions={dimensions ?? undefined}
 						selectionPeriod={panelSelectionPeriod}
 						filters={activeFilters}
+						emptyCategories={emptyFilters}
 						{gridColumns}
 						{sortMode}
 						{sampleSeed}

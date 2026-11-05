@@ -7,6 +7,7 @@ import type { Histogram, HeatmapCellBounds } from '@atm/shared/types';
 import { translate } from '#lib/utils/translations.js';
 import { apiUrl } from '#lib/utils/api.js';
 import { fetchJson } from '#lib/utils/fetchJson.js';
+import { EMPTY_HISTOGRAM } from '#lib/utils/empty-data.js';
 
 // read lazily, so an effect tracks only the fields it uses
 export type TimelineScopeInputs = {
@@ -17,16 +18,14 @@ export type TimelineScopeInputs = {
 	// the open place, named as the panel names it; null without one
 	placeTitle: string | null;
 	// the subjects' series are fetched from these: the selected cell's bounds, the
-	// open place's id, and the filter params every fetch inherits
+	// open place's id, and the filter params every fetch inherits; null params mean
+	// there is nothing to fetch (a category is empty)
 	cellBounds: HeatmapCellBounds | null;
 	placeId: string | null;
-	params: string;
+	params: string | null;
 };
 
 export type Fetcher = typeof fetchJson;
-
-// the band while a subject's series loads: no bars, no fallback to the city-wide one
-const EMPTY_HISTOGRAM: Histogram = { bins: [], maxCount: 0, timeRange: { start: '', end: '' }, totalFeatures: 0 };
 
 /** One subject's series with its request bookkeeping. */
 function createSubjectSeries() {
@@ -144,12 +143,13 @@ export function createTimelineScope(inputs: TimelineScopeInputs, fetcher: Fetche
 
 	$effect(() => {
 		const bounds = inputs.cellBounds;
-		const query = new URLSearchParams(inputs.params);
-		if (!bounds) {
+		const params = inputs.params;
+		if (!bounds || params === null) {
 			cell.clear();
 			resetIfIdle();
 			return;
 		}
+		const query = new URLSearchParams(params);
 		query.set('minLon', String(bounds.minLon));
 		query.set('maxLon', String(bounds.maxLon));
 		query.set('minLat', String(bounds.minLat));
@@ -159,12 +159,13 @@ export function createTimelineScope(inputs: TimelineScopeInputs, fetcher: Fetche
 
 	$effect(() => {
 		const placeId = inputs.placeId;
-		const query = new URLSearchParams(inputs.params);
-		if (!placeId) {
+		const params = inputs.params;
+		if (!placeId || params === null) {
 			place.clear();
 			resetIfIdle();
 			return;
 		}
+		const query = new URLSearchParams(params);
 		query.set('placeId', placeId);
 		return fetchSeries(place, query);
 	});

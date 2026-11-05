@@ -91,6 +91,14 @@ const TRANSLATIONS: Record<string, string> = {
 	// the filter panel's sections
 	searchFilter: 'Zoeken op de kaart',
 	recordTypeFilter: 'Inhoudstype',
+	// a category's link under its heading: press every item (released: clearAll)
+	selectAll: 'Selecteer alles',
+	// the categories by name, in the sentence about an emptied one and the filters line
+	recordTypesCategory: 'inhoudstypes',
+	datasetsCategory: 'datasets',
+	placeTypesCategory: 'schalen',
+	nothing: 'geen',
+	noneSelected: 'Geen {filter} geselecteerd.',
 	datasetFilter: 'Dataset',
 	datasetFilterTooltip: 'Filter op basis van de dataset waaruit de data afkomstig is.',
 	scaleFilter: 'Schaal',

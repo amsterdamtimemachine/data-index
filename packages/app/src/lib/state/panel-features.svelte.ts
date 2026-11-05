@@ -30,6 +30,8 @@ export type PanelFeaturesQuery = {
 	filters: FilterState;
 	sortMode: UiSortMode;
 	sampleSeed?: string;
+	// a category is empty: there is nothing to list
+	idle?: boolean;
 };
 
 function sortParams(query: PanelFeaturesQuery): Record<string, string> {
@@ -86,6 +88,9 @@ export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 
 	async function loadPage(page: number = 1) {
 		const query = getQuery();
+		if (query.idle) {
+			return;
+		}
 		loading = true;
 		loadingState.startLoading();
 
