@@ -41,9 +41,6 @@ function sortParams(query: PanelFeaturesQuery): Record<string, string> {
 	if (query.sortMode === 'temporal') {
 		return { sort: 'datePrecision', sortDirection: 'desc' };
 	}
-	if (query.sortMode === 'bestMatch') {
-		return { sort: 'bestMatch', sortDirection: 'desc' };
-	}
 	if (query.sortMode === 'oldest') {
 		return { sort: 'date', sortDirection: 'asc' };
 	}

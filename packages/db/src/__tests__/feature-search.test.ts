@@ -2,8 +2,8 @@
  * Feature text search (words as written over the title, the description and the
  * entity's searchable fields) and its bitmap integration: websearch semantics (exact words,
  * phrase, OR, exclusion, common words), the searchable scope, heatmap/histogram counts
- * intersected with the search set, composition with category filters, the bestMatch
- * sort lane, and the hit explained for the card. The cross-validation test pins
+ * intersected with the search set, composition with category filters, and the hit
+ * explained for the card. The cross-validation test pins
  * the surrogate mapping end to end: bitmap-intersected counts must equal a live
  * count(DISTINCT) over the same predicate.
  */
@@ -188,18 +188,11 @@ describe('feature text search', () => {
     expect(hist.totalFeatures).toBe(parseInt(live.rows[0].n));
   });
 
-  test('getFeatures filters by searchQuery and bestMatch ranks by match quality', async () => {
+  test('getFeatures filters by searchQuery', async () => {
     const bounds = await fullBounds();
-    const res = await getFeatures({
-      area: { kind: 'bounds', bounds },
-      searchQuery: 'verkooping OR huis',
-      sort: 'bestMatch',
-      pageSize: 10
-    });
+    const res = await getFeatures({ area: { kind: 'bounds', bounds }, searchQuery: 'verkooping OR huis', sort: 'date', pageSize: 10 });
     expect(res.total).toBe(2);
-    const labels = res.data.map(f => f.label);
-    // F1 matches both OR terms in its title, F3 one in its description — ts_rank with the weights
-    expect(labels).toEqual(['Verkooping van het huis', 'Onopvallend gebouw']);
+    expect(res.data.map((f) => f.label).sort()).toEqual(['Onopvallend gebouw', 'Verkooping van het huis']);
   });
 
   test('one feature of the population, by id and at its place; elsewhere or unknown, none', async () => {
@@ -228,12 +221,6 @@ describe('feature text search', () => {
     });
     expect(res.total).toBe(2);
     expect(res.data.map((f) => f.id).sort()).toEqual([F2, F3]);
-  });
-
-  test('bestMatch: a title hit outranks a description hit', async () => {
-    const bounds = await fullBounds();
-    const res = await getFeatures({ area: { kind: 'bounds', bounds }, searchQuery: 'zeedijk', sort: 'bestMatch', pageSize: 10 });
-    expect(res.data.map((f) => f.id)).toEqual([F2, F3]);
   });
 
   test('each listed hit says which values matched, with the matching words marked', async () => {

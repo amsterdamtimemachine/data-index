@@ -82,7 +82,6 @@
 	{sortMode}
 	{onSortChange}
 	{onShuffle}
-	matchActive={!!filters.searchQuery || filters.tags.length > 0}
 	totalCount={panelFeatures.totalCount}
 	currentPage={panelFeatures.currentPage}
 	pageSize={panelFeatures.pageSize}

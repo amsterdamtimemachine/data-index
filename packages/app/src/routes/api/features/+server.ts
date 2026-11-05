@@ -41,7 +41,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		const seed = parseSeed(url);
 		const searchQuery = parseSearchQuery(url);
 
-		if (!['sample', 'spatialFrequency', 'datePrecision', 'date', 'bestMatch'].includes(sort)) {
+		if (!['sample', 'spatialFrequency', 'datePrecision', 'date'].includes(sort)) {
 			throw error(400, 'Invalid sort field', { code: 'INVALID_SORT' });
 		}
 		if (!['asc', 'desc'].includes(sortDirection)) {

@@ -268,15 +268,14 @@ Indexing also stores `spatial_frequency`: the number of base cells a feature's p
 
 ### Feature sorting
 
-The cell view sorts features in one of six modes. All modes are deterministic.
+The cell view sorts features in one of five modes. All modes are deterministic.
 
 - **Sample** (default, in the UI and the API). A fair cross-section of the cell. Record types take turns in the list. Within each type, datasets take turns. Order inside a dataset comes from a seeded shuffle (`md5(id || seed)`). In the UI the seed defaults to the cell id. The shuffle button sets a `sampleSeed` URL parameter, so a shared link reproduces the exact order. One seed produces one global order, which keeps pagination consistent across pages. With topics selected, the shuffle is weighted: a feature matching more of the selected tags draws a better place, with weight 2 to the power of its matches, so richer matches drift up without fixing the order.
 - **Spatial** ("Precies gelokaliseerd" in the UI). The same type and dataset rotation, but each dataset's items are ordered by `spatial_frequency`. Items tied to the smallest place come first.
 - **Temporal** ("Precies gedateerd" in the UI). The same rotation, ordered by date range length (`end_date - start_date`). Items with the tightest dating come first: a single day before a month, a month before a year.
-- **Beste match**. Offered while a search term or topics are active. Ranks by the number of selected tags a feature matches first, then by how well its title matches the search term (`ts_rank`), with the record type rotation. A URL carrying `sort=bestMatch` keeps it until neither a term nor tags remain.
 - **Oldest / newest**. Plain chronological order on `start_date`. No rotation. An explicit date sort returns true chronology, even when that puts several items of one type in a row.
 
-`/api/features` accepts `sort` (`sample` / `spatialFrequency` / `datePrecision` / `date` / `bestMatch`), `sortDirection`, and `seed`. `sort` defaults to `sample`. `seed` is optional: without one the sample order is fixed and reproducible, and every request without a seed gets the same order. With a tag selection, the sample shuffle is weighted: a feature carrying one more of the selected tags is twice as likely to come earlier, so richer matches drift up without fixing the order. `bestMatch` orders by match quality: the number of selected `tags` a feature carries first, then its rank against the `q` text search; it is only meaningful together with at least one of them.
+`/api/features` accepts `sort` (`sample` / `spatialFrequency` / `datePrecision` / `date`), `sortDirection`, and `seed`. `sort` defaults to `sample`. `seed` is optional: without one the sample order is fixed and reproducible, and every request without a seed gets the same order. With a tag selection, the sample shuffle is weighted: a feature carrying one more of the selected tags is twice as likely to come earlier, so richer matches drift up without fixing the order.
 
 `/api/features` also takes `featureId`, a feature's id, and returns that feature's rows as the list shows them, one per place it is at, or the one at `featurePlaceId`; bounds or a place then narrow it but are not required. The app writes the expanded card to its own URL as `feature` and `at` the same way, so a link opens with the card.
 

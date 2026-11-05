@@ -21,7 +21,7 @@ import { featureYearOverlap } from './time-filter';
 import { tagMatch, tagMatchCount } from './tag-filter';
 import { UnknownTimeSliceError } from './errors';
 import { cellRangeCondition, placeCellsCondition, displayGrid, displayCellBaseRange } from './cell-features';
-import { searchMatch, searchRank, foundBy } from './feature-search';
+import { searchMatch, foundBy } from './feature-search';
 import { db } from '../client';
 import { featureToPlace, place, placeGeometry, placeCells } from '../schema';
 import type { CountRow } from '../row-types';
@@ -193,18 +193,10 @@ function sortPlan(
     }
     return { rankedCte: doubleRotationCte(laneKey), orderBy: INTERLEAVED_ORDER };
   }
-  if (sort === 'date') {
-    let orderBy = sql`start_date DESC NULLS LAST, id`;
-    if (sortDirection === 'asc') {
-      orderBy = sql`start_date ASC NULLS LAST, id`;
-    }
-    return { rankedCte: sql`ranked AS (SELECT * FROM filtered)`, orderBy };
-  }
-  // bestMatch: flat match-quality order: selected tags carried, then ts_rank against
-  // the search term; without either every key is 0 and this degrades to date order
-  let orderBy = sql`tag_matches DESC, match_score DESC, start_date DESC NULLS LAST, id`;
+  // date: flat chronology, no rotation
+  let orderBy = sql`start_date DESC NULLS LAST, id`;
   if (sortDirection === 'asc') {
-    orderBy = sql`tag_matches ASC, match_score ASC, start_date ASC NULLS LAST, id`;
+    orderBy = sql`start_date ASC NULLS LAST, id`;
   }
   return { rankedCte: sql`ranked AS (SELECT * FROM filtered)`, orderBy };
 }
@@ -294,12 +286,10 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   }
 
   let searchCondition: SQL = sql`TRUE`;
-  let matchScoreExpr: SQL = sql`0::float`;
   // the card's explanation of the hit, for the listed rows only
   let foundByExpr: SQL = sql`NULL`;
   if (searchQuery) {
     searchCondition = searchMatch(sql`f.search_tsv`, searchQuery);
-    matchScoreExpr = searchRank(sql`f.search_tsv`, searchQuery);
     foundByExpr = foundBy(sql`f`, searchQuery);
   }
 
@@ -355,7 +345,6 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         f.start_date,
         f.end_date,
         pg.spatial_frequency,
-        ${matchScoreExpr} as match_score,
         ${tagMatchesExpr} as tag_matches,
         p.type as place_type,
         p.id as place_id,

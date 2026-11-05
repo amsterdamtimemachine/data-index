@@ -75,7 +75,6 @@ const TRANSLATIONS: Record<string, string> = {
 	sortTemporal: 'Precies gedateerd',
 	sortOldest: 'Oudste eerst',
 	sortNewest: 'Nieuwste eerst',
-	sortBestMatch: 'Beste match',
 	reshuffle: 'Schud opnieuw',
 
 	// UI labels
