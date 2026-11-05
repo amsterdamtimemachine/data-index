@@ -33,6 +33,7 @@
 	import type { PageData } from './$types';
 	import type { HeatmapTimeline } from '@atm/shared/types';
 	import type { PanelSubject } from '#lib/state/panel-features.svelte.js';
+	import { createFeatureLink } from '#lib/state/feature-link.svelte.js';
 	import { PUBLIC_DEFAULT_CENTER } from '$app/env/public';
 	import { createEmptyHeatmap, getCellIdFromLonLat } from '#lib/utils/heatmap.js';
 
@@ -341,6 +342,14 @@
 			return true;
 		}
 		return showCellModal;
+	});
+
+	// the expanded card in the URL: written while one is open, restored from a link
+	createFeatureLink({
+		get searchQuery() {
+			return activeFilters.searchQuery;
+		},
+		writeParams: mapSelection.updateUrlParams
 	});
 
 	// what the timeline shows, for the empty panel's hint: the selection's series,

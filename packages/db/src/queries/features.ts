@@ -225,6 +225,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     sortDirection = 'desc',
     seed = '',
     searchQuery,
+    featureId,
+    featurePlaceId,
     page = 1,
     pageSize = 50
   } = query;
@@ -252,13 +254,15 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
 
   // Resolve the area to one population predicate; everything below is agnostic
   // of which kind it was.
-  let areaCondition: SQL;
-  if (area.kind === 'bounds') {
+  let areaCondition: SQL = sql`TRUE`;
+  if (area?.kind === 'bounds') {
     const cellRange = await boundsToBaseCellRange(area.bounds);
     areaCondition = cellRangeCondition(sql`pc.cell_x`, sql`pc.cell_y`, cellRange);
-  } else {
+  } else if (area) {
     const grid = await displayGrid(area.cols);
     areaCondition = await placeCellsCondition(sql`pc.cell_x`, sql`pc.cell_y`, area.placeId, grid);
+  } else if (!featureId) {
+    throw new Error('getFeatures needs a population or a feature');
   }
 
   const typeCondition = sql`f.record_type IN ${types}`;
@@ -299,6 +303,15 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     foundByExpr = foundBy(sql`f`, searchQuery);
   }
 
+  // one feature of the population, at its card's place when given
+  let featureCondition: SQL = sql`TRUE`;
+  if (featureId) {
+    featureCondition = sql`f.id = ${featureId}`;
+    if (featurePlaceId) {
+      featureCondition = sql`f.id = ${featureId} AND fp.place_id = ${featurePlaceId}`;
+    }
+  }
+
   // The join spine and filter bundle the count and page queries MUST share —
   // defined once so they can never filter different populations.
   const featureSpine = sql`
@@ -312,7 +325,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       AND ${dateCondition}
       AND ${tagCondition}
       AND ${placeTypeCondition}
-      AND ${searchCondition}`;
+      AND ${searchCondition}
+      AND ${featureCondition}`;
 
   // Get total count
   const countResult = await db.execute<CountRow>(sql`

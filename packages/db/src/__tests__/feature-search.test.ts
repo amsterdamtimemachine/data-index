@@ -202,6 +202,23 @@ describe('feature text search', () => {
     expect(labels).toEqual(['Verkooping van het huis', 'Onopvallend gebouw']);
   });
 
+  test('one feature of the population, by id and at its place; elsewhere or unknown, none', async () => {
+    const bounds = await fullBounds();
+    const one = await getFeatures({ area: { kind: 'bounds', bounds }, featureId: F2, featurePlaceId: P2, searchQuery: 'zeedijk', pageSize: 1 });
+    expect(one.total).toBe(1);
+    expect(one.data[0].id).toBe(F2);
+    expect(one.data[0].placeId).toBe(P2);
+    expect(one.data[0].foundBy).toEqual([{ field: 'title', text: 'Nieuwe woningen aan de \u0001Zeedijk\u0002' }]);
+    const elsewhere = await getFeatures({ area: { kind: 'bounds', bounds }, featureId: F2, featurePlaceId: P1, pageSize: 1 });
+    expect(elsewhere.total).toBe(0);
+    const unknown = await getFeatures({ area: { kind: 'bounds', bounds }, featureId: '22222222-2222-2222-2222-222222222299', pageSize: 1 });
+    expect(unknown.total).toBe(0);
+    // a feature needs no population: its id and place name the card
+    const alone = await getFeatures({ featureId: F2, featurePlaceId: P2, pageSize: 1 });
+    expect(alone.data.map((f) => [f.id, f.placeId])).toEqual([[F2, P2]]);
+    await expect(getFeatures({ pageSize: 1 })).rejects.toThrow();
+  });
+
   test('getFeatures count and page agree under a search filter', async () => {
     const bounds = await fullBounds();
     const res = await getFeatures({

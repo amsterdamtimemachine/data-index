@@ -189,7 +189,8 @@ export type FeaturesArea =
   | { kind: 'place'; placeId: string; cols?: number };
 
 export interface FeaturesQuery {
-  area: FeaturesArea;
+  // the population; not needed when featureId names the feature
+  area?: FeaturesArea;
   recordTypes?: RecordType[];
   datasetIds?: string[];
   placeTypes?: PlaceType[];
@@ -203,6 +204,10 @@ export interface FeaturesQuery {
   // Dutch FTS over feature labels (websearch syntax); also the ranking input for
   // sort='bestMatch'.
   searchQuery?: string;
+  // one feature, as the card the list showed: by its id, and at the place its card
+  // is at when it has several; within the population when one is given
+  featureId?: string;
+  featurePlaceId?: string;
   page?: number;
   pageSize?: number;
 }
