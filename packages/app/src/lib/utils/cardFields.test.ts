@@ -83,11 +83,11 @@ describe('collapsedFields', () => {
 		expect(collapsedFields(at(entry, 'x', [{ field: '$.isPartOf.name', text: `Dagboek Els ${S}Polak${E}, deel 1` }])).map((r) => r.label)).toEqual(['Auteur', 'Dagboek']);
 	});
 
-	test('a programme\'s matched items come first, every one of them, and one that repeats the title is left out', () => {
+	test('a programme\'s matched items come first, every one of them, the one that repeats the title included', () => {
 		const hits = screening.items.map((i) => ({ field: '$.items[*].name', text: i.name.replace(/^(\S+)/, `${S}$1${E}`) }));
 		const rows = collapsedFields(at(screening, 'Skippy (1931)', hits));
-		expect(rows.map((r) => r.label)).toEqual(['Optreden', 'Film', 'Venue']);
-		expect(rows[0].value).toBe(`${S}Mello${E} Wendini, komisch dressuur act`);
+		expect(rows.map((r) => r.label)).toEqual(['Film', 'Optreden', 'Film', 'Venue']);
+		expect(rows[0].value).toBe(`${S}Skippy${E} (1931)`);
 		expect(collapsedFields(at(screening, 'Skippy (1931)', [{ field: '$.location.name', text: `${S}Rialto${E}` }]))).toEqual([{ label: 'Venue', value: `${S}Rialto${E}`, href: undefined }]);
 	});
 });
@@ -195,7 +195,7 @@ describe('content by entity type', () => {
 	});
 
 	test('expanded, a programme with items and a story with an excerpt scroll; a picture and a bare description do not', () => {
-		const story: ManuscriptEntity = { type: 'Manuscript', name: 'Dagboek', excerpts: [{ placeId: 'p', text: 'Op de Dam.', truncatedBefore: false, truncatedAfter: false, mentions: [{ start: 6, end: 9, quote: 'Dam' }] }] };
+		const story: ManuscriptEntity = { type: 'Manuscript', name: 'Dagboek', excerpts: [{ placeId: 'p', text: 'Op de Dam.', truncatedBefore: false, truncatedAfter: false, mentions: [{ start: 6, end: 9 }] }] };
 		const at = (entity: Entity | undefined, placeId = 'p') => ({ id: 'f', label: '', recordType: 'story', placeId, placeType: 'street', startDate: '', endDate: '', datasetId: 'd', datasetLabel: '', tags: [], classifiers: [], entity } as unknown as FeatureResult);
 		expect(scrollingContent(at(screening), true)).toBe(true);
 		expect(scrollingContent(at(story), true)).toBe(true);

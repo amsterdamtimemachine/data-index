@@ -12,4 +12,4 @@
 	let { children }: Props = $props();
 </script>
 
-<mark class="bg-atm-mark font-semibold text-inherit rounded-sm px-0.5 -mx-0.5" title={translate('markTooltip')}>{@render children()}</mark>
+<mark class="bg-atm-mark text-inherit" title={translate('markTooltip')}>{@render children()}</mark>

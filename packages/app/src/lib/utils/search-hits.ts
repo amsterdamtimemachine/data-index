@@ -7,15 +7,13 @@
  */
 import type { Excerpt, FeatureResult } from '@atm/shared/types';
 import { SEARCH_FIELD_DESCRIPTION, SEARCH_FIELD_TITLE, SEARCH_MARK_END, SEARCH_MARK_START } from '@atm/shared/vocab';
-import { wordWindow, TEXT_WINDOWS } from './excerpts';
-
-export type MarkRange = { start: number; end: number };
+import { wordWindow, TEXT_WINDOWS, type TextRange } from './excerpts';
 
 const EXCERPT_TEXT = '$.excerpts[*].text';
 
 /** A marked string as its plain text and the ranges the marks covered. */
-export function parseMarks(marked: string): { text: string; ranges: MarkRange[] } {
-	const ranges: MarkRange[] = [];
+export function parseMarks(marked: string): { text: string; ranges: TextRange[] } {
+	const ranges: TextRange[] = [];
 	let text = '';
 	let open: number | null = null;
 	for (const ch of marked) {
@@ -37,7 +35,7 @@ export function parseMarks(marked: string): { text: string; ranges: MarkRange[] 
 }
 
 /** The plain text with marks put back around the ranges; ranges past the text are clipped. */
-export function markText(text: string, ranges: MarkRange[]): string {
+export function markText(text: string, ranges: TextRange[]): string {
 	let out = '';
 	let cursor = 0;
 	for (const r of [...ranges].sort((a, b) => a.start - b.start)) {
@@ -124,15 +122,15 @@ export function markFeature(feature: FeatureResult): FeatureResult {
 }
 
 /** The ranges a search marked in an excerpt's text, as the hits give them; none without a hit. */
-export function excerptSearchRanges(feature: FeatureResult, excerpt: Excerpt): MarkRange[] {
+export function excerptSearchRanges(feature: FeatureResult, excerpt: Excerpt): TextRange[] {
 	const marked = markedValue(hitsByField(feature).get(EXCERPT_TEXT), excerpt.text);
 	if (marked === undefined) return [];
 	return parseMarks(marked).ranges;
 }
 
 /** The ranges moved onto a window of the text that starts at `offset`, clipped to its length. */
-export function shiftRanges(ranges: MarkRange[], offset: number, length: number): MarkRange[] {
-	const shifted: MarkRange[] = [];
+export function shiftRanges(ranges: TextRange[], offset: number, length: number): TextRange[] {
+	const shifted: TextRange[] = [];
 	for (const r of ranges) {
 		const start = Math.max(r.start - offset, 0);
 		const end = Math.min(r.end - offset, length);

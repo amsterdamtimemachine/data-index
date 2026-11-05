@@ -125,7 +125,6 @@ export interface BookEntity {
 export interface ExcerptMention {
   start: number;
   end: number;
-  quote: string;
 }
 
 /**

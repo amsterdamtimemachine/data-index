@@ -10,7 +10,7 @@
 	import TagList from '#lib/components/TagList.svelte';
 	import Heading from '#lib/components/Heading.svelte';
 	import MarkedText from '#lib/components/MarkedText.svelte';
-	import { markFeature, matchWindow } from '#lib/utils/search-hits.js';
+	import { markFeature, matchWindow, hasSearchHits } from '#lib/utils/search-hits.js';
 
 	type Props = {
 		feature: FeatureResult;
@@ -39,9 +39,9 @@
 	});
 
 	const placeLine = $derived(relationLine(feature));
-	// the values a search matched carry their marks and show marked wherever the card
-	// shows them; a snapshot, so the copying works on plain data rather than the reactive proxy
-	const marked = $derived(markFeature($state.snapshot(feature)));
+	// under a search, the values it matched carry their marks and show marked wherever the
+	// card shows them; a snapshot, so the copying works on plain data rather than the reactive proxy
+	const marked = $derived(hasSearchHits(feature) ? markFeature($state.snapshot(feature)) : feature);
 	// collapsed, a title with a match is cut to the words around it
 	const title = $derived(expanded ? marked.label : matchWindow(marked.label));
 
@@ -62,14 +62,14 @@
 			return 'mt-1';
 		}
 		if (scrolling) {
-			return `px-2 py-2 shrink-0 relative z-10 bg-atm-sand border-t border-atm-sand-border shadow-edge-down`;
+			return `px-2 py-2 shrink-0 relative z-10 bg-atm-sand border-t border-atm-sand-border shadow-edge-up`;
 		}
 		return 'px-2 py-2 shrink-0';
 	});
 	// the title and place line cast the shadow onto content that scrolls under them
 	const titleBlockClasses = $derived.by(() => {
 		if (scrolling) {
-			return `shrink-0 relative z-10 bg-atm-sand pb-1 shadow-edge-up`;
+			return `shrink-0 relative z-10 bg-atm-sand pb-1 shadow-edge-down`;
 		}
 		return 'shrink-0';
 	});

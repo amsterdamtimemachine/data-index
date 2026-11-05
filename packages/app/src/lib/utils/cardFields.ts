@@ -2,7 +2,6 @@ import type { Entity, PersonEntity, MediaObjectEntity, CreativeWorkEntity, Scree
 import { formatPartialDate, formatPeriod, formatNowKnownAs } from './format';
 import { SEARCH_MARK_START } from '@atm/shared/vocab';
 import { pickExcerpt } from './excerpts';
-import { parseMarks } from './search-hits';
 import { translate } from './translations';
 
 /**
@@ -122,14 +121,12 @@ export function resolveCardFields(entity: Entity, expanded: boolean): FieldRow[]
 /**
  * The collapsed card's fields with a search on: its summary fields, and every row only
  * the expanded card shows whose value the search marked, in the expanded order (a
- * programme's items first, then its fields), so a match is never out of sight. A
- * marked row that repeats the title is left out: the title already shows it.
+ * programme's items first, then its fields), so a match is never out of sight.
  */
 export function collapsedFields(feature: FeatureResult): FieldRow[] {
 	const entity = feature.entity;
 	if (!entity) return [];
-	const title = parseMarks(feature.label).text;
-	const joins = (value: string): boolean => value.includes(SEARCH_MARK_START) && parseMarks(value).text !== title;
+	const joins = (value: string): boolean => value.includes(SEARCH_MARK_START);
 	const items = programmeRows(entity).filter((row) => joins(row.value));
 	const fields = fieldRows(entity, (spec, value) => spec.summary === true || joins(value));
 	return [...items, ...fields];
