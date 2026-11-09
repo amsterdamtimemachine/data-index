@@ -217,7 +217,7 @@ const TRANSLATIONS: Record<string, string> = {
 	published: 'Gepubliceerd',
 	written: 'Geschreven',
 	topicsTooltip:
-		'Onderwerpen zijn automatisch toegekend door een classificatiemodel, zonder handmatige correctie, en voorlopig alleen aan een deel van de datasets. Een grijs onderwerp heeft geen resultaten binnen de andere filters. Minimaal één: resultaten met minstens één gekozen onderwerp. Alle: alleen resultaten met alle gekozen onderwerpen.',
+		'Onderwerpen zijn automatisch toegekend door een classificatiemodel, zonder handmatige correctie, en voorlopig alleen aan een deel van de datasets. Minimaal één: resultaten met minstens één gekozen onderwerp. Alle: alleen resultaten met alle gekozen onderwerpen.',
 	topics: 'Onderwerpen',
 	topicsAny: 'Minimaal één',
 	topicsAll: 'Alle',
@@ -234,9 +234,9 @@ const TRANSLATIONS: Record<string, string> = {
 	mapNotLoaded: 'Kaart niet geladen',
 	timelineNotLoaded: 'Tijdlijn niet geladen',
 	featuresNotLoaded: 'Features niet geladen',
-	topicCountsNotLoaded: 'Aantallen per onderwerp niet geladen',
+	topicCountsNotLoaded: 'Aantallen per filter niet geladen',
 	// the sentence under a failure's title, by the failure's key
-	topicCountsNotLoadedText: 'De onderwerpen werken nog wel.',
+	topicCountsNotLoadedText: 'De filters werken nog wel.',
 	placeSearchFailed: 'Zoeken naar plekken mislukt',
 	placeFilterNotRestored: 'Plekfilter niet hersteld',
 	// one toast for everything wrong with a link on arrival

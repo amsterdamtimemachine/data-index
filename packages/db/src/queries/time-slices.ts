@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { UnknownTimeSliceError } from './errors';
 import type { TimeSlice, TimeRange } from '@atm/shared';
 import { DISPLAY_TIME_BIN_DEFAULT_YEARS } from '@atm/shared';
 import { db } from '../client';
@@ -85,4 +86,14 @@ export async function computeTimeRange(binSizeYears: number = DISPLAY_TIME_BIN_D
     start: slices[0].timeRange.start,
     end: slices[slices.length - 1].timeRange.end
   };
+}
+
+/** The years a time slice key spans, as the display grid knows them; an unknown key throws. */
+export async function getTimeSliceDateRange(timeSliceKey: string): Promise<{ startYear: number; endYear: number }> {
+  const timeSlices = await computeTimeSlices();
+  const timeSlice = timeSlices.find((ts) => ts.key === timeSliceKey);
+  if (!timeSlice) {
+    throw new UnknownTimeSliceError(timeSliceKey);
+  }
+  return { startYear: timeSlice.startYear, endYear: timeSlice.endYear };
 }

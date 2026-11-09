@@ -9,7 +9,7 @@
 	import type { FilterState } from '#lib/types/filters.js';
 	import { translate, translateAll, reverseTranslateAll } from '#lib/utils/translations.js';
 	import { navigateParams, withoutPlace } from '#lib/utils/navigate.js';
-	import { createTagCounts } from '#lib/state/tag-counts.svelte.js';
+	import { createFilterCounts } from '#lib/state/filter-counts.svelte.js';
 	import Heading from './Heading.svelte';
 	import TextWithSlots from './TextWithSlots.svelte';
 	import FilterSection from './FilterSection.svelte';
@@ -18,7 +18,8 @@
 	import PlaceFilterTag from './PlaceFilterTag.svelte';
 	import SearchFilterTag from './SearchFilterTag.svelte';
 	import Link from './Link.svelte';
-	import { selectsAll, NONE, type Category } from '#lib/utils/filters.js';
+	import { selectsAll, NONE, CATEGORIES, type Category } from '#lib/utils/filters.js';
+	import type { ValueCount } from '@atm/shared/types';
 	import TagOperatorSwitch from './TagOperatorSwitch.svelte';
 
 	interface Props {
@@ -33,8 +34,10 @@
 		placePanelOpen?: boolean;
 		searchPaused?: boolean;
 		onToggleSearch?: () => void;
-		// a category is empty: nothing to count, so the preview counts stay quiet
+		// a category is empty: nothing to list, so the search's preview count stays quiet
 		idle?: boolean;
+		// the period and, in the timeline's local mode, the cell or place the counts are taken within
+		countsScope?: string;
 	}
 
 	let {
@@ -46,7 +49,8 @@
 		placePanelOpen = false,
 		searchPaused = false,
 		onToggleSearch = undefined,
-		idle = false
+		idle = false,
+		countsScope = ''
 	}: Props = $props();
 
 	const recordTypes = $derived(metadata?.recordTypes ?? []);
@@ -65,50 +69,61 @@
 
 	let datasetLabels = $derived(datasets.map((s) => s.label));
 	let datasetLookup = $derived(new Map(datasets.map((s) => [s.id, s.label])));
+	const datasetIds = $derived(datasets.map((s) => s.id));
 	let currentDatasetLabels = $derived(filters.datasets.map((id) => datasetLookup.get(id) || id));
 
 	// Tags render by Dutch label like the other filters; the handler translates back.
 	let translatedTags = $derived(translateAll(availableTags));
 	let translatedCurrentTags = $derived(translateAll(currentTags));
 
-	// Per-tag counts under the other filters, used only to grey out empty tags. The
-	// selection itself is stripped so toggling a tag never refetches counts that cannot change.
-	const tagCounts = createTagCounts();
-	const tagCountsQuery = $derived.by(() => {
+	// What every filter value is worth under the other filters, the period and the scope,
+	// shown beside it. The applied filters travel as they are, an emptied category as
+	// 'none', so the server counts that category's own values and zeroes the rest.
+	const filterCounts = createFilterCounts();
+	const countsQuery = $derived.by(() => {
 		const params = new URLSearchParams(activeParams);
-		params.delete('tags');
-		params.delete('tagOperator');
+		if (metadata) {
+			for (const category of CATEGORIES) {
+				if (filters[category].length === 0) {
+					params.set(category, NONE);
+				}
+			}
+		}
+		for (const [name, value] of new URLSearchParams(countsScope)) {
+			params.set(name, value);
+		}
 		return params.toString();
 	});
-	// A boolean derived, not the array: a reloaded metadata array must not refetch.
-	const hasTags = $derived(availableTags.length > 0);
+	const hasMetadata = $derived(metadata !== null);
 	$effect(() => {
-		if (hasTags && !idle) {
-			tagCounts.load(tagCountsQuery);
+		if (hasMetadata) {
+			filterCounts.load(countsQuery);
 		} else {
-			tagCounts.reset();
+			filterCounts.reset();
 		}
 	});
-	const tagCountByLabel = $derived.by(() => {
-		const byLabel = new Map<string, number>();
-		if (!tagCounts.counts) {
-			return byLabel;
+	// a list's counts keyed by the label the toggle shows, every known value present
+	function countsByLabel(
+		ids: string[],
+		label: (id: string) => string,
+		counted: ValueCount[] | undefined
+	): Map<string, number> | undefined {
+		if (!counted) {
+			return undefined;
 		}
-		for (const id of availableTags) {
-			byLabel.set(translate(id), tagCounts.counts.get(id) ?? 0);
-		}
-		return byLabel;
-	});
-	// A tag with nothing behind it under the current filters is greyed out, unless it
-	// is selected (so it can still be deselected).
-	const disabledTagLabels = $derived.by(() => {
-		if (!tagCounts.counts) {
-			return [];
-		}
-		return translatedTags.filter(
-			(label) => tagCountByLabel.get(label) === 0 && !translatedCurrentTags.includes(label)
-		);
-	});
+		const byId = new Map(counted.map((c) => [c.id, c.count]));
+		return new Map(ids.map((id) => [label(id), byId.get(id) ?? 0]));
+	}
+	const recordTypeCounts = $derived(
+		countsByLabel(recordTypes, translate, filterCounts.counts?.recordTypes)
+	);
+	const datasetCounts = $derived(
+		countsByLabel(datasetIds, (id) => datasetLookup.get(id) || id, filterCounts.counts?.datasets)
+	);
+	const placeTypeCounts = $derived(
+		countsByLabel(placeTypes, translate, filterCounts.counts?.placeTypes)
+	);
+	const tagCounts = $derived(countsByLabel(availableTags, translate, filterCounts.counts?.tags));
 
 	// a category's param: absent for everything, NONE for nothing, else the picks
 	function writeCategory(p: URLSearchParams, name: Category, values: string[], all: string[]) {
@@ -120,8 +135,6 @@
 			p.set(name, values.join(','));
 		}
 	}
-
-	const datasetIds = $derived(datasets.map((s) => s.id));
 
 	function handleRecordTypeChange(selected: string[]) {
 		const english = reverseTranslateAll(selected);
@@ -259,6 +272,7 @@
 				<FilterToggleGroup
 					items={translatedRecordTypes}
 					selectedItems={translatedCurrentRecordTypes}
+					counts={recordTypeCounts}
 					onItemSelected={handleRecordTypeChange}
 					requireOne={false}
 					labelledBy={headingId}
@@ -278,6 +292,7 @@
 			<FilterToggleGroup
 				items={datasetLabels}
 				selectedItems={currentDatasetLabels}
+				counts={datasetCounts}
 				onItemSelected={handleDatasetChange}
 				requireOne={false}
 				labelledBy={headingId}
@@ -297,6 +312,7 @@
 				<FilterToggleGroup
 					items={translatedPlaceTypes}
 					selectedItems={translatedCurrentPlaceTypes}
+					counts={placeTypeCounts}
 					onItemSelected={handlePlaceTypeChange}
 					requireOne={false}
 					labelledBy={headingId}
@@ -326,7 +342,7 @@
 				<FilterToggleGroup
 					items={translatedTags}
 					selectedItems={translatedCurrentTags}
-					disabledItems={disabledTagLabels}
+					counts={tagCounts}
 					onItemSelected={handleTagsChange}
 					requireOne={false}
 					labelledBy={headingId}

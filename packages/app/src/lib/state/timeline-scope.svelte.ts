@@ -187,6 +187,10 @@ export function createTimelineScope(inputs: TimelineScopeInputs, fetcher: Fetche
 		get switchOn() {
 			return switchOn;
 		},
+		/** whether the band shows the subject's series: the filter counts follow the same scope */
+		get showsLocal() {
+			return showsLocal;
+		},
 		/** the switch handler for the timeline; absent on mobile, where the modal decides */
 		get onToggle() {
 			if (inputs.isMobile) {

@@ -291,7 +291,7 @@ Each match carries the matched name, the id of the matched historical name row w
 
 `/api/heatmaps`, `/api/histogram` and `/api/features` accept `q`: a free-text search over a feature's title, description and the entity fields its card shows (`SEARCH_FIELDS` in `@atm/shared`). All three share one definition of what matches, so the heatmap, the timeline and the feature list always describe the same population. With `q`, each listed feature carries `foundBy`: the values that matched, with the matching words marked.
 
-The same three accept `tags` (comma-separated tag ids) with `tagOperator` (`OR`, the default, or `AND`). Tags are classifier output ingested per dataset (see the `tags` source); the count endpoints intersect the precomputed per-tag bitmaps with their buckets, and an unknown tag id matches nothing. `/api/available-tags` lists every tag with its feature count under the same category filters and `q`, so the filter panel's counts always agree with the map.
+The same three accept `tags` (comma-separated tag ids) with `tagOperator` (`OR`, the default, or `AND`). Tags are classifier output ingested per dataset (see the `tags` source); the count endpoints intersect the precomputed per-tag bitmaps with their buckets, and an unknown tag id matches nothing. `/api/filter-counts` says what every filter value is worth: for each record type, dataset, place type and tag, how many features pressing it leaves under the other filters, the period (`timeSlice`) and, with bounds or a `placeId`, the scope. A category's values are counted under the other categories, the search and the tags; the tags under every category and the search, and under the selected tags too when they combine with AND. A category sent as `none` is an emptied one: its own values are still counted, the rest reads zero. The filter panel shows these beside every value, so they always agree with the map.
 
 Matching is on words as written, with web search syntax: plain words must all appear, `"quoted phrases"` must appear side by side, `OR` offers alternatives, and `-word` excludes. Nothing is stemmed and no word is dropped, so a name matches itself and not a lookalike (`Leeds` does not find `Leden`, `Kat` does not find `Katestraat`) and `haar` or `het` are words like any other. The words are indexed in the generated `search_tsv` column, which `rebuild-index` rebuilds whenever its definition in the code has changed, since a schema push cannot see that change. A query that matches nothing returns zero counts everywhere.
 
@@ -448,10 +448,10 @@ Ingestion is idempotent and source-driven: corrections are made in the **source 
 | `GET /api/heatmaps` | Sparse heatmap data with grid dimensions |
 | `GET /api/histogram` | Feature count distribution by time period |
 | `GET /api/features` | Paginated features within geographic bounds or the display cells of a place |
-| `GET /api/available-tags` | Every tag with its feature count under the request's filters |
+| `GET /api/filter-counts` | What every filter value is worth under the request's other filters, period and scope |
 | `GET /api/places` | Place name search and place lookup for the search filter |
 
-Heatmaps, histogram, features, and available-tags accept `recordTypes`, `datasets`, and `placeTypes` (`address` / `street` / `neighbourhood` / `district`) query parameters to filter results.
+Heatmaps, histogram, features, and filter-counts accept `recordTypes`, `datasets`, and `placeTypes` (`address` / `street` / `neighbourhood` / `district`) query parameters to filter results.
 
 Invalid input policy: malformed parameters (bad bounds, unknown `timeSlice`) return a 400 with a machine-readable `code`; well-formed filters that match nothing return empty results; display resolution (`binSize`, `cols`) is snapped to the nearest valid value. A fallback never widens a result beyond what was requested.
 

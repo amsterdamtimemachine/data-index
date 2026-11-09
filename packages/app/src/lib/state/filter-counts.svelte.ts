@@ -1,31 +1,31 @@
-/** Reactive fetcher for the per-tag counts shown in the filter panel. */
-import type { AvailableTags } from '@atm/shared/types';
+/** Reactive fetcher for the counts shown beside every filter value in the panel. */
+import type { FilterCounts } from '@atm/shared/types';
 import { apiUrl } from '#lib/utils/api.js';
 import { notifyFailure } from '#lib/state/notify.js';
 
-export function createTagCounts() {
-	// tag id → features carrying it under the current filters; null until loaded or after a failure
-	let counts = $state<Map<string, number> | null>(null);
+export function createFilterCounts() {
+	// null until loaded or after a failure
+	let counts = $state<FilterCounts | null>(null);
 	// last-wins: a stale response must not overwrite a newer one
 	let requestId = 0;
 
-	async function load(filterQuery: string) {
+	async function load(query: string) {
 		const id = ++requestId;
 		try {
-			const response = await fetch(apiUrl('/api/available-tags', new URLSearchParams(filterQuery)));
+			const response = await fetch(apiUrl('/api/filter-counts', new URLSearchParams(query)));
 			if (!response.ok) {
 				throw response;
 			}
-			const data: AvailableTags = await response.json();
+			const data: FilterCounts = await response.json();
 			if (id !== requestId) {
 				return;
 			}
-			counts = new Map(data.tags.map((tag) => [tag.id, tag.count]));
+			counts = data;
 		} catch (err) {
 			if (id !== requestId) {
 				return;
 			}
-			// the chips still work without counts
+			// the filters still work without counts
 			counts = null;
 			notifyFailure('topicCountsNotLoaded', err);
 		}

@@ -17,7 +17,8 @@ import type { Heatmap } from '@atm/shared';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
 import { upsertSource } from '../etl/writers/feature-writer';
 import { rebuildIndex } from '../etl/post-process/rebuild-index';
-import { getAvailableTags } from '../queries/tags';
+import { getFilterCounts } from '../queries/filter-counts';
+import { computeTimeSlices } from '../queries/time-slices';
 import { getHistogram } from '../queries/histogram';
 import { getHeatmapTimeline } from '../queries/heatmap';
 import { getFeatures } from '../queries/features';
@@ -102,20 +103,66 @@ describe('tag filtering', () => {
     await teardownTestDb();
   });
 
-  test('getAvailableTags counts every tag, unioned over taggers, most common first', async () => {
-    const { tags } = await getAvailableTags();
-    expect(tags.map(t => t.id)).toEqual(['water', 'nature', 'transport']);
-    expect(counts(tags)).toEqual({ water: 3, nature: 2, transport: 2 });
+  test('every filter value counted, most common first; a tag nothing carries stays at zero', async () => {
+    const all = await getFilterCounts({});
+    expect(all.total).toBe(4);
+    expect(counts(all.recordTypes)).toEqual({ image: 2, text: 1, person: 1 });
+    expect(counts(all.datasets)).toEqual({ 'tg-ds': 4 });
+    expect(counts(all.placeTypes)).toEqual({ address: 2, street: 1, neighbourhood: 1 });
+    expect(all.tags.map((t) => t.id)).toEqual(['water', 'nature', 'transport']);
+    expect(counts(all.tags)).toEqual({ water: 3, nature: 2, transport: 2 });
   });
 
-  test('getAvailableTags honours the category filters and keeps zero-count tags', async () => {
-    expect(counts((await getAvailableTags(['text'])).tags)).toEqual({ water: 1, nature: 0, transport: 0 });
-    expect(counts((await getAvailableTags(undefined, undefined, ['street'])).tags)).toEqual({ water: 1, nature: 0, transport: 0 });
+  test("a category's values are counted under the other categories, never under its own", async () => {
+    const text = await getFilterCounts({ recordTypes: ['text'] });
+    expect(counts(text.recordTypes)).toEqual({ image: 2, text: 1, person: 1 });
+    expect(counts(text.placeTypes)).toEqual({ street: 1 });
+    expect(counts(text.tags)).toEqual({ water: 1, nature: 0, transport: 0 });
+    expect(text.total).toBe(1);
+    const street = await getFilterCounts({ placeTypes: ['street'] });
+    expect(counts(street.recordTypes)).toEqual({ text: 1 });
+    expect(counts(street.tags)).toEqual({ water: 1, nature: 0, transport: 0 });
   });
 
-  test('getAvailableTags counts within a search term', async () => {
-    expect(counts((await getAvailableTags(undefined, undefined, undefined, 'eerste')).tags))
-      .toEqual({ water: 2, nature: 1, transport: 0 }); // F1 + F3
+  test('counts within a search term', async () => {
+    const found = await getFilterCounts({ searchQuery: 'eerste' });
+    expect(counts(found.tags)).toEqual({ water: 2, nature: 1, transport: 0 }); // F1 + F3
+    expect(counts(found.recordTypes)).toEqual({ image: 1, text: 1 });
+    expect(found.total).toBe(2);
+  });
+
+  test('under OR a tag counts what pressing it adds; the categories count the union', async () => {
+    const or = await getFilterCounts({ tags: ['nature', 'transport'], tagOperator: 'OR' });
+    expect(or.total).toBe(3); // F1, F2, F4
+    expect(counts(or.recordTypes)).toEqual({ image: 2, person: 1 });
+    expect(counts(or.tags)).toEqual({ water: 3, nature: 2, transport: 2 });
+  });
+
+  test('under AND a tag counts what pressing it leaves; the categories count the intersection', async () => {
+    const and = await getFilterCounts({ tags: ['nature', 'water'], tagOperator: 'AND' });
+    expect(and.total).toBe(1); // F1
+    expect(counts(and.recordTypes)).toEqual({ image: 1 });
+    expect(counts(and.tags)).toEqual({ water: 1, nature: 1, transport: 0 });
+  });
+
+  test('an emptied category zeroes the others and the total, but its own values are still counted', async () => {
+    const none = await getFilterCounts({ recordTypes: [] });
+    expect(none.total).toBe(0);
+    expect(counts(none.recordTypes)).toEqual({ image: 2, text: 1, person: 1 });
+    expect(none.datasets).toEqual([]);
+    expect(counts(none.tags)).toEqual({ water: 0, nature: 0, transport: 0 });
+  });
+
+  test('the period and the scope cut the population', async () => {
+    const slices = await computeTimeSlices();
+    const of1950 = slices.find((s) => s.startYear <= 1950 && s.endYear > 1950)!;
+    const inPeriod = await getFilterCounts({ timeSlice: of1950.key });
+    expect(inPeriod.total).toBe(4);
+    const elsewhere = await getFilterCounts({ bounds: { minLon: 4.0, maxLon: 4.001, minLat: 52.0, maxLat: 52.001 } });
+    expect(elsewhere.total).toBe(0);
+    expect(elsewhere.recordTypes).toEqual([]);
+    const here = await getFilterCounts({ bounds: await fullBounds() });
+    expect(here.total).toBe(4);
   });
 
   test('histogram total: OR unions the tag sets', async () => {

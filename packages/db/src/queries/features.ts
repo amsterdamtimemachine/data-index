@@ -14,12 +14,11 @@ import type {
   Entity,
   SearchHit,
 } from '@atm/shared';
-import { computeTimeSlices } from './time-slices';
+import { getTimeSliceDateRange } from './time-slices';
 import { getRecordTypes } from './record-types';
 import { getGridConfig } from './grid-config';
 import { featureYearOverlap } from './time-filter';
 import { tagMatch, tagMatchCount } from './tag-filter';
-import { UnknownTimeSliceError } from './errors';
 import { cellRangeCondition, placeCellsCondition, displayGrid, displayCellBaseRange } from './cell-features';
 import { searchMatch, foundBy } from './feature-search';
 import { db } from '../client';
@@ -116,17 +115,6 @@ export async function boundsToBaseCellRange(bounds: HeatmapCellBounds): Promise<
  * Get date range from time slice key; throws UnknownTimeSliceError for a key that
  * matches no slice.
  */
-async function getTimeSliceDateRange(timeSliceKey: string): Promise<{ startYear: number; endYear: number }> {
-  const timeSlices = await computeTimeSlices();
-  const timeSlice = timeSlices.find(ts => ts.key === timeSliceKey);
-  if (!timeSlice) {
-    throw new UnknownTimeSliceError(timeSliceKey);
-  }
-  return {
-    startYear: timeSlice.startYear,
-    endYear: timeSlice.endYear
-  };
-}
 
 // ── sort plans ────────────────────────────────────────────────────────────────
 // The editorial modes interleave record types; sample, spatialFrequency and

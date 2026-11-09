@@ -11,7 +11,7 @@ import { parseSearchQuery, parseTagSelection } from './page-params';
 export const NONE = 'none';
 
 /** The categories a reader can empty, by their param name. */
-const CATEGORIES = ['recordTypes', 'datasets', 'placeTypes'] as const;
+export const CATEGORIES = ['recordTypes', 'datasets', 'placeTypes'] as const;
 export type Category = (typeof CATEGORIES)[number];
 
 function parseList(url: URL, name: string): string[] | null {
