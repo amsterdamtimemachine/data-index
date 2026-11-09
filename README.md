@@ -87,7 +87,7 @@ erDiagram
 
     place {
         text id PK "e.g. https://adamlink.nl/geo/lp/1000001"
-        text type  "address | street | neighbourhood | district"
+        text type  "address | building | street | neighbourhood | district"
         text name  "e.g. Prins Hendrikkade 93"
         text source FK "provider org: adamlink | cbs | nwb | bag"
         text url  "link to the origin record"
@@ -183,7 +183,7 @@ erDiagram
         text dataset_id FK "e.g. stadsarchief-beeldbank"
         jsonb entity  "e.g. Person | CreativeWork | MediaObject | ScreeningEvent | TheaterEvent | Manuscript"
         integer feature_int_id  "identity # the surrogate the bitmaps store"
-        tsvector label_tsv  "generated from label # dutch FTS"
+        tsvector search_tsv "generated: title, description, searchable entity fields # words as written, kept current by rebuild-index"
     }
 
     agents||--o{datasets:"provides"
@@ -268,15 +268,16 @@ Indexing also stores `spatial_frequency`: the number of base cells a feature's p
 
 ### Feature sorting
 
-The cell view sorts features in one of six modes. All modes are deterministic.
+The cell view sorts features in one of five modes. All modes are deterministic.
 
 - **Sample** (default, in the UI and the API). A fair cross-section of the cell. Record types take turns in the list. Within each type, datasets take turns. Order inside a dataset comes from a seeded shuffle (`md5(id || seed)`). In the UI the seed defaults to the cell id. The shuffle button sets a `sampleSeed` URL parameter, so a shared link reproduces the exact order. One seed produces one global order, which keeps pagination consistent across pages. With topics selected, the shuffle is weighted: a feature matching more of the selected tags draws a better place, with weight 2 to the power of its matches, so richer matches drift up without fixing the order.
 - **Spatial** ("Precies gelokaliseerd" in the UI). The same type and dataset rotation, but each dataset's items are ordered by `spatial_frequency`. Items tied to the smallest place come first.
 - **Temporal** ("Precies gedateerd" in the UI). The same rotation, ordered by date range length (`end_date - start_date`). Items with the tightest dating come first: a single day before a month, a month before a year.
-- **Beste match**. Offered while a search term or topics are active. Ranks by the number of selected tags a feature matches first, then by how well its title matches the search term (`ts_rank`), with the record type rotation. A URL carrying `sort=bestMatch` keeps it until neither a term nor tags remain.
 - **Oldest / newest**. Plain chronological order on `start_date`. No rotation. An explicit date sort returns true chronology, even when that puts several items of one type in a row.
 
-`/api/features` accepts `sort` (`sample` / `spatialFrequency` / `datePrecision` / `date` / `bestMatch`), `sortDirection`, and `seed`. `sort` defaults to `sample`. `seed` is optional: without one the sample order is fixed and reproducible, and every request without a seed gets the same order. With a tag selection, the sample shuffle is weighted: a feature carrying one more of the selected tags is twice as likely to come earlier, so richer matches drift up without fixing the order. `bestMatch` orders by match quality: the number of selected `tags` a feature carries first, then its rank against the `q` text search; it is only meaningful together with at least one of them.
+`/api/features` accepts `sort` (`sample` / `spatialFrequency` / `datePrecision` / `date`), `sortDirection`, and `seed`. `sort` defaults to `sample`. `seed` is optional: without one the sample order is fixed and reproducible, and every request without a seed gets the same order. With a tag selection, the sample shuffle is weighted: a feature carrying one more of the selected tags is twice as likely to come earlier, so richer matches drift up without fixing the order.
+
+`/api/features` also takes `featureId`, a feature's id, and returns that feature's rows as the list shows them, one per place it is at, or the one at `featurePlaceId`; bounds or a place then narrow it but are not required. The app writes the expanded card to its own URL as `feature` and `at` the same way, so a link opens with the card.
 
 ### Place search
 
@@ -288,11 +289,11 @@ Each match carries the matched name, the id of the matched historical name row w
 
 ### Text search
 
-`/api/heatmaps`, `/api/histogram` and `/api/features` accept `q`: a free-text search over feature labels. All three share one definition of what matches, so the heatmap, the timeline and the feature list always describe the same population.
+`/api/heatmaps`, `/api/histogram` and `/api/features` accept `q`: a free-text search over a feature's title, description and the entity fields its card shows (`SEARCH_FIELDS` in `@atm/shared`). All three share one definition of what matches, so the heatmap, the timeline and the feature list always describe the same population. With `q`, each listed feature carries `foundBy`: the values that matched, with the matching words marked.
 
-The same three accept `tags` (comma-separated tag ids) with `tagOperator` (`OR`, the default, or `AND`). Tags are classifier output ingested per dataset (see the `tags` source); the count endpoints intersect the precomputed per-tag bitmaps with their buckets, and an unknown tag id matches nothing. `/api/available-tags` lists every tag with its feature count under the same category filters and `q`, so the filter panel's counts always agree with the map.
+The same three accept `tags` (comma-separated tag ids) with `tagOperator` (`OR`, the default, or `AND`). Tags are classifier output ingested per dataset (see the `tags` source); the count endpoints intersect the precomputed per-tag bitmaps with their buckets, and an unknown tag id matches nothing. `/api/filter-counts` says what every filter value is worth: for each record type, dataset, place type and tag, how many features pressing it leaves under the other filters, the period (`timeSlice`) and, with bounds or a `placeId`, the scope. A category's values are counted under the other categories, the search and the tags; the tags under every category and the search, and under the selected tags too when they combine with AND. A category sent as `none` is an emptied one: its own values are still counted, the rest reads zero. The filter panel shows these beside every value, so they always agree with the map.
 
-Matching uses Dutch full-text search with web search syntax: plain words must all appear, `"quoted phrases"` must appear side by side, `OR` offers alternatives, and `-word` excludes. Words are stemmed, so `verkooping` also finds `Verkoopingen`, and the stemmer folds doubled vowels, which lets old spellings find their modern forms. The search reads labels only, not article text or descriptions. A query that matches nothing, including one consisting only of stopwords, returns zero counts everywhere.
+Matching is on words as written, with web search syntax: plain words must all appear, `"quoted phrases"` must appear side by side, `OR` offers alternatives, and `-word` excludes. Nothing is stemmed and no word is dropped, so a name matches itself and not a lookalike (`Leeds` does not find `Leden`, `Kat` does not find `Katestraat`) and `haar` or `het` are words like any other. The words are indexed in the generated `search_tsv` column, which `rebuild-index` rebuilds whenever its definition in the code has changed, since a schema push cannot see that change; it likewise drops the old partial predicate from the place name indexes, which made every name lookup a slow parallel scan. A query that matches nothing returns zero counts everywhere.
 
 Heatmap and histogram counts under a search are computed by intersecting each cell's precomputed feature set with the set of matching features, so a search request costs about the same as an unfiltered one regardless of how many features match.
 
@@ -326,7 +327,7 @@ A street or address feature shows its historical name (from `place_historical_na
 
 Neighbourhood and district geometry, unlike a street's or address's, changes across history: each era's division is its own `place` row with its own `place_geometry` (polygon + `[since, until)` window). Which era a feature attaches to is decided **at ingest, not query time** — it's linked to the `place` whose window overlaps the feature's `[start, end]` the most. At query time the heatmap then counts that feature against its historical geometry's footprint, **even though the basemap shows the modern city**.
 
-A feature located by **coordinate** links to the place of its own era: addresses exist in two layers — historical Adamlink (up to 1943) and present-day BAG — so a feature dated before `ERA_CUTOFF` (1943) resolves to the Adamlink address, on/after it to the BAG address at the same point, always at the finest granularity that resolves (address > street > neighbourhood > district) within a per-type distance cap. A feature located by **name** instead resolves to the place whose name was in force nearest its date. An address matched outside its register's era, such as an 1898 programme at "Amstel 115", a name only BAG has since Adamlink recorded the house as "Binnen Amstel 115", moves to its **twin**: the address the other source records in the same BAG building with the same house number. Both sources state the building (`place_geometry.building_id`), so the pairing is theirs, not a distance guess. When a building holds several twins, those that share one of the place's own names are kept (the same street, not another street on the corner), then those whose name record is nearest the feature's date (Adamlink keeps a point per register); the match stands unless one is left. Either way, a name matching two equally-plausible places, or a coordinate with nothing in range, is skipped rather than linked to a guess.
+A feature located by **coordinate** links to the place of its own era: addresses exist in two layers — historical Adamlink (up to 1943) and present-day BAG — so a feature dated before `ERA_CUTOFF` (1943) resolves to the Adamlink address, on/after it to the BAG address at the same point, always at the finest granularity that resolves (address > street > neighbourhood > district) within a per-type distance cap. A feature located by **name** instead resolves to the place whose name was in force nearest its date. Either way a street is a candidate only while it existed, and of an area's versions the one in force at the date is preferred. An address matched outside its register's era, such as an 1898 programme at "Amstel 115", a name only BAG has since Adamlink recorded the house as "Binnen Amstel 115", moves to its **twin**: the address the other source records in the same BAG building with the same house number. Both sources state the building (`place_geometry.building_id`), so the pairing is theirs, not a distance guess. When a building holds several twins, those that share one of the place's own names are kept (the same street, not another street on the corner), then those whose name record is nearest the feature's date (Adamlink keeps a point per register); the match stands unless one is left. Either way, a name matching two equally-plausible places, or a coordinate with nothing in range, is skipped rather than linked to a guess.
 
 Both name- and geometry-windows run from `since` up to but not including `until` (at year granularity), so a boundary year falls in exactly one window; `until = null` means "still current".
 
@@ -336,20 +337,21 @@ Both name- and geometry-windows run from `since` up to but not including `until`
 
 Ingestion reads files from a local data directory; how you obtain each differs by source:
 
-- **Adamlink place data** — download the TTLs from [adamlink.nl/data](https://adamlink.nl/data): the neighbourhoods & districts, streets, LPS, and adressen files. Static, versioned downloads.
+- **Adamlink place data** — download the TTLs from [adamlink.nl/data](https://adamlink.nl/data): the neighbourhoods & districts, streets, LPS, adressen and buildings (gebouwen) files. Static, versioned downloads.
 - **PDOK base registries (CBS / NWB / BAG)** — not downloaded by hand. `db:fetch` queries the [PDOK](https://www.pdok.nl) WFS and writes a ground-truth file:
 
   ```bash
   bun run db:fetch -s cbs-areas     -o <data-dir>/cbs-areas.geojson
   bun run db:fetch -s nwb-streets   -o <data-dir>/nwb-streets.geojson
   bun run db:fetch -s bag-addresses -o <data-dir>/bag-addresses.ndjson
+  bun run db:fetch -s municipality  -o <data-dir>/municipality.geojson
   ```
 
   Splitting fetch from ingest keeps ingestion offline and reproducible and pins each PDOK snapshot as an inspectable file; re-run a fetch to refresh it.
 - **Feature datasets (Beeldbank, Joods Monument, Delpher)** — currently private derivatives of mostly-public source collections, so they are not publicly distributable.
 - **Classifier tags (optional)** — the output of a tagger run over an ingested dataset, as JSONL with one row per record: `{"id": <the dataset's natural key>, "tags": ["<tag id>", ...]}`. The id must be the same natural key the dataset's ingestor derives feature ids from (for Beeldbank the record's identifier, not its image URL); if the classifier emits another key, convert the file first. One file per run, ingested with that run's id as `--tagger`.
 - **Amsterdam Diaries entries** — exported from the Amsterdam Diaries Time Machine dump (Zenodo) with a script kept next to the dump (`export_amsterdam_diaries.py`), as JSONL with one line per entry and Amsterdam place it mentions: the entry's ark and its reading page on the Diaries site (the diary's subject by slug and the entry's position among that subject's entries), date, diary, author (with their page on the Diaries site, asked of the site's API when the script runs), the place with its Adamlink or Wikidata id and a point, and per place an excerpt of the transcription around its first mention (whole lines, up to 3,000 characters, with the mention offsets and whether the text continues before or after). The ingest stamps each excerpt with the index place its mention resolved to, so the card opens the entry at the place it shows. The people and places an entry names are not kept: the index answers what, when, where and why an item is here, and sends the reader to the source for the rest. Mentions of areas (the city, a district, a water) stay on the card but get no point, since the dump's coordinate is a centroid.
-- **Cinema Context programmes** — exported from the Cinema Context database dump with a script kept next to the dump (`export_cinema_context.py`, in the data project), as JSONL with one programme per line: its permanent id, date, venue with its kind and its page at the site, the venue's address as written and its coordinates, the bill in order. Amsterdam only by default. The ingest keeps a programme with at least one film or act, titles it with the first item on its bill, and makes it a `ScreeningEvent` when the bill opens with a film or a `TheaterEvent` when it opens with a live act; the card lists the bill in the source's order. It links to the venue's address matched by name, era-ranked like every name match, and falls back to the point when the address is written as a range or a description.
+- **Cinema Context programmes** — exported from the Cinema Context database dump with a script kept next to the dump (`export_cinema_context.py`, in the data project), as JSONL with one programme per line: its permanent id, date, venue with its kind and its page at the site, the venue's address as written and its coordinates, the programme in order. Amsterdam only by default. The ingest keeps a programme with at least one film or act, titles it with the first item on its programme, and makes it a `ScreeningEvent` when the programme opens with a film or a `TheaterEvent` when it opens with a live act; the card lists the programme in the source's order. It links to the venue's address matched by name, era-ranked like every name match, and falls back to the point when the address is written as a range or a description.
 
 All files land in the data directory; the ingestion steps below read them.
 
@@ -377,6 +379,7 @@ Adamlink (download the TTLs, see [Getting the data](#getting-the-data)):
 | [Streets](https://adamlink.nl/data) | Street geometries (LINESTRING) with historical name variants | TTL |
 | [LPS](https://adamlink.nl/data) | Linked point set: historical address-to-geometry mappings from 7 Amsterdam registries (1832–1976) | TTL |
 | [Adressen](https://adamlink.nl/data) | Dated address observations linking to LPS points via `schema:geoContains` | TTL |
+| [Buildings](https://adamlink.nl/data) | Named buildings: a footprint (BAG) or a point for a vanished one, build and demolition years, name variants | TTL |
 
 Three PDOK base registries fill the gaps, fetched with `db:fetch` (scope Amsterdam + Weesp — see [Getting the data](#getting-the-data)). CBS and BAG ingest via the generic `pdok-places` source; NWB has its own `nwb-streets` source that reconciles against Adamlink at ingest.
 
@@ -445,10 +448,10 @@ Ingestion is idempotent and source-driven: corrections are made in the **source 
 | `GET /api/heatmaps` | Sparse heatmap data with grid dimensions |
 | `GET /api/histogram` | Feature count distribution by time period |
 | `GET /api/features` | Paginated features within geographic bounds or the display cells of a place |
-| `GET /api/available-tags` | Every tag with its feature count under the request's filters |
+| `GET /api/filter-counts` | What every filter value is worth under the request's other filters, period and scope |
 | `GET /api/places` | Place name search and place lookup for the search filter |
 
-Heatmaps, histogram, features, and available-tags accept `recordTypes`, `datasets`, and `placeTypes` (`address` / `street` / `neighbourhood` / `district`) query parameters to filter results.
+Heatmaps, histogram, features, and filter-counts accept `recordTypes`, `datasets`, and `placeTypes` (`address` / `building` / `street` / `neighbourhood` / `district`) query parameters to filter results.
 
 Invalid input policy: malformed parameters (bad bounds, unknown `timeSlice`) return a 400 with a machine-readable `code`; well-formed filters that match nothing return empty results; display resolution (`binSize`, `cols`) is snapped to the nearest valid value. A fallback never widens a result beyond what was requested.
 
@@ -484,6 +487,7 @@ bun run db:fetch  -s bag-addresses -o <data-dir>/bag-addresses.ndjson
 bun run db:ingest -s pdok-places -f <data-dir>/cbs-areas.geojson
 bun run db:ingest -s nwb-streets -f <data-dir>/nwb-streets.geojson -x <data-dir>/adamlinkstraten.ttl
 bun run db:ingest -s pdok-places -f <data-dir>/bag-addresses.ndjson
+bun run db:ingest -s buildings -f <path-to-adamlinkgebouwen.ttl> -m <data-dir>/municipality.geojson
 
 # Ingest datasets (any order)
 bun run db:ingest -s <dataset-name> -f <path-to-file>
@@ -583,6 +587,7 @@ fetch -s bag-addresses -o /data/bag-addresses.ndjson
 etl -s pdok-places -f /data/cbs-areas.geojson
 etl -s nwb-streets -f /data/nwb-streets.geojson -x /data/adamlinkstraten.ttl
 etl -s pdok-places -f /data/bag-addresses.ndjson
+etl -s buildings -f /data/adamlinkgebouwen.ttl -m /data/municipality.geojson
 
 etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
@@ -643,6 +648,7 @@ fetch -s bag-addresses -o /data/bag-addresses.ndjson
 etl -s pdok-places -f /data/cbs-areas.geojson
 etl -s nwb-streets -f /data/nwb-streets.geojson -x /data/adamlinkstraten.ttl
 etl -s pdok-places -f /data/bag-addresses.ndjson
+etl -s buildings -f /data/adamlinkgebouwen.ttl -m /data/municipality.geojson
 etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv

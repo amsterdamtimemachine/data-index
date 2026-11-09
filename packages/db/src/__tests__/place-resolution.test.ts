@@ -8,7 +8,8 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
-import { getCandidatesByPoint, getCandidatesByName, pickFinest, resolveNamePool, rank, twinOf, type Candidate } from '../etl/places/place-candidates';
+import { getCandidatesByPoint, getCandidatesByName, getNamesForPlaces, pickFinest, resolveNamePool, rank, twinOf, type Candidate } from '../etl/places/place-candidates';
+import { confirmByText, dropEvidenceTypes } from '../etl/places/place-confirm';
 import { inferByPoint, inferByName, inferByPointConfirmed } from '../etl/places/place-inference';
 import { clearResolverCaches } from '../etl/places/cache';
 
@@ -155,10 +156,15 @@ describe('feature → place resolution', () => {
     expect(pickFinest(await point(Q, '1920-01-01', '1920-01-01'))?.placeId).toBe('near-s');
   });
 
-  test('point street era preference: adamlink wins over a nearer nwb street', async () => {
-    await place('adam-s', 'street', 'adamlink', 'Adam St', 'LINESTRING(119950 485040, 120050 485040)'); // 40m
-    await place('nwb-s', 'street', 'nwb', 'NWB St', 'LINESTRING(119950 485020, 120050 485020)');        // 20m, nearer
+  test('point street era fit: a street known to have existed at the date wins over a nearer undated one', async () => {
+    await place('adam-s', 'street', 'adamlink', 'Adam St', 'LINESTRING(119950 485040, 120050 485040)', '1850-01-01', null); // 40m, dated
+    await place('nwb-s', 'street', 'nwb', 'NWB St', 'LINESTRING(119950 485020, 120050 485020)');                          // 20m, nearer, no years
     expect(pickFinest(await point(Q, '1920-01-01', '1920-01-01'))?.placeId).toBe('adam-s');
+    await place('adam-u', 'street', 'adamlink', 'Undated St', 'LINESTRING(119950 485030, 120050 485030)');               // 30m, no years either
+    expect(pickFinest(await point(Q, '1920-01-01', '1920-01-01'))?.placeId).toBe('adam-s');
+    await db.execute(sql`DELETE FROM place_geometry WHERE place_id = 'adam-s'`);
+    await db.execute(sql`DELETE FROM place WHERE id = 'adam-s'`);
+    expect(pickFinest(await point(Q, '1920-01-01', '1920-01-01'))?.placeId).toBe('nwb-s');
   });
 
   test('point granularity: address wins over street', async () => {
@@ -171,6 +177,52 @@ describe('feature → place resolution', () => {
     await place('s', 'street', 'adamlink', 'S', 'LINESTRING(119950 485040, 120050 485040)');
     await place('d', 'district', 'cbs', 'D', AREA);
     expect(pickFinest(await point(Q, '1990-01-01', '1990-01-01'))?.placeId).toBe('s');
+  });
+
+  // ── existence: a lifespan type is a candidate only while it existed; a vintage prefers its version in force ──
+  test('point existence: a street outside its period is not a candidate, one within is', async () => {
+    await place('later-s', 'street', 'adamlink', 'Later St', 'LINESTRING(119950 485020, 120050 485020)', '1965-01-01', null);
+    expect(pickFinest(await point(Q, '1920-01-01', '1920-01-01'))).toBeUndefined();
+    await place('then-s', 'street', 'adamlink', 'Then St', 'LINESTRING(119950 485040, 120050 485040)', '1900-01-01', '1930-01-01');
+    expect(pickFinest(await point(Q, '1920-01-01', '1920-01-01'))?.placeId).toBe('then-s');
+  });
+
+  test('name existence: a name two streets bore in different periods resolves to the one that existed', async () => {
+    await place('old-lg', 'street', 'adamlink', 'Leprozengracht', 'LINESTRING(119950 485040, 120050 485040)', '1600-01-01', '1883-01-01');
+    await place('new-lg', 'street', 'adamlink', 'Leprozengracht', 'LINESTRING(119950 485020, 120050 485020)', '1950-01-01', null);
+    expect(await inferByName(nkey('Leprozengracht', '1870-01-01', '1870-01-01'))).toEqual({ placeId: 'old-lg' });
+    expect(await inferByName(nkey('Leprozengracht', '1960-01-01', '1960-01-01'))).toEqual({ placeId: 'new-lg' });
+    expect(await inferByName(nkey('Leprozengracht', '1920-01-01', '1920-01-01'))).toEqual({ skip: 'no-match' });
+  });
+
+  test('name vintage: two versions of an area resolve to the one in force, and stay ambiguous when neither is', async () => {
+    await place('j1', 'neighbourhood', 'adamlink', 'Jordaan', AREA, '1850-01-01', '1900-01-01');
+    await place('j2', 'neighbourhood', 'adamlink', 'Jordaan', AREA, '1900-01-01', null);
+    expect(await inferByName(nkey('Jordaan', '1920-01-01', '1920-01-01'))).toEqual({ placeId: 'j2' });
+    expect(await inferByName(nkey('Jordaan', '1870-01-01', '1870-01-01'))).toEqual({ placeId: 'j1' });
+    expect(await inferByName(nkey('Jordaan', '1700-01-01', '1700-01-01'))).toEqual({ skip: 'ambiguous' });
+  });
+
+  // ── a building: by coordinate only when the text names it ──
+  const FOOTPRINT = 'POLYGON((119980 484980, 120020 484980, 120020 485020, 119980 485020, 119980 484980))';
+  test('a building is no candidate by coordinate alone; named, it outranks the unnamed nearest address', async () => {
+    await place('gas', 'building', 'adamlink', 'Oostergasfabriek', FOOTPRINT, '1887-01-01', null);
+    await place('kade', 'address', 'adamlink', 'Kade 21', 'POINT(120000 485000)');
+    const pool = await point(Q, '1920-01-01', '1920-01-01');
+    expect(pickFinest(dropEvidenceTypes(pool))?.placeId).toBe('kade');
+    const names = await getNamesForPlaces(['gas', 'kade']);
+    expect(pickFinest(confirmByText(pool, names, 'brand bij de Oostergasfabriek'))?.placeId).toBe('gas');
+    expect(pickFinest(confirmByText(pool, names, 'Kade 21, naast de Oostergasfabriek'))?.placeId).toBe('kade');
+    expect(pickFinest(confirmByText(pool, names, 'een brand in Oost'))?.placeId).toBe('kade');
+  });
+
+  test('a building counts only while it stood; without a footprint, by its point within the address cap', async () => {
+    await place('gone', 'building', 'adamlink', 'Paleis', FOOTPRINT, '1864-01-01', '1930-01-01');
+    expect((await point(Q, '1950-01-01', '1950-01-01')).map((c) => c.placeId)).toEqual([]);
+    expect((await point(Q, '1920-01-01', '1920-01-01')).map((c) => c.placeId)).toEqual(['gone']);
+    await place('lost', 'building', 'adamlink', 'Haasje', 'POINT(120020 485000)', null, '1925-01-01'); // 20m, no footprint
+    await place('far', 'building', 'adamlink', 'Ver', 'POINT(120040 485000)', null, null);             // 40m
+    expect((await point(Q, '1920-01-01', '1920-01-01')).map((c) => c.placeId).sort()).toEqual(['gone', 'lost']);
   });
 
   // ── §5: dirty name strings ──

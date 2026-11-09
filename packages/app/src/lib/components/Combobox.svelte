@@ -151,7 +151,10 @@
 <!-- m-0 p-0 inset-auto: reset UA popover styles -->
 <div
 	{...combobox.content}
-	class="z-50 m-0 p-0 inset-auto w-max max-w-[min(64rem,calc(100vw-1.5rem))] bg-atm-sand border border-atm-sand-border rounded-sm shadow-md overflow-hidden divide-y divide-atm-gold {options.length === 0 ? 'hidden' : ''}"
+	class="z-50 m-0 p-0 inset-auto w-max max-w-[min(64rem,calc(100vw-1.5rem))] bg-atm-sand border border-atm-sand-border rounded-sm shadow-md overflow-hidden divide-y divide-atm-gold {options.length ===
+	0
+		? 'hidden'
+		: ''}"
 >
 	{@render children(getOption)}
 </div>

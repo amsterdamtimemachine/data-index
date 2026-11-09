@@ -8,7 +8,7 @@ import { sql } from 'drizzle-orm';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
-import { parseAdamlinkStreets } from '../etl/sources/adamlink-streets';
+import { parseAdamlinkStreets } from '../etl/sources/adamlink-places';
 import { rebuildIndex } from '../etl/post-process/rebuild-index';
 import { getCandidatesByName } from '../etl/places/place-candidates';
 import { searchPlaces } from '../queries/place-search';
@@ -105,7 +105,7 @@ describe('street name aliases', () => {
 
   test('the search returns the window, so two streets sharing a name can be told apart', async () => {
     const matches = await searchPlaces('Deventer Houtmarkt');
-    expect(matches.find(m => m.placeId === MEDIEVAL)?.geometryWindow).toEqual(['1380-01-01', '1663-01-01']);
+    expect(matches.find(m => m.placeId === MEDIEVAL)?.geometryWindow).toEqual(['1380-01-01', '1664-01-01']);
     expect(matches.find(m => m.placeId === SQUARE)?.geometryWindow).toEqual(['1873-01-01', null]);
   });
 

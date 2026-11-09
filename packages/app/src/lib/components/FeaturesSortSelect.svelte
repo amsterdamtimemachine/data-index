@@ -1,7 +1,3 @@
-<script lang="ts" module>
-	export { UI_SORT_MODES, type UiSortMode } from '#lib/utils/sort-modes.js';
-</script>
-
 <script lang="ts">
 	import Select, { type SelectOption } from '#lib/components/Select.svelte';
 	import Button from '#lib/components/Button.svelte';
@@ -13,33 +9,27 @@
 		value: UiSortMode;
 		onChange: (mode: UiSortMode) => void;
 		onShuffle: () => void;
-		// a search term or a tag selection is active: offer bestMatch (rank by match quality)
-		matchActive?: boolean;
 	};
-	let { value, onChange, onShuffle, matchActive = false }: Props = $props();
+	let { value, onChange, onShuffle }: Props = $props();
 
-	const OPTIONS: SelectOption<UiSortMode>[] = [
+	const options: SelectOption<UiSortMode>[] = [
 		{ value: 'sample', label: translate('sortSample') },
 		{ value: 'spatial', label: translate('sortSpatial') },
 		{ value: 'temporal', label: translate('sortTemporal') },
 		{ value: 'oldest', label: translate('sortOldest') },
 		{ value: 'newest', label: translate('sortNewest') }
 	];
-
-	// also offered while it IS the value (a URL can carry sort=bestMatch without a
-	// term or tags), so the select never holds a value it can't display
-	const options = $derived.by(() => {
-		if (matchActive || value === 'bestMatch') {
-			return [{ value: 'bestMatch' as UiSortMode, label: translate('sortBestMatch') }, ...OPTIONS];
-		}
-		return OPTIONS;
-	});
 </script>
 
 <div class="flex items-center gap-2">
 	<span class="text-base text-gray-700">{translate('sortLabel')}</span>
 	<Select {options} {value} {onChange} aria-label={translate('sortLabel')} />
 	{#if value === 'sample'}
-		<Button icon={ArrowsClockwise} onclick={onShuffle} size={16} aria-label={translate('reshuffle')} />
+		<Button
+			icon={ArrowsClockwise}
+			onclick={onShuffle}
+			size={16}
+			aria-label={translate('reshuffle')}
+		/>
 	{/if}
 </div>

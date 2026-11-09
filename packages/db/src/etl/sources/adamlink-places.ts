@@ -1,8 +1,9 @@
 /**
- * Shared parsing of the Adamlink straten TTL, used by both the `streets` source
- * (native streets, which have geometry) and the `nwb-streets` source (which backfills
- * geometry-less streets from NWB by bagOrl). Kept in one place so the geometry pick,
- * the name extraction, and the owl:sameAs bagOrl crosswalk never drift apart.
+ * Shared parsing of the Adamlink place TTLs (straten, gebouwen), used by the `streets`
+ * source (native streets, which have geometry), the `nwb-streets` source (which
+ * backfills geometry-less streets from NWB by bagOrl) and the `buildings` source. Kept
+ * in one place so the geometry pick, the name extraction, and the owl:sameAs BAG
+ * crosswalks never drift apart.
  */
 import { Parser } from 'n3';
 import { createNameWriter } from '../writers/place-writer';
@@ -15,16 +16,18 @@ export interface StreetName {
   alias: boolean;
 }
 
-export interface AdamlinkStreet {
+export interface AdamlinkPlace {
   uri: string;
   prefLabel: string;
   names: StreetName[];
-  wkt: string | null;    // current geometry, or null when Adamlink carries no line
+  wkt: string | null;    // current geometry, or null when Adamlink carries none
   bagOrl: string | null; // BAG openbare-ruimte id (owl:sameAs), or null when uncrosswalkable
-  // the street's existence as Adamlink dates it (year strings), or null
+  bagPand: string | null; // BAG building id (owl:sameAs), a building's own
+  // the place's existence as Adamlink dates it (year strings), or null
   since: string | null;
   until: string | null;
 }
+export type AdamlinkStreet = AdamlinkPlace;
 
 type Pred = { predicate: string; object: string };
 
@@ -73,25 +76,25 @@ function resolveNames(preds: Pred[], subjects: Map<string, Pred[]>, prefLabel: s
   return names;
 }
 
-function resolveBagOrl(preds: Pred[]): string | null {
+function resolveBagId(preds: Pred[], pattern: RegExp): string | null {
   for (const p of preds) {
     if (!p.predicate.endsWith('sameAs')) continue;
-    const m = p.object.match(/openbare-ruimte\/(\d{16})/);
+    const m = p.object.match(pattern);
     if (m) return m[1];
   }
   return null;
 }
 
-export function parseAdamlinkStreets(ttl: string): AdamlinkStreet[] {
+export function parseAdamlinkPlaces(ttl: string, kind: 'street' | 'building'): AdamlinkPlace[] {
   const subjects = new Map<string, Pred[]>();
   for (const q of new Parser().parse(ttl)) {
     if (!subjects.has(q.subject.value)) subjects.set(q.subject.value, []);
     subjects.get(q.subject.value)!.push({ predicate: q.predicate.value, object: q.object.value });
   }
 
-  const out: AdamlinkStreet[] = [];
+  const out: AdamlinkPlace[] = [];
   for (const uri of subjects.keys()) {
-    if (!uri.includes('/geo/street/')) continue;
+    if (!uri.includes(`/geo/${kind}/`)) continue;
     const preds = subjects.get(uri)!;
     const prefLabel = preds.find(p => p.predicate.endsWith('prefLabel'))?.object;
     if (!prefLabel) continue;
@@ -100,7 +103,8 @@ export function parseAdamlinkStreets(ttl: string): AdamlinkStreet[] {
       prefLabel,
       names: resolveNames(preds, subjects, prefLabel),
       wkt: resolveWkt(preds, subjects),
-      bagOrl: resolveBagOrl(preds),
+      bagOrl: resolveBagId(preds, /openbare-ruimte\/(\d{16})/),
+      bagPand: resolveBagId(preds, /\/pand\/(\d{16})/),
       // the street's own timestamps; nested name and geometry nodes are separate subjects
       since: preds.find(p => p.predicate.endsWith('hasEarliestBeginTimeStamp'))?.object || null,
       until: preds.find(p => p.predicate.endsWith('hasLatestEndTimeStamp'))?.object || null,
@@ -109,30 +113,41 @@ export function parseAdamlinkStreets(ttl: string): AdamlinkStreet[] {
   return out;
 }
 
-// Write the name variants (place_historical_name) for a set of streets, dated and
-// undated alike: a row without a period is a label, and readers that need a period
-// (resolution, canonicalisation) skip it by that. Shared so backfilled streets get the
-// same names native streets do.
-/** A street's existence window as place_geometry dates: year strings to first-of-January dates. */
-export function streetWindow(s: Pick<AdamlinkStreet, 'since' | 'until'>): { since: string | null; until: string | null } {
+export function parseAdamlinkStreets(ttl: string): AdamlinkStreet[] {
+  return parseAdamlinkPlaces(ttl, 'street');
+}
+
+/**
+ * A place's existence window as place_geometry dates. Years become first-of-January
+ * dates; the end year is still a year the place existed, and until is exclusive, so
+ * it ends on the first day of the year after.
+ */
+export function existenceWindow(s: Pick<AdamlinkPlace, 'since' | 'until'>): { since: string | null; until: string | null } {
   let since: string | null = null;
   if (s.since) {
     since = `${s.since}-01-01`;
   }
   let until: string | null = null;
   if (s.until) {
-    until = `${s.until}-01-01`;
+    until = `${Number(s.until) + 1}-01-01`;
   }
   return { since, until };
 }
 
-export async function insertStreetNames(
-  streets: Pick<AdamlinkStreet, 'uri' | 'names'>[],
+// Write the name variants (place_historical_name) for a set of places, dated and
+// undated alike: a row without a period is a label, and readers that need a period
+// (resolution, canonicalisation) skip it by that. Shared so backfilled streets get the
+// same names native streets do, and buildings the same as streets. A name's years
+// become first-of-January dates as given, unlike an existence window (existenceWindow):
+// a rename's until is its successor's since, a handover, not a year still held.
+export async function insertAdamlinkNames(
+  places: Pick<AdamlinkPlace, 'uri' | 'names'>[],
+  source: string,
   batchSize = 100,
 ): Promise<number> {
   const writer = createNameWriter(batchSize);
   let count = 0;
-  for (const s of streets) {
+  for (const s of places) {
     // dated names keep their #name-<n> ids (URLs restore a match by name id); aliases
     // are numbered on their own so adding them never shifts an existing id
     let dated = 0;
@@ -151,7 +166,7 @@ export async function insertStreetNames(
         name: n.label,
         since: n.since ? `${n.since}-01-01` : null,
         until: n.until ? `${n.until}-01-01` : null,
-        source: 'adamlink-straten',
+        source,
       });
       count++;
       await writer.flushIfFull();

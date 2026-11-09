@@ -11,27 +11,38 @@
  */
 import { db } from '../../client';
 import { sql, type SQL } from 'drizzle-orm/sql';
-import { ADDRESS_MAX_DISTANCE_M, STREET_MAX_DISTANCE_M, ERA_CUTOFF, CURRENT_ANCHOR, type PlaceType, type PlaceSource } from '@atm/shared';
+import { POINT_CAPS_M, ERA_CUTOFF, CURRENT_ANCHOR, PLACE_TYPES, PLACE_TYPE_SPECS, type PlaceType, type PlaceSource } from '@atm/shared';
 import { wktToRd, houseNumber } from '../sql';
 
 export type { PlaceType, PlaceSource };
 
-// address > street > neighbourhood > district — the finest-first priority
-export const GRANULARITIES: PlaceType[] = ['address', 'street', 'neighbourhood', 'district'];
+// the finest-first priority, as the registry orders it
+export const GRANULARITIES = PLACE_TYPES;
+// how a point finds each type: the nearest within its cap, or the place containing it
+export const DISTANCE_TYPES = PLACE_TYPES.filter((t) => PLACE_TYPE_SPECS[t].point === 'distance');
+export const CONTAINMENT_TYPES = PLACE_TYPES.filter((t) => PLACE_TYPE_SPECS[t].point === 'containment');
+// a type that existed for a period and is no candidate outside it
+export const LIFESPAN_TYPES = PLACE_TYPES.filter((t) => PLACE_TYPE_SPECS[t].time === 'lifespan');
+// a version of a division: preferred in its period, never excluded
+export const VINTAGE_TYPES = PLACE_TYPES.filter((t) => PLACE_TYPE_SPECS[t].time === 'vintage');
+// a candidate by coordinate only when the feature's text names it
+export const EVIDENCE_TYPES = PLACE_TYPES.filter((t) => PLACE_TYPE_SPECS[t].needsEvidence);
 
 // ── tuning knobs ──────────────────────────────────────────────────────────────
 // ERA_CUTOFF (historical↔current address cut) and CURRENT_ANCHOR (present-day reference
 // for current-name scoring) are env-configurable via @atm/shared; re-exported here.
 export { ERA_CUTOFF, CURRENT_ANCHOR };
 
-// Proximity caps (metres, RD/28992) — env-configurable via @atm/shared (defaults 30/50);
-// re-exported here. Areas match by containment, so they have no radius.
-export { ADDRESS_MAX_DISTANCE_M, STREET_MAX_DISTANCE_M };
-export const MAX_DISTANCE_M: Record<PlaceType, number | null> = {
-  address: ADDRESS_MAX_DISTANCE_M, street: STREET_MAX_DISTANCE_M, neighbourhood: null, district: null,
-};
+// Proximity caps (metres, RD/28992) by type, from POINT_CAPS_M in @atm/shared
+// (env-configurable, defaults 30/50). An area matches by containment, so it has none.
+export const MAX_DISTANCE_M = Object.fromEntries(
+  PLACE_TYPES.map((t) => [t, POINT_CAPS_M[t] ?? null])
+) as Record<PlaceType, number | null>;
 // Widest per-type cap; constant keeps ST_DWithin index-usable (exact cap is a post-filter).
-export const MAX_POINT_CAP_M = Math.max(ADDRESS_MAX_DISTANCE_M, STREET_MAX_DISTANCE_M);
+const CAPPED_TYPES = PLACE_TYPES.filter((t) => POINT_CAPS_M[t] !== undefined);
+export const MAX_POINT_CAP_M = Math.max(...CAPPED_TYPES.map((t) => POINT_CAPS_M[t]!));
+// the cap of the row's type; null for a type without one
+const capByType = sql`CASE p.type ${sql.join(CAPPED_TYPES.map((t) => sql`WHEN ${t} THEN ${POINT_CAPS_M[t]}::float8`), sql` `)} END`;
 
 export interface Candidate {
   placeId: string; name: string | null; type: PlaceType; source: PlaceSource;
@@ -41,6 +52,8 @@ export interface Candidate {
 export interface NameCandidate {
   placeId: string; name: string | null; type: PlaceType; source: PlaceSource;
   via: 'current' | 'historical'; gapDays: number; eraFit: boolean;
+  // the place's own period holds the feature date (true without a period)
+  inPeriod: boolean;
 }
 
 // ── temporal terms (the spec §4 vocabulary) — each reads the surrounding row's
@@ -48,8 +61,9 @@ export interface NameCandidate {
 
 // [since, until) overlaps the feature range [start, end]; until is EXCLUSIVE,
 // matching place_geometry (a rename's until = successor's since is a clean handoff).
-const windowOverlaps = (start: string, end: string) =>
-  sql`((since IS NULL OR since <= ${end}::date) AND (until IS NULL OR until > ${start}::date))`;
+// The columns default to the surrounding row's; a query joining two windows names them.
+const windowOverlaps = (start: string, end: string, since: SQL = sql`since`, until: SQL = sql`until`) =>
+  sql`((${since} IS NULL OR ${since} <= ${end}::date) AND (${until} IS NULL OR ${until} > ${start}::date))`;
 
 // Days of overlap between the feature range and [since, until), clamped at 0 —
 // ranks containing areas by how much of the range their vintage covers.
@@ -74,10 +88,17 @@ const addressEraFit = (start: string, end: string) => sql`CASE source
 
 // ══ FETCHERS ══════════════════════════════════════════════════════════════════
 
-// ── POINT signal: every address/street within cap, nearest first, + containing areas ──
+// ── POINT signal: every distance-found type within its cap, nearest first, + the areas
+// and buildings containing the point ──
 // Address era-fit is OVERLAP-based: adamlink if the range reaches before ERA_CUTOFF,
 // bag if it reaches on/after it — a range straddling 1943 surfaces both, distance decides.
-// Area era-fit is [start,end] ⋂ [since,until); overlap length ranks among containers.
+// A lifespan type (a street, a building) is only a candidate while it existed; one
+// whose existence is dated fits the era, one without years (NWB, or an Adamlink street
+// without them) does not, and ranks after a street known to have stood there.
+// Area era-fit is [start,end] ⋂ [since,until); overlap length ranks among containers,
+// and a version out of its period still stands when none is in it (a vintage).
+// A building takes the point its footprint contains, or, known by a point alone, one
+// within its cap; whether it may be linked at all is the text's to say (confirmByText).
 export async function getCandidatesByPoint(wkt: string, start: string, end: string, srid = 4326): Promise<Candidate[]> {
   const rows = await db.execute<{
     place_id: string; name: string | null; type: PlaceType; source: PlaceSource;
@@ -85,32 +106,37 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
   }>(sql`
     WITH q AS (SELECT ${wktToRd(wkt, srid)} AS g),
     near AS (
-      SELECT p.id, p.name, p.type, p.source, ST_Distance(pg.geometry, q.g) AS dist
+      SELECT p.id, p.name, p.type, p.source, (pg.since IS NOT NULL OR pg.until IS NOT NULL) AS dated,
+             ST_Distance(pg.geometry, q.g) AS dist
       FROM q, place_geometry pg JOIN place p ON p.id = pg.place_id
-      WHERE p.type IN ('address', 'street')
+      WHERE p.type IN ${DISTANCE_TYPES}
+        AND (p.type NOT IN ${LIFESPAN_TYPES} OR ${windowOverlaps(start, end, sql`pg.since`, sql`pg.until`)})
         AND ST_DWithin(pg.geometry, q.g, ${MAX_POINT_CAP_M}::float8)
-        AND ST_Distance(pg.geometry, q.g) <=
-              CASE p.type WHEN 'address' THEN ${ADDRESS_MAX_DISTANCE_M}::float8 ELSE ${STREET_MAX_DISTANCE_M}::float8 END
-      ORDER BY p.type, p.source, pg.geometry <-> q.g
+        AND ST_Distance(pg.geometry, q.g) <= ${capByType}
+      -- id last: two units of one building sit at the same point, and the pick must not vary per run
+      ORDER BY p.type, p.source, pg.geometry <-> q.g, p.id
     ),
-    area AS (
-      SELECT p.id, p.name, p.type, p.source, pg.since, pg.until
+    within AS (
+      SELECT p.id, p.name, p.type, p.source, pg.since, pg.until, ST_Distance(pg.geometry, q.g) AS dist
       FROM q, place_geometry pg JOIN place p ON p.id = pg.place_id
-      WHERE p.type IN ('neighbourhood', 'district') AND ST_Intersects(pg.geometry, q.g)
+      WHERE p.type IN ${CONTAINMENT_TYPES}
+        AND (ST_Intersects(pg.geometry, q.g)
+             OR (GeometryType(pg.geometry) = 'POINT' AND ST_DWithin(pg.geometry, q.g, ${capByType})))
+        AND (p.type NOT IN ${LIFESPAN_TYPES} OR ${windowOverlaps(start, end, sql`pg.since`, sql`pg.until`)})
     )
     SELECT id AS place_id, name, type, source, dist, NULL::int AS overlap_days,
-           CASE type
-             WHEN 'address' THEN ${addressEraFit(start, end)}
-             WHEN 'street'  THEN source = 'adamlink'
+           CASE WHEN type = 'address' THEN ${addressEraFit(start, end)}
+                WHEN type IN ${LIFESPAN_TYPES} THEN dated
+                ELSE TRUE
            END AS era_fit,
-           FALSE AS dated
+           dated
     FROM near
     UNION ALL
-    SELECT id, name, type, source, 0::float AS dist,
-           ${overlapDays(start, end)} AS overlap_days,
-           ${windowOverlaps(start, end)} AS era_fit,
+    SELECT id, name, type, source, dist,
+           CASE WHEN type IN ${VINTAGE_TYPES} THEN ${overlapDays(start, end)} END AS overlap_days,
+           CASE WHEN type IN ${VINTAGE_TYPES} THEN ${windowOverlaps(start, end)} ELSE TRUE END AS era_fit,
            (since IS NOT NULL OR until IS NOT NULL) AS dated
-    FROM area
+    FROM within
   `);
   return rows.rows.map((r) => ({
     placeId: r.place_id, name: r.name, type: r.type, source: r.source,
@@ -120,37 +146,46 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
 }
 
 // ── NAME signal: match current + dated historical names; nearest-by-overlap wins.
-// An undated historical row is a label (an alias), not an observation: skipped. ──
+// An undated historical row is a label (an alias), not an observation: skipped.
+// A lifespan type is only a candidate while it existed; a vintage out of its period
+// stays, marked, so the version in force wins a tie (resolveNamePool). ──
 // gap = 0 if the feature range [start,end] overlaps the name window [since,until) — until
 // is EXCLUSIVE, matching place_geometry (a rename's until = successor's since is a clean
 // handoff). Else the days to the nearest end (GREATEST skips NULL open ends automatically).
 export async function getCandidatesByName(name: string, start: string, end: string): Promise<NameCandidate[]> {
+  const inPeriod = windowOverlaps(start, end, sql`pg.since`, sql`pg.until`);
   const rows = await db.execute<{
     place_id: string; name: string | null; type: PlaceType;
-    source: PlaceSource; via: 'current' | 'historical'; gap_days: number; era_fit: boolean;
+    source: PlaceSource; via: 'current' | 'historical'; gap_days: number; era_fit: boolean; in_period: boolean;
   }>(sql`
     WITH cand AS (
-      SELECT p.id, p.name, p.type, p.source, 'current' AS via, NULL::date AS since, NULL::date AS until
-      FROM place p WHERE LOWER(p.name) = LOWER(${name})
+      SELECT p.id, p.name, p.type, p.source, 'current' AS via, NULL::date AS since, NULL::date AS until,
+             ${inPeriod} AS in_period
+      FROM place p LEFT JOIN place_geometry pg ON pg.place_id = p.id
+      WHERE LOWER(p.name) = LOWER(${name})
+        AND (p.type NOT IN ${LIFESPAN_TYPES} OR ${inPeriod})
       UNION ALL
-      SELECT p.id, hn.name, p.type, p.source, 'historical' AS via, hn.since, hn.until
+      SELECT p.id, hn.name, p.type, p.source, 'historical' AS via, hn.since, hn.until,
+             ${inPeriod} AS in_period
       FROM place_historical_name hn JOIN place p ON p.id = hn.place_id
+      LEFT JOIN place_geometry pg ON pg.place_id = p.id
       WHERE LOWER(hn.name) = LOWER(${name})
         AND (hn.since IS NOT NULL OR hn.until IS NOT NULL)
+        AND (p.type NOT IN ${LIFESPAN_TYPES} OR ${inPeriod})
     ),
     scored AS (
-      SELECT id, name, type, source, via,
+      SELECT id, name, type, source, via, in_period,
              ${nameGapDays(start, end)} AS gap_days,
              CASE WHEN type = 'address' THEN ${addressEraFit(start, end)} ELSE TRUE END AS era_fit
       FROM cand
     )
-    SELECT DISTINCT ON (id) id AS place_id, name, type, source, via, gap_days, era_fit
+    SELECT DISTINCT ON (id) id AS place_id, name, type, source, via, gap_days, era_fit, in_period
     FROM scored
     ORDER BY id, gap_days   -- keep each place's nearest-in-time observation
   `);
   return rows.rows.map((r) => ({
     placeId: r.place_id, name: r.name, type: r.type,
-    source: r.source, via: r.via, gapDays: Number(r.gap_days), eraFit: r.era_fit,
+    source: r.source, via: r.via, gapDays: Number(r.gap_days), eraFit: r.era_fit, inPeriod: r.in_period,
   }));
 }
 
@@ -256,8 +291,9 @@ export function finestResolvable(best: Partial<Record<PlaceType, unknown>>): Pla
   return GRANULARITIES.find((t) => best[t]);
 }
 
-// Name-pool selection (req 13): unique top by gap → finest type. Empty pool → none;
-// a top-two tie on (gap, type) is ambiguous (e.g. Amsterdam + Weesp Kerkstraat) → skip.
+// Name-pool selection (req 13): unique top by gap → finest type → the version in its
+// period. Empty pool → none; a top-two tie on all three is ambiguous (e.g. Amsterdam +
+// Weesp Kerkstraat) → skip.
 export type NameResolution =
   | { kind: 'resolved'; winner: NameCandidate }
   | { kind: 'ambiguous'; tied: NameCandidate[] }
@@ -269,10 +305,13 @@ export function resolveNamePool(pool: NameCandidate[]): NameResolution {
     if (a.gapDays !== b.gapDays) {
       return a.gapDays - b.gapDays;
     }
-    return GRANULARITIES.indexOf(a.type) - GRANULARITIES.indexOf(b.type);
+    if (a.type !== b.type) {
+      return GRANULARITIES.indexOf(a.type) - GRANULARITIES.indexOf(b.type);
+    }
+    return Number(b.inPeriod) - Number(a.inPeriod);
   });
   const top = sorted[0];
-  const tied = sorted.filter((c) => c.gapDays === top.gapDays && c.type === top.type);
+  const tied = sorted.filter((c) => c.gapDays === top.gapDays && c.type === top.type && c.inPeriod === top.inPeriod);
   return tied.length > 1 ? { kind: 'ambiguous', tied } : { kind: 'resolved', winner: top };
 }
 

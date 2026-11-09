@@ -3,7 +3,12 @@ import { ToggleGroup } from './toggle-group';
 
 function group(selected: string[], requireOne = false) {
 	const onChange = vi.fn();
-	const g = new ToggleGroup({ selected: () => selected, onChange, requireOne: () => requireOne, labelledBy: () => 'h1' });
+	const g = new ToggleGroup({
+		selected: () => selected,
+		onChange,
+		requireOne: () => requireOne,
+		labelledBy: () => 'h1'
+	});
 	return { g, onChange };
 }
 
@@ -11,8 +16,16 @@ describe('ToggleGroup builder', () => {
 	test('a labelled group of checkboxes whose checked state follows the selection', () => {
 		const { g } = group(['a']);
 		expect(g.root).toEqual({ role: 'group', 'aria-labelledby': 'h1' });
-		expect(g.item('a')).toMatchObject({ role: 'checkbox', 'aria-checked': true, 'data-state': 'on' });
-		expect(g.item('b')).toMatchObject({ role: 'checkbox', 'aria-checked': false, 'data-state': 'off' });
+		expect(g.item('a')).toMatchObject({
+			role: 'checkbox',
+			'aria-checked': true,
+			'data-state': 'on'
+		});
+		expect(g.item('b')).toMatchObject({
+			role: 'checkbox',
+			'aria-checked': false,
+			'data-state': 'off'
+		});
 		expect(g.item('c', true)).toMatchObject({ disabled: true, 'data-disabled': '' });
 	});
 

@@ -1,5 +1,6 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { historicalLabelSql } from './historical-label';
+import { placeTypeRank } from './place-rank';
 import type {
   RecordType,
   PlaceType,
@@ -11,15 +12,15 @@ import type {
   FeatureResult,
   FeaturesResponse,
   Entity,
+  SearchHit,
 } from '@atm/shared';
-import { computeTimeSlices } from './time-slices';
+import { getTimeSliceDateRange } from './time-slices';
 import { getRecordTypes } from './record-types';
 import { getGridConfig } from './grid-config';
 import { featureYearOverlap } from './time-filter';
 import { tagMatch, tagMatchCount } from './tag-filter';
-import { UnknownTimeSliceError } from './errors';
 import { cellRangeCondition, placeCellsCondition, displayGrid, displayCellBaseRange } from './cell-features';
-import { searchMatch, searchRank } from './feature-search';
+import { searchMatch, foundBy } from './feature-search';
 import { db } from '../client';
 import { featureToPlace, place, placeGeometry, placeCells } from '../schema';
 import type { CountRow } from '../row-types';
@@ -45,6 +46,7 @@ type FeatureRow = {
   relation_id: string | null;
   name: string | null;
   historical_label: string | null;
+  found_by: SearchHit[] | null;
   place_source: PlaceSource | null;
   place_url: string | null;
   place_provider_label: string | null;
@@ -113,17 +115,6 @@ export async function boundsToBaseCellRange(bounds: HeatmapCellBounds): Promise<
  * Get date range from time slice key; throws UnknownTimeSliceError for a key that
  * matches no slice.
  */
-async function getTimeSliceDateRange(timeSliceKey: string): Promise<{ startYear: number; endYear: number }> {
-  const timeSlices = await computeTimeSlices();
-  const timeSlice = timeSlices.find(ts => ts.key === timeSliceKey);
-  if (!timeSlice) {
-    throw new UnknownTimeSliceError(timeSliceKey);
-  }
-  return {
-    startYear: timeSlice.startYear,
-    endYear: timeSlice.endYear
-  };
-}
 
 // ── sort plans ────────────────────────────────────────────────────────────────
 // The editorial modes interleave record types; sample, spatialFrequency and
@@ -190,18 +181,10 @@ function sortPlan(
     }
     return { rankedCte: doubleRotationCte(laneKey), orderBy: INTERLEAVED_ORDER };
   }
-  if (sort === 'date') {
-    let orderBy = sql`start_date DESC NULLS LAST, id`;
-    if (sortDirection === 'asc') {
-      orderBy = sql`start_date ASC NULLS LAST, id`;
-    }
-    return { rankedCte: sql`ranked AS (SELECT * FROM filtered)`, orderBy };
-  }
-  // bestMatch: flat match-quality order: selected tags carried, then ts_rank against
-  // the search term; without either every key is 0 and this degrades to date order
-  let orderBy = sql`tag_matches DESC, match_score DESC, start_date DESC NULLS LAST, id`;
+  // date: flat chronology, no rotation
+  let orderBy = sql`start_date DESC NULLS LAST, id`;
   if (sortDirection === 'asc') {
-    orderBy = sql`tag_matches ASC, match_score ASC, start_date ASC NULLS LAST, id`;
+    orderBy = sql`start_date ASC NULLS LAST, id`;
   }
   return { rankedCte: sql`ranked AS (SELECT * FROM filtered)`, orderBy };
 }
@@ -222,6 +205,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     sortDirection = 'desc',
     seed = '',
     searchQuery,
+    featureId,
+    featurePlaceId,
     page = 1,
     pageSize = 50
   } = query;
@@ -249,13 +234,15 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
 
   // Resolve the area to one population predicate; everything below is agnostic
   // of which kind it was.
-  let areaCondition: SQL;
-  if (area.kind === 'bounds') {
+  let areaCondition: SQL = sql`TRUE`;
+  if (area?.kind === 'bounds') {
     const cellRange = await boundsToBaseCellRange(area.bounds);
     areaCondition = cellRangeCondition(sql`pc.cell_x`, sql`pc.cell_y`, cellRange);
-  } else {
+  } else if (area) {
     const grid = await displayGrid(area.cols);
     areaCondition = await placeCellsCondition(sql`pc.cell_x`, sql`pc.cell_y`, area.placeId, grid);
+  } else if (!featureId) {
+    throw new Error('getFeatures needs a population or a feature');
   }
 
   const typeCondition = sql`f.record_type IN ${types}`;
@@ -287,10 +274,20 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   }
 
   let searchCondition: SQL = sql`TRUE`;
-  let matchScoreExpr: SQL = sql`0::float`;
+  // the card's explanation of the hit, for the listed rows only
+  let foundByExpr: SQL = sql`NULL`;
   if (searchQuery) {
-    searchCondition = searchMatch(sql`f.label_tsv`, searchQuery);
-    matchScoreExpr = searchRank(sql`f.label_tsv`, searchQuery);
+    searchCondition = searchMatch(sql`f.search_tsv`, searchQuery);
+    foundByExpr = foundBy(sql`f`, searchQuery);
+  }
+
+  // one feature of the population, at its card's place when given
+  let featureCondition: SQL = sql`TRUE`;
+  if (featureId) {
+    featureCondition = sql`f.id = ${featureId}`;
+    if (featurePlaceId) {
+      featureCondition = sql`f.id = ${featureId} AND fp.place_id = ${featurePlaceId}`;
+    }
   }
 
   // The join spine and filter bundle the count and page queries MUST share —
@@ -306,7 +303,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       AND ${dateCondition}
       AND ${tagCondition}
       AND ${placeTypeCondition}
-      AND ${searchCondition}`;
+      AND ${searchCondition}
+      AND ${featureCondition}`;
 
   // Get total count
   const countResult = await db.execute<CountRow>(sql`
@@ -335,7 +333,6 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         f.start_date,
         f.end_date,
         pg.spatial_frequency,
-        ${matchScoreExpr} as match_score,
         ${tagMatchesExpr} as tag_matches,
         p.type as place_type,
         p.id as place_id,
@@ -349,7 +346,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       -- place_type and spatial_frequency — varied per execution, shifting page
       -- boundaries between otherwise identical requests.
       ORDER BY f.id,
-        CASE p.type WHEN 'address' THEN 0 WHEN 'street' THEN 1 WHEN 'neighbourhood' THEN 2 ELSE 3 END,
+        ${placeTypeRank(sql`p.type`)},
         p.id
     ),
     ${rankedCte},
@@ -381,6 +378,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       r.dated as relation_dated,
       p.name,
       ${historicalLabelSql(sql`page.place_id`, sql`page.place_type`, sql`page.start_date`, sql`page.end_date`)} as historical_label,
+      ${foundByExpr} as found_by,
       p.source as place_source,
       p.url as place_url,
       po.label as place_provider_label,
@@ -444,7 +442,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     placeProviderUrl: row.place_provider_url || undefined,
     geometryProviderLabel: row.geometry_provider_label || undefined,
     geometryProviderUrl: row.geometry_provider_url || undefined,
-    historicalLabel: row.historical_label || undefined
+    historicalLabel: row.historical_label || undefined,
+    foundBy: row.found_by || undefined
   }));
 
   return {

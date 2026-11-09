@@ -13,7 +13,16 @@
 		children?: import('svelte').Snippet;
 	}
 
-	let { level, depth, id, style, tabindex, autofocus, class: className, children }: Props = $props();
+	let {
+		level,
+		depth,
+		id,
+		style,
+		tabindex,
+		autofocus,
+		class: className,
+		children
+	}: Props = $props();
 
 	const headingLevel = $derived(depth ?? level ?? 1);
 

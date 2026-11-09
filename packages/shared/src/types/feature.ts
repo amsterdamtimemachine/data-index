@@ -12,10 +12,9 @@ export interface Classifier {
   url?: string;
 }
 
-// 'sample' and 'spatialFrequency' interleave record types and datasets (double
-// rotation); 'date' is flat chronology; 'bestMatch' is flat ts_rank order, only
-// meaningful with a searchQuery.
-export type FeaturesSortField = 'sample' | 'spatialFrequency' | 'datePrecision' | 'date' | 'bestMatch';
+// 'sample', 'spatialFrequency' and 'datePrecision' interleave record types and
+// datasets (double rotation); 'date' is flat chronology.
+export type FeaturesSortField = 'sample' | 'spatialFrequency' | 'datePrecision' | 'date';
 export type SortDirection = 'asc' | 'desc';
 export type TagOperator = 'AND' | 'OR';
 
@@ -88,28 +87,28 @@ export interface VenueEntity {
   address?: string;
 }
 
-/** A live act on a bill, as the source words it. */
+/** A live act on a programme, as the source words it. */
 export interface LiveActEntity {
   type: "LiveAct";
   name: string;
 }
 
-export type BillItem = MovieEntity | LiveActEntity;
+export type ProgrammeItem = MovieEntity | LiveActEntity;
 
-/** One programme at a venue on a date, with its bill in the source's order. */
+/** One programme at a venue on a date, with its items in the source's order. */
 interface ProgrammeEntity extends EntityBase {
   // source precision: YYYY-MM-DD, YYYY-MM or YYYY
   startDate: string;
   location: VenueEntity;
-  bill: BillItem[];
+  items: ProgrammeItem[];
 }
 
-/** A programme whose bill opens with a film; the title is that film. */
+/** A programme opening with a film; the title is that film. */
 export interface ScreeningEventEntity extends ProgrammeEntity {
   type: "ScreeningEvent";
 }
 
-/** A programme whose bill opens with a live act; the title is that act. */
+/** A programme opening with a live act; the title is that act. */
 export interface TheaterEventEntity extends ProgrammeEntity {
   type: "TheaterEvent";
 }
@@ -125,7 +124,6 @@ export interface BookEntity {
 export interface ExcerptMention {
   start: number;
   end: number;
-  quote: string;
 }
 
 /**
@@ -133,6 +131,14 @@ export interface ExcerptMention {
  * lines, the offsets of every mention of that place inside it, and whether the entry
  * continues before or after it.
  */
+// A drawing or picture on the diary page, as the source records it: the scan on the
+// Diaries IIIF server, the box on it ("x,y,w,h") and where it sits in the excerpt's text
+export interface ExcerptImage {
+  source: string;
+  region: string;
+  anchor: number;
+}
+
 export interface Excerpt {
   // the index place the entry was linked to for this mention; the card's key
   placeId?: string;
@@ -140,6 +146,8 @@ export interface Excerpt {
   truncatedBefore: boolean;
   truncatedAfter: boolean;
   mentions: ExcerptMention[];
+  // the images anchored within the text, in reading order; absent when there are none
+  images?: ExcerptImage[];
 }
 
 /**
@@ -161,10 +169,10 @@ export interface ManuscriptEntity extends EntityBase {
 export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity | ScreeningEventEntity | TheaterEventEntity | ManuscriptEntity;
 
 
-/**
- * Query parameters for fetching features
- */
-export type PlaceType = 'address' | 'street' | 'neighbourhood' | 'district';
+// the place types, as the registry in vocab orders them
+import type { PlaceType } from '../vocab/place-types';
+import type { SearchHit } from '../vocab/search-fields';
+export type { PlaceType };
 
 /** Where a place came from — Adamlink (historical) or a PDOK base registry. */
 export type PlaceSource = 'adamlink' | 'cbs' | 'nwb' | 'bag';
@@ -180,7 +188,8 @@ export type FeaturesArea =
   | { kind: 'place'; placeId: string; cols?: number };
 
 export interface FeaturesQuery {
-  area: FeaturesArea;
+  // the population; not needed when featureId names the feature
+  area?: FeaturesArea;
   recordTypes?: RecordType[];
   datasetIds?: string[];
   placeTypes?: PlaceType[];
@@ -191,9 +200,13 @@ export interface FeaturesQuery {
   sortDirection?: SortDirection;
   // Shuffle seed for sort='sample'; same seed = same order (stable pagination).
   seed?: string;
-  // Dutch FTS over feature labels (websearch syntax); also the ranking input for
-  // sort='bestMatch'.
+  // the text search (websearch syntax) over the title, the description and the
+  // entity's searchable fields
   searchQuery?: string;
+  // one feature, as the card the list showed: by its id, and at the place its card
+  // is at when it has several; within the population when one is given
+  featureId?: string;
+  featurePlaceId?: string;
   page?: number;
   pageSize?: number;
 }
@@ -230,6 +243,8 @@ export interface FeatureResult {
   relationDated?: boolean;
   displayName?: string;
   historicalLabel?: string;
+  // with a search active: the feature's values that match it, the matching words marked
+  foundBy?: SearchHit[];
   placeSource?: PlaceSource;
   placeUrl?: string;
   placeProviderLabel?: string;

@@ -22,23 +22,38 @@
 	const allPlaceTypes = $derived(status.metadata?.placeTypes ?? []);
 	const allDatasets = $derived(status.metadata?.datasets ?? []);
 
-	// a category that selects everything reads as everything, not as a list of picks
+	// a category that selects everything reads as everything, not as a list of picks; one
+	// with nothing selected reads as "geen"
 	const displayedRecordTypes = $derived.by(() => {
+		if (filters.recordTypes.length === 0) {
+			return [translate('nothing')];
+		}
 		if (selectsAll(filters.recordTypes, allRecordTypes)) {
 			return translateAll(allRecordTypes);
 		}
 		return translateAll(filters.recordTypes);
 	});
 	const displayedPlaceTypes = $derived.by(() => {
+		if (filters.placeTypes.length === 0) {
+			return [translate('nothing')];
+		}
 		if (selectsAll(filters.placeTypes, allPlaceTypes)) {
 			return translateAll(allPlaceTypes);
 		}
 		return translateAll(filters.placeTypes);
 	});
 	const displayedDatasets = $derived.by(() => {
+		if (filters.datasets.length === 0) {
+			return [translate('nothing')];
+		}
 		const label = new Map(allDatasets.map((d) => [d.id, d.label]));
 		let ids = filters.datasets;
-		if (selectsAll(filters.datasets, allDatasets.map((d) => d.id))) {
+		if (
+			selectsAll(
+				filters.datasets,
+				allDatasets.map((d) => d.id)
+			)
+		) {
 			ids = allDatasets.map((d) => d.id);
 		}
 		return ids.map((id) => label.get(id) || id);
@@ -59,7 +74,7 @@
 >
 	<div class="text-base font-sans text-black flex flex-wrap items-center gap-1">
 		<span>{translate('viewFilters')}</span>
-		{#each displayedRecordTypes as recordType, index}
+		{#each displayedRecordTypes as recordType, index (index)}
 			<Tag variant="selected-outline">{recordType}</Tag>
 			{#if index < displayedRecordTypes.length - 1}
 				<span>{translate('or')}</span>
@@ -67,7 +82,7 @@
 		{/each}
 		{#if displayedPlaceTypes.length > 0}
 			<span>{translate('statusAtScale')}</span>
-			{#each displayedPlaceTypes as placeType, index}
+			{#each displayedPlaceTypes as placeType, index (index)}
 				<Tag variant="selected-outline">{placeType}</Tag>
 				{#if index < displayedPlaceTypes.length - 1}
 					<span>{translate('or')}</span>
@@ -75,7 +90,7 @@
 			{/each}
 		{/if}
 		<span>{translate('statusInDatasets')}</span>
-		{#each displayedDatasets as dataset, index}
+		{#each displayedDatasets as dataset, index (index)}
 			<Tag variant="selected-outline">{dataset}</Tag>
 			{#if index < displayedDatasets.length - 1}
 				<span>{translate('and')}</span>
@@ -84,18 +99,21 @@
 		{#if selectedPlace}
 			<span>{translate('statusInCellsOf')}</span>
 			<Tag variant="selected-outline">
-				<span class="inline-flex align-[-2px] mr-1"><MapPin size={14} weight="bold" /></span>{formatPlaceTitle(selectedPlace)}
+				<span class="inline-flex align-[-2px] mr-1"><MapPin size={14} weight="bold" /></span
+				>{formatPlaceTitle(selectedPlace)}
 			</Tag>
 		{/if}
 		{#if searchQuery}
 			<span>{translate('statusWithSearch')}</span>
 			<Tag variant="selected-outline">
-				<span class="inline-flex align-[-2px] mr-1"><MagnifyingGlass size={14} weight="bold" /></span>{searchQuery}
+				<span class="inline-flex align-[-2px] mr-1"
+					><MagnifyingGlass size={14} weight="bold" /></span
+				>{searchQuery}
 			</Tag>
 		{/if}
 		{#if selectedTags.length > 0}
 			<span>{translate('statusAboutTopics')}</span>
-			{#each selectedTags as tag, index}
+			{#each selectedTags as tag, index (index)}
 				<Tag variant="selected-outline">{translate(tag)}</Tag>
 				{#if index < selectedTags.length - 1}
 					<span>{tagJoiner}</span>

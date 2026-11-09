@@ -36,16 +36,16 @@
 </script>
 
 {#if inline}
-	<img src={imageSrc} alt={imageAlt} {title} {loading} class={mergeCss(`${baseClasses} ${inlineClasses}`, className)} />
+	<img
+		src={imageSrc}
+		alt={imageAlt}
+		{title}
+		{loading}
+		class={mergeCss(`${baseClasses} ${inlineClasses}`, className)}
+	/>
 {:else}
 	<figure class={mergeCss(figureClasses, className)}>
-		<img
-			src={imageSrc}
-			alt={imageAlt}
-			{title}
-			{loading}
-			class={baseClasses}
-		/>
+		<img src={imageSrc} alt={imageAlt} {title} {loading} class={baseClasses} />
 		{#if imageAlt}
 			<figcaption class={captionClasses}>
 				{imageAlt}

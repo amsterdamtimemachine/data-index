@@ -4,7 +4,7 @@ import { untrack } from 'svelte';
 import type { FeatureResult, PlaceSearchMatch } from '@atm/shared/types';
 import type { FilterState } from '#lib/types/filters.js';
 import { filterParams } from '#lib/utils/filters.js';
-import type { UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
+import type { UiSortMode } from '#lib/utils/sort-modes.js';
 import { apiUrl } from '#lib/utils/api.js';
 import { notifyFailure } from '#lib/state/notify.js';
 import { announcer } from '#lib/a11y/announcer.svelte.js';
@@ -30,6 +30,8 @@ export type PanelFeaturesQuery = {
 	filters: FilterState;
 	sortMode: UiSortMode;
 	sampleSeed?: string;
+	// a category is empty: there is nothing to list
+	idle?: boolean;
 };
 
 function sortParams(query: PanelFeaturesQuery): Record<string, string> {
@@ -38,9 +40,6 @@ function sortParams(query: PanelFeaturesQuery): Record<string, string> {
 	}
 	if (query.sortMode === 'temporal') {
 		return { sort: 'datePrecision', sortDirection: 'desc' };
-	}
-	if (query.sortMode === 'bestMatch') {
-		return { sort: 'bestMatch', sortDirection: 'desc' };
 	}
 	if (query.sortMode === 'oldest') {
 		return { sort: 'date', sortDirection: 'asc' };
@@ -86,6 +85,9 @@ export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 
 	async function loadPage(page: number = 1) {
 		const query = getQuery();
+		if (query.idle) {
+			return;
+		}
 		loading = true;
 		loadingState.startLoading();
 
@@ -111,7 +113,9 @@ export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 			currentPage = data.page || 1;
 			totalCount = data.total || 0;
 			pageSize = data.pageSize || 50;
-			announcer.announce(resultsSentence(totalCount, currentPage, pageSize, subjectPhrase(query.subject)));
+			announcer.announce(
+				resultsSentence(totalCount, currentPage, pageSize, subjectPhrase(query.subject))
+			);
 		} catch (err) {
 			notifyFailure('featuresNotLoaded', err);
 		} finally {
@@ -127,9 +131,12 @@ export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 		void loadPage(page);
 	}
 
+	// the query by value: a navigation hands the page new filter objects with the same
+	// content, which must not reload the list
+	const key = $derived(JSON.stringify(getQuery()));
+
 	$effect(() => {
-		// the getter's reads register the reload triggers
-		getQuery();
+		void key;
 		features = [];
 		currentPage = 1;
 		totalCount = 0;

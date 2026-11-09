@@ -1,7 +1,13 @@
-import type { RecordType, PlaceType, TagOperator, PlaceSearchMatch, VisualizationMetadata } from '@atm/shared/types';
+import type {
+	RecordType,
+	PlaceType,
+	TagOperator,
+	PlaceSearchMatch,
+	VisualizationMetadata
+} from '@atm/shared/types';
 
 /**
- * The population filters: which features the map, the histogram, the tag counts and
+ * The population filters: which features the map, the histogram, the filter counts and
  * the feature list count. One object with one meaning everywhere; the spatial
  * subject (a cell or a place) lives beside it, not inside it.
  */

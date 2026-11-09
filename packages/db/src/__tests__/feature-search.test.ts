@@ -1,8 +1,9 @@
 /**
- * Feature text search (dutch FTS over labels) and its bitmap integration:
- * websearch semantics (stemming, phrase, OR, exclusion, stopwords), label-only scope,
- * heatmap/histogram counts intersected with the search set, composition with
- * category filters, and the bestMatch sort lane. The cross-validation test pins
+ * Feature text search (words as written over the title, the description and the
+ * entity's searchable fields) and its bitmap integration: websearch semantics (exact words,
+ * phrase, OR, exclusion, common words), the searchable scope, heatmap/histogram counts
+ * intersected with the search set, composition with category filters, and the hit
+ * explained for the card. The cross-validation test pins
  * the surrogate mapping end to end: bitmap-intersected counts must equal a live
  * count(DISTINCT) over the same predicate.
  */
@@ -16,6 +17,7 @@ import { getHeatmapTimeline } from '../queries/heatmap';
 import { getHistogram } from '../queries/histogram';
 import { getFeatures } from '../queries/features';
 import { getGridConfig } from '../queries/grid-config';
+import { searchQuery } from '../queries/feature-search';
 
 const P1 = 'fs-place-1';
 const P2 = 'fs-place-2';
@@ -23,6 +25,8 @@ const F1 = '22222222-2222-2222-2222-222222222201'; // 'Verkooping van het huis' 
 const F2 = '22222222-2222-2222-2222-222222222202'; // 'Nieuwe woningen aan de Zeedijk' image 1950 @P2
 const F3 = '22222222-2222-2222-2222-222222222203'; // matching text only in description, text 1950 @P1
 const F4 = '22222222-2222-2222-2222-222222222204'; // 'Verkoopingen te Amsterdam' text 1900 @P2
+const F5 = '22222222-2222-2222-2222-222222222205'; // a person born in Zaandam, person 1900 @P1
+const F6 = '22222222-2222-2222-2222-222222222206'; // a programme at the Odeon with a film on the programme, event 1950 @P2
 
 function timelineSum(timeline: Record<string, Heatmap>): number {
   let sum = 0;
@@ -64,9 +68,17 @@ describe('feature text search', () => {
         (${F4}, 'text', 'Verkoopingen te Amsterdam', NULL, '1900-01-01', '1900-12-31', 'fs-ds')
     `);
     await db.execute(sql`
+      INSERT INTO features (id, record_type, label, start_date, end_date, dataset_id, entity) VALUES
+        (${F5}, 'person', 'Sara Polak', '1900-01-01', '1900-12-31', 'fs-ds',
+          ${JSON.stringify({ type: 'Person', name: 'Sara Polak', birthPlace: 'Zaandam' })}::jsonb),
+        (${F6}, 'event', 'Programma', '1950-01-01', '1950-12-31', 'fs-ds',
+          ${JSON.stringify({ type: 'ScreeningEvent', name: 'Programma', startDate: '1950', location: { type: 'Place', name: 'Odeon' }, items: [{ type: 'Movie', name: 'De Koning van Thule' }] })}::jsonb)
+    `);
+    await db.execute(sql`
       INSERT INTO feature_to_place (feature_id, place_id, relation_id) VALUES
         (${F1}, ${P1}, 'isAbout'), (${F2}, ${P2}, 'isAbout'),
-        (${F3}, ${P1}, 'isAbout'), (${F4}, ${P2}, 'isAbout')
+        (${F3}, ${P1}, 'isAbout'), (${F4}, ${P2}, 'isAbout'),
+        (${F5}, ${P1}, 'isAbout'), (${F6}, ${P2}, 'isAbout')
     `);
 
     await rebuildIndex();
@@ -77,19 +89,28 @@ describe('feature text search', () => {
     await teardownTestDb();
   });
 
-  test('stemming unifies inflections: verkooping matches Verkoopingen', async () => {
+  test('a word matches itself, not its inflections: verkooping finds Verkooping, not Verkoopingen', async () => {
     const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkooping' });
-    expect(hist.totalFeatures).toBe(2); // F1 + F4, not F3 (description is out of scope)
+    expect(hist.totalFeatures).toBe(2); // F1 by title, F3 by description
   });
 
-  test('search is label-only: a term present only in a description does not match', async () => {
+  test('the description is searched: a term present only there matches', async () => {
     const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'zeedijk' });
-    expect(hist.totalFeatures).toBe(1); // F2 only, F3 excluded
+    expect(hist.totalFeatures).toBe(2); // F2 by title, F3 by description
   });
 
-  test('websearch exclusion: -amsterdam drops the Amsterdam verkooping', async () => {
-    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkooping -amsterdam' });
-    expect(hist.totalFeatures).toBe(1); // F1
+  test("the entity's searchable fields are searched: a birthplace, a venue, a film on the programme", async () => {
+    const born = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'zaandam' });
+    expect(born.totalFeatures).toBe(1); // F5
+    const venue = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'odeon' });
+    expect(venue.totalFeatures).toBe(1); // F6
+    const film = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: '"koning van thule"' });
+    expect(film.totalFeatures).toBe(1); // F6
+  });
+
+  test('websearch exclusion: -nieuwe drops the Zeedijk title that has it', async () => {
+    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'zeedijk -nieuwe' });
+    expect(hist.totalFeatures).toBe(1); // F3 by its description; F2's title carries nieuwe
   });
 
   test('websearch phrase: quoted words must be adjacent and in order', async () => {
@@ -99,31 +120,44 @@ describe('feature text search', () => {
     expect(reversed.totalFeatures).toBe(0);
   });
 
-  test('websearch OR: either term matches, still labels only', async () => {
+  test('websearch OR: either term matches', async () => {
     const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkooping OR zeedijk' });
-    expect(hist.totalFeatures).toBe(3); // F1, F4 (stemmed), F2; F3 has zeedijk only in its description
+    expect(hist.totalFeatures).toBe(3); // F1, F2, and F3 by its description
   });
 
-  test('a stopword-only query matches nothing', async () => {
-    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'de van het' });
+  test('common words are words like any other: a query needs them all', async () => {
+    const two = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'van het' });
+    expect(two.totalFeatures).toBe(1); // F1
+    const three = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'de van het' });
+    expect(three.totalFeatures).toBe(0);
+  });
+
+  test('a word matches as written: not the words it begins, nor a word it is part of', async () => {
+    const start = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkoop' });
+    expect(start.totalFeatures).toBe(0);
+    const inside = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'eedijk' });
+    expect(inside.totalFeatures).toBe(0);
+    const whole = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'de' });
+    expect(whole.totalFeatures).toBe(2); // F2 and F6 (De Koning van Thule), not Zeedijk
+  });
+
+  test('a query without a word in it matches nothing', async () => {
+    const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: '!! --' });
     expect(hist.totalFeatures).toBe(0);
-    for (const bin of hist.bins) {
-      expect(bin.count).toBe(0);
-    }
   });
 
   test('histogram bins carry only matching features, in their bins', async () => {
     const hist = await getHistogram(undefined, undefined, undefined, 50, undefined, undefined, { searchQuery: 'verkooping' });
     const byYear = new Map(hist.bins.map(b => [b.timeSlice.startYear, b.count]));
-    expect(byYear.get(1900)).toBe(2); // F1 + F4
-    expect(byYear.get(1950) ?? 0).toBe(0); // F2/F3 don't match
+    expect(byYear.get(1900)).toBe(1); // F1
+    expect(byYear.get(1950) ?? 0).toBe(1); // F3, by its description
   });
 
   test('heatmap timeline counts are intersected with the search set', async () => {
     const unfiltered = await getHeatmapTimeline({ cols: 50 }, undefined, undefined, undefined, 50);
     const filtered = await getHeatmapTimeline({ cols: 50 }, undefined, undefined, undefined, 50, { searchQuery: 'zeedijk' });
-    expect(timelineSum(unfiltered.timeline)).toBe(4);
-    expect(timelineSum(filtered.timeline)).toBe(1); // F2's cell only
+    expect(timelineSum(unfiltered.timeline)).toBe(6);
+    expect(timelineSum(filtered.timeline)).toBe(2); // F2's cell and F3's
   });
 
   test('no matches yields an empty (all-sparse) heatmap timeline', async () => {
@@ -144,7 +178,7 @@ describe('feature text search', () => {
     const live = await db.execute<{ n: string }>(sql`
       SELECT COUNT(DISTINCT f.id) AS n
       FROM features f
-      WHERE f.label_tsv @@ websearch_to_tsquery('dutch', 'verkooping')
+      WHERE f.search_tsv @@ ${searchQuery('verkooping')}
         AND EXISTS (
           SELECT 1 FROM feature_to_place fp
           JOIN place_cells pc ON pc.place_id = fp.place_id
@@ -154,18 +188,28 @@ describe('feature text search', () => {
     expect(hist.totalFeatures).toBe(parseInt(live.rows[0].n));
   });
 
-  test('getFeatures filters by searchQuery and bestMatch ranks by match quality', async () => {
+  test('getFeatures filters by searchQuery', async () => {
     const bounds = await fullBounds();
-    const res = await getFeatures({
-      area: { kind: 'bounds', bounds },
-      searchQuery: 'verkooping OR huis',
-      sort: 'bestMatch',
-      pageSize: 10
-    });
+    const res = await getFeatures({ area: { kind: 'bounds', bounds }, searchQuery: 'verkooping OR huis', sort: 'date', pageSize: 10 });
     expect(res.total).toBe(2);
-    const labels = res.data.map(f => f.label);
-    // F1 matches both OR terms, F4 one — ts_rank puts F1 first
-    expect(labels).toEqual(['Verkooping van het huis', 'Verkoopingen te Amsterdam']);
+    expect(res.data.map((f) => f.label).sort()).toEqual(['Onopvallend gebouw', 'Verkooping van het huis']);
+  });
+
+  test('one feature of the population, by id and at its place; elsewhere or unknown, none', async () => {
+    const bounds = await fullBounds();
+    const one = await getFeatures({ area: { kind: 'bounds', bounds }, featureId: F2, featurePlaceId: P2, searchQuery: 'zeedijk', pageSize: 1 });
+    expect(one.total).toBe(1);
+    expect(one.data[0].id).toBe(F2);
+    expect(one.data[0].placeId).toBe(P2);
+    expect(one.data[0].foundBy).toEqual([{ field: 'title', text: 'Nieuwe woningen aan de \u0001Zeedijk\u0002' }]);
+    const elsewhere = await getFeatures({ area: { kind: 'bounds', bounds }, featureId: F2, featurePlaceId: P1, pageSize: 1 });
+    expect(elsewhere.total).toBe(0);
+    const unknown = await getFeatures({ area: { kind: 'bounds', bounds }, featureId: '22222222-2222-2222-2222-222222222299', pageSize: 1 });
+    expect(unknown.total).toBe(0);
+    // a feature needs no population: its id and place name the card
+    const alone = await getFeatures({ featureId: F2, featurePlaceId: P2, pageSize: 1 });
+    expect(alone.data.map((f) => [f.id, f.placeId])).toEqual([[F2, P2]]);
+    await expect(getFeatures({ pageSize: 1 })).rejects.toThrow();
   });
 
   test('getFeatures count and page agree under a search filter', async () => {
@@ -175,8 +219,24 @@ describe('feature text search', () => {
       searchQuery: 'zeedijk',
       pageSize: 10
     });
-    expect(res.total).toBe(1);
-    expect(res.data.length).toBe(1);
-    expect(res.data[0].id).toBe(F2);
+    expect(res.total).toBe(2);
+    expect(res.data.map((f) => f.id).sort()).toEqual([F2, F3]);
+  });
+
+  test('each listed hit says which values matched, with the matching words marked', async () => {
+    const bounds = await fullBounds();
+    const byField = async (q: string) => {
+      const res = await getFeatures({ area: { kind: 'bounds', bounds }, searchQuery: q, pageSize: 10 });
+      return Object.fromEntries(res.data.map((f) => [f.id, f.foundBy]));
+    };
+    const zeedijk = await byField('zeedijk');
+    expect(zeedijk[F2]).toEqual([{ field: 'title', text: 'Nieuwe woningen aan de \u0001Zeedijk\u0002' }]);
+    expect(zeedijk[F3]).toEqual([{ field: 'description', text: '\u0001zeedijk\u0002 verkooping' }]);
+    const odeon = await byField('odeon');
+    expect(odeon[F6]).toEqual([{ field: '$.location.name', text: '\u0001Odeon\u0002' }]);
+    const film = await byField('koning');
+    expect(film[F6]).toEqual([{ field: '$.items[*].name', text: 'De \u0001Koning\u0002 van Thule' }]);
+    const none = await getFeatures({ area: { kind: 'bounds', bounds }, pageSize: 10 });
+    expect(none.data.every((f) => f.foundBy === undefined)).toBe(true);
   });
 });

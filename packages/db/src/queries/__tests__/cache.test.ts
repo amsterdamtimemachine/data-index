@@ -19,7 +19,9 @@ describe('createTTLCache', () => {
 
     // Wait for expiry
     const start = Date.now();
-    while (Date.now() - start < 5) {} // busy wait 5ms
+    while (Date.now() - start < 5) {
+      // busy wait 5ms
+    }
 
     expect(cache.get()).toBeNull();
   });
@@ -29,7 +31,9 @@ describe('createTTLCache', () => {
     cache.set({ big: 'x'.repeat(1000) });
 
     const start = Date.now();
-    while (Date.now() - start < 5) {}
+    while (Date.now() - start < 5) {
+      // busy wait 5ms
+    }
 
     // After get() returns null, internal data should also be null
     cache.get();

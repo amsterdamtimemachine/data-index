@@ -1,3 +1,5 @@
 // Value constants that belong with the types: safe to import in the browser,
 // unlike config, which reads the environment.
 export * from './places';
+export * from './place-types';
+export * from './search-fields';

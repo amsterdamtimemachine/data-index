@@ -2,7 +2,7 @@
 <script lang="ts">
 	import { translate } from '#lib/utils/translations.js';
 	import { resolve } from '$app/paths';
-	import { filterParams } from '#lib/utils/filters.js';
+	import { filterParams, emptyCategories } from '#lib/utils/filters.js';
 	import { formatPlaceTitle } from '#lib/utils/format.js';
 	import { tick, untrack, onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
@@ -19,7 +19,7 @@
 		panelWidthCss,
 		type PanelCols
 	} from '#lib/components/FeaturesPanelResizeHandle.svelte';
-	import { type UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
+	import type { UiSortMode } from '#lib/utils/sort-modes.js';
 	import Heatmap from '#lib/components/Heatmap.svelte';
 	import TimePeriodSelector from '#lib/components/TimePeriodSelector.svelte';
 	import FilterPanel from '#lib/components/FilterPanel.svelte';
@@ -33,9 +33,9 @@
 	import type { PageData } from './$types';
 	import type { HeatmapTimeline } from '@atm/shared/types';
 	import type { PanelSubject } from '#lib/state/panel-features.svelte.js';
+	import { createFeatureLink } from '#lib/state/feature-link.svelte.js';
 	import { PUBLIC_DEFAULT_CENTER } from '$app/env/public';
 	import { createEmptyHeatmap, getCellIdFromLonLat } from '#lib/utils/heatmap.js';
-
 
 	let { data }: { data: PageData } = $props();
 
@@ -47,16 +47,23 @@
 	const searchPaused = $derived(search.paused);
 	const activeFilters = $derived(search.activeFilters);
 	const activeParams = $derived(filterParams(activeFilters, data.metadata));
+	// a category with nothing selected: nothing is fetched, the panels say so
+	const emptyFilters = $derived(emptyCategories(activeFilters, data.metadata));
+	const idle = $derived(emptyFilters.length > 0);
 
 	// the collapsed filters line, in one piece
-	const filtersStatus = $derived({ filters: activeFilters, metadata: data.metadata, place: data.selectedPlace });
+	const filtersStatus = $derived({
+		filters: activeFilters,
+		metadata: data.metadata,
+		place: data.selectedPlace
+	});
 
 	// The city-wide heatmap and histogram, refetched when the filters change; the
 	// first heatmap runs the one-time setup below.
 	const mapData = createMapData(
 		{
 			get params() {
-				return activeParams;
+				return idle ? null : activeParams;
 			}
 		},
 		initializeFromHeatmap,
@@ -116,8 +123,6 @@
 		}
 		return panelCols;
 	});
-
-	let recordTypes = $derived(data?.metadata?.recordTypes || []);
 
 	let currentPeriod = $derived(mapSelection.currentPeriod);
 	let selectedCellId = $derived(mapSelection.selectedCellId);
@@ -204,15 +209,10 @@
 
 			// Set URL defaults if no parameters exist
 			const hasUrlParams = window.location.search.length > 0;
-			if (!hasUrlParams && heatmapTimeline && recordTypes.length > 0) {
+			if (!hasUrlParams && heatmapTimeline) {
 				const lastPeriod = getLastAvailablePeriod(heatmapTimeline);
-				let defaultRecordTypes = recordTypes;
-				if (filters.recordTypes.length > 0) {
-					defaultRecordTypes = filters.recordTypes;
-				}
-
-				if (lastPeriod && defaultRecordTypes.length > 0) {
-					mapSelection.syncUrlParameters(lastPeriod, defaultRecordTypes);
+				if (lastPeriod) {
+					mapSelection.syncUrlParameters(lastPeriod);
 
 					// Skip the default cell on mobile — the map opens unfiltered there.
 					if (window.innerWidth > MOBILE_MAX_WIDTH && PUBLIC_DEFAULT_CENTER && dimensions) {
@@ -254,7 +254,7 @@
 			return null;
 		},
 		get params() {
-			return activeParams.toString();
+			return idle ? null : activeParams.toString();
 		}
 	});
 
@@ -346,6 +346,34 @@
 		return showCellModal;
 	});
 
+	// the filter counts are taken within the period and, while the timeline shows the
+	// subject's series, within that subject: the open place, else the selected cell
+	const countsScope = $derived.by(() => {
+		const params = new URLSearchParams();
+		if (currentPeriod) {
+			params.set('timeSlice', currentPeriod);
+		}
+		if (timelineScope.showsLocal) {
+			if (placePanelOpen && data.selectedPlace) {
+				params.set('placeId', data.selectedPlace.placeId);
+			} else if (selectedCellBounds) {
+				params.set('minLon', String(selectedCellBounds.minLon));
+				params.set('maxLon', String(selectedCellBounds.maxLon));
+				params.set('minLat', String(selectedCellBounds.minLat));
+				params.set('maxLat', String(selectedCellBounds.maxLat));
+			}
+		}
+		return params.toString();
+	});
+
+	// the expanded card in the URL: written while one is open, restored from a link
+	createFeatureLink({
+		get searchQuery() {
+			return activeFilters.searchQuery;
+		},
+		writeParams: mapSelection.updateUrlParams
+	});
+
 	// what the timeline shows, for the empty panel's hint: the selection's series,
 	// else the city-wide one where the switch exists to leave it
 	const timelineView = $derived.by(() => {
@@ -375,10 +403,11 @@
 <!-- Preloaded from the SSR head: the map data downloads alongside the app bundle
      instead of after hydration. crossorigin matches fetch()'s cors/same-origin mode. -->
 <svelte:head>
-	<link rel="preload" as="fetch" href={mapData.heatmapUrl} crossorigin="anonymous" />
-	<link rel="preload" as="fetch" href={mapData.histogramUrl} crossorigin="anonymous" />
+	{#if mapData.heatmapUrl && mapData.histogramUrl}
+		<link rel="preload" as="fetch" href={mapData.heatmapUrl} crossorigin="anonymous" />
+		<link rel="preload" as="fetch" href={mapData.histogramUrl} crossorigin="anonymous" />
+	{/if}
 </svelte:head>
-
 
 <!-- inline 100dvh tracks the mobile browser chrome; browsers without dvh drop the
      declaration and fall back to the h-screen class -->
@@ -398,7 +427,11 @@
 			/>
 		{/if}
 
-		<NavContainer bind:isExpanded={navExpanded} bind:element={navElement} class="absolute top-0 left-0 z-30">
+		<NavContainer
+			bind:isExpanded={navExpanded}
+			bind:element={navElement}
+			class="absolute top-0 left-0 z-30"
+		>
 			{#snippet header()}
 				<Nav class="p-3">
 					<NavItem href={resolve('/about')} label={translate('navAbout')} />
@@ -413,13 +446,18 @@
 				{placePanelOpen}
 				{searchPaused}
 				onToggleSearch={search.toggle}
+				{idle}
+				{countsScope}
 			/>
 		</NavContainer>
 
-	<!-- Show filters status when nav is collapsed -->
-	{#if !navExpanded}
-		<FiltersStatusPanel status={filtersStatus} class="absolute top-3 left-3 max-w-[calc(100%-1.5rem)]" />
-	{/if}
+		<!-- Show filters status when nav is collapsed -->
+		{#if !navExpanded}
+			<FiltersStatusPanel
+				status={filtersStatus}
+				class="absolute top-3 left-3 max-w-[calc(100%-1.5rem)]"
+			/>
+		{/if}
 
 		{#if showPanel && panelSubject}
 			<div
@@ -437,6 +475,7 @@
 						dimensions={dimensions ?? undefined}
 						selectionPeriod={panelSelectionPeriod}
 						filters={activeFilters}
+						emptyCategories={emptyFilters}
 						{gridColumns}
 						{sortMode}
 						{sampleSeed}
@@ -464,5 +503,4 @@
 			class="z-40 bg-atm-sand border-t border-atm-sand-border"
 		/>
 	{/if}
-
 </div>

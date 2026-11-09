@@ -1,4 +1,3 @@
-
 import { browser } from '$app/env';
 import { page } from '$app/state';
 import { goto } from '$app/navigation';
@@ -62,30 +61,13 @@ export function createMapSelection() {
 	/**
 	 * Syncs URL parameters with current state after navigation is complete.
 	 */
-	function syncUrlParameters(
-		serverPeriod: string,
-		serverRecordTypes: string[] = []
-	) {
+	function syncUrlParameters(serverPeriod: string) {
 		if (!browser) return;
-
-		// Collect all missing parameters in a single object
-		const paramsToAdd: Record<string, string | null> = {};
 
 		// Set period to URL if not already present
 		const urlPeriod = page.url.searchParams.get('period');
 		if (!urlPeriod) {
-			paramsToAdd.period = serverPeriod;
-		}
-
-		// Set recordTypes to URL if not already present
-		const urlRecordTypes = page.url.searchParams.get('recordTypes');
-		if (!urlRecordTypes && serverRecordTypes.length > 0) {
-			paramsToAdd.recordTypes = serverRecordTypes.join(',');
-		}
-
-		// Update all missing parameters at once
-		if (Object.keys(paramsToAdd).length > 0) {
-			updateUrlParams(paramsToAdd);
+			updateUrlParams({ period: serverPeriod });
 		}
 
 		// Check if cell should be opened from URL parameters
@@ -113,16 +95,19 @@ export function createMapSelection() {
 		}
 	}
 
-
 	/**
 	 * Updates URL parameters without triggering navigation.
 	 * Maintains current page state while updating the address bar.
 	 * Guards against calling before router is initialized.
 	 */
+	// the URL of a write still under way, so a write that follows at once builds on it
+	// rather than on the address bar, which the first write has not reached yet
+	let pendingUrl: URL | null = null;
+
 	function updateUrlParams(params: Record<string, string | null>) {
 		if (!browser) return;
 
-		const url = new URL(window.location.href);
+		const url = new URL(pendingUrl ?? window.location.href);
 
 		Object.entries(params).forEach(([key, value]) => {
 			if (value) {
@@ -132,10 +117,17 @@ export function createMapSelection() {
 			}
 		});
 
-		goto(url.pathname + url.search, { shallow: true, replace: true, state: page.state }).catch((error) => {
-			// Router not initialized yet, skip URL update
-			console.debug('Router not ready, skipping URL update:', error);
-		});
+		pendingUrl = url;
+		goto(url.pathname + url.search, { shallow: true, replace: true, state: page.state })
+			.catch((error) => {
+				// Router not initialized yet, skip URL update
+				console.debug('Router not ready, skipping URL update:', error);
+			})
+			.finally(() => {
+				if (pendingUrl === url) {
+					pendingUrl = null;
+				}
+			});
 	}
 
 	return {

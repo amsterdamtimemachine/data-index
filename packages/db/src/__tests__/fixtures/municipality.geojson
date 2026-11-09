@@ -1,0 +1,1 @@
+{"type":"FeatureCollection","name":"Gemeentegebied","crs":{"type":"name","properties":{"name":"urn:ogc:def:crs:EPSG::28992"}},"features":[{"type":"Feature","properties":{"identificatie":"GM0363","naam":"Amsterdam","code":"0363"},"geometry":{"type":"Polygon","coordinates":[[[118381,482587],[127924,482526],[127997,495878],[118480,495939],[118381,482587]]]}}]}

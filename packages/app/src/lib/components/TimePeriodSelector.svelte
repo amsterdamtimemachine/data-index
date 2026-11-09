@@ -217,60 +217,66 @@
 			<div class="h-1"></div>
 		{/if}
 		<div class="flex items-start gap-2">
-		<!-- The track scrolls at every width, so the toggle beside it always keeps its
+			<!-- The track scrolls at every width, so the toggle beside it always keeps its
 		     place; the hover tooltip is fixed to the screen, so the scrolling never clips
 		     it. pointerdown only forfeits the one-shot auto-scroll, it is not an
 		     interaction affordance -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div
-			bind:this={scrollWrapper}
-			onpointerdown={() => (hasAutoScrolled = true)}
-			class="flex-1 min-w-0 overflow-x-auto relative scroll-shadows"
-		>
-			<!-- each bin at least 60px, so its year fits; narrower than that, the row scrolls -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
-				class="relative"
-				style="min-width: {histogram.bins.length * MIN_BIN_WIDTH}px; width: 100%; height: {timelineHeight + 25}px;"
-				bind:this={trackElement}
+				bind:this={scrollWrapper}
+				onpointerdown={() => (hasAutoScrolled = true)}
+				class="flex-1 min-w-0 overflow-x-auto relative scroll-shadows"
 			>
-			<!-- Histogram Layer: Histogram bars and grid -->
-			<TimePeriodSelectorHistogram
-				bins={histogram?.bins || []}
-				maxCount={histogram?.maxCount || 0}
-				localBins={localHistogram?.bins || []}
-				localMaxCount={localHistogram?.maxCount || 0}
-				{timelineHeight}
-				{hideGlobal}
-			/>
+				<!-- each bin at least 60px, so its year fits; narrower than that, the row scrolls -->
+				<div
+					class="relative"
+					style="min-width: {histogram.bins.length *
+						MIN_BIN_WIDTH}px; width: 100%; height: {timelineHeight + 25}px;"
+					bind:this={trackElement}
+				>
+					<!-- Histogram Layer: Histogram bars and grid -->
+					<TimePeriodSelectorHistogram
+						bins={histogram?.bins || []}
+						maxCount={histogram?.maxCount || 0}
+						localBins={localHistogram?.bins || []}
+						localMaxCount={localHistogram?.maxCount || 0}
+						{timelineHeight}
+						{hideGlobal}
+					/>
 
-			<!-- Labels Layer: Year labels -->
-			<TimePeriodSelectorLabels {displayPeriods} {timelineHeight} />
+					<!-- Labels Layer: Year labels -->
+					<TimePeriodSelectorLabels {displayPeriods} {timelineHeight} />
 
-			<!-- Interactive Layer: the bins select, drag and show the tooltip -->
-			<TimePeriodSelectorTrack
-				bins={histogram.bins}
-				localBins={localHistogram?.bins || []}
-				selectionBins={selectionHistogram?.bins || []}
-				{currentIndex}
-				onIndexChange={handleIndexChange}
-				onDragStart={handleDragStart}
-				{timelineHeight}
-				onKeyDown={handleKeyDown}
-			/>
+					<!-- Interactive Layer: the bins select, drag and show the tooltip -->
+					<TimePeriodSelectorTrack
+						bins={histogram.bins}
+						localBins={localHistogram?.bins || []}
+						selectionBins={selectionHistogram?.bins || []}
+						{currentIndex}
+						onIndexChange={handleIndexChange}
+						onDragStart={handleDragStart}
+						{timelineHeight}
+						onKeyDown={handleKeyDown}
+					/>
 
-			<!-- Thumb Layer: the frame around the selected bin, drawing only -->
-			<TimePeriodSelectorThumb
-				{currentIndex}
-				totalBins={histogram.bins.length}
-				{timelineHeight}
-			/>
+					<!-- Thumb Layer: the frame around the selected bin, drawing only -->
+					<TimePeriodSelectorThumb
+						{currentIndex}
+						totalBins={histogram.bins.length}
+						{timelineHeight}
+					/>
+				</div>
 			</div>
-		</div>
-		{#if onToggleLocal}
-			<Button onclick={onToggleLocal} disabled={!localAvailable} aria-label={toggleLabel} class="p-1 shrink-0">
-				<img src={toggleGlyph} alt="" width="24" height="24" />
-			</Button>
-		{/if}
+			{#if onToggleLocal}
+				<Button
+					onclick={onToggleLocal}
+					disabled={!localAvailable}
+					aria-label={toggleLabel}
+					class="p-1 shrink-0"
+				>
+					<img src={toggleGlyph} alt="" width="24" height="24" />
+				</Button>
+			{/if}
 		</div>
 	</div>
 {/if}

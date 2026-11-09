@@ -16,7 +16,12 @@ function countWords(count: number): string {
 }
 
 /** The panel's list: "Pagina 3 van 12, 1204 features van deze cel"; no page part on a single page. */
-export function resultsSentence(count: number, page: number, pageSize: number, subject: string): string {
+export function resultsSentence(
+	count: number,
+	page: number,
+	pageSize: number,
+	subject: string
+): string {
 	const sentence = `${countWords(count)} ${subject}`;
 	const pages = totalPages(count, pageSize);
 	if (pages > 1) {
@@ -35,7 +40,12 @@ export function mapSentence(count: number): string {
  * period with its city-wide count and, with a cell or place selected, the selection's
  * count; while the selection's own series is on screen, only the selection's count.
  */
-export function periodValueText(label: string, count: number, localCount: number | null, selectionCount: number | null): string {
+export function periodValueText(
+	label: string,
+	count: number,
+	localCount: number | null,
+	selectionCount: number | null
+): string {
 	const inSelection = translate('inSelection');
 	if (localCount !== null) {
 		return `${label}, ${midSentence(countWords(localCount))} ${inSelection}`;

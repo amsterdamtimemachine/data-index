@@ -1,9 +1,11 @@
 import { sql } from 'drizzle-orm';
-import { PRECOMP_GRID_CELL_METERS } from '@atm/shared';
+import { PRECOMP_GRID_CELL_METERS, PLACE_TYPES, PLACE_TYPE_SPECS } from '@atm/shared';
 import { db } from '../../client';
 import { placeGeometry, features, placeCells, gridConfig } from '../../schema';
 import { buildCellFeatures } from './build-cell-features';
 import { buildTagFeatures } from './build-tag-features';
+import { ensureSearchColumn } from './search-column';
+import { ensureNameIndexes } from './name-indexes';
 import { cellIndex, cellEnvelope } from '../sql';
 
 type BBoxRow = {
@@ -23,6 +25,21 @@ type StatsRow = {
 };
 
 export async function rebuildIndex() {
+  console.log('=== Text search column ===\n');
+  if (await ensureSearchColumn()) {
+    console.log('Rebuilt features.search_tsv: its expression had changed.\n');
+  } else {
+    console.log('features.search_tsv is up to date.\n');
+  }
+
+  console.log('=== Place name indexes ===\n');
+  const recreated = await ensureNameIndexes();
+  if (recreated.length > 0) {
+    console.log(`Recreated without their predicate: ${recreated.join(', ')}.\n`);
+  } else {
+    console.log('The place name indexes are up to date.\n');
+  }
+
   console.log('=== Rebuilding place_cells at 100m resolution ===\n');
 
   // Bounds from ALL place geometry (RD): the grid frame follows the gazetteer
@@ -123,7 +140,10 @@ export async function rebuildIndex() {
   // (verified: every dead adamlink name carries an until). Other sources may use
   // an open until to mean "end unknown", so they are left alone. A row with no
   // since is a label without a period, never a current name. The old name is
-  // never lost — it exists as its own (dated) history row.
+  // never lost — it exists as its own (dated) history row. Only for the types whose
+  // latest open name is the name now (PLACE_TYPE_SPECS): a building keeps the
+  // source's label, its names follow its use.
+  const renamedTypes = PLACE_TYPES.filter((t) => PLACE_TYPE_SPECS[t].currentName === 'latestOpenName');
   console.log('\nCanonicalising place names...');
   const nameResult = await db.execute(sql`
     UPDATE place p
@@ -135,7 +155,7 @@ export async function rebuildIndex() {
       ORDER BY place_id, since DESC
     ) n
     WHERE p.id = n.place_id AND p.name IS DISTINCT FROM n.name
-      AND p.source = 'adamlink'
+      AND p.source = 'adamlink' AND p.type IN ${renamedTypes}
   `);
   console.log(`  ${nameResult.rowCount} places renamed to their current name`);
 

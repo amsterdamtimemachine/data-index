@@ -38,7 +38,7 @@ async function getPlaceTypes(): Promise<PlaceType[]> {
 
 /**
  * Tag ids the index knows: the tags with a rebuilt bitmap, so the list and the
- * counts (getAvailableTags) always describe the same tags.
+ * counts (getFilterCounts) always describe the same tags.
  */
 async function getTags(): Promise<string[]> {
   const result = await db.execute<TagRow>(sql`

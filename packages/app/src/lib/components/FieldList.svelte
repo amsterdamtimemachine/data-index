@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { FieldRow } from '#lib/utils/cardFields.js';
 	import Link from './Link.svelte';
+	import MarkedText from './MarkedText.svelte';
 
 	type Props = {
 		fields: FieldRow[];
@@ -12,19 +13,26 @@
 
 {#if fields.length}
 	<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-base text-gray-700 {className || ''}">
-		{#each fields as field}
+		{#each fields as field, i (i)}
 			<dt class="text-gray-500">
 				{#if field.labelHref}
-					<Link href={field.labelHref} target="_blank" rel="noopener noreferrer" class="text-gray-500">{field.label}</Link>
+					<Link
+						href={field.labelHref}
+						target="_blank"
+						rel="noopener noreferrer"
+						class="text-gray-500">{field.label}</Link
+					>
 				{:else}
 					{field.label}
 				{/if}
 			</dt>
 			<dd>
 				{#if field.href}
-					<Link href={field.href} target="_blank" rel="noopener noreferrer">{field.value}</Link>
+					<Link href={field.href} target="_blank" rel="noopener noreferrer"
+						><MarkedText text={field.value} /></Link
+					>
 				{:else}
-					{field.value}
+					<MarkedText text={field.value} />
 				{/if}
 			</dd>
 		{/each}

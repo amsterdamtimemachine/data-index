@@ -3,21 +3,44 @@ import type { RequestHandler } from './$types';
 import type { FeaturesSortField, SortDirection, FeaturesArea } from '@atm/shared/types';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_MAX } from '@atm/shared';
 import { getFeatures, UnknownTimeSliceError } from '@atm/db';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseTags, parseTagOperator, parseBounds, parseSeed, parseSearchQuery, parseGridCols } from '#lib/server/query-params.js';
+import {
+	parseRecordTypes,
+	parseDatasets,
+	parsePlaceTypes,
+	parseTags,
+	parseTagOperator,
+	parseBounds,
+	parseSeed,
+	parseSearchQuery,
+	parseGridCols
+} from '#lib/server/query-params.js';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
-		// Parse bounds (required here, unlike the histogram endpoint)
+		// one feature, as its card: the list's own row for it, with or without a population
+		const featureId = url.searchParams.get('featureId') || undefined;
+		if (featureId && !UUID.test(featureId)) {
+			throw error(400, 'Invalid featureId', { code: 'INVALID_FEATURE_ID' });
+		}
+		const featurePlaceId = url.searchParams.get('featurePlaceId')?.slice(0, 512) || undefined;
+
+		// The spatial population: the display cells a place lies in, or a display cell's
+		// bounds; required unless a feature is named.
 		const bounds = parseBounds(url);
-		// The spatial population: the display cells a place lies in, or a display cell's bounds.
 		const placeIdParam = url.searchParams.get('placeId');
-		let area: FeaturesArea;
+		let area: FeaturesArea | undefined;
 		if (placeIdParam) {
 			area = { kind: 'place', placeId: placeIdParam.slice(0, 512), cols: parseGridCols(url) };
 		} else if (bounds) {
 			area = { kind: 'bounds', bounds };
-		} else {
-			throw error(400, 'Missing required bounds parameters (minLon, maxLon, minLat, maxLat) or placeId', { code: 'MISSING_BOUNDS' });
+		} else if (!featureId) {
+			throw error(
+				400,
+				'Missing required bounds parameters (minLon, maxLon, minLat, maxLat), placeId or featureId',
+				{ code: 'MISSING_BOUNDS' }
+			);
 		}
 
 		// Parse optional parameters
@@ -32,27 +55,31 @@ export const GET: RequestHandler = async ({ url }) => {
 		const seed = parseSeed(url);
 		const searchQuery = parseSearchQuery(url);
 
-		if (!['sample', 'spatialFrequency', 'datePrecision', 'date', 'bestMatch'].includes(sort)) {
+		if (!['sample', 'spatialFrequency', 'datePrecision', 'date'].includes(sort)) {
 			throw error(400, 'Invalid sort field', { code: 'INVALID_SORT' });
 		}
 		if (!['asc', 'desc'].includes(sortDirection)) {
 			throw error(400, 'Invalid sort direction', { code: 'INVALID_SORT' });
 		}
 
-		const page = parseInt(url.searchParams.get('page') || '1', 10) || 1;
+		const page = Math.max(parseInt(url.searchParams.get('page') || '1', 10) || 1, 1);
 		const pageSize = Math.min(
-			Math.max(parseInt(url.searchParams.get('pageSize') || String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE, 1),
+			Math.max(
+				parseInt(url.searchParams.get('pageSize') || String(DEFAULT_PAGE_SIZE), 10) ||
+					DEFAULT_PAGE_SIZE,
+				1
+			),
 			PAGE_SIZE_MAX
 		);
 
 		console.log(
 			`Features API request - area: ${JSON.stringify(area)}, ` +
-			`recordTypes: ${recordTypes?.join(', ') || 'all'}, ` +
-			`tags: ${tags?.join(', ') || 'none'} (${tagOperator}), ` +
-			`timeSlice: ${timeSlice || 'all'}, ` +
-			`sort: ${sort} ${sortDirection}, ` +
-			`q: ${searchQuery || 'none'}, ` +
-			`page: ${page}, pageSize: ${pageSize}`
+				`recordTypes: ${recordTypes?.join(', ') || 'all'}, ` +
+				`tags: ${tags?.join(', ') || 'none'} (${tagOperator}), ` +
+				`timeSlice: ${timeSlice || 'all'}, ` +
+				`sort: ${sort} ${sortDirection}, ` +
+				`q: ${searchQuery || 'none'}, ` +
+				`page: ${page}, pageSize: ${pageSize}`
 		);
 
 		const result = await getFeatures({
@@ -67,6 +94,8 @@ export const GET: RequestHandler = async ({ url }) => {
 			sortDirection: sortDirection as SortDirection,
 			seed,
 			searchQuery,
+			featureId,
+			featurePlaceId,
 			page,
 			pageSize
 		});

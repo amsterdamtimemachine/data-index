@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Category } from '#lib/utils/filters.js';
 	import { translate } from '#lib/utils/translations.js';
 	import { asset } from '$app/paths';
 	import FeaturesGrid from '#lib/components/FeaturesGrid.svelte';
@@ -6,7 +7,7 @@
 	import ButtonIllustration from '#lib/components/ButtonIllustration.svelte';
 	import TextWithSlots from '#lib/components/TextWithSlots.svelte';
 	import FeaturesPanelHeader from '#lib/components/FeaturesPanelHeader.svelte';
-	import { type UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
+	import type { UiSortMode } from '#lib/utils/sort-modes.js';
 	import { createPanelFeatures, type PanelSubject } from '#lib/state/panel-features.svelte.js';
 	import type { HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
 	import type { FilterState } from '#lib/types/filters.js';
@@ -29,6 +30,8 @@
 		// what the timeline shows, when an empty panel can point the user at it: the
 		// city-wide series with the switch (desktop), or the selection's own series
 		timelineView?: 'cityWide' | 'local';
+		// the filter categories with nothing selected: there is nothing to list, and the panel says so
+		emptyCategories?: Category[];
 	}
 
 	let {
@@ -45,7 +48,8 @@
 		sampleSeed,
 		onSortChange,
 		onShuffle,
-		timelineView = undefined
+		timelineView = undefined,
+		emptyCategories = []
 	}: Props = $props();
 
 	const panelFeatures = createPanelFeatures(() => ({
@@ -53,8 +57,13 @@
 		period,
 		filters,
 		sortMode,
-		sampleSeed
+		sampleSeed,
+		idle: emptyCategories.length > 0
 	}));
+
+	const emptyCategoryNames = $derived(
+		emptyCategories.map((c) => translate(`${c}Category`)).join(` ${translate('and')} `)
+	);
 
 	function handleClose() {
 		if (onClose) {
@@ -62,7 +71,6 @@
 		}
 	}
 </script>
-
 
 <FeaturesPanelHeader
 	{subject}
@@ -75,7 +83,6 @@
 	{sortMode}
 	{onSortChange}
 	{onShuffle}
-	matchActive={!!filters.searchQuery || filters.tags.length > 0}
 	totalCount={panelFeatures.totalCount}
 	currentPage={panelFeatures.currentPage}
 	pageSize={panelFeatures.pageSize}
@@ -86,7 +93,11 @@
 />
 
 <div class="min-h-full bg-atm-sand-dark">
-	{#if panelFeatures.features.length > 0}
+	{#if emptyCategories.length > 0}
+		<p class="text-base text-black p-4 leading-loose">
+			{translate('noneSelected').replace('{filter}', emptyCategoryNames)}
+		</p>
+	{:else if panelFeatures.features.length > 0}
 		<FeaturesGrid features={panelFeatures.features} columns={gridColumns} />
 	{:else if !panelFeatures.initialLoading && !panelFeatures.loading}
 		<p class="text-base text-black p-4 leading-loose">
@@ -103,7 +114,11 @@
 				<TextWithSlots text={translate('emptyPanelBarHint')}>
 					{#snippet children(slot)}
 						{#if slot === 'picture'}
-							<Image src={asset('images/local-timeline-detail.png')} alt={translate('localTimelineAlt')} inline />
+							<Image
+								src={asset('images/local-timeline-detail.png')}
+								alt={translate('localTimelineAlt')}
+								inline
+							/>
 						{/if}
 					{/snippet}
 				</TextWithSlots>

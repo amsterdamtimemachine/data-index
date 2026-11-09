@@ -1,6 +1,14 @@
 import { describe, test, expect } from 'vitest';
 import type { PlaceSearchMatch } from '@atm/shared/types';
-import { formatPlaceWindow, formatPlaceTitle, formatPartialDate, formatPeriod, foldLinesInline, subjectPhrase, formatNowKnownAs } from './format';
+import {
+	formatPlaceWindow,
+	formatPlaceTitle,
+	formatPartialDate,
+	formatPeriod,
+	foldLinesInline,
+	subjectPhrase,
+	formatNowKnownAs
+} from './format';
 
 function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 	return {
@@ -21,19 +29,43 @@ function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 
 describe('formatPlaceWindow', () => {
 	test("a street or area's window is its existence", () => {
-		expect(formatPlaceWindow(match({ geometryWindow: ['1850-01-01', '1909-12-31'] }))).toBe('bestond 1850 tot 1909');
-		expect(formatPlaceWindow(match({ geometryWindow: ['1921-01-01', null] }))).toBe('bestaat vanaf 1921');
-		expect(formatPlaceWindow(match({ geometryWindow: [null, '1850-01-01'] }))).toBe('bestond tot 1850');
+		expect(formatPlaceWindow(match({ geometryWindow: ['1850-01-01', '1909-12-31'] }))).toBe(
+			'bestond 1850 tot 1909'
+		);
+		expect(formatPlaceWindow(match({ geometryWindow: ['1921-01-01', null] }))).toBe(
+			'bestaat vanaf 1921'
+		);
+		// an existence until is exclusive: gone from the first day of the year after its last
+		expect(formatPlaceWindow(match({ geometryWindow: [null, '1850-01-01'] }))).toBe(
+			'bestond tot 1849'
+		);
+		expect(formatPlaceWindow(match({ geometryWindow: ['1593-01-01', '1883-01-01'] }))).toBe(
+			'bestond 1593 tot 1882'
+		);
+		expect(formatPlaceWindow(match({ geometryWindow: ['1900-01-01', '1901-01-01'] }))).toBe(
+			'bestond in 1900'
+		);
 	});
 
 	test("a street's old name carries the years it held", () => {
-		const m = match({ matchedNameId: 'n', matchedWindow: ['1850-01-01', '1943-01-01'], geometryWindow: ['1600-01-01', null] });
+		const m = match({
+			matchedNameId: 'n',
+			matchedWindow: ['1850-01-01', '1943-01-01'],
+			geometryWindow: ['1600-01-01', null]
+		});
 		expect(formatPlaceWindow(m)).toBe('naam 1850 tot 1943');
-		expect(formatPlaceWindow(match({ matchedNameId: 'n', matchedWindow: [null, '1850-01-01'] }))).toBe('naam tot 1850');
+		expect(
+			formatPlaceWindow(match({ matchedNameId: 'n', matchedWindow: [null, '1850-01-01'] }))
+		).toBe('naam tot 1850');
 	});
 
 	test('an address shows the registers it was noted on: the matched record, else all of them', () => {
-		const record = match({ type: 'address', matchedNameId: 'n', matchedWindow: ['1853-01-01', '1853-12-31'], recordedWindow: ['1832-01-01', '1943-12-31'] });
+		const record = match({
+			type: 'address',
+			matchedNameId: 'n',
+			matchedWindow: ['1853-01-01', '1853-12-31'],
+			recordedWindow: ['1832-01-01', '1943-12-31']
+		});
 		expect(formatPlaceWindow(record)).toBe('vermeld in 1853');
 		const span = match({ type: 'address', recordedWindow: ['1832-01-01', '1943-12-31'] });
 		expect(formatPlaceWindow(span)).toBe('vermeld 1832 tot 1943');
@@ -46,7 +78,7 @@ describe('formatPlaceWindow', () => {
 		expect(formatPlaceWindow(match({}))).toBe('');
 	});
 
-	test('a historical-name match shows that name\'s window, not the place\'s', () => {
+	test("a historical-name match shows that name's window, not the place's", () => {
 		const m = match({
 			matchedNameId: 'n',
 			matchedWindow: [null, '1943-01-01'],
@@ -56,7 +88,11 @@ describe('formatPlaceWindow', () => {
 	});
 
 	test('an undated variant shows no window even when the place has one', () => {
-		const m = match({ matchedNameId: 'n', matchedWindow: null, geometryWindow: ['1923-01-01', null] });
+		const m = match({
+			matchedNameId: 'n',
+			matchedWindow: null,
+			geometryWindow: ['1923-01-01', null]
+		});
 		expect(formatPlaceWindow(m)).toBe('');
 	});
 });
@@ -67,7 +103,9 @@ describe('formatPlaceTitle', () => {
 	});
 
 	test('an old name carries the current one', () => {
-		expect(formatPlaceTitle(match({ matchedName: 'Plaetse', name: 'Dam' }))).toBe('Plaetse (nu Dam)');
+		expect(formatPlaceTitle(match({ matchedName: 'Plaetse', name: 'Dam' }))).toBe(
+			'Plaetse (nu Dam)'
+		);
 	});
 
 	test('falls back to the current name, then the id', () => {
@@ -75,7 +113,6 @@ describe('formatPlaceTitle', () => {
 		expect(formatPlaceTitle(match({ matchedName: '', name: null }))).toBe('p');
 	});
 });
-
 
 describe('formatPartialDate', () => {
 	test('words a date at the precision it was recorded', () => {
@@ -89,14 +126,23 @@ describe('formatPartialDate', () => {
 	});
 });
 
-
 describe('foldLinesInline', () => {
 	test('rejoins hyphenated words and turns line breaks into spaces, keeping the edges', () => {
-		expect(foldLinesInline('Om 11 uur gaan de cursisten gezame-\nlijk materiaal maken.\nZe komen aldoor.\n')).toBe('Om 11 uur gaan de cursisten gezamelijk materiaal maken. Ze komen aldoor. ');
+		expect(
+			foldLinesInline(
+				'Om 11 uur gaan de cursisten gezame-\nlijk materiaal maken.\nZe komen aldoor.\n'
+			)
+		).toBe('Om 11 uur gaan de cursisten gezamelijk materiaal maken. Ze komen aldoor. ');
 	});
 
 	test('a blank line stays a paragraph break', () => {
-		expect(foldLinesInline('1940.\nEen Woord Tot de Jongeren\n\n"Ik wens hen te wijzen\nop de grote verantwoorde-\nlijkheid.')).toBe('1940. Een Woord Tot de Jongeren\n\n"Ik wens hen te wijzen op de grote verantwoordelijkheid.');
+		expect(
+			foldLinesInline(
+				'1940.\nEen Woord Tot de Jongeren\n\n"Ik wens hen te wijzen\nop de grote verantwoorde-\nlijkheid.'
+			)
+		).toBe(
+			'1940. Een Woord Tot de Jongeren\n\n"Ik wens hen te wijzen op de grote verantwoordelijkheid.'
+		);
 	});
 });
 
@@ -112,8 +158,18 @@ describe('formatPeriod', () => {
 describe('subjectPhrase', () => {
 	test('a cell, a place in one cell, a place across cells', () => {
 		expect(subjectPhrase({ kind: 'cell', cellId: '3_4' })).toBe('van deze cel');
-		expect(subjectPhrase({ kind: 'place', place: match({ name: 'Kalverstraat', matchedName: 'Kalverstraat', cells: [1] }) })).toBe('van de cel van Kalverstraat');
-		expect(subjectPhrase({ kind: 'place', place: match({ name: 'Kalverstraat', matchedName: 'Kalverstraat', cells: [1, 2] }) })).toBe('van de cellen van Kalverstraat');
+		expect(
+			subjectPhrase({
+				kind: 'place',
+				place: match({ name: 'Kalverstraat', matchedName: 'Kalverstraat', cells: [1] })
+			})
+		).toBe('van de cel van Kalverstraat');
+		expect(
+			subjectPhrase({
+				kind: 'place',
+				place: match({ name: 'Kalverstraat', matchedName: 'Kalverstraat', cells: [1, 2] })
+			})
+		).toBe('van de cellen van Kalverstraat');
 	});
 });
 

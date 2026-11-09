@@ -38,7 +38,10 @@ function periodWords(period: string): string {
  * The one toast for what is wrong with a link: the values that do not exist and are
  * ignored, and the period that was replaced by the latest. Null when nothing is wrong.
  */
-export function linkMessage(unknownValues: string[], replacedPeriod: string | null): Message | null {
+export function linkMessage(
+	unknownValues: string[],
+	replacedPeriod: string | null
+): Message | null {
 	const values = [...new Set(unknownValues)];
 	if (values.length === 0 && !replacedPeriod) {
 		return null;

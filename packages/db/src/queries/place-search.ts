@@ -4,6 +4,7 @@ import type { PlaceSearchMatch, PlaceType, PlaceSource } from '@atm/shared';
 import { DISPLAY_GRID_DEFAULT_COLS } from '@atm/shared';
 import { db } from '../client';
 import { displayGrid, gridColExpr, gridRowExpr } from './cell-features';
+import { placeTypeRank } from './place-rank';
 
 const MIN_QUERY_LENGTH = 2;
 const MAX_QUERY_LENGTH = 100;
@@ -17,7 +18,7 @@ const SEARCH_ORDER = sql`exact_match DESC,
   CASE WHEN source IN ('bag', 'nwb', 'cbs') THEN 0 ELSE 1 END,
   CASE WHEN superseded OR sort_until IS NOT NULL THEN 1 WHEN sort_since IS NOT NULL THEN 0 ELSE 2 END,
   sort_until DESC NULLS LAST, sort_since DESC,
-  CASE type WHEN 'address' THEN 0 WHEN 'street' THEN 1 WHEN 'neighbourhood' THEN 2 ELSE 3 END,
+  ${placeTypeRank(sql`type`)},
   lower(matched_name), id`;
 
 export type PlaceSearchOptions = {

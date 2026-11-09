@@ -1,14 +1,17 @@
 <script lang="ts">
 	import { mergeCss } from '#lib/utils/utils.js';
 	import { translate } from '#lib/utils/translations.js';
+	import { loadingState } from '#lib/state/loadingState.svelte.js';
 	type Props = {
 		thumbnail: string;
 		alt?: string;
 		expanded?: boolean;
+		// part of a larger content, such as a page of text, rather than a picture of its own
+		inline?: boolean;
 		onExpand?: () => void;
 	};
 
-	let { thumbnail, alt, expanded = false, onExpand }: Props = $props();
+	let { thumbnail, alt, expanded = false, inline = false, onExpand }: Props = $props();
 
 	let imageError = $state(false);
 	const errorHeight = $derived.by(() => {
@@ -18,8 +21,39 @@
 		return 'h-32';
 	});
 	let imageLoading = $state(true);
-	// the picture's own width / height, once it has loaded; the box takes this shape
+	// the picture's own width / height, once it has loaded; the expanded box takes this shape
 	let aspect = $state(4 / 3);
+	// expanded, a tall picture's box is at most this many times as tall as it is wide
+	const MAX_PORTRAIT_HEIGHT = 1.25;
+
+	const expandedAspect = $derived(Math.max(aspect, 1 / MAX_PORTRAIT_HEIGHT));
+	// collapsed, the box holds a 4:3 place until the picture loads, then takes the picture's height
+	const collapsedPlaceholder = $derived.by(() => {
+		if (imageLoading) {
+			return 'aspect-[4/3]';
+		}
+		return '';
+	});
+
+	// the expanded picture is the large one and can take a while: it counts in the
+	// page's loading bar from the moment it is asked for until it arrives, fails, or
+	// the card closes
+	let settle = () => {};
+	$effect(() => {
+		if (!expanded) {
+			return;
+		}
+		void thumbnail;
+		loadingState.startLoading();
+		let pending = true;
+		settle = () => {
+			if (pending) {
+				pending = false;
+				loadingState.stopLoading();
+			}
+		};
+		return settle;
+	});
 
 	const handleImageLoad = (event: Event) => {
 		const img = event.currentTarget as HTMLImageElement;
@@ -27,64 +61,97 @@
 			aspect = img.naturalWidth / img.naturalHeight;
 		}
 		imageLoading = false;
+		settle();
 	};
 
 	const handleImageError = () => {
 		imageError = true;
 		imageLoading = false;
+		settle();
 	};
 </script>
 
 <div class="flex-1 min-h-0 flex flex-col">
 	{#if imageError}
-		<div class={mergeCss('w-full flex items-center justify-center text-base text-black', errorHeight)}>
+		<div
+			class={mergeCss('w-full flex items-center justify-center text-base text-black', errorHeight)}
+		>
 			{translate('imageUnavailable')}
 		</div>
-	{:else if expanded}
-		<!-- a box of the picture's shape, which shrinks when the card runs out of room;
-		     the picture is drawn whole inside it, on a gold-gray passe-partout -->
-		<div class="relative w-full min-h-0 shrink overflow-hidden border-y border-atm-sand-border bg-atm-gold-gray" style:aspect-ratio={aspect}>
+	{:else if inline}
+		<!-- in the flow of a text: the picture at its own height, aligned with the text -->
+		<div class="px-2 py-3 flex justify-center">
 			<img
 				src={thumbnail}
 				{alt}
-				class="absolute inset-0 w-full h-full object-contain rounded"
+				class="max-w-full max-h-[70vh] object-contain"
+				onload={handleImageLoad}
+				onerror={handleImageError}
+			/>
+		</div>
+	{:else if expanded}
+		<!-- a box of the picture's shape, which shrinks when the card runs out of room;
+		     the picture is drawn whole inside it -->
+		<!-- a tall picture's box is capped in height, the picture fitted whole with bands at
+		     its sides; it is never drawn larger than its own pixels, so a small scan stays sharp -->
+		<div
+			class="relative w-full min-h-0 max-h-[70vh] shrink overflow-hidden border-y border-atm-sand-border bg-atm-sand-mat flex items-center justify-center"
+			style:aspect-ratio={expandedAspect}
+		>
+			<img
+				src={thumbnail}
+				{alt}
+				class="max-w-full max-h-full object-contain"
 				class:hidden={imageLoading}
 				onload={handleImageLoad}
 				onerror={handleImageError}
 			/>
 		</div>
 	{:else}
-		<!-- Collapsed grid thumbnail: a fixed-aspect box reserves the card's final height
-		     before the image loads, so the masonry layout measures true heights and never
-		     shifts when images stream in. Lazy so an off-screen page of 100 cards doesn't
-		     fetch every thumbnail up front. -->
-		<div class="relative w-full border-y border-atm-sand-border">
+		<!-- Collapsed grid thumbnail: the picture sizes the box, at most 4:3 of its width tall
+		     (75cqw); before it loads, the box holds a 4:3 place, which the masonry layout
+		     measures. Lazy so an off-screen page of 100 cards doesn't fetch every thumbnail
+		     up front. -->
+		<div class="relative w-full">
 			{#if onExpand}
 				<button
 					type="button"
-					class="w-full block cursor-pointer hover:opacity-80 transition-opacity"
+					class="group relative w-full block cursor-pointer"
 					onclick={onExpand}
 					aria-label={translate('expandImage')}
 					title={translate('expandImage')}
 				>
-					<div class="w-full aspect-[4/3] overflow-hidden rounded bg-atm-gold-gray">
+					<div
+						class={mergeCss(
+							'w-full overflow-hidden bg-atm-sand-mat flex items-center justify-center [container-type:inline-size]',
+							collapsedPlaceholder
+						)}
+					>
 						<img
 							src={thumbnail}
 							{alt}
 							loading="lazy"
-							class="w-full h-full object-cover"
+							class="max-w-full max-h-[75cqw] object-contain"
 							onload={handleImageLoad}
 							onerror={handleImageError}
 						/>
 					</div>
+					<span
+						class="absolute inset-0 bg-atm-gold-deep opacity-0 group-hover:opacity-20 transition-opacity pointer-events-none"
+					></span>
 				</button>
 			{:else}
-				<div class="w-full aspect-[4/3] overflow-hidden rounded bg-atm-gold-gray">
+				<div
+					class={mergeCss(
+						'w-full overflow-hidden bg-atm-sand-mat flex items-center justify-center [container-type:inline-size]',
+						collapsedPlaceholder
+					)}
+				>
 					<img
 						src={thumbnail}
 						{alt}
 						loading="lazy"
-						class="w-full h-full object-cover"
+						class="max-w-full max-h-[75cqw] object-contain"
 						onload={handleImageLoad}
 						onerror={handleImageError}
 					/>

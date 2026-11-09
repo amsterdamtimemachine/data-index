@@ -15,9 +15,16 @@
 		children?: Snippet;
 	};
 
-	// the rest carries any button attribute through; the app is not compiled to custom elements
-	// svelte-ignore custom_element_props_identifier
-	let { class: className, icon: Icon, size = 18, weight = 'bold', color = 'black', children, ...rest }: Props = $props();
+	// the rest carries any button attribute through
+	let {
+		class: className,
+		icon: Icon,
+		size = 18,
+		weight = 'bold',
+		color = 'black',
+		children,
+		...rest
+	}: Props = $props();
 
 	const iconProps: PhosphorIconProps = $derived({
 		size,
@@ -44,7 +51,7 @@
 
 	const baseClasses =
 		'focus-ring h-[32px] flex justify-center items-center bg-atm-sand-darkish rounded border border-atm-gold border-[1px] hover:bg-atm-sand-dark disabled:opacity-50 disabled:cursor-not-allowed text-sm';
-	// icon-only and label-only stay a 32px square; a glyph with a label sizes to its text
+	// icon-only stays a 32px square; a label, with or without a glyph, sizes to its text
 	const shapeClasses = $derived.by(() => {
 		if (Icon && children) {
 			return 'px-2 gap-1';
@@ -52,11 +59,16 @@
 		if (Icon) {
 			return 'w-[32px] p-1';
 		}
-		return 'w-[32px] px-3 py-2';
+		return 'px-3';
 	});
 </script>
 
-<button {...rest} {title} use:titleFromText class={mergeCss(`${baseClasses} ${shapeClasses}`, className)}>
+<button
+	{...rest}
+	{title}
+	use:titleFromText
+	class={mergeCss(`${baseClasses} ${shapeClasses}`, className)}
+>
 	{#if Icon}
 		<Icon {...iconProps} />
 	{/if}

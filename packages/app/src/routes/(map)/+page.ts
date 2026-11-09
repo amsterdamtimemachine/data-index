@@ -9,8 +9,12 @@
 
 import type { PageLoad } from './$types';
 import type { PlaceSearchMatch } from '@atm/shared/types';
-import type { UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
-import { parsePlaceSelection, parsePlacePanelFlag, parseSortSelection } from '#lib/utils/page-params.js';
+import type { UiSortMode } from '#lib/utils/sort-modes.js';
+import {
+	parsePlaceSelection,
+	parsePlacePanelFlag,
+	parseSortSelection
+} from '#lib/utils/page-params.js';
 import { parseFilterState } from '#lib/utils/filters.js';
 import { apiUrl } from '#lib/utils/api.js';
 import { describeFailure, type Failure } from '#lib/utils/fetchJson.js';

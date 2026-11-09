@@ -19,7 +19,14 @@
 		class?: string;
 	}
 
-	let { operator, onOperatorChange, anyLabel, allLabel, disabled = false, class: className }: Props = $props();
+	let {
+		operator,
+		onOperatorChange,
+		anyLabel,
+		allLabel,
+		disabled = false,
+		class: className
+	}: Props = $props();
 
 	const all = $derived(operator === 'AND');
 
@@ -41,14 +48,16 @@
 	// border and padding leave exactly the thumb's height, so it sits centred and
 	// travels the inner width less its own
 	const thumbClasses = $derived.by(() => {
-		const base = 'block h-4 w-4 rounded-full bg-atm-gold-dark shadow-sm transition-transform duration-200 ease-in-out';
+		const base =
+			'block h-4 w-4 rounded-full bg-atm-gold-dark shadow-sm transition-transform duration-200 ease-in-out';
 		if (all) {
 			return `${base} translate-x-4`;
 		}
 		return base;
 	});
 
-	const labelClasses = 'font-sans text-base text-black whitespace-nowrap cursor-pointer select-none';
+	const labelClasses =
+		'font-sans text-base text-black whitespace-nowrap cursor-pointer select-none';
 </script>
 
 <div class={mergeCss('flex items-center gap-1', className)} class:opacity-50={disabled}>

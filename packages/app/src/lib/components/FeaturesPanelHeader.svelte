@@ -4,7 +4,8 @@
 	import Button from '#lib/components/Button.svelte';
 	import X from 'phosphor-svelte/lib/X';
 	import MapThumbnail from '#lib/components/MapThumbnail.svelte';
-	import FeaturesSortSelect, { type UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
+	import FeaturesSortSelect from '#lib/components/FeaturesSortSelect.svelte';
+	import type { UiSortMode } from '#lib/utils/sort-modes.js';
 	import { createMediaQuery, MOBILE_QUERY } from '#lib/utils/media.svelte.js';
 	import { translate } from '#lib/utils/translations.js';
 	import { subjectPhrase } from '#lib/utils/format.js';
@@ -23,7 +24,6 @@
 		sortMode: UiSortMode;
 		onSortChange?: (mode: UiSortMode) => void;
 		onShuffle?: () => void;
-		matchActive?: boolean;
 		totalCount: number;
 		currentPage: number;
 		pageSize: number;
@@ -44,7 +44,6 @@
 		sortMode,
 		onSortChange,
 		onShuffle,
-		matchActive = false,
 		totalCount,
 		currentPage,
 		pageSize,
@@ -100,7 +99,6 @@
 		}
 		return 32;
 	});
-
 </script>
 
 <div
@@ -133,12 +131,18 @@
 		</div>
 		{#if hasPagination}
 			<div class="header-pages min-w-0">
-				<Pagination totalItems={totalCount} {currentPage} itemsPerPage={pageSize} {onPageChange} {loading} />
+				<Pagination
+					totalItems={totalCount}
+					{currentPage}
+					itemsPerPage={pageSize}
+					{onPageChange}
+					{loading}
+				/>
 			</div>
 		{/if}
 		{#if onSortChange && onShuffle}
 			<div class="header-sort">
-				<FeaturesSortSelect value={sortMode} onChange={onSortChange} {onShuffle} {matchActive} />
+				<FeaturesSortSelect value={sortMode} onChange={onSortChange} {onShuffle} />
 			</div>
 		{/if}
 	{/if}

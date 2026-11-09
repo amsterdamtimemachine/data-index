@@ -42,7 +42,7 @@ type InferPlaceArgs = {
     end: string;
 };
 
-export class PlaceIndex<SourceRecord extends Record<string, any>> {
+export class PlaceIndex<SourceRecord extends Record<string, unknown>> {
     private placeTrie: PlaceTrie | undefined = undefined
 
     private constructor(
@@ -54,7 +54,7 @@ export class PlaceIndex<SourceRecord extends Record<string, any>> {
      * @param methods for extracting places
      * @returns PlaceIndex itself
      */
-    static async create<SourceRecord extends Record<string, any>> 
+    static async create<SourceRecord extends Record<string, unknown>> 
         (methods: ExtractionArgs<SourceRecord>): Promise<PlaceIndex<SourceRecord>> {
         const index = new PlaceIndex(methods);
 

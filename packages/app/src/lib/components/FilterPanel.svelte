@@ -9,7 +9,7 @@
 	import type { FilterState } from '#lib/types/filters.js';
 	import { translate, translateAll, reverseTranslateAll } from '#lib/utils/translations.js';
 	import { navigateParams, withoutPlace } from '#lib/utils/navigate.js';
-	import { createTagCounts } from '#lib/state/tag-counts.svelte.js';
+	import { createFilterCounts } from '#lib/state/filter-counts.svelte.js';
 	import Heading from './Heading.svelte';
 	import TextWithSlots from './TextWithSlots.svelte';
 	import FilterSection from './FilterSection.svelte';
@@ -17,8 +17,9 @@
 	import SearchInput from './SearchInput.svelte';
 	import PlaceFilterTag from './PlaceFilterTag.svelte';
 	import SearchFilterTag from './SearchFilterTag.svelte';
-	import Button from './Button.svelte';
-	import X from 'phosphor-svelte/lib/X';
+	import Link from './Link.svelte';
+	import { selectsAll, NONE, CATEGORIES, type Category } from '#lib/utils/filters.js';
+	import type { ValueCount } from '@atm/shared/types';
 	import TagOperatorSwitch from './TagOperatorSwitch.svelte';
 
 	interface Props {
@@ -33,6 +34,10 @@
 		placePanelOpen?: boolean;
 		searchPaused?: boolean;
 		onToggleSearch?: () => void;
+		// a category is empty: nothing to list, so the search's preview count stays quiet
+		idle?: boolean;
+		// the period and, in the timeline's local mode, the cell or place the counts are taken within
+		countsScope?: string;
 	}
 
 	let {
@@ -43,7 +48,9 @@
 		onTogglePlacePanel = undefined,
 		placePanelOpen = false,
 		searchPaused = false,
-		onToggleSearch = undefined
+		onToggleSearch = undefined,
+		idle = false,
+		countsScope = ''
 	}: Props = $props();
 
 	const recordTypes = $derived(metadata?.recordTypes ?? []);
@@ -62,80 +69,93 @@
 
 	let datasetLabels = $derived(datasets.map((s) => s.label));
 	let datasetLookup = $derived(new Map(datasets.map((s) => [s.id, s.label])));
+	const datasetIds = $derived(datasets.map((s) => s.id));
 	let currentDatasetLabels = $derived(filters.datasets.map((id) => datasetLookup.get(id) || id));
 
 	// Tags render by Dutch label like the other filters; the handler translates back.
 	let translatedTags = $derived(translateAll(availableTags));
 	let translatedCurrentTags = $derived(translateAll(currentTags));
 
-	// Per-tag counts under the other filters, used only to grey out empty tags. The
-	// selection itself is stripped so toggling a tag never refetches counts that cannot change.
-	const tagCounts = createTagCounts();
-	const tagCountsQuery = $derived.by(() => {
+	// What every filter value is worth under the other filters, the period and the scope,
+	// shown beside it. The applied filters travel as they are, an emptied category as
+	// 'none', so the server counts that category's own values and zeroes the rest.
+	const filterCounts = createFilterCounts();
+	const countsQuery = $derived.by(() => {
 		const params = new URLSearchParams(activeParams);
-		params.delete('tags');
-		params.delete('tagOperator');
+		if (metadata) {
+			for (const category of CATEGORIES) {
+				if (filters[category].length === 0) {
+					params.set(category, NONE);
+				}
+			}
+		}
+		for (const [name, value] of new URLSearchParams(countsScope)) {
+			params.set(name, value);
+		}
 		return params.toString();
 	});
-	// A boolean derived, not the array: a reloaded metadata array must not refetch.
-	const hasTags = $derived(availableTags.length > 0);
+	const hasMetadata = $derived(metadata !== null);
 	$effect(() => {
-		if (hasTags) {
-			tagCounts.load(tagCountsQuery);
+		if (hasMetadata) {
+			filterCounts.load(countsQuery);
+		} else {
+			filterCounts.reset();
 		}
 	});
-	const tagCountByLabel = $derived.by(() => {
-		const byLabel = new Map<string, number>();
-		if (!tagCounts.counts) {
-			return byLabel;
+	// a list's counts keyed by the label the toggle shows, every known value present
+	function countsByLabel(
+		ids: string[],
+		label: (id: string) => string,
+		counted: ValueCount[] | undefined
+	): Map<string, number> | undefined {
+		if (!counted) {
+			return undefined;
 		}
-		for (const id of availableTags) {
-			byLabel.set(translate(id), tagCounts.counts.get(id) ?? 0);
-		}
-		return byLabel;
-	});
-	// A tag with nothing behind it under the current filters is greyed out, unless it
-	// is selected (so it can still be deselected).
-	const disabledTagLabels = $derived.by(() => {
-		if (!tagCounts.counts) {
-			return [];
-		}
-		return translatedTags.filter((label) => tagCountByLabel.get(label) === 0 && !translatedCurrentTags.includes(label));
-	});
+		const byId = new Map(counted.map((c) => [c.id, c.count]));
+		return new Map(ids.map((id) => [label(id), byId.get(id) ?? 0]));
+	}
+	const recordTypeCounts = $derived(
+		countsByLabel(recordTypes, translate, filterCounts.counts?.recordTypes)
+	);
+	const datasetCounts = $derived(
+		countsByLabel(datasetIds, (id) => datasetLookup.get(id) || id, filterCounts.counts?.datasets)
+	);
+	const placeTypeCounts = $derived(
+		countsByLabel(placeTypes, translate, filterCounts.counts?.placeTypes)
+	);
+	const tagCounts = $derived(countsByLabel(availableTags, translate, filterCounts.counts?.tags));
 
-	// bestMatch ranks against the term and the tags; with neither left it means nothing
-	function dropIdleBestMatch(p: URLSearchParams) {
-		if (p.get('sort') === 'bestMatch' && !p.get('q') && !p.get('tags')) {
-			p.delete('sort');
+	// a category's param: absent for everything, NONE for nothing, else the picks
+	function writeCategory(p: URLSearchParams, name: Category, values: string[], all: string[]) {
+		if (selectsAll(values, all)) {
+			p.delete(name);
+		} else if (values.length === 0) {
+			p.set(name, NONE);
+		} else {
+			p.set(name, values.join(','));
 		}
 	}
 
 	function handleRecordTypeChange(selected: string[]) {
-		const dutch = selected;
-		const english = reverseTranslateAll(dutch);
-		navigateParams((p) => {
-			if (english.length > 0) p.set('recordTypes', english.join(','));
-			else p.delete('recordTypes');
-		});
+		const english = reverseTranslateAll(selected);
+		navigateParams((p) => writeCategory(p, 'recordTypes', english, recordTypes));
 	}
 
 	function handleDatasetChange(selected: string[]) {
-		const labels = selected;
 		const labelToId = new Map(datasets.map((s) => [s.label, s.id]));
-		const ids = labels.map((label) => labelToId.get(label) || label);
-		navigateParams((p) => {
-			if (ids.length > 0) p.set('datasets', ids.join(','));
-			else p.delete('datasets');
-		});
+		const ids = selected.map((label) => labelToId.get(label) || label);
+		navigateParams((p) => writeCategory(p, 'datasets', ids, datasetIds));
 	}
 
 	function handlePlaceTypeChange(selected: string[]) {
-		const dutch = selected;
-		const raw = reverseTranslateAll(dutch);
-		navigateParams((p) => {
-			if (raw.length > 0) p.set('placeTypes', raw.join(','));
-			else p.delete('placeTypes');
-		});
+		const raw = reverseTranslateAll(selected);
+		navigateParams((p) => writeCategory(p, 'placeTypes', raw, placeTypes));
+	}
+
+	// the header button: with everything pressed it releases all, else it presses all
+	function handleCategoryToggle(name: Category, all: string[]) {
+		const allPressed = selectsAll(filters[name], all);
+		navigateParams((p) => writeCategory(p, name, allPressed ? [] : all, all));
 	}
 
 	function handleTagsChange(selected: string[]) {
@@ -144,14 +164,12 @@
 		navigateParams((p) => {
 			if (ids.length > 0) p.set('tags', ids.join(','));
 			else p.delete('tags');
-			dropIdleBestMatch(p);
 		});
 	}
 
 	function handleTagsClear() {
 		navigateParams((p) => {
 			p.delete('tags');
-			dropIdleBestMatch(p);
 		});
 	}
 
@@ -182,7 +200,6 @@
 	function handleSearchClear() {
 		navigateParams((p) => {
 			p.delete('q');
-			dropIdleBestMatch(p);
 		});
 	}
 
@@ -194,6 +211,12 @@
 	}
 </script>
 
+{#snippet categoryToggle(name: Category, all: string[])}
+	<Link onclick={() => handleCategoryToggle(name, all)}>
+		{selectsAll(filters[name], all) ? translate('clearAll') : translate('selectAll')}
+	</Link>
+{/snippet}
+
 <div class="p-3">
 	<div class="mb-4">
 		<Heading level={2} class="font-bold text-lg mb-2">{translate('filters')}</Heading>
@@ -203,30 +226,55 @@
 				<TextWithSlots text={translate('searchTooltip')}>
 					{#snippet children(slot)}
 						{#if slot === 'border'}
-							<img src={asset('glyphs/PlaceBorder.svg')} alt="" width="24" height="24" class="inline align-middle mx-1" />
+							<img
+								src={asset('glyphs/PlaceBorder.svg')}
+								alt=""
+								width="24"
+								height="24"
+								class="inline align-middle mx-1"
+							/>
 						{/if}
 					{/snippet}
 				</TextWithSlots>
 			{/snippet}
-			<SearchInput onApplySearch={handleSearchApply} onSelectPlace={handlePlaceSelect} filterQuery={activeParams} />
+			<SearchInput
+				onApplySearch={handleSearchApply}
+				onSelectPlace={handlePlaceSelect}
+				filterQuery={idle ? null : activeParams}
+			/>
 			{#if selectedPlace}
 				<div class="mt-2">
-					<PlaceFilterTag place={selectedPlace} onClear={handlePlaceClear} onToggle={onTogglePlacePanel} active={placePanelOpen} />
+					<PlaceFilterTag
+						place={selectedPlace}
+						onClear={handlePlaceClear}
+						onToggle={onTogglePlacePanel}
+						active={placePanelOpen}
+					/>
 				</div>
 			{/if}
 			{#if currentSearchQuery}
 				<div class="mt-2">
-					<SearchFilterTag query={currentSearchQuery} onClear={handleSearchClear} onToggle={onToggleSearch} active={!searchPaused} />
+					<SearchFilterTag
+						query={currentSearchQuery}
+						onClear={handleSearchClear}
+						onToggle={onToggleSearch}
+						active={!searchPaused}
+					/>
 				</div>
 			{/if}
 		</FilterSection>
 
 		<FilterSection heading={translate('recordTypeFilter')}>
+			{#snippet action()}
+				{@render categoryToggle('recordTypes', recordTypes)}
+			{/snippet}
 			{#snippet children(headingId)}
 				<FilterToggleGroup
 					items={translatedRecordTypes}
 					selectedItems={translatedCurrentRecordTypes}
+					counts={recordTypeCounts}
 					onItemSelected={handleRecordTypeChange}
+					requireOne={false}
 					labelledBy={headingId}
 				/>
 			{/snippet}
@@ -237,8 +285,18 @@
 		{#snippet tooltip()}
 			{translate('datasetFilterTooltip')}
 		{/snippet}
+		{#snippet action()}
+			{@render categoryToggle('datasets', datasetIds)}
+		{/snippet}
 		{#snippet children(headingId)}
-			<FilterToggleGroup items={datasetLabels} selectedItems={currentDatasetLabels} onItemSelected={handleDatasetChange} labelledBy={headingId} />
+			<FilterToggleGroup
+				items={datasetLabels}
+				selectedItems={currentDatasetLabels}
+				counts={datasetCounts}
+				onItemSelected={handleDatasetChange}
+				requireOne={false}
+				labelledBy={headingId}
+			/>
 		{/snippet}
 	</FilterSection>
 
@@ -247,11 +305,16 @@
 			{#snippet tooltip()}
 				{translate('scaleFilterTooltip')}
 			{/snippet}
+			{#snippet action()}
+				{@render categoryToggle('placeTypes', placeTypes)}
+			{/snippet}
 			{#snippet children(headingId)}
 				<FilterToggleGroup
 					items={translatedPlaceTypes}
 					selectedItems={translatedCurrentPlaceTypes}
+					counts={placeTypeCounts}
 					onItemSelected={handlePlaceTypeChange}
+					requireOne={false}
 					labelledBy={headingId}
 				/>
 			{/snippet}
@@ -263,6 +326,11 @@
 			{#snippet tooltip()}
 				{translate('topicsTooltip')}
 			{/snippet}
+			{#snippet action()}
+				{#if currentTags.length > 0}
+					<Link onclick={handleTagsClear}>{translate('clearAll')}</Link>
+				{/if}
+			{/snippet}
 			{#snippet children(headingId)}
 				<TagOperatorSwitch
 					operator={currentTagOperator}
@@ -271,13 +339,10 @@
 					allLabel={translate('topicsAll')}
 					class="mb-2"
 				/>
-				{#if currentTags.length > 0}
-					<Button icon={X} size={16} onclick={handleTagsClear} class="mb-2">{translate('clearAll')}</Button>
-				{/if}
 				<FilterToggleGroup
 					items={translatedTags}
 					selectedItems={translatedCurrentTags}
-					disabledItems={disabledTagLabels}
+					counts={tagCounts}
 					onItemSelected={handleTagsChange}
 					requireOne={false}
 					labelledBy={headingId}

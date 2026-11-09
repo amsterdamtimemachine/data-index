@@ -3,10 +3,10 @@
  * event, at the venue's address.
  *
  * Reads the JSONL exported from the Cinema Context database dump: one line per
- * programme with its venue, the venue's address as written and its point, the bill
+ * programme with its venue, the venue's address as written and its point, the items
  * in order, and the newspapers it was listed in. A programme is valid with at least
- * one film or act on its bill; an empty bill is skipped. The label is the first
- * item on the bill, and that item sets the kind: a bill opening with a film is a
+ * one film or act on its programme; a programme without items is skipped. The label is the first
+ * item on the programme, and that item sets the kind: a programme opening with a film is a
  * ScreeningEvent screened at its venue, one opening with an act a TheaterEvent
  * performed there.
  *
@@ -19,7 +19,7 @@
  * Usage: bun run db:ingest -s cinema-context -f <path-to-cinema-context.jsonl>
  */
 import { Draft, Ingestor } from '../ingest/ingestor';
-import { ProgrammeEntityFactory, programmeBill, leadsWithFilm, type ProgrammeItem } from '../ingest/entity-factory';
+import { ProgrammeEntityFactory, programmeItems, leadsWithFilm, type SourceItem } from '../ingest/entity-factory';
 import { ExtractionArgs, PlaceExtractionMethod } from '../places/place-index';
 import { RecordType, parsePartialDate, partialDateRange } from '@atm/shared';
 
@@ -33,14 +33,14 @@ type CinemaContextRecord = {
   // the venue's address as the source writes it
   address: string | null;
   geom_wkt: string;
-  items: ProgrammeItem[];
+  items: SourceItem[];
 };
 
 const SCREENED_AT = { id: 'screenedAt', label: 'Screened at', dated: true };
 const PERFORMED_AT = { id: 'performedAt', label: 'Performed at', dated: true };
 
-/** The first item on the bill, film or act, as the source words it. */
-function firstOnBill(items: ProgrammeItem[]): string | undefined {
+/** The first item on the programme, film or act, as the source words it. */
+function firstItem(items: SourceItem[]): string | undefined {
   for (const item of items) {
     if (item.title) return item.title;
     if (item.live) return item.live;
@@ -82,9 +82,9 @@ export class CinemaContextIngestor extends Ingestor<CinemaContextRecord> {
     return [SCREENED_AT, PERFORMED_AT];
   }
 
-  // screened at with a film on the bill, performed at with acts only
+  // screened at with a film on the programme, performed at with acts only
   protected override relationFor(source: CinemaContextRecord): string {
-    if (leadsWithFilm(programmeBill(source.items ?? []))) {
+    if (leadsWithFilm(programmeItems(source.items ?? []))) {
       return SCREENED_AT.id;
     }
     return PERFORMED_AT.id;
@@ -92,7 +92,7 @@ export class CinemaContextIngestor extends Ingestor<CinemaContextRecord> {
 
   protected transform(source: CinemaContextRecord): Draft | undefined {
     const dates = parseProgrammeDate(source.date);
-    const first = firstOnBill(source.items ?? []);
+    const first = firstItem(source.items ?? []);
     if (!dates || !first) {
       return undefined;
     }

@@ -20,7 +20,14 @@
 		class?: string;
 	}
 
-	let { totalItems, currentPage, itemsPerPage, onPageChange, loading = false, class: className }: Props = $props();
+	let {
+		totalItems,
+		currentPage,
+		itemsPerPage,
+		onPageChange,
+		loading = false,
+		class: className
+	}: Props = $props();
 
 	const total = $derived(totalPages(totalItems, itemsPerPage));
 
@@ -66,7 +73,7 @@
 		{:else}
 			<Button
 				{...pagination.page(item.value)}
-				class="data-[selected]:bg-atm-gold data-[selected]:hover:bg-atm-gold-dark"
+				class="w-[32px] px-0 data-[selected]:bg-atm-gold data-[selected]:hover:bg-atm-gold-dark"
 				aria-label="{translate('goToPage')} {item.value}"
 			>
 				{item.value}

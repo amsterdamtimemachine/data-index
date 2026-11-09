@@ -9,14 +9,27 @@ import { describe, test, expect, afterEach } from 'vitest';
 import { flushSync } from 'svelte';
 
 import type { Histogram, HeatmapCellBounds } from '@atm/shared/types';
-import { createTimelineScope, type TimelineScopeInputs, type Fetcher } from './timeline-scope.svelte';
+import {
+	createTimelineScope,
+	type TimelineScopeInputs,
+	type Fetcher
+} from './timeline-scope.svelte';
 
 function series(count: number): Histogram {
 	return {
-		bins: [{
-			timeSlice: { key: '1900_1950', label: '1900-1950', timeRange: { start: '1900', end: '1950' }, startYear: 1900, endYear: 1950, durationYears: 50 },
-			count
-		}],
+		bins: [
+			{
+				timeSlice: {
+					key: '1900_1950',
+					label: '1900-1950',
+					timeRange: { start: '1900', end: '1950' },
+					startYear: 1900,
+					endYear: 1950,
+					durationYears: 50
+				},
+				count
+			}
+		],
 		maxCount: count,
 		timeRange: { start: '1900', end: '1950' },
 		totalFeatures: count
@@ -58,9 +71,11 @@ function harness(overrides: Partial<TimelineScopeInputs> = {}) {
 		return () => {};
 	}) as Fetcher;
 	let scope!: ReturnType<typeof createTimelineScope>;
-	cleanups.push($effect.root(() => {
-		scope = createTimelineScope(inputs, fetcher);
-	}));
+	cleanups.push(
+		$effect.root(() => {
+			scope = createTimelineScope(inputs, fetcher);
+		})
+	);
 	flushSync();
 	return { inputs, requests, scope };
 }
@@ -79,7 +94,16 @@ describe('timeline scope', () => {
 		expect(requests).toEqual([]);
 	});
 
-	test('desktop: a loaded cell series waits for the switch, but is there for the hover\'s selection count', () => {
+	test('without params (a category is empty) a subject fetches nothing and the band stays city-wide', () => {
+		const { scope, requests, inputs } = harness({ cellBounds: CELL, params: null });
+		expect(requests).toEqual([]);
+		expect(scope.available).toBe(false);
+		inputs.params = 'recordTypes=image';
+		flushSync();
+		expect(requests).toHaveLength(1);
+	});
+
+	test("desktop: a loaded cell series waits for the switch, but is there for the hover's selection count", () => {
 		const { inputs, scope, requests } = harness();
 		inputs.cellBounds = CELL;
 		flushSync();

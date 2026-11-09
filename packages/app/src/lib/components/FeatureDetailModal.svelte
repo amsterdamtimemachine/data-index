@@ -5,6 +5,7 @@
 <script lang="ts">
 	import { featureViewerState } from '#lib/state/featureState.svelte.js';
 	import FeatureCard from '#lib/components/FeatureCard.svelte';
+	import LoadingBar from '#lib/components/LoadingBar.svelte';
 
 	// the dialog is named by the card's own heading, which carries this id
 	const TITLE_ID = 'feature-dialog-title';
@@ -28,6 +29,9 @@
 	aria-labelledby={TITLE_ID}
 	class="{widthClasses} max-h-[calc(100dvh-1.5rem)] p-0 border-0 bg-white rounded-sm shadow-xl overflow-hidden open:flex flex-col backdrop:bg-black/85"
 >
+	<!-- the dialog sits in the top layer, above the page's bar, so it carries its own: a
+	     fixed child of the dialog lies against the viewport but paints in the top layer -->
+	<LoadingBar class="fixed top-0 left-0 w-screen z-10" />
 	{#if selectedFeature}
 		<!-- the card caps itself at this height and scrolls its content region;
 		     the overflow here is only a fallback -->

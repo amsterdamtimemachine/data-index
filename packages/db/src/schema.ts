@@ -2,6 +2,7 @@ import type { AgentKind } from '@atm/shared';
 import { pgTable, text, date, smallint, integer, boolean, uuid, jsonb, real, doublePrecision, customType, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { PlaceSource } from '@atm/shared';
+import { searchVectorDdl } from './search-vector';
 
 // Custom PostGIS geometry type - stored in RD (Dutch) coordinates
 // Transform to WGS84 (4326) for frontend display
@@ -57,15 +58,17 @@ export const datasets = pgTable('datasets', {
 // ============================================================================
 export const place = pgTable('place', {
   id: text('id').primaryKey(),                    // Adamlink URI ("https://adamlink.nl/geo/{street,district,lp}/…") or PDOK "{cbs,nwb,bag}-<code>"
-  type: text('type').notNull(),                   // "address" | "street" | "neighbourhood" (buurt) | "district" (wijk)
+  type: text('type').notNull(),                   // "address" | "building" | "street" | "neighbourhood" (buurt) | "district" (wijk)
   name: text('name'),                            // name shown for the place; dated past names live in place_historical_name
   source: text('source').$type<PlaceSource>().references(() => agents.id), // provider, seeded from PLACE_PROVIDERS
   url: text('url')                               // canonical record at the source (adamlink.nl / bag.basisregistraties.overheid.nl / …)
 }, (table) => [
-  // exact case-insensitive name lookup (getCandidatesByName / inferByName)
-  index('idx_place_name_lower').on(sql`lower(${table.name})`).where(sql`${table.name} is not null`),
+  // exact case-insensitive name lookup (getCandidatesByName / inferByName). Not partial: the
+  // planner does not read a partial index's statistics, and estimated 0.5% of all places
+  // for every name, which made each lookup a parallel scan
+  index('idx_place_name_lower').on(sql`lower(${table.name})`),
   // prefix search (searchPlaces): LIKE 'q%' needs text_pattern_ops
-  index('idx_place_name_prefix').on(sql`lower(${table.name}) text_pattern_ops`).where(sql`${table.name} is not null`)
+  index('idx_place_name_prefix').on(sql`lower(${table.name}) text_pattern_ops`)
 ]);
 
 // ============================================================================
@@ -80,13 +83,13 @@ export const placeGeometry = pgTable('place_geometry', {
   source: text('source').$type<PlaceSource>().references(() => agents.id),
   url: text('url'),                               // link to the geometry's source record
   // The period the place existed in this shape: a division's validity for
-  // neighbourhood/district, the street's existence for Adamlink streets; null for
-  // addresses. until null = open/current.
+  // neighbourhood/district, the existence of an Adamlink street or building; null
+  // for addresses. until null = open/current.
   since: date('since'),
   until: date('until'),
   // The BAG building (pand) the point stands in, as the source states it: Adamlink's
-  // geoWithin link for an LP, BAG's pandidentificatie for an address. Null for
-  // streets and areas. An address from each source in one building with the same
+  // geoWithin link for an LP, BAG's pandidentificatie for an address; a building's
+  // own (Adamlink's sameAs). Null for streets and areas. An address from each source in one building with the same
   // house number is one address recorded twice (see twinOf).
   buildingId: text('building_id')
 }, (table) => [
@@ -111,8 +114,8 @@ export const placeHistoricalName = pgTable('place_historical_name', {
 }, (table) => [
   index('idx_place_historical_name_place').on(table.placeId),
   index('idx_place_historical_name_place_since').on(table.placeId, table.since),
-  index('idx_place_historical_name_lower').on(sql`lower(${table.name})`).where(sql`${table.name} is not null`),
-  index('idx_place_historical_name_prefix').on(sql`lower(${table.name}) text_pattern_ops`).where(sql`${table.name} is not null`)
+  index('idx_place_historical_name_lower').on(sql`lower(${table.name})`),
+  index('idx_place_historical_name_prefix').on(sql`lower(${table.name}) text_pattern_ops`)
 ]);
 
 // ============================================================================
@@ -145,9 +148,10 @@ export const features = pgTable('features', {
   url: text('url').notNull(),
   recordType: text('record_type').notNull(),
   label: text('label').notNull(),
-  // stemmed label, kept in sync by the DB; the text-search predicate and ts_rank
-  // both read this column (see queries/feature-search.ts)
-  labelTsv: tsvector('label_tsv').generatedAlwaysAs(sql`to_tsvector('dutch', label)`),
+  // the weighted text of the feature, words as written (title, description, the entity's
+  // searchable fields), kept in sync by the DB; the text-search predicate and ts_rank
+  // both read this column (see queries/feature-search.ts, search-vector.ts)
+  searchTsv: tsvector('search_tsv').generatedAlwaysAs(sql.raw(searchVectorDdl())),
   description: text('description'),
   contentUrl: text('content_url'),
   startDate: date('start_date').notNull(),
@@ -158,7 +162,7 @@ export const features = pgTable('features', {
   index('idx_features_dates').on(table.startDate, table.endDate),
   index('idx_features_record_type').on(table.recordType),
   uniqueIndex('idx_features_int_id').on(table.featureIntId),
-  index('idx_features_label_fts').using('gin', table.labelTsv)
+  index('idx_features_search_fts').using('gin', table.searchTsv)
 ]);
 
 // ============================================================================

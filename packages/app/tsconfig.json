@@ -3,14 +3,7 @@
 	"compilerOptions": {
 		"sourceMap": true,
 		"strict": true,
-		"types": [
-			"$app/types",
-			"postcss",
-			"bun"
-		]
+		"types": ["$app/types", "postcss", "bun"]
 	},
-	"include": [
-		"src",
-		"vite.config.ts"
-	]
+	"include": ["src", "vite.config.ts"]
 }
