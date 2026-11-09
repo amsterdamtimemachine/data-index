@@ -113,7 +113,9 @@ export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 			currentPage = data.page || 1;
 			totalCount = data.total || 0;
 			pageSize = data.pageSize || 50;
-			announcer.announce(resultsSentence(totalCount, currentPage, pageSize, subjectPhrase(query.subject)));
+			announcer.announce(
+				resultsSentence(totalCount, currentPage, pageSize, subjectPhrase(query.subject))
+			);
 		} catch (err) {
 			notifyFailure('featuresNotLoaded', err);
 		} finally {

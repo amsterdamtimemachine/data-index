@@ -34,15 +34,27 @@
 				<div class="pr-10">
 					<h3 {...toast.title} class="flex items-center gap-1.5 font-bold text-sm">
 						{#if toast.data.failure}
-							<span class="shrink-0 text-atm-red" aria-hidden="true"><Bug size={16} weight="bold" color="currentColor" /></span>
+							<span class="shrink-0 text-atm-red" aria-hidden="true"
+								><Bug size={16} weight="bold" color="currentColor" /></span
+							>
 						{/if}
 						{toast.data.title}
 					</h3>
 					<!-- one line per thing to say; a long value from a link wraps inside the toast -->
-					<div {...toast.description} class="text-sm text-gray-600 mt-1 empty:hidden whitespace-pre-line [overflow-wrap:anywhere]">{toast.data.description ?? ''}</div>
+					<div
+						{...toast.description}
+						class="text-sm text-gray-600 mt-1 empty:hidden whitespace-pre-line [overflow-wrap:anywhere]"
+					>
+						{toast.data.description ?? ''}
+					</div>
 				</div>
 				<div class="absolute top-2 right-2">
-					<Button icon={X} onclick={toast.removeSelf} size={18} aria-label={translate('dismissNotification')} />
+					<Button
+						icon={X}
+						onclick={toast.removeSelf}
+						size={18}
+						aria-label={translate('dismissNotification')}
+					/>
 				</div>
 			</div>
 		</div>

@@ -6,7 +6,12 @@
  */
 import { error } from '@sveltejs/kit';
 import type { RecordType, PlaceType, TagOperator, MatchFilters } from '@atm/shared/types';
-import { MAX_FILTER_ITEMS, DISPLAY_GRID_DEFAULT_COLS, DISPLAY_GRID_MIN_COLS, DISPLAY_GRID_MAX_COLS } from '@atm/shared';
+import {
+	MAX_FILTER_ITEMS,
+	DISPLAY_GRID_DEFAULT_COLS,
+	DISPLAY_GRID_MIN_COLS,
+	DISPLAY_GRID_MAX_COLS
+} from '@atm/shared';
 
 /**
  * Parse a comma-separated query param into a trimmed string[], or undefined.
@@ -15,7 +20,11 @@ import { MAX_FILTER_ITEMS, DISPLAY_GRID_DEFAULT_COLS, DISPLAY_GRID_MIN_COLS, DIS
 export function parseList(url: URL, name: string): string[] | undefined {
 	const raw = url.searchParams.get(name);
 	if (!raw) return undefined;
-	const items = raw.split(',').map((s) => s.trim()).filter((s) => s.length > 0).slice(0, MAX_FILTER_ITEMS);
+	const items = raw
+		.split(',')
+		.map((s) => s.trim())
+		.filter((s) => s.length > 0)
+		.slice(0, MAX_FILTER_ITEMS);
 	return items.length > 0 ? items : undefined;
 }
 
@@ -114,7 +123,9 @@ export function parseBounds(url: URL): Bounds | undefined {
 		throw error(400, 'Bounds must be valid numbers', { code: 'INVALID_BOUNDS' });
 	}
 	if (bounds.minLon >= bounds.maxLon || bounds.minLat >= bounds.maxLat) {
-		throw error(400, 'Bounds must have minLon < maxLon and minLat < maxLat', { code: 'INVALID_BOUNDS' });
+		throw error(400, 'Bounds must have minLon < maxLon and minLat < maxLat', {
+			code: 'INVALID_BOUNDS'
+		});
 	}
 	return bounds;
 }

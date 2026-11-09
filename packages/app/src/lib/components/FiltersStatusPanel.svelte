@@ -48,7 +48,12 @@
 		}
 		const label = new Map(allDatasets.map((d) => [d.id, d.label]));
 		let ids = filters.datasets;
-		if (selectsAll(filters.datasets, allDatasets.map((d) => d.id))) {
+		if (
+			selectsAll(
+				filters.datasets,
+				allDatasets.map((d) => d.id)
+			)
+		) {
 			ids = allDatasets.map((d) => d.id);
 		}
 		return ids.map((id) => label.get(id) || id);
@@ -94,13 +99,16 @@
 		{#if selectedPlace}
 			<span>{translate('statusInCellsOf')}</span>
 			<Tag variant="selected-outline">
-				<span class="inline-flex align-[-2px] mr-1"><MapPin size={14} weight="bold" /></span>{formatPlaceTitle(selectedPlace)}
+				<span class="inline-flex align-[-2px] mr-1"><MapPin size={14} weight="bold" /></span
+				>{formatPlaceTitle(selectedPlace)}
 			</Tag>
 		{/if}
 		{#if searchQuery}
 			<span>{translate('statusWithSearch')}</span>
 			<Tag variant="selected-outline">
-				<span class="inline-flex align-[-2px] mr-1"><MagnifyingGlass size={14} weight="bold" /></span>{searchQuery}
+				<span class="inline-flex align-[-2px] mr-1"
+					><MagnifyingGlass size={14} weight="bold" /></span
+				>{searchQuery}
 			</Tag>
 		{/if}
 		{#if selectedTags.length > 0}

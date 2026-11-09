@@ -16,7 +16,9 @@ export function createPlaceSearch() {
 	const run = debounce(async (q: string) => {
 		const id = ++requestId;
 		try {
-			const response = await fetch(apiUrl('/api/places', new URLSearchParams({ q, limit: String(RESULT_LIMIT) })));
+			const response = await fetch(
+				apiUrl('/api/places', new URLSearchParams({ q, limit: String(RESULT_LIMIT) }))
+			);
 			if (!response.ok) {
 				throw response;
 			}

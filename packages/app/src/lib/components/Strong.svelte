@@ -7,10 +7,7 @@
 		children?: Snippet;
 	}
 
-	let {
-		class: className,
-		children
-	}: Props = $props();
+	let { class: className, children }: Props = $props();
 
 	const baseClasses = 'font-bold';
 </script>

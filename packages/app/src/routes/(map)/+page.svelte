@@ -37,7 +37,6 @@
 	import { PUBLIC_DEFAULT_CENTER } from '$app/env/public';
 	import { createEmptyHeatmap, getCellIdFromLonLat } from '#lib/utils/heatmap.js';
 
-
 	let { data }: { data: PageData } = $props();
 
 	const isMobile = createMediaQuery(MOBILE_QUERY);
@@ -53,7 +52,11 @@
 	const idle = $derived(emptyFilters.length > 0);
 
 	// the collapsed filters line, in one piece
-	const filtersStatus = $derived({ filters: activeFilters, metadata: data.metadata, place: data.selectedPlace });
+	const filtersStatus = $derived({
+		filters: activeFilters,
+		metadata: data.metadata,
+		place: data.selectedPlace
+	});
 
 	// The city-wide heatmap and histogram, refetched when the filters change; the
 	// first heatmap runs the one-time setup below.
@@ -120,7 +123,6 @@
 		}
 		return panelCols;
 	});
-
 
 	let currentPeriod = $derived(mapSelection.currentPeriod);
 	let selectedCellId = $derived(mapSelection.selectedCellId);
@@ -387,7 +389,6 @@
 	{/if}
 </svelte:head>
 
-
 <!-- inline 100dvh tracks the mobile browser chrome; browsers without dvh drop the
      declaration and fall back to the h-screen class -->
 <div class="relative flex flex-col w-screen h-screen" style:height="100dvh">
@@ -406,7 +407,11 @@
 			/>
 		{/if}
 
-		<NavContainer bind:isExpanded={navExpanded} bind:element={navElement} class="absolute top-0 left-0 z-30">
+		<NavContainer
+			bind:isExpanded={navExpanded}
+			bind:element={navElement}
+			class="absolute top-0 left-0 z-30"
+		>
 			{#snippet header()}
 				<Nav class="p-3">
 					<NavItem href={resolve('/about')} label={translate('navAbout')} />
@@ -425,10 +430,13 @@
 			/>
 		</NavContainer>
 
-	<!-- Show filters status when nav is collapsed -->
-	{#if !navExpanded}
-		<FiltersStatusPanel status={filtersStatus} class="absolute top-3 left-3 max-w-[calc(100%-1.5rem)]" />
-	{/if}
+		<!-- Show filters status when nav is collapsed -->
+		{#if !navExpanded}
+			<FiltersStatusPanel
+				status={filtersStatus}
+				class="absolute top-3 left-3 max-w-[calc(100%-1.5rem)]"
+			/>
+		{/if}
 
 		{#if showPanel && panelSubject}
 			<div
@@ -474,5 +482,4 @@
 			class="z-40 bg-atm-sand border-t border-atm-sand-border"
 		/>
 	{/if}
-
 </div>

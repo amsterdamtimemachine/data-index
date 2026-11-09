@@ -2,7 +2,12 @@
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getAvailableTags } from '@atm/db';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseSearchQuery } from '#lib/server/query-params.js';
+import {
+	parseRecordTypes,
+	parseDatasets,
+	parsePlaceTypes,
+	parseSearchQuery
+} from '#lib/server/query-params.js';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -12,12 +17,16 @@ export const GET: RequestHandler = async ({ url }) => {
 		// Optional: count within a text search, so the panel's counts match its results.
 		const searchQuery = parseSearchQuery(url);
 
-		console.log(`Available tags API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, q: ${searchQuery || 'none'}`);
+		console.log(
+			`Available tags API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, q: ${searchQuery || 'none'}`
+		);
 
 		const result = await getAvailableTags(recordTypes, datasetIds, placeTypes, searchQuery);
 
 		const nonEmpty = result.tags.filter((tag) => tag.count > 0).length;
-		console.log(`Available tags API success - ${result.tags.length} tags, ${nonEmpty} with features`);
+		console.log(
+			`Available tags API success - ${result.tags.length} tags, ${nonEmpty} with features`
+		);
 
 		// Set appropriate cache headers
 		const headers = {

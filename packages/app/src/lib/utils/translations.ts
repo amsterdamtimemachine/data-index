@@ -101,7 +101,8 @@ const TRANSLATIONS: Record<string, string> = {
 	datasetFilter: 'Dataset',
 	datasetFilterTooltip: 'Filter op basis van de dataset waaruit de data afkomstig is.',
 	scaleFilter: 'Schaal',
-	scaleFilterTooltip: 'Hoe precies een feature op de kaart is geplaatst: op een adres, een straat, een buurt of een wijk.',
+	scaleFilterTooltip:
+		'Hoe precies een feature op de kaart is geplaatst: op een adres, een straat, een buurt of een wijk.',
 	viewFilters: 'Bekijk',
 	navAbout: 'Over',
 
@@ -144,8 +145,10 @@ const TRANSLATIONS: Record<string, string> = {
 	timePeriodSelector: 'Tijdperiode kiezen',
 
 	// the empty panel's hints; {picture} and {button} stand for the inline elements
-	emptyPanelCityWideHint: 'Klik op {button} rechtsonder om de tijdlijn van de selectie te tonen: daar zie je in welke periodes de selectie wel features heeft.',
-	emptyPanelBarHint: 'Kies op de tijdlijn {picture} een periode met een rode balk: daar heeft de selectie wel features.',
+	emptyPanelCityWideHint:
+		'Klik op {button} rechtsonder om de tijdlijn van de selectie te tonen: daar zie je in welke periodes de selectie wel features heeft.',
+	emptyPanelBarHint:
+		'Kies op de tijdlijn {picture} een periode met een rode balk: daar heeft de selectie wel features.',
 	emptyPanelOtherCell: 'Of kies een andere cel op de kaart.',
 	localTimelineAlt: 'Tijdlijn van de selectie met rode balken',
 	// the timeline hover
@@ -181,7 +184,8 @@ const TRANSLATIONS: Record<string, string> = {
 	statusAboutTopics: 'over',
 	// the search tooltip; {border} stands for the map's outline glyph
 	markTooltip: 'Gemarkeerde woorden zijn wat je zoekterm vond.',
-	searchTooltip: 'Een zoekterm doorzoekt titels, beschrijvingen en de gegevens op de kaart, zoals auteur, geboorteplaats, film of dagboektekst, binnen de toegepaste filters. Wat gevonden is, staat gemarkeerd op de kaart. Bij een gekozen plek markeert de gouden rand {border} op de kaart de cellen waarin de plek ligt.',
+	searchTooltip:
+		'Een zoekterm doorzoekt titels, beschrijvingen en de gegevens op de kaart, zoals auteur, geboorteplaats, film of dagboektekst, binnen de toegepaste filters. Wat gevonden is, staat gemarkeerd op de kaart. Bij een gekozen plek markeert de gouden rand {border} op de kaart de cellen waarin de plek ligt.',
 	ofThisCell: 'van deze cel',
 	timelineOfCell: 'Tijdlijn van deze cel',
 	timelineOf: 'Tijdlijn van',
@@ -212,7 +216,8 @@ const TRANSLATIONS: Record<string, string> = {
 	geometryProvider: 'Geometrieleverancier',
 	published: 'Gepubliceerd',
 	written: 'Geschreven',
-	topicsTooltip: 'Onderwerpen zijn automatisch toegekend door een classificatiemodel, zonder handmatige correctie, en voorlopig alleen aan een deel van de datasets. Een grijs onderwerp heeft geen resultaten binnen de andere filters. Minimaal één: resultaten met minstens één gekozen onderwerp. Alle: alleen resultaten met alle gekozen onderwerpen.',
+	topicsTooltip:
+		'Onderwerpen zijn automatisch toegekend door een classificatiemodel, zonder handmatige correctie, en voorlopig alleen aan een deel van de datasets. Een grijs onderwerp heeft geen resultaten binnen de andere filters. Minimaal één: resultaten met minstens één gekozen onderwerp. Alle: alleen resultaten met alle gekozen onderwerpen.',
 	topics: 'Onderwerpen',
 	topicsAny: 'Minimaal één',
 	topicsAll: 'Alle',
@@ -230,6 +235,7 @@ const TRANSLATIONS: Record<string, string> = {
 	timelineNotLoaded: 'Tijdlijn niet geladen',
 	featuresNotLoaded: 'Features niet geladen',
 	topicCountsNotLoaded: 'Aantallen per onderwerp niet geladen',
+	// the sentence under a failure's title, by the failure's key
 	topicCountsNotLoadedText: 'De onderwerpen werken nog wel.',
 	placeSearchFailed: 'Zoeken naar plekken mislukt',
 	placeFilterNotRestored: 'Plekfilter niet hersteld',

@@ -16,7 +16,15 @@
 	};
 
 	// the rest carries any button attribute through
-	let { class: className, icon: Icon, size = 18, weight = 'bold', color = 'black', children, ...rest }: Props = $props();
+	let {
+		class: className,
+		icon: Icon,
+		size = 18,
+		weight = 'bold',
+		color = 'black',
+		children,
+		...rest
+	}: Props = $props();
 
 	const iconProps: PhosphorIconProps = $derived({
 		size,
@@ -55,7 +63,12 @@
 	});
 </script>
 
-<button {...rest} {title} use:titleFromText class={mergeCss(`${baseClasses} ${shapeClasses}`, className)}>
+<button
+	{...rest}
+	{title}
+	use:titleFromText
+	class={mergeCss(`${baseClasses} ${shapeClasses}`, className)}
+>
 	{#if Icon}
 		<Icon {...iconProps} />
 	{/if}

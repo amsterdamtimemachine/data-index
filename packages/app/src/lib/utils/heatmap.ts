@@ -74,7 +74,7 @@ export function parseRowColFromCellId(cellId: string): { row: number; col: numbe
 }
 
 /**
- * Find cell bounds from cellId 
+ * Find cell bounds from cellId
  */
 export function getCellBoundsFromCellId(
 	cellId: string,
@@ -102,10 +102,22 @@ function clamp(n: number, lo: number, hi: number): number {
  * calculateCellBounds, clamped into range so an edge/outside point resolves to the
  * nearest valid cell instead of out of bounds.
  */
-export function getCellIdFromLonLat(lon: number, lat: number, dimensions: HeatmapDimensions): string {
+export function getCellIdFromLonLat(
+	lon: number,
+	lat: number,
+	dimensions: HeatmapDimensions
+): string {
 	const { minLon, maxLon, minLat, maxLat, colsAmount, rowsAmount } = dimensions;
-	const col = clamp(Math.floor(((lon - minLon) / (maxLon - minLon)) * colsAmount), 0, colsAmount - 1);
-	const row = clamp(Math.floor(((lat - minLat) / (maxLat - minLat)) * rowsAmount), 0, rowsAmount - 1);
+	const col = clamp(
+		Math.floor(((lon - minLon) / (maxLon - minLon)) * colsAmount),
+		0,
+		colsAmount - 1
+	);
+	const row = clamp(
+		Math.floor(((lat - minLat) / (maxLat - minLat)) * rowsAmount),
+		0,
+		rowsAmount - 1
+	);
 	return getCellIdFromRowCol(row, col);
 }
 
@@ -132,7 +144,8 @@ export function cellIdAtLonLat(
 	let col: number;
 	let row: number;
 	if (useRd) {
-		const { rdOriginX, rdOriginY, rdCellWidth, rdCellHeight } = dimensions as Required<HeatmapDimensions>;
+		const { rdOriginX, rdOriginY, rdCellWidth, rdCellHeight } =
+			dimensions as Required<HeatmapDimensions>;
 		const [x, y] = wgs84ToRd(lon, lat);
 		col = Math.floor((x - rdOriginX) / rdCellWidth);
 		row = Math.floor((y - rdOriginY) / rdCellHeight);
@@ -149,7 +162,10 @@ export function cellIdAtLonLat(
 
 /** Cells that were active before but are not any more — the only ones a heatmap
  * change has to zero, instead of resetting the whole grid. */
-export function staleCells(previous: Iterable<string>, active: { has(id: string): boolean }): string[] {
+export function staleCells(
+	previous: Iterable<string>,
+	active: { has(id: string): boolean }
+): string[] {
 	const stale: string[] = [];
 	for (const id of previous) {
 		if (!active.has(id)) {
@@ -306,8 +322,14 @@ export function placeOutlineGeometry(
 			edges.push([nw, sw]); // west
 		}
 	}
-	const rings = joinRings(edges).map((ring) => [ring.map((corner) => coordinates.get(cornerKey(corner))!)]);
-	return { type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: rings }, properties: {} };
+	const rings = joinRings(edges).map((ring) => [
+		ring.map((corner) => coordinates.get(cornerKey(corner))!)
+	]);
+	return {
+		type: 'Feature',
+		geometry: { type: 'MultiPolygon', coordinates: rings },
+		properties: {}
+	};
 }
 
 // a grid corner: column and row of the cell lines that meet there

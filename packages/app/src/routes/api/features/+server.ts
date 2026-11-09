@@ -3,7 +3,17 @@ import type { RequestHandler } from './$types';
 import type { FeaturesSortField, SortDirection, FeaturesArea } from '@atm/shared/types';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_MAX } from '@atm/shared';
 import { getFeatures, UnknownTimeSliceError } from '@atm/db';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseTags, parseTagOperator, parseBounds, parseSeed, parseSearchQuery, parseGridCols } from '#lib/server/query-params.js';
+import {
+	parseRecordTypes,
+	parseDatasets,
+	parsePlaceTypes,
+	parseTags,
+	parseTagOperator,
+	parseBounds,
+	parseSeed,
+	parseSearchQuery,
+	parseGridCols
+} from '#lib/server/query-params.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -26,7 +36,11 @@ export const GET: RequestHandler = async ({ url }) => {
 		} else if (bounds) {
 			area = { kind: 'bounds', bounds };
 		} else if (!featureId) {
-			throw error(400, 'Missing required bounds parameters (minLon, maxLon, minLat, maxLat), placeId or featureId', { code: 'MISSING_BOUNDS' });
+			throw error(
+				400,
+				'Missing required bounds parameters (minLon, maxLon, minLat, maxLat), placeId or featureId',
+				{ code: 'MISSING_BOUNDS' }
+			);
 		}
 
 		// Parse optional parameters
@@ -50,18 +64,22 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		const page = Math.max(parseInt(url.searchParams.get('page') || '1', 10) || 1, 1);
 		const pageSize = Math.min(
-			Math.max(parseInt(url.searchParams.get('pageSize') || String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE, 1),
+			Math.max(
+				parseInt(url.searchParams.get('pageSize') || String(DEFAULT_PAGE_SIZE), 10) ||
+					DEFAULT_PAGE_SIZE,
+				1
+			),
 			PAGE_SIZE_MAX
 		);
 
 		console.log(
 			`Features API request - area: ${JSON.stringify(area)}, ` +
-			`recordTypes: ${recordTypes?.join(', ') || 'all'}, ` +
-			`tags: ${tags?.join(', ') || 'none'} (${tagOperator}), ` +
-			`timeSlice: ${timeSlice || 'all'}, ` +
-			`sort: ${sort} ${sortDirection}, ` +
-			`q: ${searchQuery || 'none'}, ` +
-			`page: ${page}, pageSize: ${pageSize}`
+				`recordTypes: ${recordTypes?.join(', ') || 'all'}, ` +
+				`tags: ${tags?.join(', ') || 'none'} (${tagOperator}), ` +
+				`timeSlice: ${timeSlice || 'all'}, ` +
+				`sort: ${sort} ${sortDirection}, ` +
+				`q: ${searchQuery || 'none'}, ` +
+				`page: ${page}, pageSize: ${pageSize}`
 		);
 
 		const result = await getFeatures({

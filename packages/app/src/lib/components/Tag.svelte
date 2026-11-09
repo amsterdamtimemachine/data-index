@@ -9,13 +9,19 @@
 		children: import('svelte').Snippet;
 	}
 
-	let { class: className, variant = 'default', disabled = false, interactive = false, children }: Props = $props();
+	let {
+		class: className,
+		variant = 'default',
+		disabled = false,
+		interactive = false,
+		children
+	}: Props = $props();
 
 	const baseClasses = 'text-base px-1 py-0.5 rounded transition-colors select-none';
 
 	const variantClasses = $derived.by(() => {
 		let classes = '';
-		
+
 		if (disabled) {
 			classes = 'bg-atm-gold-gray text-gray-800';
 		} else if (variant === 'selected') {
@@ -35,7 +41,7 @@
 			classes = 'bg-atm-gold-gray text-black';
 			if (interactive) classes += ' hover:bg-atm-gold';
 		}
-		
+
 		return classes;
 	});
 </script>

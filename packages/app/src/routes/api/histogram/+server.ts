@@ -3,7 +3,14 @@ import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { DISPLAY_TIME_BIN_DEFAULT_YEARS } from '@atm/shared';
 import { getHistogram } from '@atm/db/queries';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseBounds, parseMatchFilters, parseGridCols } from '#lib/server/query-params.js';
+import {
+	parseRecordTypes,
+	parseDatasets,
+	parsePlaceTypes,
+	parseBounds,
+	parseMatchFilters,
+	parseGridCols
+} from '#lib/server/query-params.js';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -20,14 +27,27 @@ export const GET: RequestHandler = async ({ url }) => {
 		// Parse bin size
 		// Forwarded as-is; the query layer clamps and snaps it to a valid bin (normaliseBinSize).
 		const binSizeParam = url.searchParams.get('binSize');
-		const binSize = binSizeParam ? parseInt(binSizeParam, 10) || DISPLAY_TIME_BIN_DEFAULT_YEARS : DISPLAY_TIME_BIN_DEFAULT_YEARS;
+		const binSize = binSizeParam
+			? parseInt(binSizeParam, 10) || DISPLAY_TIME_BIN_DEFAULT_YEARS
+			: DISPLAY_TIME_BIN_DEFAULT_YEARS;
 
 		// Optional: restrict counts to features matching a text search and/or tags.
 		const filters = parseMatchFilters(url);
 
-		console.log(`Histogram API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, binSize: ${binSize}, q: ${filters.searchQuery || 'none'}, tags: ${filters.tags?.join(', ') || 'none'} (${filters.tagOperator})`);
+		console.log(
+			`Histogram API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, binSize: ${binSize}, q: ${filters.searchQuery || 'none'}, tags: ${filters.tags?.join(', ') || 'none'} (${filters.tagOperator})`
+		);
 
-		const histogram = await getHistogram(recordTypes, datasetIds, placeTypes, binSize, bounds, placeId, filters, cols);
+		const histogram = await getHistogram(
+			recordTypes,
+			datasetIds,
+			placeTypes,
+			binSize,
+			bounds,
+			placeId,
+			filters,
+			cols
+		);
 
 		console.log(
 			`Histogram: ${histogram.bins.length} bins, ${histogram.totalFeatures} total features`

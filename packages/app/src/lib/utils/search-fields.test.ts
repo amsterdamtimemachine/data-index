@@ -14,12 +14,15 @@ import { translate } from './translations';
 const CONTENT_LABELS: Partial<Record<Entity['type'], string[]>> = {
 	ScreeningEvent: ['film', 'performer'],
 	TheaterEvent: ['film', 'performer'],
-	Manuscript: ['text'],
+	Manuscript: ['text']
 };
 
 describe('searchable fields', () => {
 	test('every searchable field is one the card shows, and has a translation', () => {
-		for (const [type, fields] of Object.entries(SEARCH_FIELDS) as [Entity['type'], { path: string; label: string }[]][]) {
+		for (const [type, fields] of Object.entries(SEARCH_FIELDS) as [
+			Entity['type'],
+			{ path: string; label: string }[]
+		][]) {
 			const showable = new Set([...cardFieldLabels(type), ...(CONTENT_LABELS[type] ?? [])]);
 			for (const field of fields) {
 				expect(showable.has(field.label), `${type} ${field.path} (${field.label})`).toBe(true);

@@ -34,7 +34,15 @@
 	};
 	import type { FeatureCollection, Feature, Polygon } from 'geojson';
 	import type { Heatmap, HeatmapDimensions, Coordinates } from '@atm/shared/types';
-	import { generateCellIdMap, generateCellGeometries, calculateDensity, placeOutlineGeometry, cellIdAtLonLat, staleCells, type CellGeometry } from '#lib/utils/heatmap.js';
+	import {
+		generateCellIdMap,
+		generateCellGeometries,
+		calculateDensity,
+		placeOutlineGeometry,
+		cellIdAtLonLat,
+		staleCells,
+		type CellGeometry
+	} from '#lib/utils/heatmap.js';
 	import { mergeCss } from '#lib/utils/utils.js';
 	import { MOBILE_QUERY, HOVER_QUERY } from '#lib/utils/media.svelte.js';
 	import resolveConfig from 'tailwindcss/resolveConfig';
@@ -240,8 +248,18 @@
 	// pixels to pan so the box lies in the strip between the paddings and the edges
 	function overflow(box: PixelBox, pad: { left: number; right: number }): [number, number] {
 		const container = map!.getContainer();
-		const dx = axisOverflow(box.minX, box.maxX, pad.left + REVEAL_MARGIN_PX, container.clientWidth - pad.right - REVEAL_MARGIN_PX);
-		const dy = axisOverflow(box.minY, box.maxY, REVEAL_MARGIN_PX, container.clientHeight - REVEAL_MARGIN_PX);
+		const dx = axisOverflow(
+			box.minX,
+			box.maxX,
+			pad.left + REVEAL_MARGIN_PX,
+			container.clientWidth - pad.right - REVEAL_MARGIN_PX
+		);
+		const dy = axisOverflow(
+			box.minY,
+			box.maxY,
+			REVEAL_MARGIN_PX,
+			container.clientHeight - REVEAL_MARGIN_PX
+		);
 		return [Math.round(dx), Math.round(dy)];
 	}
 
@@ -260,7 +278,7 @@
 		}
 		const options: maplibre.EaseToOptions = { padding: target, duration: EASE_MS };
 		// the padding alone shifts the content by half its change
-		const shiftX = ((target.left - current.left) - (target.right - current.right)) / 2;
+		const shiftX = (target.left - current.left - (target.right - current.right)) / 2;
 		const box = untrack(() => projectCells(subjectCells(), shiftX));
 		if (box) {
 			const [dx, dy] = overflow(box, target);
@@ -282,7 +300,10 @@
 		}
 		const box = projectCells(subjectCells(), 0);
 		if (!box) return;
-		const [dx, dy] = overflow(box, untrack(() => padding));
+		const [dx, dy] = overflow(
+			box,
+			untrack(() => padding)
+		);
 		if (dx === 0 && dy === 0) return;
 		map.panBy([dx, dy], { duration: EASE_MS });
 	}
@@ -394,7 +415,13 @@
 		}
 		return {
 			type: 'FeatureCollection',
-			features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: cell.coordinates } }]
+			features: [
+				{
+					type: 'Feature',
+					properties: {},
+					geometry: { type: 'Polygon', coordinates: cell.coordinates }
+				}
+			]
 		};
 	}
 
@@ -408,22 +435,20 @@
 		cellById = new Map(cellGeometries.map((cell) => [cell.cellId, cell]));
 		previousActive = new Set();
 
-		const features = cellGeometries.map(
-			(cell): Feature<Polygon, CellProperties> => ({
-				type: 'Feature',
+		const features = cellGeometries.map((cell): Feature<Polygon, CellProperties> => ({
+			type: 'Feature',
+			id: cell.cellId,
+			properties: {
 				id: cell.cellId,
-				properties: {
-					id: cell.cellId,
-					row: cell.row,
-					col: cell.col,
-					count: 0
-				},
-				geometry: {
-					type: 'Polygon',
-					coordinates: cell.coordinates
-				}
-			})
-		);
+				row: cell.row,
+				col: cell.col,
+				count: 0
+			},
+			geometry: {
+				type: 'Polygon',
+				coordinates: cell.coordinates
+			}
+		}));
 
 		return {
 			type: 'FeatureCollection',
@@ -628,35 +653,36 @@
 
 			// A plain map listener, not a layer-scoped one: the layer variant hit-tests
 			// every rendered cell on each event; the cell is arithmetic from the cursor
-			if (hoverCapable) mapInstance.on('mousemove', (e) => {
-				if (mapInstance.isMoving()) return;
-				const cellId = cellIdAtLonLat(e.lngLat.lng, e.lngLat.lat, dimensions, exactCells);
-				if (cellId === hoveredFeatureId) {
-					// same cell: only the tooltip follows the cursor
-					if (hoverTooltip) {
-						hoverTooltip = { ...hoverTooltip, x: e.point.x, y: e.point.y };
+			if (hoverCapable)
+				mapInstance.on('mousemove', (e) => {
+					if (mapInstance.isMoving()) return;
+					const cellId = cellIdAtLonLat(e.lngLat.lng, e.lngLat.lat, dimensions, exactCells);
+					if (cellId === hoveredFeatureId) {
+						// same cell: only the tooltip follows the cursor
+						if (hoverTooltip) {
+							hoverTooltip = { ...hoverTooltip, x: e.point.x, y: e.point.y };
+						}
+						return;
 					}
-					return;
-				}
-				let count = 0;
-				if (cellId) {
-					const state = mapInstance.getFeatureState({ source: 'heatmap', id: cellId });
-					if (typeof state.count === 'number') {
-						count = state.count;
+					let count = 0;
+					if (cellId) {
+						const state = mapInstance.getFeatureState({ source: 'heatmap', id: cellId });
+						if (typeof state.count === 'number') {
+							count = state.count;
+						}
 					}
-				}
-				if (!cellId || count === 0) {
-					if (hoveredFeatureId) {
-						clearHover();
+					if (!cellId || count === 0) {
+						if (hoveredFeatureId) {
+							clearHover();
+						}
+						return;
 					}
-					return;
-				}
-				hoveredFeatureId = cellId;
-				const source = mapInstance.getSource('hover') as maplibre.GeoJSONSource;
-				source.setData(cellCollection(cellById.get(cellId)));
-				mapInstance.getCanvas().style.cursor = 'pointer';
-				hoverTooltip = { x: e.point.x, y: e.point.y, count, cellId };
-			});
+					hoveredFeatureId = cellId;
+					const source = mapInstance.getSource('hover') as maplibre.GeoJSONSource;
+					source.setData(cellCollection(cellById.get(cellId)));
+					mapInstance.getCanvas().style.cursor = 'pointer';
+					hoverTooltip = { x: e.point.x, y: e.point.y, count, cellId };
+				});
 
 			if (hoverCapable) {
 				mapInstance.on('mouseout', clearHover);
@@ -698,7 +724,11 @@
 	}
 </script>
 
-<div class={mergeCss('h-full w-full relative', className)} role="region" aria-label={translate('mapRegion')}>
+<div
+	class={mergeCss('h-full w-full relative', className)}
+	role="region"
+	aria-label={translate('mapRegion')}
+>
 	<p class="sr-only">{translate('mapKeyboardHint')}</p>
 	<div bind:this={mapContainer} class="h-full w-full"></div>
 
@@ -711,7 +741,9 @@
 		>
 			<div class="font-medium">{hoverTooltip.count} {pluralised(hoverTooltip.count)}</div>
 			{#if cell}
-				<div class="text-xs opacity-75">{fill(translate('cellPosition'), { row: String(cell.row), col: String(cell.col) })}</div>
+				<div class="text-xs opacity-75">
+					{fill(translate('cellPosition'), { row: String(cell.row), col: String(cell.col) })}
+				</div>
 			{/if}
 		</div>
 	{/if}

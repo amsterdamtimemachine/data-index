@@ -61,7 +61,9 @@
 		idle: emptyCategories.length > 0
 	}));
 
-	const emptyCategoryNames = $derived(emptyCategories.map((c) => translate(`${c}Category`)).join(` ${translate('and')} `));
+	const emptyCategoryNames = $derived(
+		emptyCategories.map((c) => translate(`${c}Category`)).join(` ${translate('and')} `)
+	);
 
 	function handleClose() {
 		if (onClose) {
@@ -69,7 +71,6 @@
 		}
 	}
 </script>
-
 
 <FeaturesPanelHeader
 	{subject}
@@ -93,7 +94,9 @@
 
 <div class="min-h-full bg-atm-sand-dark">
 	{#if emptyCategories.length > 0}
-		<p class="text-base text-black p-4 leading-loose">{translate('noneSelected').replace('{filter}', emptyCategoryNames)}</p>
+		<p class="text-base text-black p-4 leading-loose">
+			{translate('noneSelected').replace('{filter}', emptyCategoryNames)}
+		</p>
 	{:else if panelFeatures.features.length > 0}
 		<FeaturesGrid features={panelFeatures.features} columns={gridColumns} />
 	{:else if !panelFeatures.initialLoading && !panelFeatures.loading}
@@ -111,7 +114,11 @@
 				<TextWithSlots text={translate('emptyPanelBarHint')}>
 					{#snippet children(slot)}
 						{#if slot === 'picture'}
-							<Image src={asset('images/local-timeline-detail.png')} alt={translate('localTimelineAlt')} inline />
+							<Image
+								src={asset('images/local-timeline-detail.png')}
+								alt={translate('localTimelineAlt')}
+								inline
+							/>
 						{/if}
 					{/snippet}
 				</TextWithSlots>

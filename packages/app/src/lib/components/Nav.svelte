@@ -18,7 +18,11 @@
 	)}
 >
 	<a href={resolve('/(map)')} class="no-underline flex items-center">
-		<img src={asset('logos/atm_logo_big.png')} alt="A logo reading Amsterdam Time Machine in black" class="h-[34px]" />
+		<img
+			src={asset('logos/atm_logo_big.png')}
+			alt="A logo reading Amsterdam Time Machine in black"
+			class="h-[34px]"
+		/>
 	</a>
 	<div class="flex items-center gap-2">
 		{@render children?.()}

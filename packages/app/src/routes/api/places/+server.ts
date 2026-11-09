@@ -20,28 +20,34 @@ export const GET: RequestHandler = async ({ url }) => {
 				nameId = nameIdParam.slice(0, 512);
 			}
 			const match = await getPlaceById(id.slice(0, 512), { cols, nameId });
-			let matches: typeof match[] = [];
+			let matches: (typeof match)[] = [];
 			if (match) {
 				matches = [match];
 			}
-			return Response.json({ matches }, {
-				headers: {
-					'Cache-Control': 'public, max-age=3600',
-					'Access-Control-Allow-Origin': '*'
+			return Response.json(
+				{ matches },
+				{
+					headers: {
+						'Cache-Control': 'public, max-age=3600',
+						'Access-Control-Allow-Origin': '*'
+					}
 				}
-			});
+			);
 		}
 
 		let matches: Awaited<ReturnType<typeof searchPlaces>> = [];
 		if (q) {
 			matches = await searchPlaces(q, { limit, cols });
 		}
-		return Response.json({ matches }, {
-			headers: {
-				'Cache-Control': 'public, max-age=3600',
-				'Access-Control-Allow-Origin': '*'
+		return Response.json(
+			{ matches },
+			{
+				headers: {
+					'Cache-Control': 'public, max-age=3600',
+					'Access-Control-Allow-Origin': '*'
+				}
 			}
-		});
+		);
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
 		console.error('Places API error:', err);

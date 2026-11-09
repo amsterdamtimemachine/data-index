@@ -112,7 +112,11 @@
 			</SearchOptionRow>
 		{/if}
 		{#each optionSet.places as place (place.option.value)}
-			<SearchOptionRow attributes={getOption(place.option)} icon={MapPin} trailing={placeDetail(place.match)}>
+			<SearchOptionRow
+				attributes={getOption(place.option)}
+				icon={MapPin}
+				trailing={placeDetail(place.match)}
+			>
 				{place.option.label}
 			</SearchOptionRow>
 		{/each}

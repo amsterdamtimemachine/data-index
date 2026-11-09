@@ -76,7 +76,11 @@ export type ExcerptWindow = { excerpt: Excerpt; offset: number };
  * About `length` characters of the excerpt around its anchor, the first place mention
  * unless given (a search match; nothing, for the opening), cut on word boundaries.
  */
-export function excerptWindow(excerpt: Excerpt, length: number = TEXT_WINDOWS.excerpt, anchor: TextRange | undefined = excerpt.mentions[0]): ExcerptWindow {
+export function excerptWindow(
+	excerpt: Excerpt,
+	length: number = TEXT_WINDOWS.excerpt,
+	anchor: TextRange | undefined = excerpt.mentions[0]
+): ExcerptWindow {
 	const text = excerpt.text;
 	if (text.length <= length) {
 		return { excerpt, offset: 0 };
@@ -135,10 +139,14 @@ export function precedingImage(excerpt: Excerpt): ExcerptImage | null {
 	return preceding;
 }
 
-export type ExcerptBlock = { kind: 'text'; segments: TextSegment[] } | { kind: 'image'; image: ExcerptImage };
+export type ExcerptBlock =
+	{ kind: 'text'; segments: TextSegment[] } | { kind: 'image'; image: ExcerptImage };
 
 /** The excerpt in reading order: its text, cut where an image sits, and the images between, with the marks (its mentions unless given) on the text. */
-export function excerptBlocks(excerpt: Excerpt, marks: TextMarks = { place: excerpt.mentions }): ExcerptBlock[] {
+export function excerptBlocks(
+	excerpt: Excerpt,
+	marks: TextMarks = { place: excerpt.mentions }
+): ExcerptBlock[] {
 	const blocks: ExcerptBlock[] = [];
 	const pushText = (from: number, to: number) => {
 		const text = excerpt.text.slice(from, to);
@@ -146,8 +154,15 @@ export function excerptBlocks(excerpt: Excerpt, marks: TextMarks = { place: exce
 			return;
 		}
 		const within = (ranges: TextRange[] = []) =>
-			ranges.filter((r) => r.end > from && r.start < to).map((r) => ({ start: Math.max(r.start, from) - from, end: Math.min(r.end, to) - from }));
-		blocks.push({ kind: 'text', segments: foldSegments(segmentText(text, { place: within(marks.place), search: within(marks.search) })) });
+			ranges
+				.filter((r) => r.end > from && r.start < to)
+				.map((r) => ({ start: Math.max(r.start, from) - from, end: Math.min(r.end, to) - from }));
+		blocks.push({
+			kind: 'text',
+			segments: foldSegments(
+				segmentText(text, { place: within(marks.place), search: within(marks.search) })
+			)
+		});
 	};
 	let at = 0;
 	const images = [...(excerpt.images ?? [])].sort((a, b) => a.anchor - b.anchor);
@@ -184,12 +199,17 @@ export function segmentText(text: string, marks: TextMarks): TextSegment[] {
 		cuts.add(r.end);
 	}
 	const edges = [...cuts].sort((a, b) => a - b);
-	const covered = (ranges: TextRange[], a: number, b: number) => ranges.some((r) => r.start <= a && r.end >= b);
+	const covered = (ranges: TextRange[], a: number, b: number) =>
+		ranges.some((r) => r.start <= a && r.end >= b);
 	const segments: TextSegment[] = [];
 	for (let i = 0; i + 1 < edges.length; i++) {
 		const [a, b] = [edges[i], edges[i + 1]];
 		if (b <= a) continue;
-		segments.push({ text: text.slice(a, b), place: covered(place, a, b), search: covered(search, a, b) });
+		segments.push({
+			text: text.slice(a, b),
+			place: covered(place, a, b),
+			search: covered(search, a, b)
+		});
 	}
 	return segments;
 }

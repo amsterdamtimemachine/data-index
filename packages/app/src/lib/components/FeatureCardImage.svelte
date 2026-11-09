@@ -73,7 +73,9 @@
 
 <div class="flex-1 min-h-0 flex flex-col">
 	{#if imageError}
-		<div class={mergeCss('w-full flex items-center justify-center text-base text-black', errorHeight)}>
+		<div
+			class={mergeCss('w-full flex items-center justify-center text-base text-black', errorHeight)}
+		>
 			{translate('imageUnavailable')}
 		</div>
 	{:else if inline}
@@ -92,7 +94,10 @@
 		     the picture is drawn whole inside it -->
 		<!-- a tall picture's box is capped in height, the picture fitted whole with bands at
 		     its sides; it is never drawn larger than its own pixels, so a small scan stays sharp -->
-		<div class="relative w-full min-h-0 max-h-[70vh] shrink overflow-hidden border-y border-atm-sand-border bg-atm-sand-mat flex items-center justify-center" style:aspect-ratio={expandedAspect}>
+		<div
+			class="relative w-full min-h-0 max-h-[70vh] shrink overflow-hidden border-y border-atm-sand-border bg-atm-sand-mat flex items-center justify-center"
+			style:aspect-ratio={expandedAspect}
+		>
 			<img
 				src={thumbnail}
 				{alt}
@@ -116,7 +121,12 @@
 					aria-label={translate('expandImage')}
 					title={translate('expandImage')}
 				>
-					<div class={mergeCss('w-full overflow-hidden bg-atm-sand-mat flex items-center justify-center [container-type:inline-size]', collapsedPlaceholder)}>
+					<div
+						class={mergeCss(
+							'w-full overflow-hidden bg-atm-sand-mat flex items-center justify-center [container-type:inline-size]',
+							collapsedPlaceholder
+						)}
+					>
 						<img
 							src={thumbnail}
 							{alt}
@@ -126,10 +136,17 @@
 							onerror={handleImageError}
 						/>
 					</div>
-					<span class="absolute inset-0 bg-atm-gold-deep opacity-0 group-hover:opacity-20 transition-opacity pointer-events-none"></span>
+					<span
+						class="absolute inset-0 bg-atm-gold-deep opacity-0 group-hover:opacity-20 transition-opacity pointer-events-none"
+					></span>
 				</button>
 			{:else}
-				<div class={mergeCss('w-full overflow-hidden bg-atm-sand-mat flex items-center justify-center [container-type:inline-size]', collapsedPlaceholder)}>
+				<div
+					class={mergeCss(
+						'w-full overflow-hidden bg-atm-sand-mat flex items-center justify-center [container-type:inline-size]',
+						collapsedPlaceholder
+					)}
+				>
 					<img
 						src={thumbnail}
 						{alt}

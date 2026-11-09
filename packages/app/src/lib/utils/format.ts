@@ -9,7 +9,20 @@ export function formatTimePeriod(per: [number, number]): string {
 	return `${start}-${end}`;
 }
 
-const MONTH_KEYS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+const MONTH_KEYS = [
+	'january',
+	'february',
+	'march',
+	'april',
+	'may',
+	'june',
+	'july',
+	'august',
+	'september',
+	'october',
+	'november',
+	'december'
+];
 
 /**
  * Word a date at the precision it was recorded: "5 januari 1934" for YYYY-MM-DD,

@@ -20,5 +20,9 @@
 	class={mergeCss('w-full h-[3px] overflow-hidden', className)}
 	style:visibility={loadingState.barVisible ? 'visible' : 'hidden'}
 >
-	<div {...progress.progress} class="h-full w-full bg-atm-blue" style:transform="translateX(calc(var(--progress) * -1))"></div>
+	<div
+		{...progress.progress}
+		class="h-full w-full bg-atm-blue"
+		style:transform="translateX(calc(var(--progress) * -1))"
+	></div>
 </div>

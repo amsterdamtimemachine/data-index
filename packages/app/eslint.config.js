@@ -53,7 +53,8 @@ export default [
 				'error',
 				{
 					// esquery ends a regex at the first `/`, hence \u002f
-					selector: 'Literal[value=/^\\u002fapi\\u002f/]:not(CallExpression[callee.name="apiUrl"] > Literal)',
+					selector:
+						'Literal[value=/^\\u002fapi\\u002f/]:not(CallExpression[callee.name="apiUrl"] > Literal)',
 					message: 'Build API URLs with apiUrl() from #lib/utils/api.js so the base path applies.'
 				},
 				{
@@ -69,7 +70,8 @@ export default [
 					message: 'Use asset() from $app/paths for static files so the base path applies.'
 				},
 				{
-					selector: 'Literal[value=/^\\u002flogos\\u002f/]:not(CallExpression[callee.name="asset"] > Literal)',
+					selector:
+						'Literal[value=/^\\u002flogos\\u002f/]:not(CallExpression[callee.name="asset"] > Literal)',
 					message: 'Use asset() from $app/paths for static files so the base path applies.'
 				}
 			]

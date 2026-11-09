@@ -24,7 +24,12 @@
 	<div class="flex items-center gap-2 mb-2">
 		<Heading level={3} id={headingId} class="mb-0">{heading}</Heading>
 		{#if tooltip}
-			<Tooltip icon={QuestionMark} placement="bottom" label="{translate('explainAbout')} {heading}" class="m-0">{@render tooltip()}</Tooltip>
+			<Tooltip
+				icon={QuestionMark}
+				placement="bottom"
+				label="{translate('explainAbout')} {heading}"
+				class="m-0">{@render tooltip()}</Tooltip
+			>
 		{/if}
 		{#if action}
 			{@render action()}

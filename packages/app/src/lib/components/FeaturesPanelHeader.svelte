@@ -99,7 +99,6 @@
 		}
 		return 32;
 	});
-
 </script>
 
 <div
@@ -132,7 +131,13 @@
 		</div>
 		{#if hasPagination}
 			<div class="header-pages min-w-0">
-				<Pagination totalItems={totalCount} {currentPage} itemsPerPage={pageSize} {onPageChange} {loading} />
+				<Pagination
+					totalItems={totalCount}
+					{currentPage}
+					itemsPerPage={pageSize}
+					{onPageChange}
+					{loading}
+				/>
 			</div>
 		{/if}
 		{#if onSortChange && onShuffle}

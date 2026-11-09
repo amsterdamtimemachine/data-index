@@ -21,7 +21,14 @@
 		expanded?: boolean;
 		onExpand?: () => void;
 	};
-	let { blocks, truncatedBefore, truncatedAfter, sourceUrl, expanded = false, onExpand }: Props = $props();
+	let {
+		blocks,
+		truncatedBefore,
+		truncatedAfter,
+		sourceUrl,
+		expanded = false,
+		onExpand
+	}: Props = $props();
 
 	// the ellipses go on the first and last text, whatever images sit around them
 	const firstText = $derived(blocks.findIndex((b) => b.kind === 'text'));
@@ -39,17 +46,30 @@
 <div class={wrapperClasses}>
 	{#each blocks as block, b (b)}
 		{#if block.kind === 'image'}
-			<FeatureCardImage thumbnail={getExcerptImageUrl(block.image, pictureUse(expanded))} alt={translate('diaryImage')} {expanded} inline={expanded} {onExpand} />
+			<FeatureCardImage
+				thumbnail={getExcerptImageUrl(block.image, pictureUse(expanded))}
+				alt={translate('diaryImage')}
+				{expanded}
+				inline={expanded}
+				{onExpand}
+			/>
 		{:else}
 			<p class="p-2 text-base text-gray-700 leading-relaxed whitespace-pre-wrap">
-				<!-- eslint-disable-next-line svelte/no-useless-mustaches -- the mustaches keep the space beside the ellipsis -->
-				{#if truncatedBefore && b === firstText}{'… '}{/if}{#each block.segments as segment, i (i)}{#if segment.search}<Mark>{#if segment.place}<b class="font-semibold">{segment.text}</b>{:else}{segment.text}{/if}</Mark>{:else if segment.place}<b class="font-semibold">{segment.text}</b>{:else}{segment.text}{/if}{/each}{#if truncatedAfter && b === lastText}{' …'}{/if}
+				<!-- eslint-disable svelte/no-useless-mustaches -- the mustaches keep the space beside the ellipsis -->
+				{#if truncatedBefore && b === firstText}{'… '}{/if}{#each block.segments as segment, i (i)}{#if segment.search}<Mark
+							>{#if segment.place}<b class="font-semibold">{segment.text}</b
+								>{:else}{segment.text}{/if}</Mark
+						>{:else if segment.place}<b class="font-semibold">{segment.text}</b
+						>{:else}{segment.text}{/if}{/each}{#if truncatedAfter && b === lastText}{' …'}{/if}
 			</p>
+			<!-- eslint-enable svelte/no-useless-mustaches -->
 		{/if}
 	{/each}
 	{#if expanded && sourceUrl && (truncatedBefore || truncatedAfter)}
 		<p class="px-2 pb-2">
-			<Link href={sourceUrl} icon={ArrowUpRight} weight="bold" title={translate('fullTextAtSource')}>{translate('readMore')}</Link>
+			<Link href={sourceUrl} icon={ArrowUpRight} weight="bold" title={translate('fullTextAtSource')}
+				>{translate('readMore')}</Link
+			>
 		</p>
 	{/if}
 </div>

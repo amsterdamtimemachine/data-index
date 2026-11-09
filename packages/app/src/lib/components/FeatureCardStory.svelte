@@ -10,7 +10,14 @@
 	import type { FeatureResult } from '@atm/shared/types';
 	import FeatureCardExcerpt from '#lib/components/FeatureCardExcerpt.svelte';
 	import FeatureCardText from '#lib/components/FeatureCardText.svelte';
-	import { pickExcerpt, excerptWindow, excerptBlocks, precedingImage, type ExcerptWindow, type TextMarks } from '#lib/utils/excerpts.js';
+	import {
+		pickExcerpt,
+		excerptWindow,
+		excerptBlocks,
+		precedingImage,
+		type ExcerptWindow,
+		type TextMarks
+	} from '#lib/utils/excerpts.js';
 	import { TEXT_WINDOWS } from '#lib/config/text.js';
 	import { excerptSearchRanges, hasSearchHits, shiftRanges } from '#lib/utils/search-hits.js';
 
@@ -53,7 +60,10 @@
 		if (!shown) {
 			return {};
 		}
-		return { place: shown.excerpt.mentions, search: shiftRanges(searchRanges, shown.offset, shown.excerpt.text.length) };
+		return {
+			place: shown.excerpt.mentions,
+			search: shiftRanges(searchRanges, shown.offset, shown.excerpt.text.length)
+		};
 	});
 	// the excerpt's images sit in the text where they are on the page: every one expanded,
 	// collapsed only the one just before the text, so the text stays under it
@@ -70,7 +80,14 @@
 </script>
 
 {#if shown}
-	<FeatureCardExcerpt {blocks} truncatedBefore={shown.excerpt.truncatedBefore} truncatedAfter={shown.excerpt.truncatedAfter} sourceUrl={feature.url} {expanded} {onExpand} />
+	<FeatureCardExcerpt
+		{blocks}
+		truncatedBefore={shown.excerpt.truncatedBefore}
+		truncatedAfter={shown.excerpt.truncatedAfter}
+		sourceUrl={feature.url}
+		{expanded}
+		{onExpand}
+	/>
 {:else if feature.description}
 	<FeatureCardText text={feature.description} {expanded} />
 {/if}

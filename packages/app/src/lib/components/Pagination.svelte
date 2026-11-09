@@ -20,7 +20,14 @@
 		class?: string;
 	}
 
-	let { totalItems, currentPage, itemsPerPage, onPageChange, loading = false, class: className }: Props = $props();
+	let {
+		totalItems,
+		currentPage,
+		itemsPerPage,
+		onPageChange,
+		loading = false,
+		class: className
+	}: Props = $props();
 
 	const total = $derived(totalPages(totalItems, itemsPerPage));
 

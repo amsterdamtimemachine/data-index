@@ -1,6 +1,17 @@
 import { describe, test, expect } from 'vitest';
 import type { ScreeningEventEntity, TheaterEventEntity, FeatureResult } from '@atm/shared/types';
-import { resolveCardFields, collapsedFields, dataSourceFields, programmeRows, programmeHeading, entitySubtype, relationLine, typeLabel, contentKind, scrollingContent } from './cardFields';
+import {
+	resolveCardFields,
+	collapsedFields,
+	dataSourceFields,
+	programmeRows,
+	programmeHeading,
+	entitySubtype,
+	relationLine,
+	typeLabel,
+	contentKind,
+	scrollingContent
+} from './cardFields';
 import { markFeature } from './search-hits';
 import type { Entity, ManuscriptEntity } from '@atm/shared/types';
 
@@ -9,7 +20,13 @@ const screening: ScreeningEventEntity = {
 	id: 'V1',
 	name: 'Skippy (1931)',
 	startDate: '1934-01-05',
-	location: { type: 'Place', name: 'Rialto', identifier: 'B1', additionalType: 'Cinema', address: 'Ceintuurbaan 338' },
+	location: {
+		type: 'Place',
+		name: 'Rialto',
+		identifier: 'B1',
+		additionalType: 'Cinema',
+		address: 'Ceintuurbaan 338'
+	},
 	items: [
 		{ type: 'Movie', name: 'Skippy (1931)', url: 'https://cinemacontext.nl/id/F1' },
 		{ type: 'LiveAct', name: 'Mello Wendini, komisch dressuur act' },
@@ -27,7 +44,9 @@ const theatre: TheaterEventEntity = {
 
 describe('programme cards', () => {
 	test('collapsed: the venue', () => {
-		expect(resolveCardFields(screening, false)).toEqual([{ label: 'Venue', value: 'Rialto', href: undefined }]);
+		expect(resolveCardFields(screening, false)).toEqual([
+			{ label: 'Venue', value: 'Rialto', href: undefined }
+		]);
 	});
 
 	test('expanded adds nothing beyond the venue: the programme is the card content', () => {
@@ -37,7 +56,15 @@ describe('programme cards', () => {
 
 	test('a programme of several items gets a heading worded from it; one item gets none', () => {
 		expect(programmeHeading(screening)).toBe('2 films en 1 optreden op het programma');
-		expect(programmeHeading({ ...theatre, items: [{ type: 'LiveAct', name: 'a' }, { type: 'LiveAct', name: 'b' }] })).toBe('2 optredens op het programma');
+		expect(
+			programmeHeading({
+				...theatre,
+				items: [
+					{ type: 'LiveAct', name: 'a' },
+					{ type: 'LiveAct', name: 'b' }
+				]
+			})
+		).toBe('2 optredens op het programma');
 		expect(programmeHeading(theatre)).toBeNull();
 		expect(programmeHeading({ type: 'Person', name: 'x' })).toBeNull();
 	});
@@ -59,7 +86,9 @@ describe('programme cards', () => {
 	});
 
 	test('labels reach the list as text', () => {
-		expect(resolveCardFields({ type: 'Person', name: 'x', birthDate: '1900-01-01' }, false)).toEqual([
+		expect(
+			resolveCardFields({ type: 'Person', name: 'x', birthDate: '1900-01-01' }, false)
+		).toEqual([
 			{ label: 'Geboren', value: '1 januari 1900', href: undefined },
 			{ label: 'Overleden', value: 'Onbekend', href: undefined }
 		]);
@@ -73,30 +102,66 @@ describe('collapsedFields', () => {
 		markFeature({ id: 'f', label, recordType: 'x', entity, foundBy } as unknown as FeatureResult);
 
 	test('without a search, the summary fields', () => {
-		expect(collapsedFields(at(screening, 'Skippy (1931)', []))).toEqual(resolveCardFields(screening, false));
+		expect(collapsedFields(at(screening, 'Skippy (1931)', []))).toEqual(
+			resolveCardFields(screening, false)
+		);
 	});
 
 	test('a hidden field the search marked joins the summary fields in the expanded order, marked', () => {
-		const photo: Entity = { type: 'MediaObject', name: 'Foto', author: 'Jacob Olie', contentUrl: 'u' };
-		expect(collapsedFields(at(photo, 'Foto', [{ field: '$.author', text: `Jacob ${S}Olie${E}` }]))).toEqual([{ label: 'Auteur', value: `Jacob ${S}Olie${E}`, href: undefined }]);
-		const entry: ManuscriptEntity = { type: 'Manuscript', name: 'x', excerpts: [], author: { type: 'Person', name: 'Els Polak' }, isPartOf: { type: 'Book', name: 'Dagboek Els Polak, deel 1' } };
-		expect(collapsedFields(at(entry, 'x', [{ field: '$.isPartOf.name', text: `Dagboek Els ${S}Polak${E}, deel 1` }])).map((r) => r.label)).toEqual(['Auteur', 'Dagboek']);
+		const photo: Entity = {
+			type: 'MediaObject',
+			name: 'Foto',
+			author: 'Jacob Olie',
+			contentUrl: 'u'
+		};
+		expect(
+			collapsedFields(at(photo, 'Foto', [{ field: '$.author', text: `Jacob ${S}Olie${E}` }]))
+		).toEqual([{ label: 'Auteur', value: `Jacob ${S}Olie${E}`, href: undefined }]);
+		const entry: ManuscriptEntity = {
+			type: 'Manuscript',
+			name: 'x',
+			excerpts: [],
+			author: { type: 'Person', name: 'Els Polak' },
+			isPartOf: { type: 'Book', name: 'Dagboek Els Polak, deel 1' }
+		};
+		expect(
+			collapsedFields(
+				at(entry, 'x', [{ field: '$.isPartOf.name', text: `Dagboek Els ${S}Polak${E}, deel 1` }])
+			).map((r) => r.label)
+		).toEqual(['Auteur', 'Dagboek']);
 	});
 
-	test('a programme\'s matched items come first, every one of them, the one that repeats the title included', () => {
-		const hits = screening.items.map((i) => ({ field: '$.items[*].name', text: i.name.replace(/^(\S+)/, `${S}$1${E}`) }));
+	test("a programme's matched items come first, every one of them, the one that repeats the title included", () => {
+		const hits = screening.items.map((i) => ({
+			field: '$.items[*].name',
+			text: i.name.replace(/^(\S+)/, `${S}$1${E}`)
+		}));
 		const rows = collapsedFields(at(screening, 'Skippy (1931)', hits));
 		expect(rows.map((r) => r.label)).toEqual(['Film', 'Optreden', 'Film', 'Venue']);
 		expect(rows[0].value).toBe(`${S}Skippy${E} (1931)`);
-		expect(collapsedFields(at(screening, 'Skippy (1931)', [{ field: '$.location.name', text: `${S}Rialto${E}` }]))).toEqual([{ label: 'Venue', value: `${S}Rialto${E}`, href: undefined }]);
+		expect(
+			collapsedFields(
+				at(screening, 'Skippy (1931)', [{ field: '$.location.name', text: `${S}Rialto${E}` }])
+			)
+		).toEqual([{ label: 'Venue', value: `${S}Rialto${E}`, href: undefined }]);
 	});
 });
 
 describe('relationLine', () => {
 	const base = {
-		id: 'f', recordType: 'event', label: 'x', dateRange: [1934, 1934], tags: [], classifiers: [], spatialFrequency: 1,
-		relationId: 'screenedAt', displayName: 'Ceintuurbaan 338', placeUrl: 'https://adamlink.nl/geo/address/A1',
-		startDate: '1934-01-05', endDate: '1934-01-05', entity: screening
+		id: 'f',
+		recordType: 'event',
+		label: 'x',
+		dateRange: [1934, 1934],
+		tags: [],
+		classifiers: [],
+		spatialFrequency: 1,
+		relationId: 'screenedAt',
+		displayName: 'Ceintuurbaan 338',
+		placeUrl: 'https://adamlink.nl/geo/address/A1',
+		startDate: '1934-01-05',
+		endDate: '1934-01-05',
+		entity: screening
 	} as FeatureResult;
 
 	test('the type, the relation, the place linked to its record, and the date of a dated relation', () => {
@@ -109,10 +174,22 @@ describe('relationLine', () => {
 		});
 	});
 
-	test('an undated relation has no date; an old name carries today\'s after it', () => {
-		const text = { ...base, recordType: 'text', entity: undefined, relationId: 'isAbout', relationDated: false, historicalLabel: 'Plaetse', displayName: 'Dam' } as FeatureResult;
+	test("an undated relation has no date; an old name carries today's after it", () => {
+		const text = {
+			...base,
+			recordType: 'text',
+			entity: undefined,
+			relationId: 'isAbout',
+			relationDated: false,
+			historicalLabel: 'Plaetse',
+			displayName: 'Dam'
+		} as FeatureResult;
 		expect(relationLine(text)).toEqual({
-			type: 'Tekst', relation: 'Gaat over', place: 'Plaetse', placeHref: 'https://adamlink.nl/geo/address/A1', now: ' (nu Dam)'
+			type: 'Tekst',
+			relation: 'Gaat over',
+			place: 'Plaetse',
+			placeHref: 'https://adamlink.nl/geo/address/A1',
+			now: ' (nu Dam)'
 		});
 	});
 
@@ -123,23 +200,39 @@ describe('relationLine', () => {
 			placeId: 'bag-0363010000596932',
 			placeUrl: 'http://bag.basisregistraties.overheid.nl/bag/id/verblijfsobject/0363010000596932'
 		} as FeatureResult;
-		expect(relationLine(bag).placeHref).toBe('https://bagviewer.kadaster.nl/lvbag/bag-viewer/#?searchQuery=0363010000596932');
+		expect(relationLine(bag).placeHref).toBe(
+			'https://bagviewer.kadaster.nl/lvbag/bag-viewer/#?searchQuery=0363010000596932'
+		);
 	});
 
 	test('the type is the most specific one: the subtype where there is one', () => {
 		expect(typeLabel(base)).toBe('Filmvertoning');
 		expect(typeLabel({ ...base, entity: theatre } as FeatureResult)).toBe('Voorstelling');
-		expect(typeLabel({ ...base, recordType: 'image', entity: undefined } as FeatureResult)).toBe('Afbeelding');
+		expect(typeLabel({ ...base, recordType: 'image', entity: undefined } as FeatureResult)).toBe(
+			'Afbeelding'
+		);
 	});
 });
 
 describe('provenance rows', () => {
 	const beeldbank = {
-		id: 'f', recordType: 'image', label: 'x', dateRange: [1900, 1900], tags: ['maps'], spatialFrequency: 1,
-		url: 'https://id.archief.amsterdam/f', providerLabel: 'Amsterdam Stadsarchief', providerUrl: 'https://archief.amsterdam', datasetLabel: 'Beeldbank',
-		placeType: 'street', displayName: 'Keizersgracht', placeUrl: 'https://adamlink.nl/geo/street/keizersgracht/2337',
-		placeProviderLabel: 'Adamlink', placeProviderUrl: 'https://adamlink.nl',
-		geometryProviderLabel: 'NWB', geometryProviderUrl: 'https://www.rijkswaterstaat.nl',
+		id: 'f',
+		recordType: 'image',
+		label: 'x',
+		dateRange: [1900, 1900],
+		tags: ['maps'],
+		spatialFrequency: 1,
+		url: 'https://id.archief.amsterdam/f',
+		providerLabel: 'Amsterdam Stadsarchief',
+		providerUrl: 'https://archief.amsterdam',
+		datasetLabel: 'Beeldbank',
+		placeType: 'street',
+		displayName: 'Keizersgracht',
+		placeUrl: 'https://adamlink.nl/geo/street/keizersgracht/2337',
+		placeProviderLabel: 'Adamlink',
+		placeProviderUrl: 'https://adamlink.nl',
+		geometryProviderLabel: 'NWB',
+		geometryProviderUrl: 'https://www.rijkswaterstaat.nl',
 		classifiers: [{ id: 'siglip2', label: 'SigLIP 2', url: 'https://example.org/siglip' }]
 	} as FeatureResult;
 
@@ -150,43 +243,82 @@ describe('provenance rows', () => {
 			['Geometrieleverancier', 'NWB', 'https://www.rijkswaterstaat.nl'],
 			['Classificatiemodel', 'SigLIP 2', 'https://example.org/siglip']
 		]);
-		const own = { ...beeldbank, providerLabel: 'Cinema Context', datasetLabel: 'Cinema Context', classifiers: [], geometryProviderLabel: undefined };
+		const own = {
+			...beeldbank,
+			providerLabel: 'Cinema Context',
+			datasetLabel: 'Cinema Context',
+			classifiers: [],
+			geometryProviderLabel: undefined
+		};
 		expect(dataSourceFields(own, true).map((r) => r.label)).toEqual(['Locatieleverancier']);
 		expect(dataSourceFields(beeldbank, false)).toEqual([]);
 	});
 
 	test('a public download of the whole dataset is a row between the leveranciers and the model', () => {
-		const diaries = { ...beeldbank, datasetLabel: 'Amsterdam Diaries Time Machine', datasetDistributionUrl: 'https://zenodo.org/records/14385058' } as FeatureResult;
-		expect(dataSourceFields(diaries, true).map((r) => r.label)).toEqual(['Dataleverancier', 'Locatieleverancier', 'Geometrieleverancier', 'Volledige dataset', 'Classificatiemodel']);
-		expect(dataSourceFields(diaries, true)[3]).toEqual({ label: 'Volledige dataset', value: 'zenodo.org', href: 'https://zenodo.org/records/14385058' });
+		const diaries = {
+			...beeldbank,
+			datasetLabel: 'Amsterdam Diaries Time Machine',
+			datasetDistributionUrl: 'https://zenodo.org/records/14385058'
+		} as FeatureResult;
+		expect(dataSourceFields(diaries, true).map((r) => r.label)).toEqual([
+			'Dataleverancier',
+			'Locatieleverancier',
+			'Geometrieleverancier',
+			'Volledige dataset',
+			'Classificatiemodel'
+		]);
+		expect(dataSourceFields(diaries, true)[3]).toEqual({
+			label: 'Volledige dataset',
+			value: 'zenodo.org',
+			href: 'https://zenodo.org/records/14385058'
+		});
 	});
 
-	test('an image shows the archive\'s own dating, else its dates worded at their precision', () => {
+	test("an image shows the archive's own dating, else its dates worded at their precision", () => {
 		const image = { type: 'MediaObject' as const, name: 'x', contentUrl: 'u' };
-		expect(resolveCardFields({ ...image, dateText: '1953 (ca.) t/m 1995 (ca.)', dateCreated: '1953-01-01/1995-12-31' }, true)[0])
-			.toEqual({ label: 'Datering', value: '1953 (ca.) t/m 1995 (ca.)', href: undefined });
-		expect(resolveCardFields({ ...image, dateCreated: '1988-01-01/1988-12-31' }, true)[0].value).toBe('1988');
-		expect(resolveCardFields({ ...image, dateCreated: '1958-09-27' }, true)[0].value).toBe('27 september 1958');
+		expect(
+			resolveCardFields(
+				{ ...image, dateText: '1953 (ca.) t/m 1995 (ca.)', dateCreated: '1953-01-01/1995-12-31' },
+				true
+			)[0]
+		).toEqual({ label: 'Datering', value: '1953 (ca.) t/m 1995 (ca.)', href: undefined });
+		expect(
+			resolveCardFields({ ...image, dateCreated: '1988-01-01/1988-12-31' }, true)[0].value
+		).toBe('1988');
+		expect(resolveCardFields({ ...image, dateCreated: '1958-09-27' }, true)[0].value).toBe(
+			'27 september 1958'
+		);
 	});
 
 	test('a story shows when it was written, at the precision it was dated', () => {
 		const entry = { type: 'Manuscript' as const, name: 'x', excerpts: [] };
-		expect(resolveCardFields({ ...entry, dateCreated: '1944-10-30' }, true)[0]).toEqual({ label: 'Geschreven', value: '30 oktober 1944', href: undefined });
-		expect(resolveCardFields({ ...entry, dateCreated: '1943-01' }, true)[0].value).toBe('januari 1943');
+		expect(resolveCardFields({ ...entry, dateCreated: '1944-10-30' }, true)[0]).toEqual({
+			label: 'Geschreven',
+			value: '30 oktober 1944',
+			href: undefined
+		});
+		expect(resolveCardFields({ ...entry, dateCreated: '1943-01' }, true)[0].value).toBe(
+			'januari 1943'
+		);
 		expect(resolveCardFields(entry, true).find((r) => r.label === 'Geschreven')).toBeUndefined();
 	});
 
 	test('a text shows the issue it appeared in', () => {
-		expect(resolveCardFields({ type: 'CreativeWork', name: 'x', datePublished: '1967-01-03' }, true)).toEqual([
-			{ label: 'Gepubliceerd', value: '3 januari 1967', href: undefined }
-		]);
+		expect(
+			resolveCardFields({ type: 'CreativeWork', name: 'x', datePublished: '1967-01-03' }, true)
+		).toEqual([{ label: 'Gepubliceerd', value: '3 januari 1967', href: undefined }]);
 	});
 });
 
 describe('content by entity type', () => {
 	test('every entity type maps to a content kind; no entity shows the description', () => {
 		const kinds: Record<Entity['type'], string> = {
-			MediaObject: 'picture', ScreeningEvent: 'programme', TheaterEvent: 'programme', Manuscript: 'story', Person: 'text', CreativeWork: 'text',
+			MediaObject: 'picture',
+			ScreeningEvent: 'programme',
+			TheaterEvent: 'programme',
+			Manuscript: 'story',
+			Person: 'text',
+			CreativeWork: 'text'
 		};
 		for (const [type, kind] of Object.entries(kinds)) {
 			expect(contentKind({ type } as Entity)).toBe(kind);
@@ -195,13 +327,38 @@ describe('content by entity type', () => {
 	});
 
 	test('expanded, a programme with items and a story with an excerpt scroll; a picture and a bare description do not', () => {
-		const story: ManuscriptEntity = { type: 'Manuscript', name: 'Dagboek', excerpts: [{ placeId: 'p', text: 'Op de Dam.', truncatedBefore: false, truncatedAfter: false, mentions: [{ start: 6, end: 9 }] }] };
-		const at = (entity: Entity | undefined, placeId = 'p') => ({ id: 'f', label: '', recordType: 'story', placeId, placeType: 'street', startDate: '', endDate: '', datasetId: 'd', datasetLabel: '', tags: [], classifiers: [], entity } as unknown as FeatureResult);
+		const story: ManuscriptEntity = {
+			type: 'Manuscript',
+			name: 'Dagboek',
+			excerpts: [
+				{
+					placeId: 'p',
+					text: 'Op de Dam.',
+					truncatedBefore: false,
+					truncatedAfter: false,
+					mentions: [{ start: 6, end: 9 }]
+				}
+			]
+		};
+		const at = (entity: Entity | undefined, placeId = 'p') =>
+			({
+				id: 'f',
+				label: '',
+				recordType: 'story',
+				placeId,
+				placeType: 'street',
+				startDate: '',
+				endDate: '',
+				datasetId: 'd',
+				datasetLabel: '',
+				tags: [],
+				classifiers: [],
+				entity
+			}) as unknown as FeatureResult;
 		expect(scrollingContent(at(screening), true)).toBe(true);
 		expect(scrollingContent(at(story), true)).toBe(true);
 		expect(scrollingContent(at(story), false)).toBe(false);
 		expect(scrollingContent(at({ type: 'MediaObject', name: 'Foto' } as Entity), true)).toBe(false);
 		expect(scrollingContent(at(undefined), true)).toBe(false);
 	});
-
 });

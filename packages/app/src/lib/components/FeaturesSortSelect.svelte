@@ -25,6 +25,11 @@
 	<span class="text-base text-gray-700">{translate('sortLabel')}</span>
 	<Select {options} {value} {onChange} aria-label={translate('sortLabel')} />
 	{#if value === 'sample'}
-		<Button icon={ArrowsClockwise} onclick={onShuffle} size={16} aria-label={translate('reshuffle')} />
+		<Button
+			icon={ArrowsClockwise}
+			onclick={onShuffle}
+			size={16}
+			aria-label={translate('reshuffle')}
+		/>
 	{/if}
 </div>

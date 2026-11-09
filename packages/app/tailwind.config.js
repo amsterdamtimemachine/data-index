@@ -18,8 +18,8 @@ export default {
 				'atm-sand-border': '#d7c5b8',
 				'atm-sand-mat': '#f4f0eb', // behind pictures
 				'atm-mark': '#d9e3fb', // behind the words a search matched
-				'atm-gold': '#dcb27d', 
-				'atm-gold-dark': '#cca36e', 
+				'atm-gold': '#dcb27d',
+				'atm-gold-dark': '#cca36e',
 				'atm-gold-darkest': '#58401a',
 				'atm-gold-darkest-hover': '#3b2a10',
 				'atm-gold-deep': '#1a1205', // tooltip ground
@@ -27,19 +27,19 @@ export default {
 				'atm-gold-gray-dark': '#5e5954',
 				'atm-red': '#ee5e00',
 				'atm-red-darkest': '#7a3100',
-				'atm-blue':'#5e92f3',
-				'atm-blue-light':'#c2d0fb',
+				'atm-blue': '#5e92f3',
+				'atm-blue-light': '#c2d0fb',
 				'map-cell-value': '#0053fb',
 				'map-place-outline': '#dcb27d',
 				'map-place-outline-casing': '#a5824e',
 				'map-selected-outline-casing': '#a84200',
-				'map-background': '#f7ece4', 
+				'map-background': '#f7ece4',
 				'map-water-fill': '#c5e0fd',
 				'map-water-outline': '#c5e0fd',
-				'map-transporation-outline': '#f7ece4',
+				'map-transporation-outline': '#f7ece4'
 			},
 			fontFamily: {
-				'sans': ['Satoshi', 'sans-serif'],
+				sans: ['Satoshi', 'sans-serif']
 			}
 		}
 	},

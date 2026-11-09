@@ -1,5 +1,11 @@
 import { describe, test, expect } from 'vitest';
-import { parseFeatureSelection, parsePlaceSelection, parsePlacePanelFlag, parseSortSelection, parseSearchQuery } from './page-params';
+import {
+	parseFeatureSelection,
+	parsePlaceSelection,
+	parsePlacePanelFlag,
+	parseSortSelection,
+	parseSearchQuery
+} from './page-params';
 
 function url(qs: string): URL {
 	return new URL(`http://x/?${qs}`);
@@ -66,11 +72,20 @@ describe('parseSearchQuery', () => {
 
 describe('parseFeatureSelection', () => {
 	test('the feature and the place its card is at, each absent when not given', () => {
-		expect(parseFeatureSelection(new URL('http://x/?feature=22222222-2222-2222-2222-222222222201&at=https://adamlink.nl/geo/street/1'))).toEqual({
+		expect(
+			parseFeatureSelection(
+				new URL(
+					'http://x/?feature=22222222-2222-2222-2222-222222222201&at=https://adamlink.nl/geo/street/1'
+				)
+			)
+		).toEqual({
 			featureId: '22222222-2222-2222-2222-222222222201',
 			placeId: 'https://adamlink.nl/geo/street/1'
 		});
-		expect(parseFeatureSelection(new URL('http://x/?feature=f'))).toEqual({ featureId: 'f', placeId: null });
+		expect(parseFeatureSelection(new URL('http://x/?feature=f'))).toEqual({
+			featureId: 'f',
+			placeId: null
+		});
 		expect(parseFeatureSelection(new URL('http://x/'))).toEqual({ featureId: null, placeId: null });
 	});
 });

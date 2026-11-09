@@ -21,7 +21,13 @@ describe('classifyFailure', () => {
 
 describe('describeFailure', () => {
 	test('the kind, and the status when the server answered', () => {
-		expect(describeFailure(new Response(null, { status: 500 }))).toEqual({ kind: 'server', status: 500 });
-		expect(describeFailure(new TypeError('Failed to fetch'))).toEqual({ kind: 'unreachable', status: null });
+		expect(describeFailure(new Response(null, { status: 500 }))).toEqual({
+			kind: 'server',
+			status: 500
+		});
+		expect(describeFailure(new TypeError('Failed to fetch'))).toEqual({
+			kind: 'unreachable',
+			status: null
+		});
 	});
 });
