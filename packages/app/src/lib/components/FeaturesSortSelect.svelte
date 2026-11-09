@@ -1,7 +1,3 @@
-<script lang="ts" module>
-	export { UI_SORT_MODES, type UiSortMode } from '#lib/utils/sort-modes.js';
-</script>
-
 <script lang="ts">
 	import Select, { type SelectOption } from '#lib/components/Select.svelte';
 	import Button from '#lib/components/Button.svelte';

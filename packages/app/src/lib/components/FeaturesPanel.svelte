@@ -7,7 +7,7 @@
 	import ButtonIllustration from '#lib/components/ButtonIllustration.svelte';
 	import TextWithSlots from '#lib/components/TextWithSlots.svelte';
 	import FeaturesPanelHeader from '#lib/components/FeaturesPanelHeader.svelte';
-	import { type UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
+	import type { UiSortMode } from '#lib/utils/sort-modes.js';
 	import { createPanelFeatures, type PanelSubject } from '#lib/state/panel-features.svelte.js';
 	import type { HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
 	import type { FilterState } from '#lib/types/filters.js';

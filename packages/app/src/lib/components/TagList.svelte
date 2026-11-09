@@ -18,7 +18,7 @@
 
 {#if tags && tags.length > 0}
 	<div class={mergeCss('flex flex-wrap gap-1', className)}>
-		{#each visibleTags as tag}
+		{#each visibleTags as tag (tag)}
 			<Tag>{tag}</Tag>
 		{/each}
 		{#if showOverflow}

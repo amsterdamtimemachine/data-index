@@ -91,7 +91,7 @@
 			bind:this={masonryContainer}
 			style:grid-template-columns={`repeat(${currentColumns}, minmax(0, 1fr))`}
 		>
-			{#each Array(MAX_COLUMNS) as _, columnIndex}
+			{#each Array.from({ length: MAX_COLUMNS }, (_, i) => i) as columnIndex (columnIndex)}
 				<div class="masonry-column" role="presentation"></div>
 			{/each}
 			{#each features as feature, index (index)}

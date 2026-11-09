@@ -4,7 +4,7 @@ import { untrack } from 'svelte';
 import type { FeatureResult, PlaceSearchMatch } from '@atm/shared/types';
 import type { FilterState } from '#lib/types/filters.js';
 import { filterParams } from '#lib/utils/filters.js';
-import type { UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
+import type { UiSortMode } from '#lib/utils/sort-modes.js';
 import { apiUrl } from '#lib/utils/api.js';
 import { notifyFailure } from '#lib/state/notify.js';
 import { announcer } from '#lib/a11y/announcer.svelte.js';

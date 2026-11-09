@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { resolve, asset } from '$app/paths';
-	import Heading from './Heading.svelte';
 	import { mergeCss } from '#lib/utils/utils.js';
 	import type { Snippet } from 'svelte';
 

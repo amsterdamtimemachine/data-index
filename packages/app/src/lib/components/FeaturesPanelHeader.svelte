@@ -4,7 +4,8 @@
 	import Button from '#lib/components/Button.svelte';
 	import X from 'phosphor-svelte/lib/X';
 	import MapThumbnail from '#lib/components/MapThumbnail.svelte';
-	import FeaturesSortSelect, { type UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
+	import FeaturesSortSelect from '#lib/components/FeaturesSortSelect.svelte';
+	import type { UiSortMode } from '#lib/utils/sort-modes.js';
 	import { createMediaQuery, MOBILE_QUERY } from '#lib/utils/media.svelte.js';
 	import { translate } from '#lib/utils/translations.js';
 	import { subjectPhrase } from '#lib/utils/format.js';

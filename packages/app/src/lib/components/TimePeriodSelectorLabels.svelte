@@ -25,7 +25,7 @@
 
 <svg class="absolute w-full h-full pointer-events-none">
 	<!-- Year labels -->
-	{#each displayPeriods as period, i}
+	{#each displayPeriods as period, i (i)}
 		{@const position = (i / (displayPeriods.length - 1)) * 100}
 		<text
 			x="{position}%"

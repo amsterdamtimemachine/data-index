@@ -69,7 +69,7 @@
 >
 	<div class="text-base font-sans text-black flex flex-wrap items-center gap-1">
 		<span>{translate('viewFilters')}</span>
-		{#each displayedRecordTypes as recordType, index}
+		{#each displayedRecordTypes as recordType, index (index)}
 			<Tag variant="selected-outline">{recordType}</Tag>
 			{#if index < displayedRecordTypes.length - 1}
 				<span>{translate('or')}</span>
@@ -77,7 +77,7 @@
 		{/each}
 		{#if displayedPlaceTypes.length > 0}
 			<span>{translate('statusAtScale')}</span>
-			{#each displayedPlaceTypes as placeType, index}
+			{#each displayedPlaceTypes as placeType, index (index)}
 				<Tag variant="selected-outline">{placeType}</Tag>
 				{#if index < displayedPlaceTypes.length - 1}
 					<span>{translate('or')}</span>
@@ -85,7 +85,7 @@
 			{/each}
 		{/if}
 		<span>{translate('statusInDatasets')}</span>
-		{#each displayedDatasets as dataset, index}
+		{#each displayedDatasets as dataset, index (index)}
 			<Tag variant="selected-outline">{dataset}</Tag>
 			{#if index < displayedDatasets.length - 1}
 				<span>{translate('and')}</span>
@@ -105,7 +105,7 @@
 		{/if}
 		{#if selectedTags.length > 0}
 			<span>{translate('statusAboutTopics')}</span>
-			{#each selectedTags as tag, index}
+			{#each selectedTags as tag, index (index)}
 				<Tag variant="selected-outline">{translate(tag)}</Tag>
 				{#if index < selectedTags.length - 1}
 					<span>{tagJoiner}</span>

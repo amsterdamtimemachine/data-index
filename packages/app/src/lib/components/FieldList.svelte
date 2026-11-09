@@ -13,7 +13,7 @@
 
 {#if fields.length}
 	<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-base text-gray-700 {className || ''}">
-		{#each fields as field}
+		{#each fields as field, i (i)}
 			<dt class="text-gray-500">
 				{#if field.labelHref}
 					<Link href={field.labelHref} target="_blank" rel="noopener noreferrer" class="text-gray-500">{field.label}</Link>

@@ -19,7 +19,7 @@
 		panelWidthCss,
 		type PanelCols
 	} from '#lib/components/FeaturesPanelResizeHandle.svelte';
-	import { type UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
+	import type { UiSortMode } from '#lib/utils/sort-modes.js';
 	import Heatmap from '#lib/components/Heatmap.svelte';
 	import TimePeriodSelector from '#lib/components/TimePeriodSelector.svelte';
 	import FilterPanel from '#lib/components/FilterPanel.svelte';

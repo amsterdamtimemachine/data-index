@@ -42,6 +42,7 @@
 			<FeatureCardImage thumbnail={getExcerptImageUrl(block.image, pictureUse(expanded))} alt={translate('diaryImage')} {expanded} inline={expanded} {onExpand} />
 		{:else}
 			<p class="p-2 text-base text-gray-700 leading-relaxed whitespace-pre-wrap">
+				<!-- eslint-disable-next-line svelte/no-useless-mustaches -- the mustaches keep the space beside the ellipsis -->
 				{#if truncatedBefore && b === firstText}{'… '}{/if}{#each block.segments as segment, i (i)}{#if segment.search}<Mark>{#if segment.place}<b class="font-semibold">{segment.text}</b>{:else}{segment.text}{/if}</Mark>{:else if segment.place}<b class="font-semibold">{segment.text}</b>{:else}{segment.text}{/if}{/each}{#if truncatedAfter && b === lastText}{' …'}{/if}
 			</p>
 		{/if}

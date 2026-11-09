@@ -32,7 +32,7 @@
 		},
 		layers: []
 	};
-	import type { FeatureCollection, Feature, Polygon, GeoJsonProperties } from 'geojson';
+	import type { FeatureCollection, Feature, Polygon } from 'geojson';
 	import type { Heatmap, HeatmapDimensions, Coordinates } from '@atm/shared/types';
 	import { generateCellIdMap, generateCellGeometries, calculateDensity, placeOutlineGeometry, cellIdAtLonLat, staleCells, type CellGeometry } from '#lib/utils/heatmap.js';
 	import { mergeCss } from '#lib/utils/utils.js';
@@ -45,7 +45,7 @@
 		row: number;
 		col: number;
 		count: number;
-		[key: string]: any; // Allow additional GeoJSON properties
+		[key: string]: unknown; // Allow additional GeoJSON properties
 	}
 
 	export interface MapStyle {

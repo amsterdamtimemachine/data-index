@@ -54,7 +54,7 @@ export class MediaObjectEntityFactory extends EntityFactory<MediaObjectEntity> {
             ...(dateCreatedFormatted && { dateCreated: dateCreatedFormatted }),
             ...(dateText && { dateText }),
         };
-    } 
+    }
 }
 
 // the source row's shape, as the cinema-context source reads it

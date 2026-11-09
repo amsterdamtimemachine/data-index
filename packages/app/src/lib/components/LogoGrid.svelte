@@ -25,7 +25,7 @@
 	"grid-cols-1 sm:grid-cols-3", // Mobile: 1 col, Small+: 3 cols
 	className
 )}>
-	{#each logos as logo}
+	{#each logos as logo (logo.url)}
 		<a 
 			href={logo.url}
 			target="_blank"

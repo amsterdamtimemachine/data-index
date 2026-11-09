@@ -15,8 +15,7 @@
 		children?: Snippet;
 	};
 
-	// the rest carries any button attribute through; the app is not compiled to custom elements
-	// svelte-ignore custom_element_props_identifier
+	// the rest carries any button attribute through
 	let { class: className, icon: Icon, size = 18, weight = 'bold', color = 'black', children, ...rest }: Props = $props();
 
 	const iconProps: PhosphorIconProps = $derived({

@@ -54,9 +54,9 @@ export function formatPeriod(start: string, end: string): string {
 export function foldLinesInline(text: string): string {
 	return text
 		.replace(/-\n(?!\n)/g, '')
-		.replace(/\n{2,}/g, '\u0000')
+		.replace(/\n{2,}/g, '\uE000')
 		.replace(/\n/g, ' ')
-		.replace(/\u0000/g, '\n\n');
+		.replace(/\uE000/g, '\n\n');
 }
 
 export function formatDatasetTitle(title: string): string {

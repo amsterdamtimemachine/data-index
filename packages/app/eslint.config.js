@@ -20,11 +20,21 @@ export default [
 		}
 	},
 	{
-		files: ['**/*.svelte'],
+		files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
 		languageOptions: {
 			parserOptions: {
 				parser: ts.parser
 			}
+		}
+	},
+	{
+		rules: {
+			// internal links and API URLs are guarded by the no-restricted-syntax rules below;
+			// a dynamic href is an external URL, and a goto() carries a path taken from the
+			// current location, base path included
+			'svelte/no-navigation-without-resolve': ['error', { ignoreLinks: true, ignoreGoto: true }],
+			// a Map or URLSearchParams built inside a $derived is a value, not state
+			'svelte/prefer-svelte-reactivity': 'off'
 		}
 	},
 	{

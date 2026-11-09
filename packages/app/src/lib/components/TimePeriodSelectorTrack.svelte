@@ -102,7 +102,7 @@
 >
 	<!-- a press area per period, for the pointer only: a slider's parts are not separate
 	     controls, so they take no focus and screen readers hear the slider's value -->
-	{#each bins as bin, i}
+	{#each bins as bin, i (i)}
 		{@const barWidth = 100 / bins.length}
 		{@const x = (i / bins.length) * 100}
 		<div
