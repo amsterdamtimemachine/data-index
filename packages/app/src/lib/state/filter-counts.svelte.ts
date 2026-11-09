@@ -27,7 +27,7 @@ export function createFilterCounts() {
 			}
 			// the filters still work without counts
 			counts = null;
-			notifyFailure('topicCountsNotLoaded', err);
+			notifyFailure('filterCountsNotLoaded', err);
 		}
 	}
 

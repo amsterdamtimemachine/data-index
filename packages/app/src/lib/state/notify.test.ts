@@ -51,7 +51,7 @@ describe('notify', () => {
 		notifyFailure('mapNotLoaded', new Response(null, { status: 500 }));
 		notifyFailure('timelineNotLoaded', new Response(null, { status: 500 }));
 		notifyFailure('featuresNotLoaded', new Response(null, { status: 500 }));
-		notifyFailure('topicCountsNotLoaded', new Response(null, { status: 500 }));
+		notifyFailure('filterCountsNotLoaded', new Response(null, { status: 500 }));
 		settle();
 		expect(toasts).toEqual([
 			{ title: 'Index niet bereikbaar', description: 'Foutcode 500', failure: true }
@@ -67,7 +67,7 @@ describe('notify', () => {
 	});
 
 	test('a sentence of its own and the code are both shown', () => {
-		notifyFailure('topicCountsNotLoaded', new Response(null, { status: 500 }));
+		notifyFailure('filterCountsNotLoaded', new Response(null, { status: 500 }));
 		settle();
 		expect(toasts[0].description).toBe('De filters werken nog wel.\nFoutcode 500');
 	});
@@ -130,7 +130,7 @@ describe('notify', () => {
 describe('message', () => {
 	test('a title, with its sentence when it has one', () => {
 		expect(message('mapNotLoaded')).toEqual({ title: 'Kaart niet geladen' });
-		expect(message('topicCountsNotLoaded')).toEqual({
+		expect(message('filterCountsNotLoaded')).toEqual({
 			title: 'Aantallen per filter niet geladen',
 			text: 'De filters werken nog wel.'
 		});

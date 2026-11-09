@@ -234,9 +234,9 @@ const TRANSLATIONS: Record<string, string> = {
 	mapNotLoaded: 'Kaart niet geladen',
 	timelineNotLoaded: 'Tijdlijn niet geladen',
 	featuresNotLoaded: 'Features niet geladen',
-	topicCountsNotLoaded: 'Aantallen per filter niet geladen',
+	filterCountsNotLoaded: 'Aantallen per filter niet geladen',
 	// the sentence under a failure's title, by the failure's key
-	topicCountsNotLoadedText: 'De filters werken nog wel.',
+	filterCountsNotLoadedText: 'De filters werken nog wel.',
 	placeSearchFailed: 'Zoeken naar plekken mislukt',
 	placeFilterNotRestored: 'Plekfilter niet hersteld',
 	// one toast for everything wrong with a link on arrival

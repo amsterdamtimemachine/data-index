@@ -1,6 +1,7 @@
 /**
- * Tag filtering on the bitmap path: per-tag counts under the category filters and
- * a search term, heatmap/histogram counts intersected with OR / AND tag sets, an
+ * Tag filtering on the bitmap path: the filter counts (every category's values and
+ * the tags, under the other filters, the period and the scope, with the tags' OR / AND
+ * read), heatmap/histogram counts intersected with OR / AND tag sets, an
  * unknown tag matching nothing, composition with the search bitmap, and the
  * feature list's per-row tag predicate. The cross-validation test pins the
  * precomputed bitmaps to a live count over feature_tags.
