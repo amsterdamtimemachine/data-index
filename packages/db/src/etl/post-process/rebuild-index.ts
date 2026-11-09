@@ -5,6 +5,7 @@ import { placeGeometry, features, placeCells, gridConfig } from '../../schema';
 import { buildCellFeatures } from './build-cell-features';
 import { buildTagFeatures } from './build-tag-features';
 import { ensureSearchColumn } from './search-column';
+import { ensureNameIndexes } from './name-indexes';
 import { cellIndex, cellEnvelope } from '../sql';
 
 type BBoxRow = {
@@ -29,6 +30,14 @@ export async function rebuildIndex() {
     console.log('Rebuilt features.search_tsv: its expression had changed.\n');
   } else {
     console.log('features.search_tsv is up to date.\n');
+  }
+
+  console.log('=== Place name indexes ===\n');
+  const recreated = await ensureNameIndexes();
+  if (recreated.length > 0) {
+    console.log(`Recreated without their predicate: ${recreated.join(', ')}.\n`);
+  } else {
+    console.log('The place name indexes are up to date.\n');
   }
 
   console.log('=== Rebuilding place_cells at 100m resolution ===\n');

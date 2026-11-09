@@ -87,7 +87,7 @@ erDiagram
 
     place {
         text id PK "e.g. https://adamlink.nl/geo/lp/1000001"
-        text type  "address | street | neighbourhood | district"
+        text type  "address | building | street | neighbourhood | district"
         text name  "e.g. Prins Hendrikkade 93"
         text source FK "provider org: adamlink | cbs | nwb | bag"
         text url  "link to the origin record"
@@ -293,7 +293,7 @@ Each match carries the matched name, the id of the matched historical name row w
 
 The same three accept `tags` (comma-separated tag ids) with `tagOperator` (`OR`, the default, or `AND`). Tags are classifier output ingested per dataset (see the `tags` source); the count endpoints intersect the precomputed per-tag bitmaps with their buckets, and an unknown tag id matches nothing. `/api/filter-counts` says what every filter value is worth: for each record type, dataset, place type and tag, how many features pressing it leaves under the other filters, the period (`timeSlice`) and, with bounds or a `placeId`, the scope. A category's values are counted under the other categories, the search and the tags; the tags under every category and the search, and under the selected tags too when they combine with AND. A category sent as `none` is an emptied one: its own values are still counted, the rest reads zero. The filter panel shows these beside every value, so they always agree with the map.
 
-Matching is on words as written, with web search syntax: plain words must all appear, `"quoted phrases"` must appear side by side, `OR` offers alternatives, and `-word` excludes. Nothing is stemmed and no word is dropped, so a name matches itself and not a lookalike (`Leeds` does not find `Leden`, `Kat` does not find `Katestraat`) and `haar` or `het` are words like any other. The words are indexed in the generated `search_tsv` column, which `rebuild-index` rebuilds whenever its definition in the code has changed, since a schema push cannot see that change. A query that matches nothing returns zero counts everywhere.
+Matching is on words as written, with web search syntax: plain words must all appear, `"quoted phrases"` must appear side by side, `OR` offers alternatives, and `-word` excludes. Nothing is stemmed and no word is dropped, so a name matches itself and not a lookalike (`Leeds` does not find `Leden`, `Kat` does not find `Katestraat`) and `haar` or `het` are words like any other. The words are indexed in the generated `search_tsv` column, which `rebuild-index` rebuilds whenever its definition in the code has changed, since a schema push cannot see that change; it likewise drops the old partial predicate from the place name indexes, which made every name lookup a slow parallel scan. A query that matches nothing returns zero counts everywhere.
 
 Heatmap and histogram counts under a search are computed by intersecting each cell's precomputed feature set with the set of matching features, so a search request costs about the same as an unfiltered one regardless of how many features match.
 
@@ -451,7 +451,7 @@ Ingestion is idempotent and source-driven: corrections are made in the **source 
 | `GET /api/filter-counts` | What every filter value is worth under the request's other filters, period and scope |
 | `GET /api/places` | Place name search and place lookup for the search filter |
 
-Heatmaps, histogram, features, and filter-counts accept `recordTypes`, `datasets`, and `placeTypes` (`address` / `street` / `neighbourhood` / `district`) query parameters to filter results.
+Heatmaps, histogram, features, and filter-counts accept `recordTypes`, `datasets`, and `placeTypes` (`address` / `building` / `street` / `neighbourhood` / `district`) query parameters to filter results.
 
 Invalid input policy: malformed parameters (bad bounds, unknown `timeSlice`) return a 400 with a machine-readable `code`; well-formed filters that match nothing return empty results; display resolution (`binSize`, `cols`) is snapped to the nearest valid value. A fallback never widens a result beyond what was requested.
 

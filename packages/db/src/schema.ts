@@ -63,10 +63,12 @@ export const place = pgTable('place', {
   source: text('source').$type<PlaceSource>().references(() => agents.id), // provider, seeded from PLACE_PROVIDERS
   url: text('url')                               // canonical record at the source (adamlink.nl / bag.basisregistraties.overheid.nl / …)
 }, (table) => [
-  // exact case-insensitive name lookup (getCandidatesByName / inferByName)
-  index('idx_place_name_lower').on(sql`lower(${table.name})`).where(sql`${table.name} is not null`),
+  // exact case-insensitive name lookup (getCandidatesByName / inferByName). Not partial: the
+  // planner does not read a partial index's statistics, and estimated 0.5% of all places
+  // for every name, which made each lookup a parallel scan
+  index('idx_place_name_lower').on(sql`lower(${table.name})`),
   // prefix search (searchPlaces): LIKE 'q%' needs text_pattern_ops
-  index('idx_place_name_prefix').on(sql`lower(${table.name}) text_pattern_ops`).where(sql`${table.name} is not null`)
+  index('idx_place_name_prefix').on(sql`lower(${table.name}) text_pattern_ops`)
 ]);
 
 // ============================================================================
@@ -112,8 +114,8 @@ export const placeHistoricalName = pgTable('place_historical_name', {
 }, (table) => [
   index('idx_place_historical_name_place').on(table.placeId),
   index('idx_place_historical_name_place_since').on(table.placeId, table.since),
-  index('idx_place_historical_name_lower').on(sql`lower(${table.name})`).where(sql`${table.name} is not null`),
-  index('idx_place_historical_name_prefix').on(sql`lower(${table.name}) text_pattern_ops`).where(sql`${table.name} is not null`)
+  index('idx_place_historical_name_lower').on(sql`lower(${table.name})`),
+  index('idx_place_historical_name_prefix').on(sql`lower(${table.name}) text_pattern_ops`)
 ]);
 
 // ============================================================================
