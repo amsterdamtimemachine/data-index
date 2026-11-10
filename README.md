@@ -377,8 +377,8 @@ Adamlink (download the TTLs, see [Getting the data](#getting-the-data)):
 |---------|-------------|--------|
 | [Neighbourhoods & districts](https://adamlink.nl/geo/districts) | Neighbourhood (buurt) + district (wijk) polygons — historical (1600 wijken, 1850/1909 buurten) plus present-day CBS — split onto the `neighbourhood` and `district` place types; ingested by the `neighbourhoods-and-districts` source | TTL |
 | [Streets](https://adamlink.nl/data) | Street geometries (LINESTRING) with historical name variants | TTL |
-| [LPS](https://adamlink.nl/data) | Linked point set: historical address-to-geometry mappings from 7 Amsterdam registries (1832–1976) | TTL |
-| [Adressen](https://adamlink.nl/data) | Dated address observations linking to LPS points via `schema:geoContains` | TTL |
+| [LPS](https://adamlink.nl/data) | Locatiepunten: the points HisGis located address mentions at, with the BAG building each falls in | TTL |
+| [Adressen](https://adamlink.nl/data) | Adresvermeldingen: an address as noted on one of eight historical sources, mostly maps, from the 1802 Verpondingsnummers to the 1943 Publieke Werken map, each linked to its locatiepunt via `schema:geoContains` | TTL |
 | [Buildings](https://adamlink.nl/data) | Named buildings: a footprint (BAG) or a point for a vanished one, build and demolition years, name variants | TTL |
 
 Three PDOK base registries fill the gaps, fetched with `db:fetch` (scope Amsterdam + Weesp — see [Getting the data](#getting-the-data)). CBS and BAG ingest via the generic `pdok-places` source; NWB has its own `nwb-streets` source that reconciles against Adamlink at ingest.

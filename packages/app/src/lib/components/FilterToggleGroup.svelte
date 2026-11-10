@@ -58,7 +58,7 @@
 				<Tag variant="outline" interactive={true}>{item}</Tag>
 			{/if}
 			{#if count !== undefined}
-				<span class="text-base text-gray-500 tabular-nums">{count}</span>
+				<span class="text-sm text-gray-500 tabular-nums">{count}</span>
 			{/if}
 		</button>
 	{/each}
