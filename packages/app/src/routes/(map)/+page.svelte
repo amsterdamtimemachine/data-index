@@ -346,6 +346,26 @@
 		return showCellModal;
 	});
 
+	// the filter counts are taken within the period and, while the timeline shows the
+	// subject's series, within that subject: the open place, else the selected cell
+	const countsScope = $derived.by(() => {
+		const params = new URLSearchParams();
+		if (currentPeriod) {
+			params.set('timeSlice', currentPeriod);
+		}
+		if (timelineScope.showsLocal) {
+			if (placePanelOpen && data.selectedPlace) {
+				params.set('placeId', data.selectedPlace.placeId);
+			} else if (selectedCellBounds) {
+				params.set('minLon', String(selectedCellBounds.minLon));
+				params.set('maxLon', String(selectedCellBounds.maxLon));
+				params.set('minLat', String(selectedCellBounds.minLat));
+				params.set('maxLat', String(selectedCellBounds.maxLat));
+			}
+		}
+		return params.toString();
+	});
+
 	// the expanded card in the URL: written while one is open, restored from a link
 	createFeatureLink({
 		get searchQuery() {
@@ -427,6 +447,7 @@
 				{searchPaused}
 				onToggleSearch={search.toggle}
 				{idle}
+				{countsScope}
 			/>
 		</NavContainer>
 
