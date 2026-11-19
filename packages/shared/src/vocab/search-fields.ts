@@ -17,14 +17,9 @@ export const SEARCH_FIELDS: Partial<Record<Entity['type'], SearchField[]>> = {
     { path: '$.deathPlace', label: 'died' },
   ],
   MediaObject: [{ path: '$.author', label: 'author' }],
-  // a programme's items are films or live acts; the card labels each by its kind
   ScreeningEvent: [
     { path: '$.location.name', label: 'venue' },
     { path: '$.items[*].name', label: 'film' },
-  ],
-  TheaterEvent: [
-    { path: '$.location.name', label: 'venue' },
-    { path: '$.items[*].name', label: 'performer' },
   ],
   Manuscript: [
     { path: '$.author.name', label: 'author' },

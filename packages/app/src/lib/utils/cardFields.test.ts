@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import type { ScreeningEventEntity, TheaterEventEntity, FeatureResult } from '@atm/shared/types';
+import type { ScreeningEventEntity, FeatureResult } from '@atm/shared/types';
 import {
 	resolveCardFields,
 	collapsedFields,
@@ -29,17 +29,16 @@ const screening: ScreeningEventEntity = {
 	},
 	items: [
 		{ type: 'Movie', name: 'Skippy (1931)', url: 'https://cinemacontext.nl/id/F1' },
-		{ type: 'LiveAct', name: 'Mello Wendini, komisch dressuur act' },
 		{ type: 'Movie', name: 'Reis naar de maan, De' }
 	]
 };
 
-const theatre: TheaterEventEntity = {
-	type: 'TheaterEvent',
-	name: 'Allison Troep, acrobaten',
+const single: ScreeningEventEntity = {
+	type: 'ScreeningEvent',
+	name: 'Can-can (1960)',
 	startDate: '1907-05',
 	location: { type: 'Place', name: 'Carr', identifier: 'B2' },
-	items: [{ type: 'LiveAct', name: 'Allison Troep, acrobaten' }]
+	items: [{ type: 'Movie', name: 'Can-can (1960)' }]
 };
 
 describe('programme cards', () => {
@@ -51,37 +50,25 @@ describe('programme cards', () => {
 
 	test('expanded adds nothing beyond the venue: the programme is the card content', () => {
 		expect(resolveCardFields(screening, true).length).toBe(1);
-		expect(resolveCardFields(theatre, true).length).toBe(1);
 	});
 
-	test('a programme of several items gets a heading worded from it; one item gets none', () => {
-		expect(programmeHeading(screening)).toBe('2 films en 1 optreden op het programma');
-		expect(
-			programmeHeading({
-				...theatre,
-				items: [
-					{ type: 'LiveAct', name: 'a' },
-					{ type: 'LiveAct', name: 'b' }
-				]
-			})
-		).toBe('2 optredens op het programma');
-		expect(programmeHeading(theatre)).toBeNull();
+	test('a programme of several films gets a heading worded from it; one film gets none', () => {
+		expect(programmeHeading(screening)).toBe('2 films op het programma');
+		expect(programmeHeading(single)).toBeNull();
 		expect(programmeHeading({ type: 'Person', name: 'x' })).toBeNull();
 	});
 
-	test("the items in the source's order: a film linked where it has a page, an act as worded", () => {
+	test("the films in the source's order, each linked where it has a page", () => {
 		expect(programmeRows(screening)).toEqual([
 			{ label: 'Film', value: 'Skippy (1931)', href: 'https://cinemacontext.nl/id/F1' },
-			{ label: 'Optreden', value: 'Mello Wendini, komisch dressuur act' },
 			{ label: 'Film', value: 'Reis naar de maan, De', href: undefined }
 		]);
 		expect(programmeRows({ type: 'Person', name: 'x' })).toEqual([]);
 		expect(programmeRows(undefined)).toEqual([]);
 	});
 
-	test('the subtype follows the type: a screening or a performance', () => {
+	test('a programme is a screening; other entities have no subtype', () => {
 		expect(entitySubtype(screening)).toBe('screening');
-		expect(entitySubtype(theatre)).toBe('performance');
 		expect(entitySubtype({ type: 'Person', name: 'x' })).toBeNull();
 	});
 
@@ -137,7 +124,7 @@ describe('collapsedFields', () => {
 			text: i.name.replace(/^(\S+)/, `${S}$1${E}`)
 		}));
 		const rows = collapsedFields(at(screening, 'Skippy (1931)', hits));
-		expect(rows.map((r) => r.label)).toEqual(['Film', 'Optreden', 'Film', 'Venue']);
+		expect(rows.map((r) => r.label)).toEqual(['Film', 'Film', 'Venue']);
 		expect(rows[0].value).toBe(`${S}Skippy${E} (1931)`);
 		expect(
 			collapsedFields(
@@ -207,7 +194,6 @@ describe('relationLine', () => {
 
 	test('the type is the most specific one: the subtype where there is one', () => {
 		expect(typeLabel(base)).toBe('Filmvertoning');
-		expect(typeLabel({ ...base, entity: theatre } as FeatureResult)).toBe('Voorstelling');
 		expect(typeLabel({ ...base, recordType: 'image', entity: undefined } as FeatureResult)).toBe(
 			'Afbeelding'
 		);
@@ -315,7 +301,6 @@ describe('content by entity type', () => {
 		const kinds: Record<Entity['type'], string> = {
 			MediaObject: 'picture',
 			ScreeningEvent: 'programme',
-			TheaterEvent: 'programme',
 			Manuscript: 'story',
 			Person: 'text',
 			CreativeWork: 'text'

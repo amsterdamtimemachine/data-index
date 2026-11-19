@@ -4,7 +4,6 @@ import type {
 	MediaObjectEntity,
 	CreativeWorkEntity,
 	ScreeningEventEntity,
-	TheaterEventEntity,
 	ManuscriptEntity,
 	FeatureResult
 } from '@atm/shared/types';
@@ -22,9 +21,8 @@ export type FieldRow = { label: string; value: string; href?: string; labelHref?
 const isPerson = (e: Entity): e is PersonEntity => e.type === 'Person';
 const isMedia = (e: Entity): e is MediaObjectEntity => e.type === 'MediaObject';
 const isCreativeWork = (e: Entity): e is CreativeWorkEntity => e.type === 'CreativeWork';
-// a programme: a screening (a film on its programme) or a theatre event (acts only)
-const isProgramme = (e: Entity): e is ScreeningEventEntity | TheaterEventEntity =>
-	e.type === 'ScreeningEvent' || e.type === 'TheaterEvent';
+// a programme of films at a venue
+const isProgramme = (e: Entity): e is ScreeningEventEntity => e.type === 'ScreeningEvent';
 const isManuscript = (e: Entity): e is ManuscriptEntity => e.type === 'Manuscript';
 
 /** A publication date worded at its precision; a start/end range worded as a period. */
@@ -113,7 +111,6 @@ const CARD_FIELDS: Partial<Record<Entity['type'], CardFieldSpec[]>> = {
 		{ label: 'author', value: (e) => (isMedia(e) ? e.author || translate('unknown') : null) }
 	],
 	ScreeningEvent: PROGRAMME_FIELDS,
-	TheaterEvent: PROGRAMME_FIELDS,
 	Manuscript: [
 		// the day, month or year the entry was written, as the annotators dated it
 		{
@@ -178,57 +175,30 @@ export function entitySubtype(entity: Entity | undefined): string | null {
 	if (entity?.type === 'ScreeningEvent') {
 		return 'screening';
 	}
-	if (entity?.type === 'TheaterEvent') {
-		return 'performance';
-	}
 	return null;
 }
 
 /**
- * A heading for a programme of more than one item, worded from it: "3 films op het
- * programma", "2 films en 1 optreden op het programma". Null for a single item,
- * which the title already names.
+ * A heading for a programme of more than one film: "3 films op het programma". Null
+ * for a single film, which the title already names.
  */
 export function programmeHeading(entity: Entity | undefined): string | null {
-	if (!entity || !isProgramme(entity)) {
+	if (!entity || !isProgramme(entity) || entity.items.length < 2) {
 		return null;
 	}
-	const films = entity.items.filter((item) => item.type === 'Movie').length;
-	const acts = entity.items.length - films;
-	if (films + acts < 2) {
-		return null;
-	}
-	const parts: string[] = [];
-	if (films > 0) {
-		parts.push(countWord(films, 'filmOne', 'filmMany'));
-	}
-	if (acts > 0) {
-		parts.push(countWord(acts, 'actOne', 'actMany'));
-	}
-	return `${parts.join(` ${translate('and')} `)} ${translate('onTheProgramme')}`;
+	return `${entity.items.length} ${translate('filmMany')} ${translate('onTheProgramme')}`;
 }
 
-function countWord(count: number, one: string, many: string): string {
-	if (count === 1) {
-		return `${count} ${translate(one)}`;
-	}
-	return `${count} ${translate(many)}`;
-}
-
-/** A programme's items as rows in the source's order: a film linked to its page, an act as worded. */
+/** A programme's films as rows in the source's order, each linked to its page. */
 export function programmeRows(entity: Entity | undefined): FieldRow[] {
 	if (!entity || !isProgramme(entity)) {
 		return [];
 	}
-	const rows: FieldRow[] = [];
-	for (const item of entity.items) {
-		if (item.type === 'Movie') {
-			rows.push({ label: translate('film'), value: item.name, href: item.url });
-		} else {
-			rows.push({ label: translate('performer'), value: item.name });
-		}
-	}
-	return rows;
+	return entity.items.map((item) => ({
+		label: translate('film'),
+		value: item.name,
+		href: item.url
+	}));
 }
 
 /** The feature's most specific type: its subtype where it has one ("Filmvertoning"), else its record type ("Afbeelding"). */
@@ -346,7 +316,6 @@ export type ContentKind = 'picture' | 'programme' | 'story' | 'text';
 const CONTENT_KIND: Record<Entity['type'], ContentKind> = {
 	MediaObject: 'picture',
 	ScreeningEvent: 'programme',
-	TheaterEvent: 'programme',
 	Manuscript: 'story',
 	Person: 'text',
 	CreativeWork: 'text'
