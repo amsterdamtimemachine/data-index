@@ -84,7 +84,7 @@ export async function setupTestDb() {
       name TEXT, source TEXT REFERENCES agents(id), url TEXT
     )
   `);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_name_lower ON place USING btree (lower(name)) WHERE name IS NOT NULL`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_name_lower ON place USING btree (lower(name))`);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS place_geometry (
       place_id TEXT PRIMARY KEY REFERENCES place(id),
@@ -106,7 +106,7 @@ export async function setupTestDb() {
   `);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_historical_name_place ON place_historical_name(place_id)`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_historical_name_place_since ON place_historical_name(place_id, since)`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_historical_name_lower ON place_historical_name USING btree (lower(name)) WHERE name IS NOT NULL`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_historical_name_lower ON place_historical_name USING btree (lower(name))`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS relation (id TEXT PRIMARY KEY, label TEXT NOT NULL, dated BOOLEAN NOT NULL DEFAULT false)`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS tags (id TEXT PRIMARY KEY, label TEXT NOT NULL)`);
   await db.execute(sql`
