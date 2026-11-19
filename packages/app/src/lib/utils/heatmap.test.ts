@@ -70,10 +70,20 @@ describe('cell id <-> row/col', () => {
 
 describe('calculateCellBounds (uniform interpolation)', () => {
 	test('first cell spans the first sub-rectangle', () => {
-		expect(calculateCellBounds(0, 0, GRID)).toEqual({ minLon: 0, maxLon: 5, minLat: 0, maxLat: 10 });
+		expect(calculateCellBounds(0, 0, GRID)).toEqual({
+			minLon: 0,
+			maxLon: 5,
+			minLat: 0,
+			maxLat: 10
+		});
 	});
 	test('last row/col snap to the exact grid max (inclusive boundary)', () => {
-		expect(calculateCellBounds(1, 1, GRID)).toEqual({ minLon: 5, maxLon: 10, minLat: 10, maxLat: 20 });
+		expect(calculateCellBounds(1, 1, GRID)).toEqual({
+			minLon: 5,
+			maxLon: 10,
+			minLat: 10,
+			maxLat: 20
+		});
 	});
 });
 

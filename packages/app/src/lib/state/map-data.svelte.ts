@@ -5,7 +5,12 @@
  * fetched and both are empty. One URL definition feeds the <head> preloads and the
  * fetches, so the browser's preload always matches.
  */
-import type { Histogram, HeatmapTimeline, HeatmapDimensions, HeatmapResponse } from '@atm/shared/types';
+import type {
+	Histogram,
+	HeatmapTimeline,
+	HeatmapDimensions,
+	HeatmapResponse
+} from '@atm/shared/types';
 import { apiUrl } from '#lib/utils/api.js';
 import { fetchJson } from '#lib/utils/fetchJson.js';
 import { notifyFailure } from '#lib/state/notify.js';
@@ -16,7 +21,11 @@ export type MapDataInputs = {
 	params: URLSearchParams | null;
 };
 
-export function createMapData(inputs: MapDataInputs, onHeatmap?: () => void, onHistogram?: (histogram: Histogram) => void) {
+export function createMapData(
+	inputs: MapDataInputs,
+	onHeatmap?: () => void,
+	onHistogram?: (histogram: Histogram) => void
+) {
 	let timeline = $state<HeatmapTimeline | null>(null);
 	let dimensions = $state<HeatmapDimensions | null>(null);
 	let histogram = $state<Histogram | null>(null);

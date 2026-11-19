@@ -12,10 +12,9 @@ export interface Classifier {
   url?: string;
 }
 
-// 'sample' and 'spatialFrequency' interleave record types and datasets (double
-// rotation); 'date' is flat chronology; 'bestMatch' is flat ts_rank order, only
-// meaningful with a searchQuery.
-export type FeaturesSortField = 'sample' | 'spatialFrequency' | 'datePrecision' | 'date' | 'bestMatch';
+// 'sample', 'spatialFrequency' and 'datePrecision' interleave record types and
+// datasets (double rotation); 'date' is flat chronology.
+export type FeaturesSortField = 'sample' | 'spatialFrequency' | 'datePrecision' | 'date';
 export type SortDirection = 'asc' | 'desc';
 export type TagOperator = 'AND' | 'OR';
 
@@ -189,7 +188,8 @@ export type FeaturesArea =
   | { kind: 'place'; placeId: string; cols?: number };
 
 export interface FeaturesQuery {
-  area: FeaturesArea;
+  // the population; not needed when featureId names the feature
+  area?: FeaturesArea;
   recordTypes?: RecordType[];
   datasetIds?: string[];
   placeTypes?: PlaceType[];
@@ -200,9 +200,13 @@ export interface FeaturesQuery {
   sortDirection?: SortDirection;
   // Shuffle seed for sort='sample'; same seed = same order (stable pagination).
   seed?: string;
-  // Dutch FTS over feature labels (websearch syntax); also the ranking input for
-  // sort='bestMatch'.
+  // the text search (websearch syntax) over the title, the description and the
+  // entity's searchable fields
   searchQuery?: string;
+  // one feature, as the card the list showed: by its id, and at the place its card
+  // is at when it has several; within the population when one is given
+  featureId?: string;
+  featurePlaceId?: string;
   page?: number;
   pageSize?: number;
 }

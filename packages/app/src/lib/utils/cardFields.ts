@@ -1,4 +1,13 @@
-import type { Entity, PersonEntity, MediaObjectEntity, CreativeWorkEntity, ScreeningEventEntity, TheaterEventEntity, ManuscriptEntity, FeatureResult } from '@atm/shared/types';
+import type {
+	Entity,
+	PersonEntity,
+	MediaObjectEntity,
+	CreativeWorkEntity,
+	ScreeningEventEntity,
+	TheaterEventEntity,
+	ManuscriptEntity,
+	FeatureResult
+} from '@atm/shared/types';
 import { formatPartialDate, formatPeriod, formatNowKnownAs } from './format';
 import { SEARCH_MARK_START } from '@atm/shared/vocab';
 import { pickExcerpt } from './excerpts';
@@ -14,7 +23,8 @@ const isPerson = (e: Entity): e is PersonEntity => e.type === 'Person';
 const isMedia = (e: Entity): e is MediaObjectEntity => e.type === 'MediaObject';
 const isCreativeWork = (e: Entity): e is CreativeWorkEntity => e.type === 'CreativeWork';
 // a programme: a screening (a film on its programme) or a theatre event (acts only)
-const isProgramme = (e: Entity): e is ScreeningEventEntity | TheaterEventEntity => e.type === 'ScreeningEvent' || e.type === 'TheaterEvent';
+const isProgramme = (e: Entity): e is ScreeningEventEntity | TheaterEventEntity =>
+	e.type === 'ScreeningEvent' || e.type === 'TheaterEvent';
 const isManuscript = (e: Entity): e is ManuscriptEntity => e.type === 'Manuscript';
 
 /** A publication date worded at its precision; a start/end range worded as a period. */
@@ -64,7 +74,12 @@ type CardFieldSpec = {
 
 // a programme's venue; its date is in the relation line, its items the card's content (programmeRows)
 const PROGRAMME_FIELDS: CardFieldSpec[] = [
-	{ label: 'venue', value: (e) => (isProgramme(e) ? e.location.name : null), href: (e) => (isProgramme(e) ? e.location.url : undefined), summary: true },
+	{
+		label: 'venue',
+		value: (e) => (isProgramme(e) ? e.location.name : null),
+		href: (e) => (isProgramme(e) ? e.location.url : undefined),
+		summary: true
+	}
 ];
 
 /**
@@ -75,25 +90,48 @@ const PROGRAMME_FIELDS: CardFieldSpec[] = [
  */
 const CARD_FIELDS: Partial<Record<Entity['type'], CardFieldSpec[]>> = {
 	Person: [
-		{ label: 'born', value: (e) => (isPerson(e) ? withPlace(e.birthDate, e.birthPlace) : null), summary: true },
-		{ label: 'died', value: (e) => (isPerson(e) ? withPlace(e.deathDate, e.deathPlace) : null), summary: true },
+		{
+			label: 'born',
+			value: (e) => (isPerson(e) ? withPlace(e.birthDate, e.birthPlace) : null),
+			summary: true
+		},
+		{
+			label: 'died',
+			value: (e) => (isPerson(e) ? withPlace(e.deathDate, e.deathPlace) : null),
+			summary: true
+		}
 	],
 	// a text's date is the issue it appeared in
 	CreativeWork: [
-		{ label: 'published', value: (e) => (isCreativeWork(e) && e.datePublished ? formatPublished(e.datePublished) : null) },
+		{
+			label: 'published',
+			value: (e) => (isCreativeWork(e) && e.datePublished ? formatPublished(e.datePublished) : null)
+		}
 	],
 	MediaObject: [
 		{ label: 'dating', value: (e) => (isMedia(e) ? imageDating(e) : null) },
-		{ label: 'author', value: (e) => (isMedia(e) ? e.author || translate('unknown') : null) },
+		{ label: 'author', value: (e) => (isMedia(e) ? e.author || translate('unknown') : null) }
 	],
 	ScreeningEvent: PROGRAMME_FIELDS,
 	TheaterEvent: PROGRAMME_FIELDS,
 	Manuscript: [
 		// the day, month or year the entry was written, as the annotators dated it
-		{ label: 'written', value: (e) => (isManuscript(e) && e.dateCreated ? formatPartialDate(e.dateCreated) : null) },
-		{ label: 'author', value: (e) => (isManuscript(e) ? e.author?.name ?? null : null), href: (e) => (isManuscript(e) ? e.author?.url : undefined), summary: true },
-		{ label: 'diary', value: (e) => (isManuscript(e) ? e.isPartOf?.name ?? null : null), href: (e) => (isManuscript(e) ? e.isPartOf?.url : undefined) },
-	],
+		{
+			label: 'written',
+			value: (e) => (isManuscript(e) && e.dateCreated ? formatPartialDate(e.dateCreated) : null)
+		},
+		{
+			label: 'author',
+			value: (e) => (isManuscript(e) ? (e.author?.name ?? null) : null),
+			href: (e) => (isManuscript(e) ? e.author?.url : undefined),
+			summary: true
+		},
+		{
+			label: 'diary',
+			value: (e) => (isManuscript(e) ? (e.isPartOf?.name ?? null) : null),
+			href: (e) => (isManuscript(e) ? e.isPartOf?.url : undefined)
+		}
+	]
 };
 
 /** The labels of the fields the card can show for this entity type, collapsed or expanded. */
@@ -102,7 +140,10 @@ export function cardFieldLabels(type: Entity['type']): string[] {
 }
 
 // the entity's fields in their order, those `keep` says, as rows
-function fieldRows(entity: Entity, keep: (spec: CardFieldSpec, value: string) => boolean): FieldRow[] {
+function fieldRows(
+	entity: Entity,
+	keep: (spec: CardFieldSpec, value: string) => boolean
+): FieldRow[] {
 	const fields: FieldRow[] = [];
 	for (const spec of CARD_FIELDS[entity.type] ?? []) {
 		const value = spec.value(entity);
@@ -239,7 +280,11 @@ export function relationLine(feature: FeatureResult): RelationLine {
 		line.place = placeName;
 		line.placeHref = placeHref(feature);
 	}
-	if (feature.historicalLabel && feature.displayName && feature.historicalLabel !== feature.displayName) {
+	if (
+		feature.historicalLabel &&
+		feature.displayName &&
+		feature.historicalLabel !== feature.displayName
+	) {
 		line.now = ` ${formatNowKnownAs(feature.displayName)}`;
 	}
 	if (feature.relationDated && feature.startDate && feature.endDate) {
@@ -258,16 +303,32 @@ export function dataSourceFields(feature: FeatureResult, expanded: boolean): Fie
 	if (!expanded) return [];
 	const rows: FieldRow[] = [];
 	if (feature.providerLabel && feature.providerLabel !== feature.datasetLabel) {
-		rows.push({ label: translate('dataProvider'), value: feature.providerLabel, href: feature.providerUrl });
+		rows.push({
+			label: translate('dataProvider'),
+			value: feature.providerLabel,
+			href: feature.providerUrl
+		});
 	}
 	if (feature.placeProviderLabel) {
-		rows.push({ label: translate('placeDataProvider'), value: feature.placeProviderLabel, href: feature.placeProviderUrl });
+		rows.push({
+			label: translate('placeDataProvider'),
+			value: feature.placeProviderLabel,
+			href: feature.placeProviderUrl
+		});
 	}
 	if (feature.geometryProviderLabel) {
-		rows.push({ label: translate('geometryProvider'), value: feature.geometryProviderLabel, href: feature.geometryProviderUrl });
+		rows.push({
+			label: translate('geometryProvider'),
+			value: feature.geometryProviderLabel,
+			href: feature.geometryProviderUrl
+		});
 	}
 	if (feature.datasetDistributionUrl) {
-		rows.push({ label: translate('fullDataset'), value: new URL(feature.datasetDistributionUrl).host, href: feature.datasetDistributionUrl });
+		rows.push({
+			label: translate('fullDataset'),
+			value: new URL(feature.datasetDistributionUrl).host,
+			href: feature.datasetDistributionUrl
+		});
 	}
 	for (const classifier of feature.classifiers ?? []) {
 		rows.push({ label: translate('classifier'), value: classifier.label, href: classifier.url });
@@ -288,7 +349,7 @@ const CONTENT_KIND: Record<Entity['type'], ContentKind> = {
 	TheaterEvent: 'programme',
 	Manuscript: 'story',
 	Person: 'text',
-	CreativeWork: 'text',
+	CreativeWork: 'text'
 };
 
 export function contentKind(entity: Entity | undefined): ContentKind {

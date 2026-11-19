@@ -3,7 +3,9 @@ import { splitSlots } from './slots';
 
 describe('splitSlots', () => {
 	test('a sentence without slots is one text part', () => {
-		expect(splitSlots('Geen features gevonden.')).toEqual([{ kind: 'text', value: 'Geen features gevonden.' }]);
+		expect(splitSlots('Geen features gevonden.')).toEqual([
+			{ kind: 'text', value: 'Geen features gevonden.' }
+		]);
 	});
 
 	test('a slot splits the text around it, keeping the spaces', () => {
@@ -24,6 +26,8 @@ describe('splitSlots', () => {
 	});
 
 	test('braces that are not a single word stay text', () => {
-		expect(splitSlots('a {two words} b {} c')).toEqual([{ kind: 'text', value: 'a {two words} b {} c' }]);
+		expect(splitSlots('a {two words} b {} c')).toEqual([
+			{ kind: 'text', value: 'a {two words} b {} c' }
+		]);
 	});
 });

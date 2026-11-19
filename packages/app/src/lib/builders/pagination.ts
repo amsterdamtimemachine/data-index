@@ -81,7 +81,11 @@ export class Pagination {
 		const root = event.currentTarget;
 		const current = event.target;
 		// only the strip's buttons: the page input keeps its arrow keys for the caret
-		if (!(root instanceof HTMLElement) || !(current instanceof HTMLElement) || !current.hasAttribute(ITEM)) {
+		if (
+			!(root instanceof HTMLElement) ||
+			!(current instanceof HTMLElement) ||
+			!current.hasAttribute(ITEM)
+		) {
 			return;
 		}
 		const items = Array.from(root.querySelectorAll<HTMLElement>(`[${ITEM}]:not([disabled])`));

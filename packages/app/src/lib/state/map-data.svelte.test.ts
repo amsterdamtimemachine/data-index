@@ -16,7 +16,12 @@ vi.mock('#lib/state/notify.js', () => ({
 }));
 
 vi.mock('#lib/utils/fetchJson.js', () => ({
-	fetchJson: (url: string, onData: (d: unknown) => void, onError: (failure: unknown) => void, onSettled?: () => void) => {
+	fetchJson: (
+		url: string,
+		onData: (d: unknown) => void,
+		onError: (failure: unknown) => void,
+		onSettled?: () => void
+	) => {
 		calls.push({
 			url,
 			load: (data) => {
@@ -45,14 +50,18 @@ afterEach(() => {
 });
 
 function harness(query: string | null = 'recordTypes=image') {
-	const inputs = $state<{ params: URLSearchParams | null }>({ params: query === null ? null : new URLSearchParams(query) });
+	const inputs = $state<{ params: URLSearchParams | null }>({
+		params: query === null ? null : new URLSearchParams(query)
+	});
 	let setups = 0;
 	let data!: ReturnType<typeof createMapData>;
-	cleanups.push($effect.root(() => {
-		data = createMapData(inputs, () => {
-			setups += 1;
-		});
-	}));
+	cleanups.push(
+		$effect.root(() => {
+			data = createMapData(inputs, () => {
+				setups += 1;
+			});
+		})
+	);
 	flushSync();
 	return { inputs, data, setups: () => setups };
 }
@@ -65,7 +74,10 @@ const RESPONSE: HeatmapResponse = {
 describe('map data', () => {
 	test('fetches the heatmap and the histogram for the params, and the URLs feed the preloads', () => {
 		const { data } = harness();
-		expect(calls.map((c) => c.url)).toEqual(['/api/heatmaps?recordTypes=image', '/api/histogram?recordTypes=image']);
+		expect(calls.map((c) => c.url)).toEqual([
+			'/api/heatmaps?recordTypes=image',
+			'/api/histogram?recordTypes=image'
+		]);
 		expect(data.heatmapUrl).toBe('/api/heatmaps?recordTypes=image');
 		expect(data.histogramUrl).toBe('/api/histogram?recordTypes=image');
 	});
@@ -77,7 +89,12 @@ describe('map data', () => {
 		expect(data.timeline).toEqual(RESPONSE.timeline);
 		expect(data.dimensions).toEqual(RESPONSE.dimensions);
 		expect(setups()).toBe(1);
-		calls[1].load({ bins: [], maxCount: 0, timeRange: { start: '', end: '' }, totalFeatures: 7 } satisfies Histogram);
+		calls[1].load({
+			bins: [],
+			maxCount: 0,
+			timeRange: { start: '', end: '' },
+			totalFeatures: 7
+		} satisfies Histogram);
 		flushSync();
 		expect(data.histogram?.totalFeatures).toBe(7);
 	});
@@ -103,13 +120,19 @@ describe('map data', () => {
 		expect(data.histogram?.totalFeatures).toBe(0);
 		inputs.params = new URLSearchParams('recordTypes=text');
 		flushSync();
-		expect(calls.map((c) => c.url)).toEqual(['/api/heatmaps?recordTypes=text', '/api/histogram?recordTypes=text']);
+		expect(calls.map((c) => c.url)).toEqual([
+			'/api/heatmaps?recordTypes=text',
+			'/api/histogram?recordTypes=text'
+		]);
 	});
 
 	test('a params change refetches both', () => {
 		const { inputs } = harness();
 		inputs.params = new URLSearchParams('recordTypes=text');
 		flushSync();
-		expect(calls.slice(2).map((c) => c.url)).toEqual(['/api/heatmaps?recordTypes=text', '/api/histogram?recordTypes=text']);
+		expect(calls.slice(2).map((c) => c.url)).toEqual([
+			'/api/heatmaps?recordTypes=text',
+			'/api/histogram?recordTypes=text'
+		]);
 	});
 });

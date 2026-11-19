@@ -11,6 +11,8 @@ describe('apiUrl', () => {
 
 	test('appends params only when there are any', () => {
 		expect(apiUrl('/api/heatmaps', new URLSearchParams())).toBe('/x/api/heatmaps');
-		expect(apiUrl('/api/heatmaps', new URLSearchParams('recordTypes=image'))).toBe('/x/api/heatmaps?recordTypes=image');
+		expect(apiUrl('/api/heatmaps', new URLSearchParams('recordTypes=image'))).toBe(
+			'/x/api/heatmaps?recordTypes=image'
+		);
 	});
 });

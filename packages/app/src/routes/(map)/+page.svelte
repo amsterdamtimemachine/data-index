@@ -19,7 +19,7 @@
 		panelWidthCss,
 		type PanelCols
 	} from '#lib/components/FeaturesPanelResizeHandle.svelte';
-	import { type UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
+	import type { UiSortMode } from '#lib/utils/sort-modes.js';
 	import Heatmap from '#lib/components/Heatmap.svelte';
 	import TimePeriodSelector from '#lib/components/TimePeriodSelector.svelte';
 	import FilterPanel from '#lib/components/FilterPanel.svelte';
@@ -33,9 +33,9 @@
 	import type { PageData } from './$types';
 	import type { HeatmapTimeline } from '@atm/shared/types';
 	import type { PanelSubject } from '#lib/state/panel-features.svelte.js';
+	import { createFeatureLink } from '#lib/state/feature-link.svelte.js';
 	import { PUBLIC_DEFAULT_CENTER } from '$app/env/public';
 	import { createEmptyHeatmap, getCellIdFromLonLat } from '#lib/utils/heatmap.js';
-
 
 	let { data }: { data: PageData } = $props();
 
@@ -52,7 +52,11 @@
 	const idle = $derived(emptyFilters.length > 0);
 
 	// the collapsed filters line, in one piece
-	const filtersStatus = $derived({ filters: activeFilters, metadata: data.metadata, place: data.selectedPlace });
+	const filtersStatus = $derived({
+		filters: activeFilters,
+		metadata: data.metadata,
+		place: data.selectedPlace
+	});
 
 	// The city-wide heatmap and histogram, refetched when the filters change; the
 	// first heatmap runs the one-time setup below.
@@ -119,7 +123,6 @@
 		}
 		return panelCols;
 	});
-
 
 	let currentPeriod = $derived(mapSelection.currentPeriod);
 	let selectedCellId = $derived(mapSelection.selectedCellId);
@@ -343,6 +346,14 @@
 		return showCellModal;
 	});
 
+	// the expanded card in the URL: written while one is open, restored from a link
+	createFeatureLink({
+		get searchQuery() {
+			return activeFilters.searchQuery;
+		},
+		writeParams: mapSelection.updateUrlParams
+	});
+
 	// what the timeline shows, for the empty panel's hint: the selection's series,
 	// else the city-wide one where the switch exists to leave it
 	const timelineView = $derived.by(() => {
@@ -378,7 +389,6 @@
 	{/if}
 </svelte:head>
 
-
 <!-- inline 100dvh tracks the mobile browser chrome; browsers without dvh drop the
      declaration and fall back to the h-screen class -->
 <div class="relative flex flex-col w-screen h-screen" style:height="100dvh">
@@ -397,7 +407,11 @@
 			/>
 		{/if}
 
-		<NavContainer bind:isExpanded={navExpanded} bind:element={navElement} class="absolute top-0 left-0 z-30">
+		<NavContainer
+			bind:isExpanded={navExpanded}
+			bind:element={navElement}
+			class="absolute top-0 left-0 z-30"
+		>
 			{#snippet header()}
 				<Nav class="p-3">
 					<NavItem href={resolve('/about')} label={translate('navAbout')} />
@@ -416,10 +430,13 @@
 			/>
 		</NavContainer>
 
-	<!-- Show filters status when nav is collapsed -->
-	{#if !navExpanded}
-		<FiltersStatusPanel status={filtersStatus} class="absolute top-3 left-3 max-w-[calc(100%-1.5rem)]" />
-	{/if}
+		<!-- Show filters status when nav is collapsed -->
+		{#if !navExpanded}
+			<FiltersStatusPanel
+				status={filtersStatus}
+				class="absolute top-3 left-3 max-w-[calc(100%-1.5rem)]"
+			/>
+		{/if}
 
 		{#if showPanel && panelSubject}
 			<div
@@ -465,5 +482,4 @@
 			class="z-40 bg-atm-sand border-t border-atm-sand-border"
 		/>
 	{/if}
-
 </div>

@@ -64,7 +64,8 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
     protected pi: PlaceIndex<SourceRecord> | undefined;
     protected ef: EntityFactory<EntityBase> | undefined;
     protected fr: FileReader<SourceRecord> | undefined;
-    protected writer: any; // TODO: could do some better type-checking here. 
+    // created in init, before any record is written
+    protected writer!: ReturnType<typeof createFeatureWriter>;
 
     /**
      * Appends the metadata of the (concrete) class to the database
@@ -115,7 +116,7 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
         if (!draft) { return [undefined, undefined] }
 
         const resolved = await this.extractPlace(source, draft)
-        const entity: EntityBase = this.ef!.create(draft, new Map<string, any>(Object.entries(source as object)))
+        const entity: EntityBase = this.ef!.create(draft, new Map<string, unknown>(Object.entries(source as object)))
         const feature = this.constructFeature(draft, entity) as NewFeature
 
         return [feature, resolved]

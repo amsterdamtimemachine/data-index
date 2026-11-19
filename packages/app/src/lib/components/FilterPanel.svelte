@@ -105,15 +105,10 @@
 		if (!tagCounts.counts) {
 			return [];
 		}
-		return translatedTags.filter((label) => tagCountByLabel.get(label) === 0 && !translatedCurrentTags.includes(label));
+		return translatedTags.filter(
+			(label) => tagCountByLabel.get(label) === 0 && !translatedCurrentTags.includes(label)
+		);
 	});
-
-	// bestMatch ranks against the term and the tags; with neither left it means nothing
-	function dropIdleBestMatch(p: URLSearchParams) {
-		if (p.get('sort') === 'bestMatch' && !p.get('q') && !p.get('tags')) {
-			p.delete('sort');
-		}
-	}
 
 	// a category's param: absent for everything, NONE for nothing, else the picks
 	function writeCategory(p: URLSearchParams, name: Category, values: string[], all: string[]) {
@@ -156,14 +151,12 @@
 		navigateParams((p) => {
 			if (ids.length > 0) p.set('tags', ids.join(','));
 			else p.delete('tags');
-			dropIdleBestMatch(p);
 		});
 	}
 
 	function handleTagsClear() {
 		navigateParams((p) => {
 			p.delete('tags');
-			dropIdleBestMatch(p);
 		});
 	}
 
@@ -194,7 +187,6 @@
 	function handleSearchClear() {
 		navigateParams((p) => {
 			p.delete('q');
-			dropIdleBestMatch(p);
 		});
 	}
 
@@ -221,20 +213,40 @@
 				<TextWithSlots text={translate('searchTooltip')}>
 					{#snippet children(slot)}
 						{#if slot === 'border'}
-							<img src={asset('glyphs/PlaceBorder.svg')} alt="" width="24" height="24" class="inline align-middle mx-1" />
+							<img
+								src={asset('glyphs/PlaceBorder.svg')}
+								alt=""
+								width="24"
+								height="24"
+								class="inline align-middle mx-1"
+							/>
 						{/if}
 					{/snippet}
 				</TextWithSlots>
 			{/snippet}
-			<SearchInput onApplySearch={handleSearchApply} onSelectPlace={handlePlaceSelect} filterQuery={idle ? null : activeParams} />
+			<SearchInput
+				onApplySearch={handleSearchApply}
+				onSelectPlace={handlePlaceSelect}
+				filterQuery={idle ? null : activeParams}
+			/>
 			{#if selectedPlace}
 				<div class="mt-2">
-					<PlaceFilterTag place={selectedPlace} onClear={handlePlaceClear} onToggle={onTogglePlacePanel} active={placePanelOpen} />
+					<PlaceFilterTag
+						place={selectedPlace}
+						onClear={handlePlaceClear}
+						onToggle={onTogglePlacePanel}
+						active={placePanelOpen}
+					/>
 				</div>
 			{/if}
 			{#if currentSearchQuery}
 				<div class="mt-2">
-					<SearchFilterTag query={currentSearchQuery} onClear={handleSearchClear} onToggle={onToggleSearch} active={!searchPaused} />
+					<SearchFilterTag
+						query={currentSearchQuery}
+						onClear={handleSearchClear}
+						onToggle={onToggleSearch}
+						active={!searchPaused}
+					/>
 				</div>
 			{/if}
 		</FilterSection>
@@ -263,7 +275,13 @@
 			{@render categoryToggle('datasets', datasetIds)}
 		{/snippet}
 		{#snippet children(headingId)}
-			<FilterToggleGroup items={datasetLabels} selectedItems={currentDatasetLabels} onItemSelected={handleDatasetChange} requireOne={false} labelledBy={headingId} />
+			<FilterToggleGroup
+				items={datasetLabels}
+				selectedItems={currentDatasetLabels}
+				onItemSelected={handleDatasetChange}
+				requireOne={false}
+				labelledBy={headingId}
+			/>
 		{/snippet}
 	</FilterSection>
 

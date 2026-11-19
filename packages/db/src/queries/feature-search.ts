@@ -1,8 +1,8 @@
 /**
  * Feature text search over features.search_tsv (the title, the description and the
- * entity's searchable fields, weighted; see search-vector.ts): words as written, in
- * websearch syntax (phrases, OR, -exclusion). One definition of the query, the match predicate, the
- * rank and the search bitmap, so the heatmap, histogram and feature list can never
+ * entity's searchable fields; see search-vector.ts): words as written, in websearch
+ * syntax (phrases, OR, -exclusion). One definition of the query, the match predicate
+ * and the search bitmap, so the heatmap, histogram and feature list can never
  * disagree on what "matches q" means (see queries/time-filter.ts for the drift story
  * that motivates this pattern), and one explanation of a hit for the card.
  */
@@ -21,11 +21,6 @@ export function searchQuery(q: string): SQL {
  * and the bare table share the fragment. */
 export function searchMatch(tsvCol: SQL, q: string): SQL {
   return sql`${tsvCol} @@ ${searchQuery(q)}`;
-}
-
-/** Match quality of tsvCol against q — the bestMatch sort's lane key. */
-export function searchRank(tsvCol: SQL, q: string): SQL {
-  return sql`ts_rank(${tsvCol}, ${searchQuery(q)})`;
 }
 
 /**

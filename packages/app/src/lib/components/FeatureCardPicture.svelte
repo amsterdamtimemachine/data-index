@@ -14,7 +14,12 @@
 </script>
 
 {#if feature.contentUrl}
-	<FeatureCardImage thumbnail={getPictureUrl(feature.contentUrl, pictureUse(expanded))} alt={feature.description} {expanded} {onExpand} />
+	<FeatureCardImage
+		thumbnail={getPictureUrl(feature.contentUrl, pictureUse(expanded))}
+		alt={feature.description}
+		{expanded}
+		{onExpand}
+	/>
 {/if}
 {#if feature.description}
 	<FeatureCardText text={feature.description} {expanded} />

@@ -4,7 +4,12 @@
  * force an oversized IN (...) query.
  */
 import { describe, test, expect } from 'vitest';
-import { MAX_FILTER_ITEMS, DISPLAY_GRID_DEFAULT_COLS, DISPLAY_GRID_MIN_COLS, DISPLAY_GRID_MAX_COLS } from '@atm/shared';
+import {
+	MAX_FILTER_ITEMS,
+	DISPLAY_GRID_DEFAULT_COLS,
+	DISPLAY_GRID_MIN_COLS,
+	DISPLAY_GRID_MAX_COLS
+} from '@atm/shared';
 import { parseBounds, parseList, parseGridCols } from './query-params';
 
 function url(qs: string): URL {
@@ -42,15 +47,24 @@ describe('parseBounds', () => {
 	});
 
 	test('non-numeric → 400 INVALID_BOUNDS', () => {
-		expect400(() => parseBounds(url('?minLon=abc&maxLon=4.9&minLat=52.3&maxLat=52.4')), 'INVALID_BOUNDS');
+		expect400(
+			() => parseBounds(url('?minLon=abc&maxLon=4.9&minLat=52.3&maxLat=52.4')),
+			'INVALID_BOUNDS'
+		);
 	});
 
 	test('inverted box → 400 INVALID_BOUNDS', () => {
-		expect400(() => parseBounds(url('?minLon=4.9&maxLon=4.8&minLat=52.3&maxLat=52.4')), 'INVALID_BOUNDS');
+		expect400(
+			() => parseBounds(url('?minLon=4.9&maxLon=4.8&minLat=52.3&maxLat=52.4')),
+			'INVALID_BOUNDS'
+		);
 	});
 
 	test('degenerate (zero-area) box → 400 INVALID_BOUNDS', () => {
-		expect400(() => parseBounds(url('?minLon=4.8&maxLon=4.8&minLat=52.3&maxLat=52.4')), 'INVALID_BOUNDS');
+		expect400(
+			() => parseBounds(url('?minLon=4.8&maxLon=4.8&minLat=52.3&maxLat=52.4')),
+			'INVALID_BOUNDS'
+		);
 	});
 });
 

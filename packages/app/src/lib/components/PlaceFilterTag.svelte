@@ -40,14 +40,27 @@
 </script>
 
 {#snippet chipContent()}
-	<span class="inline-flex align-[-2px] mr-1"><MapPin size={14} weight="bold" /></span>{`${cellsLabel} ${displayName}`}
+	<span class="inline-flex align-[-2px] mr-1"><MapPin size={14} weight="bold" /></span
+	>{`${cellsLabel} ${displayName}`}
 {/snippet}
 
 <div class="flex items-center gap-2">
-	<Button icon={X} onclick={onClear} size={18} aria-label={translate('clearPlaceFilter')} class="shrink-0" />
+	<Button
+		icon={X}
+		onclick={onClear}
+		size={18}
+		aria-label={translate('clearPlaceFilter')}
+		class="shrink-0"
+	/>
 	<Tag {variant} interactive={true}>
 		{#if onToggle}
-			<button onclick={onToggle} aria-label={toggleLabel} title={toggleLabel} aria-pressed={active} class="text-left cursor-pointer">
+			<button
+				onclick={onToggle}
+				aria-label={toggleLabel}
+				title={toggleLabel}
+				aria-pressed={active}
+				class="text-left cursor-pointer"
+			>
 				{@render chipContent()}
 			</button>
 		{:else}

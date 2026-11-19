@@ -76,12 +76,25 @@
 {/snippet}
 
 {#if href}
-	<a {href} {title} {target} {rel} aria-describedby={describedBy} class={mergeCss(`${baseClasses} ${gapClass}`, className)}>
+	<a
+		{href}
+		{title}
+		{target}
+		{rel}
+		aria-describedby={describedBy}
+		class={mergeCss(`${baseClasses} ${gapClass}`, className)}
+	>
 		{@render content()}
 		{#if newWindow}
 			<span id={noteId} hidden>{translate('opensInNewWindow')}</span>
 		{/if}
 	</a>
 {:else}
-	<button type="button" {onclick} {title} class={mergeCss(`${baseClasses} ${gapClass} cursor-pointer`, className)}>{@render content()}</button>
+	<button
+		type="button"
+		{onclick}
+		{title}
+		class={mergeCss(`${baseClasses} ${gapClass} cursor-pointer`, className)}
+		>{@render content()}</button
+	>
 {/if}

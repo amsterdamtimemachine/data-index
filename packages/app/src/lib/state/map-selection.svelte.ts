@@ -1,4 +1,3 @@
-
 import { browser } from '$app/env';
 import { page } from '$app/state';
 import { goto } from '$app/navigation';
@@ -95,7 +94,6 @@ export function createMapSelection() {
 			updateUrlParams({ cell: null });
 		}
 	}
-
 
 	/**
 	 * Updates URL parameters without triggering navigation.

@@ -1,4 +1,10 @@
-import type { RecordType, PlaceType, TagOperator, PlaceSearchMatch, VisualizationMetadata } from '@atm/shared/types';
+import type {
+	RecordType,
+	PlaceType,
+	TagOperator,
+	PlaceSearchMatch,
+	VisualizationMetadata
+} from '@atm/shared/types';
 
 /**
  * The population filters: which features the map, the histogram, the tag counts and

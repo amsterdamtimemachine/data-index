@@ -19,12 +19,19 @@ function parseList(url: URL, name: string): string[] | null {
 	if (!raw) {
 		return null;
 	}
-	return raw.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+	return raw
+		.split(',')
+		.map((s) => s.trim())
+		.filter((s) => s.length > 0);
 }
 
 /** Does the selection cover every option? */
 export function selectsAll(selected: string[], all: string[]): boolean {
-	return selected.length > 0 && selected.length === all.length && all.every((item) => selected.includes(item));
+	return (
+		selected.length > 0 &&
+		selected.length === all.length &&
+		all.every((item) => selected.includes(item))
+	);
 }
 
 /**
@@ -32,7 +39,10 @@ export function selectsAll(selected: string[], all: string[]): boolean {
  * without metadata: the categories are empty then because there is nothing to read
  * them against, not because the reader emptied them.
  */
-export function emptyCategories(filters: FilterState, metadata: VisualizationMetadata | null): Category[] {
+export function emptyCategories(
+	filters: FilterState,
+	metadata: VisualizationMetadata | null
+): Category[] {
 	if (!metadata) {
 		return [];
 	}
@@ -46,7 +56,10 @@ export function emptyCategories(filters: FilterState, metadata: VisualizationMet
  * one written as NONE is empty. Without metadata (its load failed) the categories
  * stay empty.
  */
-export function parseFilterState(url: URL, metadata: VisualizationMetadata | null): { filters: FilterState; unknownValues: string[] } {
+export function parseFilterState(
+	url: URL,
+	metadata: VisualizationMetadata | null
+): { filters: FilterState; unknownValues: string[] } {
 	const unknownValues: string[] = [];
 	const tagSelection = parseTagSelection(url);
 	const filters: FilterState = {
@@ -91,7 +104,10 @@ export function parseFilterState(url: URL, metadata: VisualizationMetadata | nul
 	}
 
 	filters.recordTypes = category('recordTypes', metadata.recordTypes) as FilterState['recordTypes'];
-	filters.datasets = category('datasets', metadata.datasets.map((d) => d.id));
+	filters.datasets = category(
+		'datasets',
+		metadata.datasets.map((d) => d.id)
+	);
 	filters.placeTypes = category('placeTypes', metadata.placeTypes) as FilterState['placeTypes'];
 	filters.tags = known(tagSelection.tags, metadata.tags);
 
@@ -103,7 +119,10 @@ export function parseFilterState(url: URL, metadata: VisualizationMetadata | nul
  * that selects everything is left out (absent means all, and the URL stays short);
  * without metadata every non-empty list is sent. Tags travel with their operator.
  */
-export function filterParams(filters: FilterState, metadata?: VisualizationMetadata | null): URLSearchParams {
+export function filterParams(
+	filters: FilterState,
+	metadata?: VisualizationMetadata | null
+): URLSearchParams {
 	const params = new URLSearchParams();
 	let allRecordTypes: string[] = [];
 	let allDatasets: string[] = [];
@@ -113,13 +132,19 @@ export function filterParams(filters: FilterState, metadata?: VisualizationMetad
 		allDatasets = metadata.datasets.map((d) => d.id);
 		allPlaceTypes = metadata.placeTypes;
 	}
-	if (filters.recordTypes.length > 0 && !(metadata && selectsAll(filters.recordTypes, allRecordTypes))) {
+	if (
+		filters.recordTypes.length > 0 &&
+		!(metadata && selectsAll(filters.recordTypes, allRecordTypes))
+	) {
 		params.set('recordTypes', filters.recordTypes.join(','));
 	}
 	if (filters.datasets.length > 0 && !(metadata && selectsAll(filters.datasets, allDatasets))) {
 		params.set('datasets', filters.datasets.join(','));
 	}
-	if (filters.placeTypes.length > 0 && !(metadata && selectsAll(filters.placeTypes, allPlaceTypes))) {
+	if (
+		filters.placeTypes.length > 0 &&
+		!(metadata && selectsAll(filters.placeTypes, allPlaceTypes))
+	) {
 		params.set('placeTypes', filters.placeTypes.join(','));
 	}
 	if (filters.searchQuery) {

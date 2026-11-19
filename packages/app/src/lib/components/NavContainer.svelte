@@ -17,7 +17,13 @@
 		children?: Snippet;
 	}
 
-	let { class: className, isExpanded = $bindable(true), element = $bindable(), header, children }: Props = $props();
+	let {
+		class: className,
+		isExpanded = $bindable(true),
+		element = $bindable(),
+		header,
+		children
+	}: Props = $props();
 
 	const navPosition = tweened(isExpanded ? 0 : -100, {
 		duration: 200,
@@ -63,7 +69,12 @@
 		aria-expanded={isExpanded}
 		aria-controls="filters-panel"
 	/>
-	<div id="filters-panel" class="w-full h-full flex flex-col" inert={!isExpanded} aria-hidden={!isExpanded}>
+	<div
+		id="filters-panel"
+		class="w-full h-full flex flex-col"
+		inert={!isExpanded}
+		aria-hidden={!isExpanded}
+	>
 		{#if header}
 			<div class="shrink-0">
 				{@render header()}

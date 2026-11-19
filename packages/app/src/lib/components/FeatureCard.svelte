@@ -1,7 +1,14 @@
 <script lang="ts">
 	import type { FeatureResult } from '@atm/shared/types';
 	import { translate, translateAll } from '#lib/utils/translations.js';
-	import { resolveCardFields, collapsedFields, dataSourceFields, relationLine, contentKind, scrollingContent } from '#lib/utils/cardFields.js';
+	import {
+		resolveCardFields,
+		collapsedFields,
+		dataSourceFields,
+		relationLine,
+		contentKind,
+		scrollingContent
+	} from '#lib/utils/cardFields.js';
 	import { featureViewerState } from '#lib/state/featureState.svelte.js';
 	import FeatureCardHeader from '#lib/components/FeatureCardHeader.svelte';
 	import FeatureCardPlaceLine from '#lib/components/FeatureCardPlaceLine.svelte';
@@ -78,7 +85,8 @@
 	// sources stay, the content region (image, rows, text) is what scrolls
 	const rootClasses = $derived.by(() => {
 		// a long unbroken word wraps inside the card, its field grids and tag row included
-		const base = 'w-full border rounded-sm border-atm-sand-border bg-atm-sand min-w-0 [overflow-wrap:anywhere]';
+		const base =
+			'w-full border rounded-sm border-atm-sand-border bg-atm-sand min-w-0 [overflow-wrap:anywhere]';
 		if (expanded) {
 			return `${base} flex flex-col min-h-0 max-h-full`;
 		}
@@ -145,7 +153,9 @@
 					<FieldList fields={entityFields} class="mb-3" />
 				{/if}
 				{#if provenanceFields.length > 0}
-					<Heading level={sectionLevel} class="text-base font-medium mb-1">{translate('provenance')}</Heading>
+					<Heading level={sectionLevel} class="text-base font-medium mb-1"
+						>{translate('provenance')}</Heading
+					>
 					<FieldList fields={provenanceFields} />
 				{/if}
 			</div>

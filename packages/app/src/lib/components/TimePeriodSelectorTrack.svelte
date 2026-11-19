@@ -20,7 +20,16 @@
 		// a press on a bin starts a drag; the selector follows the pointer from there
 		onDragStart: (event: PointerEvent) => void;
 	}
-	let { bins, localBins = [], selectionBins = [], currentIndex, onIndexChange, timelineHeight, onKeyDown, onDragStart }: Props = $props();
+	let {
+		bins,
+		localBins = [],
+		selectionBins = [],
+		currentIndex,
+		onIndexChange,
+		timelineHeight,
+		onKeyDown,
+		onDragStart
+	}: Props = $props();
 
 	const hoverCapable = createMediaQuery(HOVER_QUERY);
 
@@ -72,7 +81,12 @@
 		if (localBins.length > 0) {
 			localCount = localBins[currentIndex]?.count ?? 0;
 		}
-		return periodValueText(bin.timeSlice.label, bin.count, localCount, selectionCountFor(selectionBins, bin.timeSlice.key));
+		return periodValueText(
+			bin.timeSlice.label,
+			bin.count,
+			localCount,
+			selectionCountFor(selectionBins, bin.timeSlice.key)
+		);
 	});
 
 	// a press selects the bin under the pointer and starts a drag from it. The drag
@@ -102,7 +116,7 @@
 >
 	<!-- a press area per period, for the pointer only: a slider's parts are not separate
 	     controls, so they take no focus and screen readers hear the slider's value -->
-	{#each bins as bin, i}
+	{#each bins as bin, i (i)}
 		{@const barWidth = 100 / bins.length}
 		{@const x = (i / bins.length) * 100}
 		<div

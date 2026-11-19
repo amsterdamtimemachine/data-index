@@ -20,7 +20,9 @@
 	}
 </script>
 
-<div class="min-h-screen bg-atm-sand flex flex-col items-center justify-center gap-4 p-6 text-center">
+<div
+	class="min-h-screen bg-atm-sand flex flex-col items-center justify-center gap-4 p-6 text-center"
+>
 	<Heading level={1}>{title}</Heading>
 	<Link href={resolve('/(map)')}>{translate('backToMap')}</Link>
 </div>

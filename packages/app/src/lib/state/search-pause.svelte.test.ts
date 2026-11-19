@@ -7,7 +7,15 @@ import type { FilterState } from '#lib/types/filters.js';
 import { createSearchPause } from './search-pause.svelte';
 
 function filters(overrides: Partial<FilterState> = {}): FilterState {
-	return { recordTypes: ['image'], datasets: [], placeTypes: [], tags: [], tagOperator: 'OR', searchQuery: 'bom', ...overrides };
+	return {
+		recordTypes: ['image'],
+		datasets: [],
+		placeTypes: [],
+		tags: [],
+		tagOperator: 'OR',
+		searchQuery: 'bom',
+		...overrides
+	};
 }
 
 describe('search pause', () => {

@@ -21,7 +21,7 @@ import { featureYearOverlap } from './time-filter';
 import { tagMatch, tagMatchCount } from './tag-filter';
 import { UnknownTimeSliceError } from './errors';
 import { cellRangeCondition, placeCellsCondition, displayGrid, displayCellBaseRange } from './cell-features';
-import { searchMatch, searchRank, foundBy } from './feature-search';
+import { searchMatch, foundBy } from './feature-search';
 import { db } from '../client';
 import { featureToPlace, place, placeGeometry, placeCells } from '../schema';
 import type { CountRow } from '../row-types';
@@ -193,18 +193,10 @@ function sortPlan(
     }
     return { rankedCte: doubleRotationCte(laneKey), orderBy: INTERLEAVED_ORDER };
   }
-  if (sort === 'date') {
-    let orderBy = sql`start_date DESC NULLS LAST, id`;
-    if (sortDirection === 'asc') {
-      orderBy = sql`start_date ASC NULLS LAST, id`;
-    }
-    return { rankedCte: sql`ranked AS (SELECT * FROM filtered)`, orderBy };
-  }
-  // bestMatch: flat match-quality order: selected tags carried, then ts_rank against
-  // the search term; without either every key is 0 and this degrades to date order
-  let orderBy = sql`tag_matches DESC, match_score DESC, start_date DESC NULLS LAST, id`;
+  // date: flat chronology, no rotation
+  let orderBy = sql`start_date DESC NULLS LAST, id`;
   if (sortDirection === 'asc') {
-    orderBy = sql`tag_matches ASC, match_score ASC, start_date ASC NULLS LAST, id`;
+    orderBy = sql`start_date ASC NULLS LAST, id`;
   }
   return { rankedCte: sql`ranked AS (SELECT * FROM filtered)`, orderBy };
 }
@@ -225,6 +217,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
     sortDirection = 'desc',
     seed = '',
     searchQuery,
+    featureId,
+    featurePlaceId,
     page = 1,
     pageSize = 50
   } = query;
@@ -252,13 +246,15 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
 
   // Resolve the area to one population predicate; everything below is agnostic
   // of which kind it was.
-  let areaCondition: SQL;
-  if (area.kind === 'bounds') {
+  let areaCondition: SQL = sql`TRUE`;
+  if (area?.kind === 'bounds') {
     const cellRange = await boundsToBaseCellRange(area.bounds);
     areaCondition = cellRangeCondition(sql`pc.cell_x`, sql`pc.cell_y`, cellRange);
-  } else {
+  } else if (area) {
     const grid = await displayGrid(area.cols);
     areaCondition = await placeCellsCondition(sql`pc.cell_x`, sql`pc.cell_y`, area.placeId, grid);
+  } else if (!featureId) {
+    throw new Error('getFeatures needs a population or a feature');
   }
 
   const typeCondition = sql`f.record_type IN ${types}`;
@@ -290,13 +286,20 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
   }
 
   let searchCondition: SQL = sql`TRUE`;
-  let matchScoreExpr: SQL = sql`0::float`;
   // the card's explanation of the hit, for the listed rows only
   let foundByExpr: SQL = sql`NULL`;
   if (searchQuery) {
     searchCondition = searchMatch(sql`f.search_tsv`, searchQuery);
-    matchScoreExpr = searchRank(sql`f.search_tsv`, searchQuery);
     foundByExpr = foundBy(sql`f`, searchQuery);
+  }
+
+  // one feature of the population, at its card's place when given
+  let featureCondition: SQL = sql`TRUE`;
+  if (featureId) {
+    featureCondition = sql`f.id = ${featureId}`;
+    if (featurePlaceId) {
+      featureCondition = sql`f.id = ${featureId} AND fp.place_id = ${featurePlaceId}`;
+    }
   }
 
   // The join spine and filter bundle the count and page queries MUST share —
@@ -312,7 +315,8 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       AND ${dateCondition}
       AND ${tagCondition}
       AND ${placeTypeCondition}
-      AND ${searchCondition}`;
+      AND ${searchCondition}
+      AND ${featureCondition}`;
 
   // Get total count
   const countResult = await db.execute<CountRow>(sql`
@@ -341,7 +345,6 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
         f.start_date,
         f.end_date,
         pg.spatial_frequency,
-        ${matchScoreExpr} as match_score,
         ${tagMatchesExpr} as tag_matches,
         p.type as place_type,
         p.id as place_id,

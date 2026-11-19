@@ -8,6 +8,19 @@ import { UI_SORT_MODES, type UiSortMode } from './sort-modes';
 const ID_MAX_LENGTH = 512;
 const SEED_MAX_LENGTH = 64;
 
+/** The expanded card a link carries: the feature's id and the place its card is at. */
+export function parseFeatureSelection(url: URL): {
+	featureId: string | null;
+	placeId: string | null;
+} {
+	const feature = url.searchParams.get('feature');
+	const at = url.searchParams.get('at');
+	return {
+		featureId: feature ? feature.slice(0, ID_MAX_LENGTH) : null,
+		placeId: at ? at.slice(0, ID_MAX_LENGTH) : null
+	};
+}
+
 /** The place selection references: place id and, optionally, the clicked name row. */
 export function parsePlaceSelection(url: URL): { placeId: string | null; nameId: string | null } {
 	let placeId: string | null = null;
@@ -53,7 +66,10 @@ export function parseTagSelection(url: URL): { tags: string[]; tagOperator: TagO
 	let tags: string[] = [];
 	const raw = url.searchParams.get('tags');
 	if (raw) {
-		tags = raw.split(',').map((t) => t.trim()).filter((t) => t.length > 0);
+		tags = raw
+			.split(',')
+			.map((t) => t.trim())
+			.filter((t) => t.length > 0);
 	}
 	let tagOperator: TagOperator = 'OR';
 	if ((url.searchParams.get('tagOperator') || '').toUpperCase() === 'AND') {

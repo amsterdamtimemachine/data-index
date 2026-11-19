@@ -30,14 +30,27 @@
 </script>
 
 {#snippet chipContent()}
-	<span class="inline-flex align-[-2px] mr-1"><MagnifyingGlass size={14} weight="bold" /></span>{query}
+	<span class="inline-flex align-[-2px] mr-1"><MagnifyingGlass size={14} weight="bold" /></span
+	>{query}
 {/snippet}
 
 <div class="flex items-center gap-2">
-	<Button icon={X} onclick={onClear} size={18} aria-label={translate('clearSearchFilter')} class="shrink-0" />
+	<Button
+		icon={X}
+		onclick={onClear}
+		size={18}
+		aria-label={translate('clearSearchFilter')}
+		class="shrink-0"
+	/>
 	<Tag {variant} interactive={true}>
 		{#if onToggle}
-			<button onclick={onToggle} aria-label={toggleLabel} title={toggleLabel} aria-pressed={active} class="text-left cursor-pointer">{@render chipContent()}</button>
+			<button
+				onclick={onToggle}
+				aria-label={toggleLabel}
+				title={toggleLabel}
+				aria-pressed={active}
+				class="text-left cursor-pointer">{@render chipContent()}</button
+			>
 		{:else}
 			<span class="text-left">{@render chipContent()}</span>
 		{/if}

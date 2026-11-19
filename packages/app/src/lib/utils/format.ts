@@ -9,7 +9,20 @@ export function formatTimePeriod(per: [number, number]): string {
 	return `${start}-${end}`;
 }
 
-const MONTH_KEYS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+const MONTH_KEYS = [
+	'january',
+	'february',
+	'march',
+	'april',
+	'may',
+	'june',
+	'july',
+	'august',
+	'september',
+	'october',
+	'november',
+	'december'
+];
 
 /**
  * Word a date at the precision it was recorded: "5 januari 1934" for YYYY-MM-DD,
@@ -54,9 +67,9 @@ export function formatPeriod(start: string, end: string): string {
 export function foldLinesInline(text: string): string {
 	return text
 		.replace(/-\n(?!\n)/g, '')
-		.replace(/\n{2,}/g, '\u0000')
+		.replace(/\n{2,}/g, '\uE000')
 		.replace(/\n/g, ' ')
-		.replace(/\u0000/g, '\n\n');
+		.replace(/\uE000/g, '\n\n');
 }
 
 export function formatDatasetTitle(title: string): string {

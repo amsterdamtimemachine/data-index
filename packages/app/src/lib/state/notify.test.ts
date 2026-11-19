@@ -2,7 +2,8 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const toasts: Array<{ title: string; description?: string; failure?: boolean }> = [];
 vi.mock('#lib/state/toaster.svelte.js', () => ({
-	addToast: ({ data }: { data: { title: string; description?: string; failure?: boolean } }) => toasts.push(data)
+	addToast: ({ data }: { data: { title: string; description?: string; failure?: boolean } }) =>
+		toasts.push(data)
 }));
 
 import { notifyOnce, notifyFailure, message, linkMessage } from './notify';
@@ -33,13 +34,17 @@ describe('notify', () => {
 		notifyFailure('placeSearchFailed', lost);
 		expect(toasts).toHaveLength(0);
 		settle();
-		expect(toasts).toEqual([{ title: 'Index niet bereikbaar', description: undefined, failure: true }]);
+		expect(toasts).toEqual([
+			{ title: 'Index niet bereikbaar', description: undefined, failure: true }
+		]);
 	});
 
 	test('one feature failing on its own keeps its message, with the code', () => {
 		notifyFailure('mapNotLoaded', new Response(null, { status: 500 }));
 		settle();
-		expect(toasts).toEqual([{ title: 'Kaart niet geladen', description: 'Foutcode 500', failure: true }]);
+		expect(toasts).toEqual([
+			{ title: 'Kaart niet geladen', description: 'Foutcode 500', failure: true }
+		]);
 	});
 
 	test('several features failing together are one cause: the index, with the code', () => {
@@ -48,13 +53,17 @@ describe('notify', () => {
 		notifyFailure('featuresNotLoaded', new Response(null, { status: 500 }));
 		notifyFailure('topicCountsNotLoaded', new Response(null, { status: 500 }));
 		settle();
-		expect(toasts).toEqual([{ title: 'Index niet bereikbaar', description: 'Foutcode 500', failure: true }]);
+		expect(toasts).toEqual([
+			{ title: 'Index niet bereikbaar', description: 'Foutcode 500', failure: true }
+		]);
 	});
 
 	test('the proxy saying the server is down: unreachable, with its code', () => {
 		notifyFailure('featuresNotLoaded', new Response(null, { status: 503 }));
 		settle();
-		expect(toasts).toEqual([{ title: 'Index niet bereikbaar', description: 'Foutcode 503', failure: true }]);
+		expect(toasts).toEqual([
+			{ title: 'Index niet bereikbaar', description: 'Foutcode 503', failure: true }
+		]);
 	});
 
 	test('a sentence of its own and the code are both shown', () => {
@@ -69,7 +78,9 @@ describe('notify', () => {
 		notifyFailure('featuresNotLoaded', new TypeError('Failed to fetch'));
 		settle();
 		vi.unstubAllGlobals();
-		expect(toasts).toEqual([{ title: 'Geen internetverbinding', description: undefined, failure: true }]);
+		expect(toasts).toEqual([
+			{ title: 'Geen internetverbinding', description: undefined, failure: true }
+		]);
 	});
 
 	test('a cancelled request says nothing; a failure a loader described is shown like the others', () => {
@@ -78,7 +89,9 @@ describe('notify', () => {
 		expect(toasts).toHaveLength(0);
 		notifyFailure('indexNotLoaded', { kind: 'server', status: 500 });
 		settle();
-		expect(toasts).toEqual([{ title: 'Index niet geladen', description: 'Foutcode 500', failure: true }]);
+		expect(toasts).toEqual([
+			{ title: 'Index niet geladen', description: 'Foutcode 500', failure: true }
+		]);
 	});
 
 	test('the repeat window goes by the message: a 502 and then a 503 are one outage', () => {
@@ -101,9 +114,15 @@ describe('notify', () => {
 	});
 
 	test('a once-per-visit toast is never repeated', () => {
-		notifyOnce({ title: 'Onbekende waarde in de link', text: '‘nope’ bestaat niet en wordt genegeerd.' });
+		notifyOnce({
+			title: 'Onbekende waarde in de link',
+			text: '‘nope’ bestaat niet en wordt genegeerd.'
+		});
 		vi.advanceTimersByTime(60_000);
-		notifyOnce({ title: 'Onbekende waarde in de link', text: '‘nope’ bestaat niet en wordt genegeerd.' });
+		notifyOnce({
+			title: 'Onbekende waarde in de link',
+			text: '‘nope’ bestaat niet en wordt genegeerd.'
+		});
 		expect(toasts).toHaveLength(1);
 	});
 });
@@ -111,7 +130,10 @@ describe('notify', () => {
 describe('message', () => {
 	test('a title, with its sentence when it has one', () => {
 		expect(message('mapNotLoaded')).toEqual({ title: 'Kaart niet geladen' });
-		expect(message('topicCountsNotLoaded')).toEqual({ title: 'Aantallen per onderwerp niet geladen', text: 'De onderwerpen werken nog wel.' });
+		expect(message('topicCountsNotLoaded')).toEqual({
+			title: 'Aantallen per onderwerp niet geladen',
+			text: 'De onderwerpen werken nog wel.'
+		});
 	});
 });
 
@@ -121,7 +143,10 @@ describe('linkMessage', () => {
 	});
 
 	test('one unknown value', () => {
-		expect(linkMessage(['nope'], null)).toEqual({ title: 'Onbekende waarde in de link', text: '‘nope’ bestaat niet en wordt genegeerd.' });
+		expect(linkMessage(['nope'], null)).toEqual({
+			title: 'Onbekende waarde in de link',
+			text: '‘nope’ bestaat niet en wordt genegeerd.'
+		});
 	});
 
 	test('several unknown values in one list, each once', () => {

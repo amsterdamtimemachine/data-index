@@ -4,7 +4,13 @@ import type { RequestHandler } from './$types';
 import type { HeatmapResolutionConfig } from '@atm/shared/types';
 import { DISPLAY_TIME_BIN_DEFAULT_YEARS } from '@atm/shared';
 import { getHeatmap, getHeatmapTimeline } from '@atm/db/queries';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes, parseMatchFilters, parseGridCols } from '#lib/server/query-params.js';
+import {
+	parseRecordTypes,
+	parseDatasets,
+	parsePlaceTypes,
+	parseMatchFilters,
+	parseGridCols
+} from '#lib/server/query-params.js';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -21,7 +27,9 @@ export const GET: RequestHandler = async ({ url }) => {
 		// Parse bin size
 		// Forwarded as-is; the query layer clamps and snaps it to a valid bin (normaliseBinSize).
 		const binSizeParam = url.searchParams.get('binSize');
-		const binSize = binSizeParam ? parseInt(binSizeParam, 10) || DISPLAY_TIME_BIN_DEFAULT_YEARS : DISPLAY_TIME_BIN_DEFAULT_YEARS;
+		const binSize = binSizeParam
+			? parseInt(binSizeParam, 10) || DISPLAY_TIME_BIN_DEFAULT_YEARS
+			: DISPLAY_TIME_BIN_DEFAULT_YEARS;
 
 		// Optional: restrict counts to features matching a text search and/or tags.
 		const filters = parseMatchFilters(url);
@@ -31,7 +39,15 @@ export const GET: RequestHandler = async ({ url }) => {
 		);
 
 		if (timeSliceParam) {
-			const heatmapResponse = await getHeatmap(timeSliceParam, resolution, recordTypes, datasetIds, placeTypes, binSize, filters);
+			const heatmapResponse = await getHeatmap(
+				timeSliceParam,
+				resolution,
+				recordTypes,
+				datasetIds,
+				placeTypes,
+				binSize,
+				filters
+			);
 			const cellCount = Object.values(heatmapResponse.timeline)[0]?.indices.length ?? 0;
 			console.log(`Heatmap for ${timeSliceParam}: ${cellCount} cells`);
 
@@ -42,7 +58,14 @@ export const GET: RequestHandler = async ({ url }) => {
 				}
 			});
 		} else {
-			const heatmapResponse = await getHeatmapTimeline(resolution, recordTypes, datasetIds, placeTypes, binSize, filters);
+			const heatmapResponse = await getHeatmapTimeline(
+				resolution,
+				recordTypes,
+				datasetIds,
+				placeTypes,
+				binSize,
+				filters
+			);
 			const timeSliceCount = Object.keys(heatmapResponse.timeline).length;
 			const totalCells = Object.values(heatmapResponse.timeline).reduce(
 				(sum, h) => sum + h.indices.length,

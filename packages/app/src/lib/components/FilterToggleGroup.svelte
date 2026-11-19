@@ -14,7 +14,14 @@
 		labelledBy: string;
 	}
 
-	let { items, selectedItems, disabledItems = [], onItemSelected, requireOne = true, labelledBy }: Props = $props();
+	let {
+		items,
+		selectedItems,
+		disabledItems = [],
+		onItemSelected,
+		requireOne = true,
+		labelledBy
+	}: Props = $props();
 
 	const group = new ToggleGroup({
 		selected: () => selectedItems,

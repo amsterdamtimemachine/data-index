@@ -13,7 +13,8 @@
     "db:studio": "drizzle-kit studio",
     "db:ingest": "bun run src/etl/index.ts ingest",
     "db:rebuild-index": "bun run src/etl/index.ts rebuild-index",
-    "test": "bun test --env-file=../../.env.test"
+    "test": "bun test --env-file=../../.env.test",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@atm/shared": "workspace:*",
@@ -25,10 +26,14 @@
     "@streamparser/json": "^0.0.22"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.0",
     "@types/geojson": "^7946.0.16",
     "@types/n3": "^1.26.4",
     "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.11",
-    "typescript": "^6.0.3"
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.0"
   }
 }

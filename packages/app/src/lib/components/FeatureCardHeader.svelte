@@ -31,10 +31,17 @@
 	});
 </script>
 
-<div class={mergeCss('border-b border-atm-sand-border flex w-full justify-between items-center gap-2 min-h-[32px]', className)}>
+<div
+	class={mergeCss(
+		'border-b border-atm-sand-border flex w-full justify-between items-center gap-2 min-h-[32px]',
+		className
+	)}
+>
 	<div class="min-w-0 flex-1">
 		{#if feature.url}
-			<Link href={feature.url} target="_blank" rel="noopener noreferrer" class="block truncate">{sourceName}</Link>
+			<Link href={feature.url} target="_blank" rel="noopener noreferrer" class="block truncate"
+				>{sourceName}</Link
+			>
 		{:else}
 			<span class="block truncate text-base text-black">{sourceName}</span>
 		{/if}

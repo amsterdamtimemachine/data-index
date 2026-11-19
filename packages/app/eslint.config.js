@@ -20,11 +20,21 @@ export default [
 		}
 	},
 	{
-		files: ['**/*.svelte'],
+		files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
 		languageOptions: {
 			parserOptions: {
 				parser: ts.parser
 			}
+		}
+	},
+	{
+		rules: {
+			// internal links and API URLs are guarded by the no-restricted-syntax rules below;
+			// a dynamic href is an external URL, and a goto() carries a path taken from the
+			// current location, base path included
+			'svelte/no-navigation-without-resolve': ['error', { ignoreLinks: true, ignoreGoto: true }],
+			// a Map or URLSearchParams built inside a $derived is a value, not state
+			'svelte/prefer-svelte-reactivity': 'off'
 		}
 	},
 	{
@@ -43,7 +53,8 @@ export default [
 				'error',
 				{
 					// esquery ends a regex at the first `/`, hence \u002f
-					selector: 'Literal[value=/^\\u002fapi\\u002f/]:not(CallExpression[callee.name="apiUrl"] > Literal)',
+					selector:
+						'Literal[value=/^\\u002fapi\\u002f/]:not(CallExpression[callee.name="apiUrl"] > Literal)',
 					message: 'Build API URLs with apiUrl() from #lib/utils/api.js so the base path applies.'
 				},
 				{
@@ -59,7 +70,8 @@ export default [
 					message: 'Use asset() from $app/paths for static files so the base path applies.'
 				},
 				{
-					selector: 'Literal[value=/^\\u002flogos\\u002f/]:not(CallExpression[callee.name="asset"] > Literal)',
+					selector:
+						'Literal[value=/^\\u002flogos\\u002f/]:not(CallExpression[callee.name="asset"] > Literal)',
 					message: 'Use asset() from $app/paths for static files so the base path applies.'
 				}
 			]

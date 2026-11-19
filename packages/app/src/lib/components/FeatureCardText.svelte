@@ -2,6 +2,8 @@
 	import { translate } from '#lib/utils/translations.js';
 	import { parseMarks, markText } from '#lib/utils/search-hits.js';
 	import MarkedText from '#lib/components/MarkedText.svelte';
+	import Link from '#lib/components/Link.svelte';
+	import { TEXT_WINDOWS } from '#lib/config/text.js';
 	type Props = {
 		text: string;
 		expanded?: boolean;
@@ -9,16 +11,15 @@
 
 	let { text, expanded = false }: Props = $props();
 
-	const maxLength = 200;
 	let showFullText = $state(false);
 	// the length is the words', not the search marks' in them
 	const parsed = $derived(parseMarks(text));
-	const needsTruncation = $derived(parsed.text.length > maxLength);
+	const needsTruncation = $derived(parsed.text.length > TEXT_WINDOWS.description);
 	const truncatedText = $derived.by(() => {
 		if (!needsTruncation) {
 			return text;
 		}
-		return markText(parsed.text.slice(0, maxLength), parsed.ranges) + '...';
+		return markText(parsed.text.slice(0, TEXT_WINDOWS.description), parsed.ranges) + '...';
 	});
 </script>
 
@@ -36,25 +37,13 @@
 				<div>
 					<MarkedText text={truncatedText} />
 				</div>
-				<button
-					class="mt-2 text-base text-blue-600 hover:text-blue-800 underline"
-					title={translate('showMore')}
-					onclick={() => (showFullText = true)}
-				>
-					{translate('showMore')}
-				</button>
+				<Link class="mt-2" onclick={() => (showFullText = true)}>{translate('showMore')}</Link>
 			{:else}
 				<div>
 					<MarkedText {text} />
 				</div>
 				{#if needsTruncation}
-					<button
-						class="mt-2 text-base text-blue-600 hover:text-blue-800 underline"
-						title={translate('showLess')}
-						onclick={() => (showFullText = false)}
-					>
-						{translate('showLess')}
-					</button>
+					<Link class="mt-2" onclick={() => (showFullText = false)}>{translate('showLess')}</Link>
 				{/if}
 			{/if}
 		</div>

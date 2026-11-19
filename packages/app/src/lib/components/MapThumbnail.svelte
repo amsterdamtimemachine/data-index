@@ -23,7 +23,17 @@
 		height?: number;
 		class?: string;
 	};
-	let { timeline, dimensions, cellId = undefined, highlightCells = undefined, highlightSelected = false, period, width = 150, height = 75, class: className }: Props = $props();
+	let {
+		timeline,
+		dimensions,
+		cellId = undefined,
+		highlightCells = undefined,
+		highlightSelected = false,
+		period,
+		width = 150,
+		height = 75,
+		class: className
+	}: Props = $props();
 
 	const MIN_MARKER_PX = 5;
 
@@ -70,7 +80,12 @@
 			}
 			ctx.fillStyle = colors['map-place-outline'];
 			for (const i of highlightCells) {
-				ctx.fillRect(cellX(i) - (m - s) / 2 - rim, cellY(i) - (m - s) / 2 - rim, m + rim * 2, m + rim * 2);
+				ctx.fillRect(
+					cellX(i) - (m - s) / 2 - rim,
+					cellY(i) - (m - s) / 2 - rim,
+					m + rim * 2,
+					m + rim * 2
+				);
 			}
 			if (highlightSelected) {
 				ctx.fillStyle = colors['atm-red'];

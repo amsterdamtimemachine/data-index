@@ -6,8 +6,14 @@
  * excerpt, whose text the window addresses by offset.
  */
 import type { Excerpt, FeatureResult } from '@atm/shared/types';
-import { SEARCH_FIELD_DESCRIPTION, SEARCH_FIELD_TITLE, SEARCH_MARK_END, SEARCH_MARK_START } from '@atm/shared/vocab';
-import { wordWindow, TEXT_WINDOWS, type TextRange } from './excerpts';
+import {
+	SEARCH_FIELD_DESCRIPTION,
+	SEARCH_FIELD_TITLE,
+	SEARCH_MARK_END,
+	SEARCH_MARK_START
+} from '@atm/shared/vocab';
+import { wordWindow, type TextRange } from './excerpts';
+import { TEXT_WINDOWS } from '#lib/config/text.js';
 
 const EXCERPT_TEXT = '$.excerpts[*].text';
 

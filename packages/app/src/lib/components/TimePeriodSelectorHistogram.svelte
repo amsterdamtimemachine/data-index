@@ -79,7 +79,7 @@
 	{/each}
 
 	<!-- Ticks at period boundaries -->
-	{#each Array(bins.length + 1) as _, i}
+	{#each Array.from({ length: bins.length + 1 }, (_, n) => n) as i (i)}
 		{@const position = (i / bins.length) * 100}
 		<line
 			x1="{position}%"
