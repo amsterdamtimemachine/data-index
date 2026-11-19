@@ -1,12 +1,12 @@
 /**
  * Cinema Context ingestion: a programme with a film is a ScreeningEvent screened at
- * its venue, one with acts only a TheaterEvent performed there; an empty bill or an
- * unreadable date is skipped. The label is the first item on the bill. The place is
+ * its venue, one with acts only a TheaterEvent performed there; a programme without items or an
+ * unreadable date is skipped. The label is the first item on the programme. The place is
  * the venue's address matched by name, with the point as fallback.
  *
  * Fixture: two programmes at a named address (one with an act before its film), one
  * at an address written as a range, an acts-only programme without a permanent id,
- * one with a malformed date and one with an empty bill.
+ * one with a malformed date and one with a programme without items.
  */
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
@@ -46,13 +46,13 @@ describe('cinema-context ingestion', () => {
     return r.rows;
   }
 
-  test('a programme needs a bill and a readable date', async () => {
+  test('a programme needs items and a readable date', async () => {
     const all = await rows();
     expect(all.length).toBe(4);
     expect(all.every((f) => f.record_type === 'event')).toBe(true);
   });
 
-  test('the label is the first item on the bill, film or act', async () => {
+  test('the label is the first item on the programme, film or act', async () => {
     const all = await rows();
     expect(all.find((f) => f.start === '1934-01-05')!.label).toBe('Skippy (1931)');
     expect(all.find((f) => f.start === '1960-03-04')!.label).toBe('Mello Wendini, komisch dressuur act');
@@ -84,13 +84,13 @@ describe('cinema-context ingestion', () => {
     expect(r.rows).toEqual([{ id: 'performedAt', dated: true }, { id: 'screenedAt', dated: true }]);
   });
 
-  test("the entity carries the venue as the source has it and the bill in the source's order", async () => {
+  test("the entity carries the venue as the source has it and the items in the source's order", async () => {
     const all = await rows();
     const mixed = all.find((f) => f.start === '1960-03-04')!.entity;
     expect(mixed.id).toBe('V000002');
     expect(mixed.name).toBe('Mello Wendini, komisch dressuur act');
     expect(mixed.location).toEqual({ type: 'Place', name: 'Rialto', identifier: 'B000001', url: 'https://cinemacontext.nl/id/B000001', additionalType: 'Cinema', address: 'Ceintuurbaan 338' });
-    expect(mixed.bill).toEqual([
+    expect(mixed.items).toEqual([
       { type: 'LiveAct', name: 'Mello Wendini, komisch dressuur act' },
       { type: 'Movie', name: 'Can-can (1960)', url: 'https://cinemacontext.nl/id/F000002', dateCreated: '1960', countryOfOrigin: 'USA' }
     ]);
@@ -99,7 +99,7 @@ describe('cinema-context ingestion', () => {
     }
     const acts = all.find((f) => f.start === '1934-01-12')!;
     expect(acts.url).toBe('');
-    expect(acts.entity.bill).toEqual([{ type: 'LiveAct', name: 'Allison Troep, acrobaten' }, { type: 'LiveAct', name: 'Alfonso Avello Combination, pantomime' }]);
+    expect(acts.entity.items).toEqual([{ type: 'LiveAct', name: 'Allison Troep, acrobaten' }, { type: 'LiveAct', name: 'Alfonso Avello Combination, pantomime' }]);
   });
 
   test('dates keep the source precision', async () => {

@@ -1,6 +1,8 @@
 import { describe, test, expect } from 'vitest';
 import type { ScreeningEventEntity, TheaterEventEntity, FeatureResult } from '@atm/shared/types';
-import { resolveCardFields, dataSourceFields, programmeBillRows, programmeBillHeading, entitySubtype, relationLine, typeLabel } from './cardFields';
+import { resolveCardFields, collapsedFields, dataSourceFields, programmeRows, programmeHeading, entitySubtype, relationLine, typeLabel, contentKind, scrollingContent } from './cardFields';
+import { markFeature } from './search-hits';
+import type { Entity, ManuscriptEntity } from '@atm/shared/types';
 
 const screening: ScreeningEventEntity = {
 	type: 'ScreeningEvent',
@@ -8,7 +10,7 @@ const screening: ScreeningEventEntity = {
 	name: 'Skippy (1931)',
 	startDate: '1934-01-05',
 	location: { type: 'Place', name: 'Rialto', identifier: 'B1', additionalType: 'Cinema', address: 'Ceintuurbaan 338' },
-	bill: [
+	items: [
 		{ type: 'Movie', name: 'Skippy (1931)', url: 'https://cinemacontext.nl/id/F1' },
 		{ type: 'LiveAct', name: 'Mello Wendini, komisch dressuur act' },
 		{ type: 'Movie', name: 'Reis naar de maan, De' }
@@ -20,7 +22,7 @@ const theatre: TheaterEventEntity = {
 	name: 'Allison Troep, acrobaten',
 	startDate: '1907-05',
 	location: { type: 'Place', name: 'Carr', identifier: 'B2' },
-	bill: [{ type: 'LiveAct', name: 'Allison Troep, acrobaten' }]
+	items: [{ type: 'LiveAct', name: 'Allison Troep, acrobaten' }]
 };
 
 describe('programme cards', () => {
@@ -28,26 +30,26 @@ describe('programme cards', () => {
 		expect(resolveCardFields(screening, false)).toEqual([{ label: 'Venue', value: 'Rialto', href: undefined }]);
 	});
 
-	test('expanded adds nothing beyond the venue: the bill is the card content', () => {
+	test('expanded adds nothing beyond the venue: the programme is the card content', () => {
 		expect(resolveCardFields(screening, true).length).toBe(1);
 		expect(resolveCardFields(theatre, true).length).toBe(1);
 	});
 
-	test('a bill of several items gets a heading worded from it; one item gets none', () => {
-		expect(programmeBillHeading(screening)).toBe('2 films en 1 optreden op het programma');
-		expect(programmeBillHeading({ ...theatre, bill: [{ type: 'LiveAct', name: 'a' }, { type: 'LiveAct', name: 'b' }] })).toBe('2 optredens op het programma');
-		expect(programmeBillHeading(theatre)).toBeNull();
-		expect(programmeBillHeading({ type: 'Person', name: 'x' })).toBeNull();
+	test('a programme of several items gets a heading worded from it; one item gets none', () => {
+		expect(programmeHeading(screening)).toBe('2 films en 1 optreden op het programma');
+		expect(programmeHeading({ ...theatre, items: [{ type: 'LiveAct', name: 'a' }, { type: 'LiveAct', name: 'b' }] })).toBe('2 optredens op het programma');
+		expect(programmeHeading(theatre)).toBeNull();
+		expect(programmeHeading({ type: 'Person', name: 'x' })).toBeNull();
 	});
 
-	test("the bill in the source's order: a film linked where it has a page, an act as worded", () => {
-		expect(programmeBillRows(screening)).toEqual([
+	test("the items in the source's order: a film linked where it has a page, an act as worded", () => {
+		expect(programmeRows(screening)).toEqual([
 			{ label: 'Film', value: 'Skippy (1931)', href: 'https://cinemacontext.nl/id/F1' },
 			{ label: 'Optreden', value: 'Mello Wendini, komisch dressuur act' },
 			{ label: 'Film', value: 'Reis naar de maan, De', href: undefined }
 		]);
-		expect(programmeBillRows({ type: 'Person', name: 'x' })).toEqual([]);
-		expect(programmeBillRows(undefined)).toEqual([]);
+		expect(programmeRows({ type: 'Person', name: 'x' })).toEqual([]);
+		expect(programmeRows(undefined)).toEqual([]);
 	});
 
 	test('the subtype follows the type: a screening or a performance', () => {
@@ -61,6 +63,32 @@ describe('programme cards', () => {
 			{ label: 'Geboren', value: '1 januari 1900', href: undefined },
 			{ label: 'Overleden', value: 'Onbekend', href: undefined }
 		]);
+	});
+});
+
+describe('collapsedFields', () => {
+	const S = '\u0001';
+	const E = '\u0002';
+	const at = (entity: Entity, label: string, foundBy: { field: string; text: string }[]) =>
+		markFeature({ id: 'f', label, recordType: 'x', entity, foundBy } as unknown as FeatureResult);
+
+	test('without a search, the summary fields', () => {
+		expect(collapsedFields(at(screening, 'Skippy (1931)', []))).toEqual(resolveCardFields(screening, false));
+	});
+
+	test('a hidden field the search marked joins the summary fields in the expanded order, marked', () => {
+		const photo: Entity = { type: 'MediaObject', name: 'Foto', author: 'Jacob Olie', contentUrl: 'u' };
+		expect(collapsedFields(at(photo, 'Foto', [{ field: '$.author', text: `Jacob ${S}Olie${E}` }]))).toEqual([{ label: 'Auteur', value: `Jacob ${S}Olie${E}`, href: undefined }]);
+		const entry: ManuscriptEntity = { type: 'Manuscript', name: 'x', excerpts: [], author: { type: 'Person', name: 'Els Polak' }, isPartOf: { type: 'Book', name: 'Dagboek Els Polak, deel 1' } };
+		expect(collapsedFields(at(entry, 'x', [{ field: '$.isPartOf.name', text: `Dagboek Els ${S}Polak${E}, deel 1` }])).map((r) => r.label)).toEqual(['Auteur', 'Dagboek']);
+	});
+
+	test('a programme\'s matched items come first, every one of them, the one that repeats the title included', () => {
+		const hits = screening.items.map((i) => ({ field: '$.items[*].name', text: i.name.replace(/^(\S+)/, `${S}$1${E}`) }));
+		const rows = collapsedFields(at(screening, 'Skippy (1931)', hits));
+		expect(rows.map((r) => r.label)).toEqual(['Film', 'Optreden', 'Film', 'Venue']);
+		expect(rows[0].value).toBe(`${S}Skippy${E} (1931)`);
+		expect(collapsedFields(at(screening, 'Skippy (1931)', [{ field: '$.location.name', text: `${S}Rialto${E}` }]))).toEqual([{ label: 'Venue', value: `${S}Rialto${E}`, href: undefined }]);
 	});
 });
 
@@ -153,4 +181,27 @@ describe('provenance rows', () => {
 			{ label: 'Gepubliceerd', value: '3 januari 1967', href: undefined }
 		]);
 	});
+});
+
+describe('content by entity type', () => {
+	test('every entity type maps to a content kind; no entity shows the description', () => {
+		const kinds: Record<Entity['type'], string> = {
+			MediaObject: 'picture', ScreeningEvent: 'programme', TheaterEvent: 'programme', Manuscript: 'story', Person: 'text', CreativeWork: 'text',
+		};
+		for (const [type, kind] of Object.entries(kinds)) {
+			expect(contentKind({ type } as Entity)).toBe(kind);
+		}
+		expect(contentKind(undefined)).toBe('text');
+	});
+
+	test('expanded, a programme with items and a story with an excerpt scroll; a picture and a bare description do not', () => {
+		const story: ManuscriptEntity = { type: 'Manuscript', name: 'Dagboek', excerpts: [{ placeId: 'p', text: 'Op de Dam.', truncatedBefore: false, truncatedAfter: false, mentions: [{ start: 6, end: 9 }] }] };
+		const at = (entity: Entity | undefined, placeId = 'p') => ({ id: 'f', label: '', recordType: 'story', placeId, placeType: 'street', startDate: '', endDate: '', datasetId: 'd', datasetLabel: '', tags: [], classifiers: [], entity } as unknown as FeatureResult);
+		expect(scrollingContent(at(screening), true)).toBe(true);
+		expect(scrollingContent(at(story), true)).toBe(true);
+		expect(scrollingContent(at(story), false)).toBe(false);
+		expect(scrollingContent(at({ type: 'MediaObject', name: 'Foto' } as Entity), true)).toBe(false);
+		expect(scrollingContent(at(undefined), true)).toBe(false);
+	});
+
 });

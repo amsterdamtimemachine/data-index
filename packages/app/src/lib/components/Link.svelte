@@ -1,11 +1,18 @@
+<!--
+	A text link: underlined, in the link's colours. To a URL it is an anchor; with an
+	onclick and no URL it is a button that reads the same, for a light action in text
+	where a boxed button would weigh too much.
+-->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import type { MouseEventHandler } from 'svelte/elements';
 	import { mergeCss } from '#lib/utils/utils.js';
 	import { translate } from '#lib/utils/translations.js';
 	import type { PhosphorIcon, PhosphorIconProps } from '@atm/shared/types';
 
 	interface Props {
-		href: string;
+		href?: string;
+		onclick?: MouseEventHandler<HTMLButtonElement>;
 		title?: string;
 		target?: string;
 		rel?: string;
@@ -19,6 +26,7 @@
 
 	let {
 		href,
+		onclick,
 		title,
 		target,
 		rel,
@@ -58,14 +66,22 @@
 	});
 </script>
 
-<a {href} {title} {target} {rel} aria-describedby={describedBy} class={mergeCss(`${baseClasses} ${gapClass}`, className)}>
+{#snippet content()}
 	{#if children}
 		{@render children()}
 	{/if}
 	{#if Icon}
 		<Icon {...iconProps} />
 	{/if}
-	{#if newWindow}
-		<span id={noteId} hidden>{translate('opensInNewWindow')}</span>
-	{/if}
-</a>
+{/snippet}
+
+{#if href}
+	<a {href} {title} {target} {rel} aria-describedby={describedBy} class={mergeCss(`${baseClasses} ${gapClass}`, className)}>
+		{@render content()}
+		{#if newWindow}
+			<span id={noteId} hidden>{translate('opensInNewWindow')}</span>
+		{/if}
+	</a>
+{:else}
+	<button type="button" {onclick} {title} class={mergeCss(`${baseClasses} ${gapClass} cursor-pointer`, className)}>{@render content()}</button>
+{/if}

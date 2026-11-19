@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import type { VisualizationMetadata } from '@atm/shared/types';
-import { parseFilterState, filterParams, selectsAll } from './filters';
+import { parseFilterState, filterParams, selectsAll, emptyCategories } from './filters';
 
 const metadata: VisualizationMetadata = {
 	timeSlices: [],
@@ -48,6 +48,16 @@ describe('parseFilterState', () => {
 		expect(unknownValues).toEqual(['video', 'nope', 'nope']);
 	});
 
+	test('a category written as none is empty; none among values is an unknown value', () => {
+		const { filters, unknownValues } = parseFilterState(url('datasets=none&recordTypes=none,image'), metadata);
+		expect(filters.datasets).toEqual([]);
+		expect(filters.recordTypes).toEqual(['image']);
+		expect(filters.placeTypes).toEqual(['address', 'street']);
+		expect(unknownValues).toEqual(['none']);
+		expect(emptyCategories(filters, metadata)).toEqual(['datasets']);
+		expect(emptyCategories(filters, null)).toEqual([]);
+	});
+
 	test('without metadata the categories stay empty but search and operator still parse', () => {
 		const { filters } = parseFilterState(url('recordTypes=image&q=brug&tags=maps&tagOperator=AND'), null);
 		expect(filters.recordTypes).toEqual([]);
@@ -77,7 +87,7 @@ describe('filterParams', () => {
 
 describe('selectsAll', () => {
 	test('empty, complete and partial selections', () => {
-		expect(selectsAll([], ['a', 'b'])).toBe(true);
+		expect(selectsAll([], ['a', 'b'])).toBe(false);
 		expect(selectsAll(['b', 'a'], ['a', 'b'])).toBe(true);
 		expect(selectsAll(['a'], ['a', 'b'])).toBe(false);
 	});

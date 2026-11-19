@@ -4,6 +4,7 @@
  * Expects DATABASE_URL and CACHE_TTL_MINUTES=0 to be set by the test script.
  */
 import { sql } from 'drizzle-orm';
+import { searchVectorDdl } from '../search-vector';
 import { resolve } from 'path';
 import { db } from '../client';
 
@@ -113,16 +114,16 @@ export async function setupTestDb() {
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       feature_int_id INTEGER GENERATED ALWAYS AS IDENTITY,
       url TEXT, record_type TEXT NOT NULL, label TEXT NOT NULL,
-      label_tsv TSVECTOR GENERATED ALWAYS AS (to_tsvector('dutch', label)) STORED,
       description TEXT, content_url TEXT, start_date DATE, end_date DATE,
       dataset_id TEXT REFERENCES datasets(id),
-      entity JSONB
+      entity JSONB,
+      search_tsv TSVECTOR GENERATED ALWAYS AS (${sql.raw(searchVectorDdl())}) STORED
     )
   `);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_features_dates ON features(start_date, end_date)`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_features_record_type ON features(record_type)`);
   await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_features_int_id ON features(feature_int_id)`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_features_label_fts ON features USING gin (label_tsv)`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_features_search_fts ON features USING gin (search_tsv)`);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS feature_to_place (
       feature_id UUID NOT NULL REFERENCES features(id),

@@ -4,6 +4,7 @@ import { db } from '../../client';
 import { placeGeometry, features, placeCells, gridConfig } from '../../schema';
 import { buildCellFeatures } from './build-cell-features';
 import { buildTagFeatures } from './build-tag-features';
+import { ensureSearchColumn } from './search-column';
 import { cellIndex, cellEnvelope } from '../sql';
 
 type BBoxRow = {
@@ -23,6 +24,13 @@ type StatsRow = {
 };
 
 export async function rebuildIndex() {
+  console.log('=== Text search column ===\n');
+  if (await ensureSearchColumn()) {
+    console.log('Rebuilt features.search_tsv: its expression had changed.\n');
+  } else {
+    console.log('features.search_tsv is up to date.\n');
+  }
+
   console.log('=== Rebuilding place_cells at 100m resolution ===\n');
 
   // Bounds from ALL place geometry (RD): the grid frame follows the gazetteer

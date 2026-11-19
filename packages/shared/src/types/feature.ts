@@ -88,28 +88,28 @@ export interface VenueEntity {
   address?: string;
 }
 
-/** A live act on a bill, as the source words it. */
+/** A live act on a programme, as the source words it. */
 export interface LiveActEntity {
   type: "LiveAct";
   name: string;
 }
 
-export type BillItem = MovieEntity | LiveActEntity;
+export type ProgrammeItem = MovieEntity | LiveActEntity;
 
-/** One programme at a venue on a date, with its bill in the source's order. */
+/** One programme at a venue on a date, with its items in the source's order. */
 interface ProgrammeEntity extends EntityBase {
   // source precision: YYYY-MM-DD, YYYY-MM or YYYY
   startDate: string;
   location: VenueEntity;
-  bill: BillItem[];
+  items: ProgrammeItem[];
 }
 
-/** A programme whose bill opens with a film; the title is that film. */
+/** A programme opening with a film; the title is that film. */
 export interface ScreeningEventEntity extends ProgrammeEntity {
   type: "ScreeningEvent";
 }
 
-/** A programme whose bill opens with a live act; the title is that act. */
+/** A programme opening with a live act; the title is that act. */
 export interface TheaterEventEntity extends ProgrammeEntity {
   type: "TheaterEvent";
 }
@@ -125,7 +125,6 @@ export interface BookEntity {
 export interface ExcerptMention {
   start: number;
   end: number;
-  quote: string;
 }
 
 /**
@@ -173,6 +172,7 @@ export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity | Scr
 
 // the place types, as the registry in vocab orders them
 import type { PlaceType } from '../vocab/place-types';
+import type { SearchHit } from '../vocab/search-fields';
 export type { PlaceType };
 
 /** Where a place came from — Adamlink (historical) or a PDOK base registry. */
@@ -239,6 +239,8 @@ export interface FeatureResult {
   relationDated?: boolean;
   displayName?: string;
   historicalLabel?: string;
+  // with a search active: the feature's values that match it, the matching words marked
+  foundBy?: SearchHit[];
   placeSource?: PlaceSource;
   placeUrl?: string;
   placeProviderLabel?: string;

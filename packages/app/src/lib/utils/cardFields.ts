@@ -1,5 +1,7 @@
 import type { Entity, PersonEntity, MediaObjectEntity, CreativeWorkEntity, ScreeningEventEntity, TheaterEventEntity, ManuscriptEntity, FeatureResult } from '@atm/shared/types';
 import { formatPartialDate, formatPeriod, formatNowKnownAs } from './format';
+import { SEARCH_MARK_START } from '@atm/shared/vocab';
+import { pickExcerpt } from './excerpts';
 import { translate } from './translations';
 
 /**
@@ -11,7 +13,7 @@ export type FieldRow = { label: string; value: string; href?: string; labelHref?
 const isPerson = (e: Entity): e is PersonEntity => e.type === 'Person';
 const isMedia = (e: Entity): e is MediaObjectEntity => e.type === 'MediaObject';
 const isCreativeWork = (e: Entity): e is CreativeWorkEntity => e.type === 'CreativeWork';
-// a programme: a screening (a film on its bill) or a theatre event (acts only)
+// a programme: a screening (a film on its programme) or a theatre event (acts only)
 const isProgramme = (e: Entity): e is ScreeningEventEntity | TheaterEventEntity => e.type === 'ScreeningEvent' || e.type === 'TheaterEvent';
 const isManuscript = (e: Entity): e is ManuscriptEntity => e.type === 'Manuscript';
 
@@ -57,12 +59,10 @@ type CardFieldSpec = {
 	value: (entity: Entity) => string | null;
 	// a link for the value
 	href?: (entity: Entity) => string | undefined;
-	// one row per item, for a field that repeats (the films on a bill); the label and value are per row
-	rows?: (entity: Entity) => FieldRow[];
 	summary?: boolean; // also show on the collapsed card, not just the expanded detail
 };
 
-// a programme's venue; its date is in the relation line, its bill the card's content (programmeBillRows)
+// a programme's venue; its date is in the relation line, its items the card's content (programmeRows)
 const PROGRAMME_FIELDS: CardFieldSpec[] = [
 	{ label: 'venue', value: (e) => (isProgramme(e) ? e.location.name : null), href: (e) => (isProgramme(e) ? e.location.url : undefined), summary: true },
 ];
@@ -96,22 +96,40 @@ const CARD_FIELDS: Partial<Record<Entity['type'], CardFieldSpec[]>> = {
 	],
 };
 
-/** Entity fields to render for the given mode (collapsed keeps only `summary` fields). */
-export function resolveCardFields(entity: Entity, expanded: boolean): FieldRow[] {
-	const specs = CARD_FIELDS[entity.type] ?? [];
+/** The labels of the fields the card can show for this entity type, collapsed or expanded. */
+export function cardFieldLabels(type: Entity['type']): string[] {
+	return (CARD_FIELDS[type] ?? []).map((spec) => spec.label);
+}
+
+// the entity's fields in their order, those `keep` says, as rows
+function fieldRows(entity: Entity, keep: (spec: CardFieldSpec, value: string) => boolean): FieldRow[] {
 	const fields: FieldRow[] = [];
-	for (const spec of specs) {
-		if (!expanded && !spec.summary) continue;
-		if (spec.rows) {
-			fields.push(...spec.rows(entity));
-			continue;
-		}
+	for (const spec of CARD_FIELDS[entity.type] ?? []) {
 		const value = spec.value(entity);
-		if (value == null) continue;
+		if (value == null || !keep(spec, value)) continue;
 		const href = spec.href ? spec.href(entity) : undefined;
 		fields.push({ label: translate(spec.label), value, href });
 	}
 	return fields;
+}
+
+/** Entity fields to render for the given mode (collapsed keeps only `summary` fields). */
+export function resolveCardFields(entity: Entity, expanded: boolean): FieldRow[] {
+	return fieldRows(entity, (spec) => expanded || spec.summary === true);
+}
+
+/**
+ * The collapsed card's fields with a search on: its summary fields, and every row only
+ * the expanded card shows whose value the search marked, in the expanded order (a
+ * programme's items first, then its fields), so a match is never out of sight.
+ */
+export function collapsedFields(feature: FeatureResult): FieldRow[] {
+	const entity = feature.entity;
+	if (!entity) return [];
+	const joins = (value: string): boolean => value.includes(SEARCH_MARK_START);
+	const items = programmeRows(entity).filter((row) => joins(row.value));
+	const fields = fieldRows(entity, (spec, value) => spec.summary === true || joins(value));
+	return [...items, ...fields];
 }
 
 /** An entity's subtype as a translate() key, its most specific type; null without one. */
@@ -126,16 +144,16 @@ export function entitySubtype(entity: Entity | undefined): string | null {
 }
 
 /**
- * A heading for a bill of more than one item, worded from it: "3 films op het
+ * A heading for a programme of more than one item, worded from it: "3 films op het
  * programma", "2 films en 1 optreden op het programma". Null for a single item,
  * which the title already names.
  */
-export function programmeBillHeading(entity: Entity | undefined): string | null {
+export function programmeHeading(entity: Entity | undefined): string | null {
 	if (!entity || !isProgramme(entity)) {
 		return null;
 	}
-	const films = entity.bill.filter((item) => item.type === 'Movie').length;
-	const acts = entity.bill.length - films;
+	const films = entity.items.filter((item) => item.type === 'Movie').length;
+	const acts = entity.items.length - films;
 	if (films + acts < 2) {
 		return null;
 	}
@@ -156,13 +174,13 @@ function countWord(count: number, one: string, many: string): string {
 	return `${count} ${translate(many)}`;
 }
 
-/** A programme's bill as rows in the source's order: a film linked to its page, an act as worded. */
-export function programmeBillRows(entity: Entity | undefined): FieldRow[] {
+/** A programme's items as rows in the source's order: a film linked to its page, an act as worded. */
+export function programmeRows(entity: Entity | undefined): FieldRow[] {
 	if (!entity || !isProgramme(entity)) {
 		return [];
 	}
 	const rows: FieldRow[] = [];
-	for (const item of entity.bill) {
+	for (const item of entity.items) {
 		if (item.type === 'Movie') {
 			rows.push({ label: translate('film'), value: item.name, href: item.url });
 		} else {
@@ -255,4 +273,42 @@ export function dataSourceFields(feature: FeatureResult, expanded: boolean): Fie
 		rows.push({ label: translate('classifier'), value: classifier.label, href: classifier.url });
 	}
 	return rows;
+}
+
+/**
+ * What a card shows as its content, by entity type: a picture, a programme's items,
+ * a story's excerpt, or the description alone. The one place that maps a type to a
+ * kind; FeatureCardContent renders the kind.
+ */
+export type ContentKind = 'picture' | 'programme' | 'story' | 'text';
+
+const CONTENT_KIND: Record<Entity['type'], ContentKind> = {
+	MediaObject: 'picture',
+	ScreeningEvent: 'programme',
+	TheaterEvent: 'programme',
+	Manuscript: 'story',
+	Person: 'text',
+	CreativeWork: 'text',
+};
+
+export function contentKind(entity: Entity | undefined): ContentKind {
+	if (!entity) {
+		return 'text';
+	}
+	return CONTENT_KIND[entity.type];
+}
+
+/** Whether the expanded card's content scrolls: a programme's items or a story's text do; a picture shrinks to the room instead. */
+export function scrollingContent(feature: FeatureResult, expanded: boolean): boolean {
+	if (!expanded || !feature.entity) {
+		return false;
+	}
+	const kind = contentKind(feature.entity);
+	if (kind === 'programme') {
+		return programmeRows(feature.entity).length > 0;
+	}
+	if (kind === 'story' && isManuscript(feature.entity)) {
+		return pickExcerpt(feature.entity, feature.placeId) !== null;
+	}
+	return false;
 }

@@ -22,20 +22,30 @@
 	const allPlaceTypes = $derived(status.metadata?.placeTypes ?? []);
 	const allDatasets = $derived(status.metadata?.datasets ?? []);
 
-	// a category that selects everything reads as everything, not as a list of picks
+	// a category that selects everything reads as everything, not as a list of picks; one
+	// with nothing selected reads as "geen"
 	const displayedRecordTypes = $derived.by(() => {
+		if (filters.recordTypes.length === 0) {
+			return [translate('nothing')];
+		}
 		if (selectsAll(filters.recordTypes, allRecordTypes)) {
 			return translateAll(allRecordTypes);
 		}
 		return translateAll(filters.recordTypes);
 	});
 	const displayedPlaceTypes = $derived.by(() => {
+		if (filters.placeTypes.length === 0) {
+			return [translate('nothing')];
+		}
 		if (selectsAll(filters.placeTypes, allPlaceTypes)) {
 			return translateAll(allPlaceTypes);
 		}
 		return translateAll(filters.placeTypes);
 	});
 	const displayedDatasets = $derived.by(() => {
+		if (filters.datasets.length === 0) {
+			return [translate('nothing')];
+		}
 		const label = new Map(allDatasets.map((d) => [d.id, d.label]));
 		let ids = filters.datasets;
 		if (selectsAll(filters.datasets, allDatasets.map((d) => d.id))) {

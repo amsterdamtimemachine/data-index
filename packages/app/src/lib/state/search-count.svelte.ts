@@ -34,9 +34,9 @@ export function createSearchCount() {
 		}
 	}, DEBOUNCE_MS);
 
-	function setQuery(q: string, filterQuery: string) {
+	function setQuery(q: string, filterQuery: string | null) {
 		const trimmed = q.trim();
-		if (trimmed.length < MIN_QUERY_LENGTH) {
+		if (trimmed.length < MIN_QUERY_LENGTH || filterQuery === null) {
 			run.cancel();
 			requestId++;
 			count = null;

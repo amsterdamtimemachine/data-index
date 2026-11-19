@@ -17,8 +17,8 @@
 	import SearchInput from './SearchInput.svelte';
 	import PlaceFilterTag from './PlaceFilterTag.svelte';
 	import SearchFilterTag from './SearchFilterTag.svelte';
-	import Button from './Button.svelte';
-	import X from 'phosphor-svelte/lib/X';
+	import Link from './Link.svelte';
+	import { selectsAll, NONE, type Category } from '#lib/utils/filters.js';
 	import TagOperatorSwitch from './TagOperatorSwitch.svelte';
 
 	interface Props {
@@ -33,6 +33,8 @@
 		placePanelOpen?: boolean;
 		searchPaused?: boolean;
 		onToggleSearch?: () => void;
+		// a category is empty: nothing to count, so the preview counts stay quiet
+		idle?: boolean;
 	}
 
 	let {
@@ -43,7 +45,8 @@
 		onTogglePlacePanel = undefined,
 		placePanelOpen = false,
 		searchPaused = false,
-		onToggleSearch = undefined
+		onToggleSearch = undefined,
+		idle = false
 	}: Props = $props();
 
 	const recordTypes = $derived(metadata?.recordTypes ?? []);
@@ -80,8 +83,10 @@
 	// A boolean derived, not the array: a reloaded metadata array must not refetch.
 	const hasTags = $derived(availableTags.length > 0);
 	$effect(() => {
-		if (hasTags) {
+		if (hasTags && !idle) {
 			tagCounts.load(tagCountsQuery);
+		} else {
+			tagCounts.reset();
 		}
 	});
 	const tagCountByLabel = $derived.by(() => {
@@ -110,32 +115,39 @@
 		}
 	}
 
+	// a category's param: absent for everything, NONE for nothing, else the picks
+	function writeCategory(p: URLSearchParams, name: Category, values: string[], all: string[]) {
+		if (selectsAll(values, all)) {
+			p.delete(name);
+		} else if (values.length === 0) {
+			p.set(name, NONE);
+		} else {
+			p.set(name, values.join(','));
+		}
+	}
+
+	const datasetIds = $derived(datasets.map((s) => s.id));
+
 	function handleRecordTypeChange(selected: string[]) {
-		const dutch = selected;
-		const english = reverseTranslateAll(dutch);
-		navigateParams((p) => {
-			if (english.length > 0) p.set('recordTypes', english.join(','));
-			else p.delete('recordTypes');
-		});
+		const english = reverseTranslateAll(selected);
+		navigateParams((p) => writeCategory(p, 'recordTypes', english, recordTypes));
 	}
 
 	function handleDatasetChange(selected: string[]) {
-		const labels = selected;
 		const labelToId = new Map(datasets.map((s) => [s.label, s.id]));
-		const ids = labels.map((label) => labelToId.get(label) || label);
-		navigateParams((p) => {
-			if (ids.length > 0) p.set('datasets', ids.join(','));
-			else p.delete('datasets');
-		});
+		const ids = selected.map((label) => labelToId.get(label) || label);
+		navigateParams((p) => writeCategory(p, 'datasets', ids, datasetIds));
 	}
 
 	function handlePlaceTypeChange(selected: string[]) {
-		const dutch = selected;
-		const raw = reverseTranslateAll(dutch);
-		navigateParams((p) => {
-			if (raw.length > 0) p.set('placeTypes', raw.join(','));
-			else p.delete('placeTypes');
-		});
+		const raw = reverseTranslateAll(selected);
+		navigateParams((p) => writeCategory(p, 'placeTypes', raw, placeTypes));
+	}
+
+	// the header button: with everything pressed it releases all, else it presses all
+	function handleCategoryToggle(name: Category, all: string[]) {
+		const allPressed = selectsAll(filters[name], all);
+		navigateParams((p) => writeCategory(p, name, allPressed ? [] : all, all));
 	}
 
 	function handleTagsChange(selected: string[]) {
@@ -194,6 +206,12 @@
 	}
 </script>
 
+{#snippet categoryToggle(name: Category, all: string[])}
+	<Link onclick={() => handleCategoryToggle(name, all)}>
+		{selectsAll(filters[name], all) ? translate('clearAll') : translate('selectAll')}
+	</Link>
+{/snippet}
+
 <div class="p-3">
 	<div class="mb-4">
 		<Heading level={2} class="font-bold text-lg mb-2">{translate('filters')}</Heading>
@@ -208,7 +226,7 @@
 					{/snippet}
 				</TextWithSlots>
 			{/snippet}
-			<SearchInput onApplySearch={handleSearchApply} onSelectPlace={handlePlaceSelect} filterQuery={activeParams} />
+			<SearchInput onApplySearch={handleSearchApply} onSelectPlace={handlePlaceSelect} filterQuery={idle ? null : activeParams} />
 			{#if selectedPlace}
 				<div class="mt-2">
 					<PlaceFilterTag place={selectedPlace} onClear={handlePlaceClear} onToggle={onTogglePlacePanel} active={placePanelOpen} />
@@ -222,11 +240,15 @@
 		</FilterSection>
 
 		<FilterSection heading={translate('recordTypeFilter')}>
+			{#snippet action()}
+				{@render categoryToggle('recordTypes', recordTypes)}
+			{/snippet}
 			{#snippet children(headingId)}
 				<FilterToggleGroup
 					items={translatedRecordTypes}
 					selectedItems={translatedCurrentRecordTypes}
 					onItemSelected={handleRecordTypeChange}
+					requireOne={false}
 					labelledBy={headingId}
 				/>
 			{/snippet}
@@ -237,8 +259,11 @@
 		{#snippet tooltip()}
 			{translate('datasetFilterTooltip')}
 		{/snippet}
+		{#snippet action()}
+			{@render categoryToggle('datasets', datasetIds)}
+		{/snippet}
 		{#snippet children(headingId)}
-			<FilterToggleGroup items={datasetLabels} selectedItems={currentDatasetLabels} onItemSelected={handleDatasetChange} labelledBy={headingId} />
+			<FilterToggleGroup items={datasetLabels} selectedItems={currentDatasetLabels} onItemSelected={handleDatasetChange} requireOne={false} labelledBy={headingId} />
 		{/snippet}
 	</FilterSection>
 
@@ -247,11 +272,15 @@
 			{#snippet tooltip()}
 				{translate('scaleFilterTooltip')}
 			{/snippet}
+			{#snippet action()}
+				{@render categoryToggle('placeTypes', placeTypes)}
+			{/snippet}
 			{#snippet children(headingId)}
 				<FilterToggleGroup
 					items={translatedPlaceTypes}
 					selectedItems={translatedCurrentPlaceTypes}
 					onItemSelected={handlePlaceTypeChange}
+					requireOne={false}
 					labelledBy={headingId}
 				/>
 			{/snippet}
@@ -263,6 +292,11 @@
 			{#snippet tooltip()}
 				{translate('topicsTooltip')}
 			{/snippet}
+			{#snippet action()}
+				{#if currentTags.length > 0}
+					<Link onclick={handleTagsClear}>{translate('clearAll')}</Link>
+				{/if}
+			{/snippet}
 			{#snippet children(headingId)}
 				<TagOperatorSwitch
 					operator={currentTagOperator}
@@ -271,9 +305,6 @@
 					allLabel={translate('topicsAll')}
 					class="mb-2"
 				/>
-				{#if currentTags.length > 0}
-					<Button icon={X} size={16} onclick={handleTagsClear} class="mb-2">{translate('clearAll')}</Button>
-				{/if}
 				<FilterToggleGroup
 					items={translatedTags}
 					selectedItems={translatedCurrentTags}

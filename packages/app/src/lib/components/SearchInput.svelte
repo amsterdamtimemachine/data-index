@@ -21,7 +21,8 @@
 		onApplySearch: (q: string) => void;
 		onSelectPlace: (match: PlaceSearchMatch) => void;
 		// current filter params, so the count matches what applying will show
-		filterQuery?: string;
+		// the applied filters the preview count rides on; null when there is no data to count
+		filterQuery?: string | null;
 	};
 	let { onApplySearch, onSelectPlace, filterQuery = '' }: Props = $props();
 
@@ -101,7 +102,7 @@
 		{#if optionSet.text}
 			{@const text = optionSet.text}
 			<SearchOptionRow attributes={getOption(text)} icon={MagnifyingGlass} trailing={countText}>
-				<TextWithSlots text={translate('searchInTitles')}>
+				<TextWithSlots text={translate('searchInData')}>
 					{#snippet children(slot)}
 						{#if slot === 'term'}
 							{text.label}

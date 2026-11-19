@@ -39,7 +39,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			throw error(400, 'Invalid sort direction', { code: 'INVALID_SORT' });
 		}
 
-		const page = parseInt(url.searchParams.get('page') || '1', 10) || 1;
+		const page = Math.max(parseInt(url.searchParams.get('page') || '1', 10) || 1, 1);
 		const pageSize = Math.min(
 			Math.max(parseInt(url.searchParams.get('pageSize') || String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE, 1),
 			PAGE_SIZE_MAX

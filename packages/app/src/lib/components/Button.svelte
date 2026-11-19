@@ -44,7 +44,7 @@
 
 	const baseClasses =
 		'focus-ring h-[32px] flex justify-center items-center bg-atm-sand-darkish rounded border border-atm-gold border-[1px] hover:bg-atm-sand-dark disabled:opacity-50 disabled:cursor-not-allowed text-sm';
-	// icon-only and label-only stay a 32px square; a glyph with a label sizes to its text
+	// icon-only stays a 32px square; a label, with or without a glyph, sizes to its text
 	const shapeClasses = $derived.by(() => {
 		if (Icon && children) {
 			return 'px-2 gap-1';
@@ -52,7 +52,7 @@
 		if (Icon) {
 			return 'w-[32px] p-1';
 		}
-		return 'w-[32px] px-3 py-2';
+		return 'px-3';
 	});
 </script>
 
