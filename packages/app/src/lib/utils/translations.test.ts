@@ -33,7 +33,7 @@ describe('translations', () => {
 		expect(translate('image')).toBe('Afbeelding');
 		speak('en');
 		expect(translate('image')).toBe('Image');
-		expect(translate('bridge_canal')).toBe('bridge canal');
+		expect(translate('bridge_canal')).toBe('Bridge canal');
 		expect(translate('not-a-key')).toBe('not-a-key');
 		expect(hasTranslation('image')).toBe(true);
 		expect(hasTranslation('not-a-key')).toBe(false);
