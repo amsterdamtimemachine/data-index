@@ -220,6 +220,9 @@ export const EN: Record<TranslationKey, string> = {
 	pageNotFound: 'Page not found',
 	somethingWentWrong: 'Something went wrong',
 	backToMap: 'Back to the map',
+	metaDescription:
+		'Search heritage collections of several institutions in one platform, with historical data through time and space for research and discovery.',
+	logoAlt: 'Amsterdam Time Machine logo',
 	languageNl: 'Nederlands',
 	languageEn: 'English'
 };

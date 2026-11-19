@@ -243,6 +243,10 @@ export const NL = {
 	somethingWentWrong: 'Er ging iets mis',
 	backToMap: 'Terug naar de kaart',
 	// the language switch: each language in its own words
+	// the page's description for search engines and link previews
+	metaDescription:
+		'Doorzoek erfgoedcollecties van meerdere instellingen in één platform met historische data door tijd en ruimte voor onderzoek en ontdekking.',
+	logoAlt: 'Logo van de Amsterdam Time Machine',
 	languageNl: 'Nederlands',
 	languageEn: 'English'
 };
