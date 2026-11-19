@@ -158,6 +158,8 @@ const TRANSLATIONS: Record<string, string> = {
 	classifier: 'Classificatiemodel',
 	// a story's rows
 	diary: 'Dagboek',
+	// a drawing or picture from a diary page, shown with the entry
+	diaryImage: 'Afbeelding uit het dagboek',
 	inSelection: 'in de selectie',
 	periodLabel: 'Periode',
 	showPlaceFeatures: 'Features van deze plek tonen',

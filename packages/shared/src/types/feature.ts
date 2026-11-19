@@ -133,6 +133,14 @@ export interface ExcerptMention {
  * lines, the offsets of every mention of that place inside it, and whether the entry
  * continues before or after it.
  */
+// A drawing or picture on the diary page, as the source records it: the scan on the
+// Diaries IIIF server, the box on it ("x,y,w,h") and where it sits in the excerpt's text
+export interface ExcerptImage {
+  source: string;
+  region: string;
+  anchor: number;
+}
+
 export interface Excerpt {
   // the index place the entry was linked to for this mention; the card's key
   placeId?: string;
@@ -140,6 +148,8 @@ export interface Excerpt {
   truncatedBefore: boolean;
   truncatedAfter: boolean;
   mentions: ExcerptMention[];
+  // the images anchored within the text, in reading order; absent when there are none
+  images?: ExcerptImage[];
 }
 
 /**

@@ -49,7 +49,7 @@
 	});
 
 	const baseClasses =
-		'focus-ring inline-flex items-center font-sans text-black hover:text-atm-gold-dark underline';
+		'focus-ring inline-flex items-center font-sans text-black hover:text-atm-gold-darkest underline';
 	const gapClass = $derived.by(() => {
 		if (Icon && children) {
 			return 'gap-1';

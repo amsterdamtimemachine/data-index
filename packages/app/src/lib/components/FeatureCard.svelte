@@ -7,7 +7,8 @@
 	import FeatureCardImage from '#lib/components/FeatureCardImage.svelte';
 	import FeatureCardText from '#lib/components/FeatureCardText.svelte';
 	import FeatureCardExcerpt from '#lib/components/FeatureCardExcerpt.svelte';
-	import { pickExcerpt, excerptWindow, segmentText, foldSegments, COLLAPSED_EXCERPT_LENGTH } from '#lib/utils/excerpts.js';
+	import { pickExcerpt, excerptWindow, COLLAPSED_EXCERPT_LENGTH, excerptBlocks, precedingImage } from '#lib/utils/excerpts.js';
+	import { getPictureUrl } from '#lib/utils/image-sizes.js';
 	import FieldList from '#lib/components/FieldList.svelte';
 	import Link from '#lib/components/Link.svelte';
 	import EvidenceHighlight from '#lib/components/EvidenceHighlight.svelte';
@@ -76,11 +77,23 @@
 	});
 	// the place is marked in the text shown, so the relation line takes the same colour
 	const hasEvidence = $derived(storyExcerpt !== null && storyExcerpt.mentions.length > 0);
-	const storySegments = $derived.by(() => {
+	const pictureUse = $derived.by(() => {
+		if (expanded) {
+			return 'full' as const;
+		}
+		return 'card' as const;
+	});
+	// the excerpt's images sit in the text where they are on the page: every one expanded,
+	// collapsed only the one just before the text, so the text stays under it
+	const storyBlocks = $derived.by(() => {
 		if (!storyExcerpt) {
 			return [];
 		}
-		return foldSegments(segmentText(storyExcerpt.text, storyExcerpt.mentions));
+		if (expanded) {
+			return excerptBlocks(storyExcerpt);
+		}
+		const image = precedingImage(storyExcerpt);
+		return excerptBlocks({ ...storyExcerpt, images: image ? [image] : [] });
 	});
 	// the content region scrolls for these: the blocks above and below it cast the edge shadows
 	const scrollingContent = $derived(expanded && (billRows.length > 0 || storyExcerpt !== null));
@@ -171,7 +184,7 @@
 		<div class={contentClasses}>
 			{#if entityType === 'MediaObject' && feature.contentUrl}
 				<FeatureCardImage
-					thumbnail={feature.contentUrl}
+					thumbnail={getPictureUrl(feature.contentUrl, pictureUse)}
 					alt={feature.description}
 					{expanded}
 					onExpand={handleExpand}
@@ -185,11 +198,12 @@
 			{/if}
 			{#if storyExcerpt}
 				<FeatureCardExcerpt
-					segments={storySegments}
+					blocks={storyBlocks}
 					truncatedBefore={storyExcerpt.truncatedBefore}
 					truncatedAfter={storyExcerpt.truncatedAfter}
 					sourceUrl={feature.url}
 					{expanded}
+					onExpand={handleExpand}
 				/>
 			{:else if feature.description}
 				<FeatureCardText text={feature.description} {expanded} />

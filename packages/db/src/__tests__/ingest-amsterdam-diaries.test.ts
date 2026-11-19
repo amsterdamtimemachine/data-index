@@ -90,6 +90,18 @@ describe('amsterdam-diaries ingestion', () => {
     expect(single.excerpts.map((x: { placeId?: string }) => x.placeId)).toEqual(['https://adamlink.nl/geo/street/prinsengracht/3684']);
   });
 
+  test('an excerpt carries the images anchored in it; an excerpt without any has no images field', async () => {
+    const all = await rows();
+    const single = all.find((f) => f.start === '1943-01-01')!.entity;
+    expect(single.excerpts[0].images).toEqual([{
+      source: 'https://images.diaries.amsterdamtimemachine.nl/iiif/urn-gvn-EVDO01-IIAV002_IAV001000030-large_10.jpg',
+      region: '80,806,1083,654',
+      anchor: 0
+    }]);
+    const e = all.find((f) => f.start === '1941-03-19')!.entity;
+    expect(e.excerpts[0]).not.toHaveProperty('images');
+  });
+
   test('the dataset records where the whole of it can be downloaded', async () => {
     const r = await db.execute<{ distribution_url: string | null }>(sql`SELECT distribution_url FROM datasets WHERE id = 'amsterdam-diaries'`);
     expect(r.rows[0].distribution_url).toBe('https://zenodo.org/records/14385058');

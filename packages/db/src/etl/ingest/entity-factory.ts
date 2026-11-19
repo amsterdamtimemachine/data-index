@@ -146,7 +146,10 @@ export class ManuscriptEntityFactory extends EntityFactory<ManuscriptEntity> {
             name: typeof name === 'string' && name ? name : feature.label,
             ...(typeof date === 'string' && date && { dateCreated: date }),
             // only the excerpt's own fields: the source row's place URI is the ingest's key, not the entity's
-            excerpts: excerpts.map((x) => ({ text: x.text, truncatedBefore: x.truncatedBefore, truncatedAfter: x.truncatedAfter, mentions: x.mentions })),
+            excerpts: excerpts.map((x) => ({
+                text: x.text, truncatedBefore: x.truncatedBefore, truncatedAfter: x.truncatedAfter, mentions: x.mentions,
+                ...(x.images?.length && { images: x.images }),
+            })),
             ...(author.name && { author: { type: 'Person' as const, name: author.name, ...(author.url && { url: author.url }) } }),
             ...(diary.name && {
                 isPartOf: {

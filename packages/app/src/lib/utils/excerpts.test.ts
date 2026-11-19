@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import type { Excerpt, ManuscriptEntity } from '@atm/shared/types';
-import { pickExcerpt, excerptWindow, segmentText, foldSegments } from './excerpts';
+import { pickExcerpt, excerptWindow, segmentText, foldSegments, precedingImage, excerptBlocks } from './excerpts';
+import { iiifImageUrl } from './iiif';
 
 const excerpt = (over: Partial<Excerpt>): Excerpt => ({
 	text: '',
@@ -87,5 +88,51 @@ describe('foldSegments', () => {
 			{ text: 'Zorgvliet', marked: true },
 			{ text: '; allen niet meer', marked: false }
 		]);
+	});
+});
+
+describe('images in the excerpt', () => {
+	const img = (anchor: number) => ({ source: 'https://iiif.example/scan.jpg', region: '80,806,1083,654', anchor });
+	const long = 'a '.repeat(200) + 'Vondelpark ' + 'b '.repeat(200);
+	const at = long.indexOf('Vondelpark');
+	const mentions = [{ start: at, end: at + 10, quote: 'Vondelpark' }];
+
+	test('the window keeps the images anchored within it, counting its edges, and shifts them', () => {
+		const shown = excerptWindow(excerpt({ text: long, mentions, images: [img(0), img(at - 20), img(long.length)] }), 100);
+		const lo = long.indexOf(shown.text);
+		expect(shown.images).toEqual([img(at - 20 - lo)]);
+	});
+
+	test('an image before a leading blank line still sits beside the shown text', () => {
+		const text = '\nJuni 1944\nVue de mon bureau\nRozenstraat\n' + 'c '.repeat(300);
+		const start = text.indexOf('Rozenstraat');
+		const shown = excerptWindow(excerpt({ text, mentions: [{ start, end: start + 11, quote: 'Rozenstraat' }], images: [img(0)] }), 100);
+		expect(shown.text.startsWith('Juni 1944')).toBe(true);
+		expect(shown.images).toEqual([img(0)]);
+	});
+
+	test('the collapsed card takes the last image before the text', () => {
+		const text = '\n\nOctober 1944\nRozenstraat\n';
+		expect(precedingImage(excerpt({ text, images: [img(0), img(1), img(text.length)] }))).toEqual(img(1));
+		expect(precedingImage(excerpt({ text, images: [img(text.length)] }))).toBeNull();
+		expect(precedingImage(excerpt({ text: long, images: [img(at)] }))).toBeNull();
+		expect(precedingImage(excerpt({ text: 'x' }))).toBeNull();
+	});
+
+	test('the text is cut where an image sits, in reading order', () => {
+		const text = 'Vondelpark, Rosarium\n29 Oct 44';
+		const blocks = excerptBlocks(excerpt({ text, images: [img(21), img(0)] }));
+		expect(blocks.map((b) => b.kind)).toEqual(['image', 'text', 'image', 'text']);
+	});
+
+	test('an image after the last text stays after it', () => {
+		const text = '\n\nOctober 1944\nRozenstraat\n';
+		const blocks = excerptBlocks(excerpt({ text, images: [img(0), img(1), img(text.length)] }));
+		expect(blocks.map((b) => b.kind)).toEqual(['image', 'image', 'text', 'image']);
+	});
+
+	test('a IIIF URL asks the scan for the box at a size', () => {
+		expect(iiifImageUrl(img(0), ',600')).toBe('https://iiif.example/scan.jpg/80,806,1083,654/,600/0/default.jpg');
+		expect(iiifImageUrl(img(0))).toBe('https://iiif.example/scan.jpg/80,806,1083,654/max/0/default.jpg');
 	});
 });
