@@ -68,7 +68,8 @@
 
 {#snippet content()}
 	{#if children}
-		{@render children()}
+		<!-- one flex item for the text, so the spaces around a mark inside it are kept -->
+		<span>{@render children()}</span>
 	{/if}
 	{#if Icon}
 		<Icon {...iconProps} />
