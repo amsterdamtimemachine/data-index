@@ -287,6 +287,10 @@ Each match carries the matched name, the id of the matched historical name row w
 
 `/api/places` accepts `q` (search) or `id` with optional `nameId` (restore), plus `cols` and `limit`. `/api/features` and `/api/histogram` accept `placeId` to scope their results to the display cells one place lies in, at the grid width `cols` like the heatmap, so a selected place reads exactly like clicking the cells the map outlines for it: whatever else lies in those cells counts too.
 
+### Language
+
+The UI is Dutch by default and English with `lang=en` in the URL; the NL/EN switch beside the About button writes it. The strings live in `packages/app/src/lib/utils/translations/nl.ts` and `en.ts`, which must carry the same keys. Source data (titles, descriptions, place and dataset names) is never translated, and topics show in English as the classifier's own labels. The about page has one text per language, `content.nl.svx` and `content.en.svx`.
+
 ### Text search
 
 `/api/heatmaps`, `/api/histogram` and `/api/features` accept `q`: a free-text search over a feature's title, description and the entity fields its card shows (`SEARCH_FIELDS` in `@atm/shared`). All three share one definition of what matches, so the heatmap, the timeline and the feature list always describe the same population. With `q`, each listed feature carries `foundBy`: the values that matched, with the matching words marked.

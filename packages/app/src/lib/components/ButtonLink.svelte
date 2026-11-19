@@ -1,15 +1,17 @@
+<!-- A link drawn as the app's button; any other anchor attribute is passed on -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import type { HTMLAnchorAttributes } from 'svelte/elements';
 	import { mergeCss } from '#lib/utils/utils.js';
 
-	interface Props {
+	type Props = Omit<HTMLAnchorAttributes, 'class' | 'children'> & {
 		href: string;
 		target?: string;
 		rel?: string;
 		class?: string;
 		active?: boolean;
 		children?: Snippet;
-	}
+	};
 
 	let {
 		href,
@@ -17,7 +19,8 @@
 		rel = 'noopener noreferrer',
 		class: className,
 		active = false,
-		children
+		children,
+		...rest
 	}: Props = $props();
 
 	const baseClasses = $derived(
@@ -27,7 +30,7 @@
 	);
 </script>
 
-<a class={mergeCss(baseClasses, className)} {href} {target} {rel}>
+<a {...rest} class={mergeCss(baseClasses, className)} {href} {target} {rel}>
 	<span>
 		{@render children?.()}
 	</span>

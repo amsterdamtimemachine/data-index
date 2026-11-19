@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve, asset } from '$app/paths';
 	import { mergeCss } from '#lib/utils/utils.js';
+	import { withLanguage } from '#lib/utils/translations.js';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -17,7 +18,7 @@
 		className
 	)}
 >
-	<a href={resolve('/(map)')} class="no-underline flex items-center">
+	<a href={withLanguage(resolve('/(map)'))} class="no-underline flex items-center">
 		<img
 			src={asset('logos/atm_logo_big.png')}
 			alt="A logo reading Amsterdam Time Machine in black"

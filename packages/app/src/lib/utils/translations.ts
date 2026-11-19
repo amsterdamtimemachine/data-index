@@ -1,281 +1,69 @@
-// Single translation map: all UI strings in one place
-const TRANSLATIONS: Record<string, string> = {
-	// Placeholders
-	unknown: 'Onbekend',
-
-	// Record types
-	image: 'Afbeelding',
-	person: 'Persoon',
-	text: 'Tekst',
-	event: 'Evenement',
-	// an event's subtype, which names its type on the card in place of "Evenement"
-	screening: 'Filmvertoning',
-	story: 'Verhaal',
-
-	// Place types
-	address: 'Adres',
-	building: 'Gebouw',
-	street: 'Straat',
-	neighbourhood: 'Buurt',
-	district: 'Wijk',
-
-	// Tags (classifier keys → Dutch)
-	animals: 'Dieren',
-	art: 'Kunst',
-	birds_eye_view: 'Vogelvlucht',
-	bridge_canal: 'Bruggen en grachten',
-	building_architecture: 'Gebouwen',
-	building_interior: 'Interieurs',
-	construction_demolition: 'Bouw en sloop',
-	drawing_architecture: 'Bouwtekeningen',
-	harbor_industrial: 'Haven en industrie',
-	maps: 'Kaarten',
-	parks_green: 'Parken en groen',
-	portrait_people: 'Mensen en portretten',
-	public_event: 'Evenementen',
-	shops_commerce: 'Winkels en handel',
-	transportation: 'Vervoer',
-
-	// Relations
-	isAbout: 'Gaat over',
-	mentions: 'Noemt',
-	screenedAt: 'Vertoond op',
-
-	hadLastLivingLocation: 'Laatste woonadres',
-
-	// Entity fields
-	born: 'Geboren',
-	died: 'Overleden',
-	// screening event rows
-	film: 'Film',
-	dating: 'Datering',
-
-	// Months, for dates worded on cards
-	january: 'januari',
-	february: 'februari',
-	march: 'maart',
-	april: 'april',
-	may: 'mei',
-	june: 'juni',
-	july: 'juli',
-	august: 'augustus',
-	september: 'september',
-	october: 'oktober',
-	november: 'november',
-	december: 'december',
-	author: 'Auteur',
-
-	// Sorting
-	sortLabel: 'Sortering',
-	sortSample: 'Van alles wat',
-	sortSpatial: 'Precies gelokaliseerd',
-	sortTemporal: 'Precies gedateerd',
-	sortOldest: 'Oudste eerst',
-	sortNewest: 'Nieuwste eerst',
-	reshuffle: 'Schud opnieuw',
-
-	// UI labels
-	searchPlaceholder: 'Zoek een plek of zoekterm',
-	// the dropdown's text search row; {term} stands for what was typed
-	searchInData: 'Zoek ‘{term}’ in gegevens',
-	clearSearchFilter: 'Verwijder zoekfilter',
-	cellsOf: 'Cellen van',
-	cellOf: 'Cel van',
-	clearPlaceFilter: 'Verwijder plekfilter',
-	imageUnavailable: 'Afbeelding niet beschikbaar',
-	noFeaturesForSelection: 'Geen features gevonden voor deze selectie en periode.',
-	// the filter panel's sections
-	searchFilter: 'Zoeken op de kaart',
-	recordTypeFilter: 'Inhoudstype',
-	// a category's link under its heading: press every item (released: clearAll)
-	selectAll: 'Selecteer alles',
-	// the categories by name, in the sentence about an emptied one and the filters line
-	recordTypesCategory: 'inhoudstypes',
-	datasetsCategory: 'datasets',
-	placeTypesCategory: 'schalen',
-	nothing: 'geen',
-	noneSelected: 'Geen {filter} geselecteerd.',
-	datasetFilter: 'Dataset',
-	datasetFilterTooltip: 'Filter op basis van de dataset waaruit de data afkomstig is.',
-	scaleFilter: 'Schaal',
-	scaleFilterTooltip:
-		'Hoe precies een feature op de kaart is geplaatst: op een adres, een straat, een buurt of een wijk.',
-	viewFilters: 'Bekijk',
-	navAbout: 'Over',
-
-	// cards, grid and panel
-	showMore: 'Meer tonen',
-	// the link after a story's excerpt to the entry's page at the source
-	readMore: 'Lees verder',
-	fullTextAtSource: 'Volledige tekst bij de bron',
-	showLess: 'Minder tonen',
-	noFeaturesToDisplay: 'Geen features om te tonen',
-	openFeature: 'Feature openen',
-	siteTitle: 'Amsterdam Time Machine Data Index',
-	results: 'Resultaten',
-	found: 'gevonden',
-	// the screen reader's sentence after results change: "Pagina 3 van 12, …", "Geen features …"
-	page: 'Pagina',
-	outOf: 'van',
-	none: 'Geen',
-	opensInNewWindow: 'opent in nieuw venster',
-	// the map region and its canvas, which the arrow keys pan
-	mapRegion: 'Kaart van Amsterdam',
-	mapCanvas: 'Kaart, verschuif met de pijltjestoetsen',
-	mapKeyboardHint: 'Kies een plek met het zoekveld, of een periode met de tijdlijn.',
-	// a filter section's question mark; the heading follows
-	explainAbout: 'Uitleg over',
-	pauseSearchTerm: 'Pauzeer zoekterm',
-	resumeSearchTerm: 'Pas zoekterm toe',
-	closeFeature: 'Feature sluiten',
-	closeFeaturesPanel: 'Paneel sluiten',
-	expandImage: 'Afbeelding vergroten',
-	selectedCellPosition: 'Positie van de geselecteerde cel op de kaart',
-	panelWidth: 'Paneelbreedte (kolommen)',
-
-	// controls, for screen readers
-	pagination: 'Paginering',
-	previousPage: 'Vorige pagina',
-	nextPage: 'Volgende pagina',
-	goToPage: 'Ga naar pagina',
-	dismissNotification: 'Melding sluiten',
-	timePeriodSelector: 'Tijdperiode kiezen',
-
-	// the empty panel's hints; {picture} and {button} stand for the inline elements
-	emptyPanelCityWideHint:
-		'Klik op {button} rechtsonder om de tijdlijn van de selectie te tonen: daar zie je in welke periodes de selectie wel features heeft.',
-	emptyPanelBarHint:
-		'Kies op de tijdlijn {picture} een periode met een rode balk: daar heeft de selectie wel features.',
-	emptyPanelOtherCell: 'Of kies een andere cel op de kaart.',
-	localTimelineAlt: 'Tijdlijn van de selectie met rode balken',
-	// the timeline hover
-	// the cell under the pointer, in the order its id has in a link (cell=51_53)
-	cellPosition: 'rij {row}, kolom {col}',
-	featureOne: 'feature',
-	featureMany: 'features',
-	showing: 'Toont',
-	venue: 'Venue',
-	// a programme's heading: "2 films op het programma"
-	filmMany: 'films',
-	and: 'en',
-	or: 'of',
-	onTheProgramme: 'op het programma',
-	classifier: 'Classificatiemodel',
-	// a story's rows
-	diary: 'Dagboek',
-	// a drawing or picture from a diary page, shown with the entry
-	diaryImage: 'Afbeelding uit het dagboek',
-	inSelection: 'in de selectie',
-	periodLabel: 'Periode',
-	showPlaceFeatures: 'Features van deze plek tonen',
-	hidePlaceFeatures: 'Features van deze plek verbergen',
-	// the collapsed filter status line
-	statusAtScale: 'op',
-	statusInDatasets: 'in',
-	statusInCellsOf: 'in de cellen van',
-	statusWithSearch: 'met zoekterm',
-	statusAboutTopics: 'over',
-	// the search tooltip; {border} stands for the map's outline glyph
-	markTooltip: 'Gemarkeerde woorden zijn wat je zoekterm vond.',
-	searchTooltip:
-		'Een zoekterm doorzoekt titels, beschrijvingen en de gegevens op de kaart, zoals auteur, geboorteplaats, film of dagboektekst, binnen de toegepaste filters. Wat gevonden is, staat gemarkeerd op de kaart. Bij een gekozen plek markeert de gouden rand {border} op de kaart de cellen waarin de plek ligt.',
-	ofThisCell: 'van deze cel',
-	timelineOfCell: 'Tijdlijn van deze cel',
-	timelineOf: 'Tijdlijn van',
-	toggleLocalTimeline: 'Tijdlijn van de selectie tonen',
-	toggleGlobalTimeline: 'Tijdlijn van de hele stad tonen',
-	ofCellsOf: 'van de cellen van',
-	ofCellOf: 'van de cel van',
-	// after an old place name, the name it goes by now; {name} stands for it
-	nowKnownAs: '(nu {name})',
-	// place window words: "vanaf 1923", "1380 tot 1663", "in 1853"
-	windowSince: 'vanaf',
-	windowUntil: 'tot',
-	windowIn: 'in',
-	// what a search row's years mean: a street or area's existence ("bestaat vanaf 1663",
-	// "bestond 1850 tot 1909"), the years a name held ("naam 1850 tot 1943"), the years an
-	// address was noted on a register ("vermeld in 1853"), or a current register
-	existsSince: 'bestaat vanaf',
-	existed: 'bestond',
-	nameHeld: 'naam',
-	recorded: 'vermeld',
-	currentRegister: 'huidig',
-	filters: 'Filters',
-	// the heading over an expanded card's provenance
-	provenance: 'Herkomst',
-	dataProvider: 'Dataleverancier',
-	placeDataProvider: 'Locatieleverancier',
-	fullDataset: 'Volledige dataset',
-	geometryProvider: 'Geometrieleverancier',
-	published: 'Gepubliceerd',
-	written: 'Geschreven',
-	topicsTooltip:
-		'Onderwerpen zijn automatisch toegekend door een classificatiemodel, zonder handmatige correctie, en voorlopig alleen aan een deel van de datasets. Minimaal één: resultaten met minstens één gekozen onderwerp. Alle: alleen resultaten met alle gekozen onderwerpen.',
-	topics: 'Onderwerpen',
-	topicsAny: 'Minimaal één',
-	topicsAll: 'Alle',
-	clearAll: 'Wis alles',
-	// the topics' operator switch, named by what "on" means
-	topicOperator: 'Alle gekozen onderwerpen',
-
-	// Toasts: a title, and a sentence under <key>Text when the title needs one; {slots} are filled in
-	indexUnreachable: 'Index niet bereikbaar',
-	noInternet: 'Geen internetverbinding',
-	// added under a failure when the server answered with a status
-	failureCode: 'Foutcode {code}',
-	indexNotLoaded: 'Index niet geladen',
-	mapNotLoaded: 'Kaart niet geladen',
-	timelineNotLoaded: 'Tijdlijn niet geladen',
-	featuresNotLoaded: 'Features niet geladen',
-	filterCountsNotLoaded: 'Aantallen per filter niet geladen',
-	// the sentence under a failure's title, by the failure's key
-	filterCountsNotLoadedText: 'De filters werken nog wel.',
-	placeSearchFailed: 'Zoeken naar plekken mislukt',
-	placeFilterNotRestored: 'Plekfilter niet hersteld',
-	// one toast for everything wrong with a link on arrival
-	linkValueUnknownOne: 'Onbekende waarde in de link',
-	linkValueUnknownMany: 'Onbekende waarden in de link',
-	linkValueIgnoredOne: '{values} bestaat niet en wordt genegeerd.',
-	linkValueIgnoredMany: '{values} bestaan niet en worden genegeerd.',
-	linkPeriodReplaced: 'Periode {period} bestaat niet; de meest recente periode wordt getoond.',
-	// the error page
-	pageNotFound: 'Pagina niet gevonden',
-	somethingWentWrong: 'Er ging iets mis',
-	backToMap: 'Terug naar de kaart'
-};
-
-// Reverse map (built once)
-const REVERSE: Record<string, string> = Object.fromEntries(
-	Object.entries(TRANSLATIONS).map(([k, v]) => [v, k])
-);
-
 /**
- * Translate a key to Dutch. Returns the key itself if no translation exists.
+ * The UI's strings in the page's language. Dutch is the default; `lang=en` in the URL
+ * asks for English. The language is fixed for a page's lifetime: the switch reloads the
+ * page, so nothing here is reactive. In the browser it is read once from the address;
+ * on the server each request supplies its own (see hooks.server.ts). Source data
+ * (titles, descriptions, place and dataset names) is never translated.
  */
+import { NL } from './translations/nl';
+import { EN } from './translations/en';
+
+export const LANGUAGES = ['nl', 'en'] as const;
+export type Language = (typeof LANGUAGES)[number];
+export const DEFAULT_LANGUAGE: Language = 'nl';
+export const LANGUAGE_PARAM = 'lang';
+
+const MAPS: Record<Language, Record<string, string>> = { nl: NL, en: EN };
+
+/** The language a `lang` value asks for; anything unknown or absent is the default. */
+export function parseLanguage(value: string | null | undefined): Language {
+	if (value === 'en') {
+		return 'en';
+	}
+	return DEFAULT_LANGUAGE;
+}
+
+function addressLanguage(): Language {
+	if (typeof window === 'undefined' || !window.location) {
+		return DEFAULT_LANGUAGE;
+	}
+	return parseLanguage(new URLSearchParams(window.location.search).get(LANGUAGE_PARAM));
+}
+
+const pageLanguage = addressLanguage();
+let languageSource: () => Language = () => pageLanguage;
+
+/** Replace where the language comes from: the server reads it per request. */
+export function setLanguageSource(source: () => Language) {
+	languageSource = source;
+}
+
+export function currentLanguage(): Language {
+	return languageSource();
+}
+
+/** An internal link that keeps the page's language: the default language adds nothing. */
+export function withLanguage(href: string): string {
+	const language = currentLanguage();
+	if (language === DEFAULT_LANGUAGE) {
+		return href;
+	}
+	const joiner = href.includes('?') ? '&' : '?';
+	return `${href}${joiner}${LANGUAGE_PARAM}=${language}`;
+}
+
+/** A key's string in the page's language. Returns the key itself if no translation exists. */
 export function translate(key: string): string {
-	return TRANSLATIONS[key] || key;
+	return MAPS[currentLanguage()][key] || key;
 }
 
-/**
- * Reverse translate a Dutch string back to its English key.
- */
-export function reverseTranslate(dutch: string): string {
-	return REVERSE[dutch] || dutch;
-}
-
-/** Translate an array of keys to Dutch. */
 export function translateAll(keys: string[]): string[] {
 	return keys.map(translate);
 }
 
-/** Reverse translate an array of Dutch strings back to their English keys. */
-export function reverseTranslateAll(dutch: string[]): string[] {
-	return dutch.map(reverseTranslate);
-}
-
 /** Whether a key has a translation of its own. */
 export function hasTranslation(key: string): boolean {
-	return key in TRANSLATIONS;
+	return key in NL;
 }
 
 /** A translated template with its {name} slots filled in: fill('(nu {name})', { name: 'Dam' }). */

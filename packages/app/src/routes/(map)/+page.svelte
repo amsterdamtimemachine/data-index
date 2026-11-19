@@ -30,6 +30,7 @@
 	import FiltersStatusPanel from '#lib/components/FiltersStatusPanel.svelte';
 	import Nav from '#lib/components/Nav.svelte';
 	import NavItem from '#lib/components/NavItem.svelte';
+	import LanguageSwitch from '#lib/components/LanguageSwitch.svelte';
 	import type { PageData } from './$types';
 	import type { HeatmapTimeline } from '@atm/shared/types';
 	import type { PanelSubject } from '#lib/state/panel-features.svelte.js';
@@ -435,6 +436,7 @@
 			{#snippet header()}
 				<Nav class="p-3">
 					<NavItem href={resolve('/about')} label={translate('navAbout')} />
+					<LanguageSwitch />
 				</Nav>
 			{/snippet}
 			<FilterPanel
