@@ -15,6 +15,7 @@ const TRANSLATIONS: Record<string, string> = {
 
 	// Place types
 	address: 'Adres',
+	building: 'Gebouw',
 	street: 'Straat',
 	neighbourhood: 'Buurt',
 	district: 'Wijk',

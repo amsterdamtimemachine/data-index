@@ -36,12 +36,13 @@ describe('historical label', () => {
     expect(await labelAt('dam', 'street', '1960-06-01')).toBe('Dam');
   });
 
-  test('an address shows its latest observation at or before the date', async () => {
+  test('an address shows the observation nearest the date, the one the name resolver links through', async () => {
     await place('lp', 'address', 'Kalverstraat 97');
     await name('o1', 'lp', 'E 52', '1853-01-01', '1853-12-31');
     await name('o2', 'lp', 'Kalverstraat 97', '1876-01-01', '1876-12-31');
     expect(await labelAt('lp', 'address', '1860-06-01')).toBe('E 52');
+    expect(await labelAt('lp', 'address', '1870-06-01')).toBe('Kalverstraat 97');
     expect(await labelAt('lp', 'address', '1903-03-09')).toBe('Kalverstraat 97');
-    expect(await labelAt('lp', 'address', '1840-01-01')).toBeNull();
+    expect(await labelAt('lp', 'address', '1840-01-01')).toBe('E 52');
   });
 });

@@ -1,5 +1,6 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { historicalLabelSql } from './historical-label';
+import { placeTypeRank } from './place-rank';
 import type {
   RecordType,
   PlaceType,
@@ -349,7 +350,7 @@ export async function getFeatures(query: FeaturesQuery): Promise<FeaturesRespons
       -- place_type and spatial_frequency — varied per execution, shifting page
       -- boundaries between otherwise identical requests.
       ORDER BY f.id,
-        CASE p.type WHEN 'address' THEN 0 WHEN 'street' THEN 1 WHEN 'neighbourhood' THEN 2 ELSE 3 END,
+        ${placeTypeRank(sql`p.type`)},
         p.id
     ),
     ${rankedCte},

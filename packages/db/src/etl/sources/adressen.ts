@@ -19,8 +19,13 @@ import { Parser } from 'n3';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
 import { createNameWriter } from '../writers/place-writer';
+import { requireInIndex } from '../ingest/ingestor';
 
 export async function ingest(filePath: string) {
+  await requireInIndex(
+    sql`SELECT COUNT(*) AS count FROM place WHERE id LIKE 'https://adamlink.nl/geo/lp/%'`,
+    'ingest lps first: the adressen name the LPS points, which the index does not hold yet'
+  );
   console.log(`Parsing ${filePath}...`);
   const quads = new Parser().parse(readFileSync(filePath, 'utf8'));
 

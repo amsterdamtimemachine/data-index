@@ -58,7 +58,7 @@ export interface PlaceInsert {
   // existence for Adamlink streets. Left undefined for addresses. Dates as 'YYYY-MM-DD'.
   since?: string | null;
   until?: string | null;
-  // The BAG building the point stands in, as the source states it. Addresses only.
+  // The BAG building the point stands in, as the source states it, or a building's own.
   buildingId?: string | null;
 }
 

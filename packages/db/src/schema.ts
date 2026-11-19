@@ -57,7 +57,7 @@ export const datasets = pgTable('datasets', {
 // ============================================================================
 export const place = pgTable('place', {
   id: text('id').primaryKey(),                    // Adamlink URI ("https://adamlink.nl/geo/{street,district,lp}/…") or PDOK "{cbs,nwb,bag}-<code>"
-  type: text('type').notNull(),                   // "address" | "street" | "neighbourhood" (buurt) | "district" (wijk)
+  type: text('type').notNull(),                   // "address" | "building" | "street" | "neighbourhood" (buurt) | "district" (wijk)
   name: text('name'),                            // name shown for the place; dated past names live in place_historical_name
   source: text('source').$type<PlaceSource>().references(() => agents.id), // provider, seeded from PLACE_PROVIDERS
   url: text('url')                               // canonical record at the source (adamlink.nl / bag.basisregistraties.overheid.nl / …)
@@ -80,13 +80,13 @@ export const placeGeometry = pgTable('place_geometry', {
   source: text('source').$type<PlaceSource>().references(() => agents.id),
   url: text('url'),                               // link to the geometry's source record
   // The period the place existed in this shape: a division's validity for
-  // neighbourhood/district, the street's existence for Adamlink streets; null for
-  // addresses. until null = open/current.
+  // neighbourhood/district, the existence of an Adamlink street or building; null
+  // for addresses. until null = open/current.
   since: date('since'),
   until: date('until'),
   // The BAG building (pand) the point stands in, as the source states it: Adamlink's
-  // geoWithin link for an LP, BAG's pandidentificatie for an address. Null for
-  // streets and areas. An address from each source in one building with the same
+  // geoWithin link for an LP, BAG's pandidentificatie for an address; a building's
+  // own (Adamlink's sameAs). Null for streets and areas. An address from each source in one building with the same
   // house number is one address recorded twice (see twinOf).
   buildingId: text('building_id')
 }, (table) => [

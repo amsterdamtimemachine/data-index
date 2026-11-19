@@ -25,6 +25,7 @@ program
   .requiredOption('-s, --source <name>', 'Source name to ingest')
   .requiredOption('-f, --file <path>', 'Input file path')
   .option('-x, --adamlink-streets <path>', 'Adamlink straten TTL (required by the nwb-streets source, to dedup against)')
+  .option('-m, --municipality <path>', 'Municipality boundary GeoJSON from db:fetch (required by the buildings source, its scope)')
   .option('-t, --tagger <id>', 'Id of the classifier model, stamped on its rows (required by the tags source)')
   .option('-d, --dataset <id>', 'Dataset whose natural keys the file carries (required by the tags source)')
   .option('--tagger-label <name>', 'Name of the classifier model, shown on cards (tags source; defaults to the id)')
@@ -66,6 +67,7 @@ program
 
       await sourceModule.ingest(opts.file, {
         adamlinkStreets: opts.adamlinkStreets,
+        municipality: opts.municipality,
         tagger: opts.tagger,
         dataset: opts.dataset,
         taggerLabel: opts.taggerLabel,

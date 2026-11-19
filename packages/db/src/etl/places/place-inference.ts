@@ -2,8 +2,8 @@ import { db } from '../../client';
 import { createCachedResolver } from './cache';
 import { PlaceIdRow } from '../../row-types';
 import { sql } from 'drizzle-orm/sql';
-import { getCandidatesByPoint, getCandidatesByName, getNamesForPlaces, pickFinest, resolveNamePool, twinOf, type Candidate, type PlaceType } from './place-candidates';
-import { confirmByText } from './place-confirm';
+import { getCandidatesByPoint, getCandidatesByName, getNamesForPlaces, pickFinest, resolveNamePool, twinOf, EVIDENCE_TYPES, type Candidate, type PlaceType } from './place-candidates';
+import { confirmByText, confirmable, dropEvidenceTypes, nameQualifies } from './place-confirm';
 import type { Resolved } from './place-index';
 
 const allPlacesCTE = sql`
@@ -46,8 +46,9 @@ async function eraTwin(placeId: string, type: PlaceType, eraFit: boolean, start:
 /**
  * Resolve a place-name string to the single place it names — exact case-insensitive
  * match (LOWER(name) =), nearest-in-time by the feature date range, unique winner by
- * gap → finest type; an address outside its era yields to its twin (eraTwin). Returns a tagged skip (→ the cascade tries the next method, else
- * the feature is skipped): 'no-match' when the name matches nothing (or is empty),
+ * gap → finest type; an address outside its era yields to its twin (eraTwin). Returns
+ * a tagged skip (→ the cascade tries the next method, else the feature is skipped):
+ * 'no-match' when the name matches nothing (or is empty),
  * 'ambiguous' for two equal-gap same-type places, 'undated' when the feature has no date.
  * Cache key is JSON `{area, start, end}` — the trie's type is NOT a filter (a
  * name-collision map makes it unreliable; resolveNamePool's finest-type tiebreak decides).
@@ -65,8 +66,9 @@ export const inferByName = createCachedResolver(async (key: string): Promise<Res
 /**
  * Resolve a point WKT (WGS84) to the single most-specific place — nearest address
  * (≤30m) / street (≤50m) per source, else the containing area — era-ranked by the
- * feature date range. Returns a tagged skip (→ the cascade tries the next method, else
- * the feature is skipped): 'cap-miss' when nothing sits within the caps, 'undated' when
+ * feature date range. A type that needs naming (a building) is no candidate without a
+ * text. Returns a tagged skip (→ the cascade tries the next method, else the feature is
+ * skipped): 'cap-miss' when nothing sits within the caps, 'undated' when
  * the feature has no date (a point can't be era-placed without one; spec §5), 'no-match'
  * when no coordinate was given. Cache key is JSON `{wkt, start, end}`.
  */
@@ -74,7 +76,7 @@ export const inferByPoint = createCachedResolver(async (key: string): Promise<Re
     const { wkt, start, end } = JSON.parse(key);
     if (!wkt) { return { skip: 'no-match' } }
     if (!start || !end) { return { skip: 'undated' } }
-    const best = pickFinest(await getCandidatesByPoint(wkt, start, end));
+    const best = pickFinest(dropEvidenceTypes(await getCandidatesByPoint(wkt, start, end)));
     return best ? { placeId: await eraTwin(best.placeId, best.type, best.eraFit, start, end) } : { skip: 'cap-miss' };
 });
 
@@ -88,7 +90,7 @@ export async function inferByPointConfirmed(wkt: string, text: string, start: st
     if (!wkt) { return { skip: 'no-match' } }
     if (!start || !end) { return { skip: 'undated' } }
     const pool = await pointPool(JSON.stringify({ wkt, start, end }));
-    const named = pool.filter((c) => c.type === 'address' || c.type === 'street').map((c) => c.placeId);
+    const named = pool.filter((c) => confirmable(c.type)).map((c) => c.placeId);
     const names = await getNamesForPlaces(named);
     const best = pickFinest(confirmByText(pool, names, text));
     return best ? { placeId: await eraTwin(best.placeId, best.type, best.eraFit, start, end) } : { skip: 'cap-miss' };
@@ -119,7 +121,10 @@ export const inferByAdamURI = createCachedResolver(async (adamlinkUri: string): 
 });
 
 /**
- * Retrieves all existing place-names in database from both places & historic places table
+ * Retrieves all existing place-names in database from both places & historic places table,
+ * leaving out a name that cannot serve as evidence in a text (nameQualifies), and every
+ * name of a type that needs the coordinate as well (a building: its names include
+ * common words, and a text alone cannot place the feature at it)
  * @returns map of places and their type (address, street, etc)
  */
 export async function getPlaceMap() {
@@ -128,7 +133,8 @@ export async function getPlaceMap() {
     const placeMap = new Map<string, string>();
 
     for (const row of results.rows) {
-        if (row.name) {
+        const type = row.type as PlaceType;
+        if (row.name && !EVIDENCE_TYPES.includes(type) && nameQualifies(row.name, type)) {
             placeMap.set(row.name, row.type);
         }
     }

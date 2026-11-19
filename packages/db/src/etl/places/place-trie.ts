@@ -4,7 +4,7 @@
  * isTerminal defines if a node is an actual location. 
  * Type corresponds to the type of location (street, address, etc.)
  */
-import { normalizeName } from './normalize';
+import { nameTokens } from './normalize';
 
 export interface node {
     value?: string
@@ -32,8 +32,8 @@ export class PlaceTrie {
         for (const place of map) {
             let current: node = root;
             
-            // indexed by the normalised words; the value keeps the name as the index spells it
-            const words: string[] = normalizeName(place[0]).split(' ')
+            // indexed by the words every scanner reads (nameTokens); the value keeps the name as the index spells it
+            const words: string[] = nameTokens(place[0])
 
             for (const word of words) {
                 if (!current.children.has(word)) {
@@ -78,7 +78,7 @@ export class PlaceTrie {
         if (!this.root) { return [] }
 
         const matches: node[] = []
-        const words = normalizeName(text).split(' ');
+        const words = nameTokens(text);
 
         for (let i = 0; i < words.length; i++) {
             let current = this.root
