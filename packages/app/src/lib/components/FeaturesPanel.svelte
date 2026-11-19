@@ -79,7 +79,6 @@
 	{selectionPeriod}
 	{timeline}
 	{dimensions}
-	{gridColumns}
 	{sortMode}
 	{onSortChange}
 	{onShuffle}

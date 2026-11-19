@@ -1,8 +1,9 @@
 /**
- * Cinema Context ingestion: a programme with a film is a ScreeningEvent screened at
- * its venue, one with acts only a TheaterEvent performed there; a programme without items or an
- * unreadable date is skipped. The label is the first item on the programme. The place is
- * the venue's address matched by name, with the point as fallback.
+ * Cinema Context ingestion: only the films are kept. A programme is a ScreeningEvent
+ * screened at its venue with its films as items and its live acts left out; a programme
+ * without a film, without items or with an unreadable date is not ingested. The label is
+ * the first film. The place is the venue's address matched by name, with the point as
+ * fallback.
  *
  * Fixture: two programmes at a named address (one with an act before its film), one
  * at an address written as a range, an acts-only programme without a permanent id,
@@ -11,11 +12,11 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { resolve } from 'path';
-import type { ScreeningEventEntity, TheaterEventEntity } from '@atm/shared';
+import type { ScreeningEventEntity } from '@atm/shared';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
 import { parseProgrammeDate } from '../etl/sources/cinema-context';
 
-type Row = { id: string; url: string; label: string; record_type: string; start: string; end: string; entity: ScreeningEventEntity | TheaterEventEntity; place_id: string; relation_id: string };
+type Row = { id: string; url: string; label: string; record_type: string; start: string; end: string; entity: ScreeningEventEntity; place_id: string; relation_id: string };
 
 describe('cinema-context ingestion', () => {
   beforeAll(async () => {
@@ -46,17 +47,17 @@ describe('cinema-context ingestion', () => {
     return r.rows;
   }
 
-  test('a programme needs items and a readable date', async () => {
+  test('a programme needs a film and a readable date: the acts-only programme is not ingested', async () => {
     const all = await rows();
-    expect(all.length).toBe(4);
+    expect(all.length).toBe(3);
     expect(all.every((f) => f.record_type === 'event')).toBe(true);
+    expect(all.find((f) => f.start === '1934-01-12')).toBeUndefined();
   });
 
-  test('the label is the first item on the programme, film or act', async () => {
+  test('the label is the first film, also when an act comes before it', async () => {
     const all = await rows();
     expect(all.find((f) => f.start === '1934-01-05')!.label).toBe('Skippy (1931)');
-    expect(all.find((f) => f.start === '1960-03-04')!.label).toBe('Mello Wendini, komisch dressuur act');
-    expect(all.find((f) => f.start === '1934-01-12')!.label).toBe('Allison Troep, acrobaten');
+    expect(all.find((f) => f.start === '1960-03-04')!.label).toBe('Can-can (1960)');
   });
 
   test('the address matches by name; a range falls back to the point', async () => {
@@ -65,41 +66,29 @@ describe('cinema-context ingestion', () => {
     expect(all.find((f) => f.start === '1907-05-01')!.place_id).toBe('cc-point');
   });
 
-  test('the lead item sets the type and the relation: a film opens a screening, an act a theatre event', async () => {
+  test('every programme is a screening, screened at its venue', async () => {
     const all = await rows();
-    const film = all.find((f) => f.start === '1934-01-05')!;
-    expect(film.entity.type).toBe('ScreeningEvent');
-    expect(film.relation_id).toBe('screenedAt');
-    // an act followed by a film: the act leads, so a theatre event, titled by the act
-    const actFirst = all.find((f) => f.start === '1960-03-04')!;
-    expect(actFirst.entity.type).toBe('TheaterEvent');
-    expect(actFirst.relation_id).toBe('performedAt');
-    const acts = all.find((f) => f.start === '1934-01-12')!;
-    expect(acts.entity.type).toBe('TheaterEvent');
-    expect(acts.relation_id).toBe('performedAt');
+    expect(all.every((f) => f.entity.type === 'ScreeningEvent')).toBe(true);
+    expect(all.every((f) => f.relation_id === 'screenedAt')).toBe(true);
   });
 
-  test('both relations are dated: the card words a programme\'s date with its place', async () => {
+  test('the one relation is dated: the card words a programme\'s date with its place', async () => {
     const r = await db.execute<{ id: string; dated: boolean }>(sql`SELECT id, dated FROM relation ORDER BY id`);
-    expect(r.rows).toEqual([{ id: 'performedAt', dated: true }, { id: 'screenedAt', dated: true }]);
+    expect(r.rows).toEqual([{ id: 'screenedAt', dated: true }]);
   });
 
-  test("the entity carries the venue as the source has it and the items in the source's order", async () => {
+  test("the entity carries the venue as the source has it and only the films, in the source's order", async () => {
     const all = await rows();
     const mixed = all.find((f) => f.start === '1960-03-04')!.entity;
     expect(mixed.id).toBe('V000002');
-    expect(mixed.name).toBe('Mello Wendini, komisch dressuur act');
+    expect(mixed.name).toBe('Can-can (1960)');
     expect(mixed.location).toEqual({ type: 'Place', name: 'Rialto', identifier: 'B000001', url: 'https://cinemacontext.nl/id/B000001', additionalType: 'Cinema', address: 'Ceintuurbaan 338' });
     expect(mixed.items).toEqual([
-      { type: 'LiveAct', name: 'Mello Wendini, komisch dressuur act' },
       { type: 'Movie', name: 'Can-can (1960)', url: 'https://cinemacontext.nl/id/F000002', dateCreated: '1960', countryOfOrigin: 'USA' }
     ]);
     for (const gone of ['citation', 'workPresented', 'performer']) {
       expect(mixed).not.toHaveProperty(gone);
     }
-    const acts = all.find((f) => f.start === '1934-01-12')!;
-    expect(acts.url).toBe('');
-    expect(acts.entity.items).toEqual([{ type: 'LiveAct', name: 'Allison Troep, acrobaten' }, { type: 'LiveAct', name: 'Alfonso Avello Combination, pantomime' }]);
   });
 
   test('dates keep the source precision', async () => {

@@ -1,13 +1,16 @@
-<!-- The filter panel's choice list: outline tags that toggle, one of them required unless told otherwise; with counts, each shows what pressing it leaves -->
+<!-- The filter panel's choice list: outline tags that toggle, one of them required unless told otherwise; items are ids shown by their label, and with counts each shows what pressing it leaves -->
 <script lang="ts">
 	import Check from 'phosphor-svelte/lib/Check';
 	import Tag from './Tag.svelte';
 	import { ToggleGroup } from '#lib/builders/toggle-group.js';
 
 	interface Props {
+		// ids; the selection and the counts speak in them
 		items: string[];
 		selectedItems: string[];
-		// what each item is worth under the other filters, by item; absent while loading
+		// the text an id shows as
+		label: (id: string) => string;
+		// what each item is worth under the other filters, by id; absent while loading
 		counts?: Map<string, number>;
 		onItemSelected: (selected: string[]) => void;
 		requireOne?: boolean;
@@ -18,6 +21,7 @@
 	let {
 		items,
 		selectedItems,
+		label,
 		counts,
 		onItemSelected,
 		requireOne = true,
@@ -31,17 +35,19 @@
 		labelledBy: () => labelledBy
 	});
 
-	const sortedItems = $derived([...items].sort());
+	const sortedItems = $derived(
+		items.map((id) => ({ id, text: label(id) })).sort((a, b) => a.text.localeCompare(b.text))
+	);
 </script>
 
 <div {...group.root} class="flex flex-col items-start gap-1">
-	{#each sortedItems as item (item)}
-		{@const selected = selectedItems.includes(item)}
-		{@const count = counts?.get(item)}
+	{#each sortedItems as { id, text } (id)}
+		{@const selected = selectedItems.includes(id)}
+		{@const count = counts?.get(id)}
 		<button
-			{...group.item(item, false)}
-			aria-label={item}
-			title={item}
+			{...group.item(id, false)}
+			aria-label={text}
+			title={text}
 			class="focus-ring flex items-center gap-2 pb-1 w-full text-left cursor-pointer"
 		>
 			<span
@@ -53,9 +59,9 @@
 				{/if}
 			</span>
 			{#if selected}
-				<Tag variant="selected-outline" interactive={true}>{item}</Tag>
+				<Tag variant="selected-outline" interactive={true}>{text}</Tag>
 			{:else}
-				<Tag variant="outline" interactive={true}>{item}</Tag>
+				<Tag variant="outline" interactive={true}>{text}</Tag>
 			{/if}
 			{#if count !== undefined}
 				<span class="text-sm text-gray-500 tabular-nums">{count}</span>

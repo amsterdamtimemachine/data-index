@@ -12,6 +12,12 @@ import { DateRange, ExtractionArgs, PlaceIndex, Resolved, SkipReason } from '../
 
 export type Draft = Omit<NewFeature, 'recordType' | 'datasetId'>
 
+// How many rows resolve their place at the same time. The lookups wait on the database
+// more than they compute, so several at once pay off on a machine with cores to spare;
+// on a single core set INGEST_CONCURRENCY=1. Kept under the connection pool's size.
+const MAX_CONCURRENCY = 10;
+const CONCURRENCY = Math.min(Math.max(parseInt(process.env.INGEST_CONCURRENCY ?? '8', 10) || 8, 1), MAX_CONCURRENCY);
+
 /**
  * Abstract class used for ingesting datasets. Use as follows:
  * 1. Create new file, create a new exportable class extending this Ingestor-class
@@ -133,10 +139,24 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
         let noData = 0   // transform produced no draft
         let errors = 0
 
-        for await (const source of sources) {
+        // a row's failure is the row's, not the run's
+        const resolveRow = async (source: SourceRecord) => {
             try {
-                const [feature, resolved] = await this.sourceToFeature(source)
+                return { source, row: await this.sourceToFeature(source) }
+            } catch (error) {
+                return { source, error }
+            }
+        }
 
+        // the rows of a chunk resolve together, then are counted and written in the file's order
+        const settle = async (chunk: SourceRecord[]) => {
+            for (const { source, row, error } of await Promise.all(chunk.map(resolveRow))) {
+                if (!row) {
+                    console.error(`Failed to process row: ${JSON.stringify(source).slice(0, 200)}:`, error)
+                    errors++
+                    continue
+                }
+                const [feature, resolved] = row
                 if (!feature || !resolved) { noData++; continue }
                 if ('skip' in resolved) { skips[resolved.skip]++; continue }
 
@@ -150,13 +170,19 @@ export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
                     this.writer.addLink({ featureId: feature.id, placeId, relationId: this.relationFor(source) })
                     fMap.get(feature.id)?.add(placeId)
                 }
-            } catch (error) {
-                console.error(`Failed to process row: ${source}:`, error)
-                errors++
             }
-
             await this.writer.flushIfFull()
         }
+
+        let chunk: SourceRecord[] = []
+        for await (const source of sources) {
+            chunk.push(source)
+            if (chunk.length >= CONCURRENCY) {
+                await settle(chunk)
+                chunk = []
+            }
+        }
+        await settle(chunk)
 
         await this.writer.flush()
         const skipped = skips.ambiguous + skips['cap-miss'] + skips.undated + skips['no-match'] + noData + errors

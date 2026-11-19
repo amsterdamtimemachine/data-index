@@ -7,7 +7,7 @@
 	import { asset } from '$app/paths';
 	import type { PlaceSearchMatch, VisualizationMetadata } from '@atm/shared/types';
 	import type { FilterState } from '#lib/types/filters.js';
-	import { translate, translateAll, reverseTranslateAll } from '#lib/utils/translations.js';
+	import { translate } from '#lib/utils/translations.js';
 	import { navigateParams, withoutPlace } from '#lib/utils/navigate.js';
 	import { createFilterCounts } from '#lib/state/filter-counts.svelte.js';
 	import Heading from './Heading.svelte';
@@ -61,20 +61,10 @@
 	const currentTagOperator = $derived(filters.tagOperator);
 	const currentSearchQuery = $derived(filters.searchQuery);
 
-	// Dutch labels for display; the handlers translate the selection back before writing it.
-	let translatedRecordTypes = $derived(translateAll(recordTypes));
-	let translatedCurrentRecordTypes = $derived(translateAll(filters.recordTypes));
-	let translatedPlaceTypes = $derived(translateAll(placeTypes));
-	let translatedCurrentPlaceTypes = $derived(translateAll(filters.placeTypes));
-
-	let datasetLabels = $derived(datasets.map((s) => s.label));
+	// the toggle groups speak in ids; a dataset shows its own label, the rest are translated
 	let datasetLookup = $derived(new Map(datasets.map((s) => [s.id, s.label])));
 	const datasetIds = $derived(datasets.map((s) => s.id));
-	let currentDatasetLabels = $derived(filters.datasets.map((id) => datasetLookup.get(id) || id));
-
-	// Tags render by Dutch label like the other filters; the handler translates back.
-	let translatedTags = $derived(translateAll(availableTags));
-	let translatedCurrentTags = $derived(translateAll(currentTags));
+	const datasetLabel = (id: string) => datasetLookup.get(id) || id;
 
 	// What every filter value is worth under the other filters, the period and the scope,
 	// shown beside it. The applied filters travel as they are, an emptied category as
@@ -102,28 +92,21 @@
 			filterCounts.reset();
 		}
 	});
-	// a list's counts keyed by the label the toggle shows, every known value present
-	function countsByLabel(
+	// a list's counts by id, every known value present
+	function countsById(
 		ids: string[],
-		label: (id: string) => string,
 		counted: ValueCount[] | undefined
 	): Map<string, number> | undefined {
 		if (!counted) {
 			return undefined;
 		}
 		const byId = new Map(counted.map((c) => [c.id, c.count]));
-		return new Map(ids.map((id) => [label(id), byId.get(id) ?? 0]));
+		return new Map(ids.map((id) => [id, byId.get(id) ?? 0]));
 	}
-	const recordTypeCounts = $derived(
-		countsByLabel(recordTypes, translate, filterCounts.counts?.recordTypes)
-	);
-	const datasetCounts = $derived(
-		countsByLabel(datasetIds, (id) => datasetLookup.get(id) || id, filterCounts.counts?.datasets)
-	);
-	const placeTypeCounts = $derived(
-		countsByLabel(placeTypes, translate, filterCounts.counts?.placeTypes)
-	);
-	const tagCounts = $derived(countsByLabel(availableTags, translate, filterCounts.counts?.tags));
+	const recordTypeCounts = $derived(countsById(recordTypes, filterCounts.counts?.recordTypes));
+	const datasetCounts = $derived(countsById(datasetIds, filterCounts.counts?.datasets));
+	const placeTypeCounts = $derived(countsById(placeTypes, filterCounts.counts?.placeTypes));
+	const tagCounts = $derived(countsById(availableTags, filterCounts.counts?.tags));
 
 	// a category's param: absent for everything, NONE for nothing, else the picks
 	function writeCategory(p: URLSearchParams, name: Category, values: string[], all: string[]) {
@@ -137,19 +120,15 @@
 	}
 
 	function handleRecordTypeChange(selected: string[]) {
-		const english = reverseTranslateAll(selected);
-		navigateParams((p) => writeCategory(p, 'recordTypes', english, recordTypes));
+		navigateParams((p) => writeCategory(p, 'recordTypes', selected, recordTypes));
 	}
 
 	function handleDatasetChange(selected: string[]) {
-		const labelToId = new Map(datasets.map((s) => [s.label, s.id]));
-		const ids = selected.map((label) => labelToId.get(label) || label);
-		navigateParams((p) => writeCategory(p, 'datasets', ids, datasetIds));
+		navigateParams((p) => writeCategory(p, 'datasets', selected, datasetIds));
 	}
 
 	function handlePlaceTypeChange(selected: string[]) {
-		const raw = reverseTranslateAll(selected);
-		navigateParams((p) => writeCategory(p, 'placeTypes', raw, placeTypes));
+		navigateParams((p) => writeCategory(p, 'placeTypes', selected, placeTypes));
 	}
 
 	// the header button: with everything pressed it releases all, else it presses all
@@ -158,9 +137,7 @@
 		navigateParams((p) => writeCategory(p, name, allPressed ? [] : all, all));
 	}
 
-	function handleTagsChange(selected: string[]) {
-		const dutch = selected;
-		const ids = reverseTranslateAll(dutch);
+	function handleTagsChange(ids: string[]) {
 		navigateParams((p) => {
 			if (ids.length > 0) p.set('tags', ids.join(','));
 			else p.delete('tags');
@@ -270,8 +247,9 @@
 			{/snippet}
 			{#snippet children(headingId)}
 				<FilterToggleGroup
-					items={translatedRecordTypes}
-					selectedItems={translatedCurrentRecordTypes}
+					items={recordTypes}
+					selectedItems={filters.recordTypes}
+					label={translate}
 					counts={recordTypeCounts}
 					onItemSelected={handleRecordTypeChange}
 					requireOne={false}
@@ -290,8 +268,9 @@
 		{/snippet}
 		{#snippet children(headingId)}
 			<FilterToggleGroup
-				items={datasetLabels}
-				selectedItems={currentDatasetLabels}
+				items={datasetIds}
+				selectedItems={filters.datasets}
+				label={datasetLabel}
 				counts={datasetCounts}
 				onItemSelected={handleDatasetChange}
 				requireOne={false}
@@ -310,8 +289,9 @@
 			{/snippet}
 			{#snippet children(headingId)}
 				<FilterToggleGroup
-					items={translatedPlaceTypes}
-					selectedItems={translatedCurrentPlaceTypes}
+					items={placeTypes}
+					selectedItems={filters.placeTypes}
+					label={translate}
 					counts={placeTypeCounts}
 					onItemSelected={handlePlaceTypeChange}
 					requireOne={false}
@@ -340,8 +320,9 @@
 					class="mb-2"
 				/>
 				<FilterToggleGroup
-					items={translatedTags}
-					selectedItems={translatedCurrentTags}
+					items={availableTags}
+					selectedItems={currentTags}
+					label={translate}
 					counts={tagCounts}
 					onItemSelected={handleTagsChange}
 					requireOne={false}

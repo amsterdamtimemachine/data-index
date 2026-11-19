@@ -20,7 +20,6 @@
 		selectionPeriod?: string;
 		timeline?: HeatmapTimeline;
 		dimensions?: HeatmapDimensions;
-		gridColumns?: number;
 		sortMode: UiSortMode;
 		onSortChange?: (mode: UiSortMode) => void;
 		onShuffle?: () => void;
@@ -40,7 +39,6 @@
 		selectionPeriod,
 		timeline,
 		dimensions,
-		gridColumns,
 		sortMode,
 		onSortChange,
 		onShuffle,
@@ -54,16 +52,6 @@
 	}: Props = $props();
 
 	const hasPagination = $derived(totalCount > pageSize);
-
-	const headerLayout = $derived.by(() => {
-		if (gridColumns === undefined || gridColumns <= 1) {
-			return 'stacked';
-		}
-		if (gridColumns === 2) {
-			return 'split';
-		}
-		return 'inline';
-	});
 
 	const isMobile = createMediaQuery(MOBILE_QUERY);
 
@@ -101,13 +89,21 @@
 	});
 </script>
 
+<!--
+	One layout at every width, with no breakpoints: the map and the count, then the
+	pagination and the sort, on one line when it fits. When it does not, the controls move
+	to a second line, and when that is too narrow for both, the sort wraps under the
+	pagination. The close button keeps the top right corner, which the padding leaves free.
+-->
 <div
-	data-layout={headerLayout}
-	class="panel-header sticky min-h-[50px] p-3 md:p-4 top-0 z-10 bg-atm-sand border-b border-atm-sand-border shadow-panel
-	       grid items-center gap-x-3 gap-y-2"
+	class="sticky top-0 z-10 min-h-[50px] p-3 pr-[calc(0.75rem+32px+0.75rem)] md:p-4 md:pr-[calc(1rem+32px+0.75rem)]
+	       bg-atm-sand border-b border-atm-sand-border shadow-panel
+	       flex flex-wrap items-center gap-x-4 gap-y-2"
 >
-	{#if timeline && dimensions}
-		<div class="header-map">
+	<h2 class="sr-only">{translate('results')}</h2>
+	<!-- the map and the count stay together; the count's text is what gives when it is narrow -->
+	<div class="min-w-0 flex items-center gap-x-3">
+		{#if timeline && dimensions}
 			<MapThumbnail
 				{timeline}
 				{dimensions}
@@ -117,20 +113,22 @@
 				period={thumbnailPeriod}
 				width={thumbnailWidth}
 				height={thumbnailHeight}
+				class="shrink-0"
 			/>
-		</div>
-	{/if}
-	<h2 class="sr-only">{translate('results')}</h2>
+		{/if}
+		{#if !initialLoading && totalCount > 0}
+			<div class="min-w-0">
+				<FeaturesCount count={totalCount} {currentPage} perPage={pageSize}>
+					{#snippet children(shown)}
+						{translate('showing')} {shown} {translate('featureMany')} {populationLabel}
+					{/snippet}
+				</FeaturesCount>
+			</div>
+		{/if}
+	</div>
 	{#if !initialLoading && totalCount > 0}
-		<div class="header-count">
-			<FeaturesCount count={totalCount} {currentPage} perPage={pageSize}>
-				{#snippet children(shown)}
-					{translate('showing')} {shown} {translate('featureMany')} {populationLabel}
-				{/snippet}
-			</FeaturesCount>
-		</div>
-		{#if hasPagination}
-			<div class="header-pages min-w-0">
+		<div class="min-w-0 max-w-full flex flex-wrap items-center gap-x-4 gap-y-2">
+			{#if hasPagination}
 				<Pagination
 					totalItems={totalCount}
 					{currentPage}
@@ -138,56 +136,13 @@
 					{onPageChange}
 					{loading}
 				/>
-			</div>
-		{/if}
-		{#if onSortChange && onShuffle}
-			<div class="header-sort">
+			{/if}
+			{#if onSortChange && onShuffle}
 				<FeaturesSortSelect value={sortMode} onChange={onSortChange} {onShuffle} />
-			</div>
-		{/if}
+			{/if}
+		</div>
 	{/if}
-	<div class="header-close justify-self-end">
+	<div class="absolute top-3 right-3 md:top-4 md:right-4">
 		<Button icon={X} onclick={onClose} size={18} aria-label={translate('closeFeaturesPanel')} />
 	</div>
 </div>
-
-<style lang="postcss">
-	.panel-header {
-		grid-template-areas: 'map count close' 'pages pages .' 'sort sort .';
-		grid-template-columns: auto 1fr auto;
-	}
-	.header-map {
-		grid-area: map;
-	}
-	.header-count {
-		grid-area: count;
-	}
-	.header-pages {
-		grid-area: pages;
-	}
-	.header-sort {
-		grid-area: sort;
-	}
-	.header-close {
-		grid-area: close;
-	}
-
-	/* margins, not column-gap: an absent cell must not leave a gap */
-	/* the count text is the squeezable track (it wraps); pagination stays rigid */
-	.panel-header[data-layout='split'] {
-		grid-template-areas: 'map count sort close' 'pages pages pages pages';
-		grid-template-columns: auto minmax(0, max-content) auto 1fr;
-		column-gap: 0;
-	}
-
-	.panel-header[data-layout='inline'] {
-		grid-template-areas: 'map count pages sort close';
-		grid-template-columns: auto minmax(0, max-content) max-content auto 1fr;
-		column-gap: 0;
-	}
-
-	.panel-header[data-layout='split'] :is(.header-map, .header-count, .header-sort),
-	.panel-header[data-layout='inline'] :is(.header-map, .header-count, .header-pages, .header-sort) {
-		margin-right: 1rem;
-	}
-</style>

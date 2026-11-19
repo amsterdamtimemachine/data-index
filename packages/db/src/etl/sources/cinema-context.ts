@@ -4,11 +4,10 @@
  *
  * Reads the JSONL exported from the Cinema Context database dump: one line per
  * programme with its venue, the venue's address as written and its point, the items
- * in order, and the newspapers it was listed in. A programme is valid with at least
- * one film or act on its programme; a programme without items is skipped. The label is the first
- * item on the programme, and that item sets the kind: a programme opening with a film is a
- * ScreeningEvent screened at its venue, one opening with an act a TheaterEvent
- * performed there.
+ * in order, and the newspapers it was listed in. Only the films are kept: a programme
+ * becomes a ScreeningEvent screened at its venue with its films as items, its live acts
+ * are left out, and a programme without a film is not ingested. The label is the
+ * first film.
  *
  * The place is the venue's address, matched by name against the dated address names;
  * a match outside its register's era moves to the same address as the other source
@@ -19,7 +18,7 @@
  * Usage: bun run db:ingest -s cinema-context -f <path-to-cinema-context.jsonl>
  */
 import { Draft, Ingestor } from '../ingest/ingestor';
-import { ProgrammeEntityFactory, programmeItems, leadsWithFilm, type SourceItem } from '../ingest/entity-factory';
+import { ProgrammeEntityFactory, type SourceItem } from '../ingest/entity-factory';
 import { ExtractionArgs, PlaceExtractionMethod } from '../places/place-index';
 import { RecordType, parsePartialDate, partialDateRange } from '@atm/shared';
 
@@ -37,15 +36,10 @@ type CinemaContextRecord = {
 };
 
 const SCREENED_AT = { id: 'screenedAt', label: 'Screened at', dated: true };
-const PERFORMED_AT = { id: 'performedAt', label: 'Performed at', dated: true };
 
-/** The first item on the programme, film or act, as the source words it. */
-function firstItem(items: SourceItem[]): string | undefined {
-  for (const item of items) {
-    if (item.title) return item.title;
-    if (item.live) return item.live;
-  }
-  return undefined;
+/** The first film on the programme, as the source words it; none without a film. */
+function firstFilm(items: SourceItem[]): string | undefined {
+  return items.find((item) => item.title)?.title;
 }
 
 /** The programme's period at the source's precision; null when unparseable. */
@@ -78,21 +72,14 @@ export class CinemaContextIngestor extends Ingestor<CinemaContextRecord> {
     return new ProgrammeEntityFactory();
   }
 
+  // dated: the card words a programme's date with its place
   protected override relations() {
-    return [SCREENED_AT, PERFORMED_AT];
-  }
-
-  // screened at with a film on the programme, performed at with acts only
-  protected override relationFor(source: CinemaContextRecord): string {
-    if (leadsWithFilm(programmeItems(source.items ?? []))) {
-      return SCREENED_AT.id;
-    }
-    return PERFORMED_AT.id;
+    return [SCREENED_AT];
   }
 
   protected transform(source: CinemaContextRecord): Draft | undefined {
     const dates = parseProgrammeDate(source.date);
-    const first = firstItem(source.items ?? []);
+    const first = firstFilm(source.items ?? []);
     if (!dates || !first) {
       return undefined;
     }
