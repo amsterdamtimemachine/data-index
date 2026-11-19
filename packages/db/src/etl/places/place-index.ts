@@ -1,10 +1,10 @@
 import { PlaceTrie } from "./place-trie";
-import { getPlaceMap, inferByAdamURI, inferByName, inferByPoint } from "./place-inference";
+import { getPlaceMap, inferByAdamURI, inferByName, inferByPoint, inferByPointConfirmed } from "./place-inference";
 
 /**
  * Different types of methods for extracting places from objects
  */
-export enum PlaceExtractionMethod { TEXT, WKT, URI }
+export enum PlaceExtractionMethod { TEXT, WKT, URI, NAME }
 
 /**
  * Object used for args for the place-extraction-methods. 
@@ -12,10 +12,12 @@ export enum PlaceExtractionMethod { TEXT, WKT, URI }
  * it falls back on the next method defined in array
  * method: type of method used
  * column: from which column should the alg extract data 
+ * confirmBy: WKT only; a text column whose place names decide between the point's neighbours
  */
 export type ExtractionArgs<SourceRecord> = {
   method: PlaceExtractionMethod;
   column: Extract<keyof SourceRecord, string>; 
+  confirmBy?: Extract<keyof SourceRecord, string>;
 }[];
 
 export type DateRange = { start: string; end: string };
@@ -27,8 +29,12 @@ export type SkipReason = 'ambiguous' | 'cap-miss' | 'undated' | 'no-match';
 export type Resolved = { placeId: string } | { skip: SkipReason };
 
 const SKIP_PRECEDENCE: SkipReason[] = ['ambiguous', 'cap-miss', 'undated', 'no-match'];
-const moreSpecificSkip = (a: SkipReason | undefined, b: SkipReason): SkipReason =>
-    a !== undefined && SKIP_PRECEDENCE.indexOf(a) <= SKIP_PRECEDENCE.indexOf(b) ? a : b;
+function moreSpecificSkip(a: SkipReason | undefined, b: SkipReason): SkipReason {
+    if (a !== undefined && SKIP_PRECEDENCE.indexOf(a) <= SKIP_PRECEDENCE.indexOf(b)) {
+        return a;
+    }
+    return b;
+}
 
 type InferPlaceArgs = {
     area: string;
@@ -108,10 +114,19 @@ export class PlaceIndex<SourceRecord extends Record<string, any>> {
 
             switch (method.method) {
                 case PlaceExtractionMethod.WKT:
-                    res = await inferByPoint(JSON.stringify({ wkt: value, start: dateRange.start, end: dateRange.end }))
+                    if (method.confirmBy) {
+                        const text = String(source[method.confirmBy] ?? '')
+                        res = await inferByPointConfirmed(value, text, dateRange.start, dateRange.end)
+                    } else {
+                        res = await inferByPoint(JSON.stringify({ wkt: value, start: dateRange.start, end: dateRange.end }))
+                    }
                     break
                 case PlaceExtractionMethod.URI:
                     res = await inferByAdamURI(value)
+                    break
+                case PlaceExtractionMethod.NAME:
+                    // the whole value is one place name, matched exactly and era-ranked
+                    res = await inferByName(JSON.stringify({ area: value, start: dateRange.start, end: dateRange.end } as InferPlaceArgs))
                     break
                 case PlaceExtractionMethod.TEXT:
                 default:

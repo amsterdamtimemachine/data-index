@@ -48,7 +48,7 @@ export class NwbStreetsFetcher extends PdokFetcher<NwbProps> {
   // NWB returns one feature per road segment; a street is many segments sharing a
   // bagOrl (BAG openbareruimte). Merge them into one MultiLineString per street,
   // preferring carriageway geometry and falling back to footpath for pedestrian-only ways.
-  protected async *places(g: Gemeente): AsyncGenerator<PlaceDraft> {
+  protected override async *places(g: Gemeente): AsyncGenerator<PlaceDraft> {
     const groups = new Map<string, { props: NwbProps; street: Position[][]; foot: Position[][] }>();
     for await (const seg of this.page(this.service(), this.layers[0], this.gemeenteFilter(g))) {
       if (!this.keep(seg.properties)) continue;
@@ -67,11 +67,17 @@ export class NwbStreetsFetcher extends PdokFetcher<NwbProps> {
   protected toPlace(feature: Feature<Geometry, NwbProps>): PlaceDraft {
     const p = feature.properties;
     const bagOrl = p.bagOrl?.trim() || null;
+    let id = `nwb-${p.gmeId}-${slug(p.sttNaam!)}`;
+    let url: string | null = null;
+    if (bagOrl) {
+      id = `nwb-${bagOrl}`;
+      url = `https://bagviewer.kadaster.nl/lvbag/bag-viewer/#?searchQuery=${bagOrl}`;
+    }
     return {
-      id: bagOrl ? `nwb-${bagOrl}` : `nwb-${p.gmeId}-${slug(p.sttNaam!)}`,
+      id,
       type: 'street',
       name: p.sttNaam!,
-      url: bagOrl ? `https://bagviewer.kadaster.nl/lvbag/bag-viewer/#?searchQuery=${bagOrl}` : null,
+      url,
       geometry: feature.geometry,
     };
   }

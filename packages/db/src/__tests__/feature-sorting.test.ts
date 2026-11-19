@@ -73,7 +73,7 @@ describe('feature sorting', () => {
     await setupTestDb();
     await cleanTestDb();
 
-    await db.execute(sql`INSERT INTO organisations (id, label) VALUES ('adamlink', 'A')`);
+    await db.execute(sql`INSERT INTO agents (id, label) VALUES ('adamlink', 'A')`);
     await db.execute(sql`INSERT INTO datasets (id, label) VALUES ('dsA', 'Dataset A'), ('dsB', 'Dataset B')`);
     await db.execute(sql`INSERT INTO relation (id, label) VALUES ('isAbout', 'About') ON CONFLICT (id) DO NOTHING`);
 
@@ -202,38 +202,6 @@ describe('feature sorting', () => {
         expect(labels.indexOf(`${type}-${dataset}-1`)).toBeLessThan(
           labels.indexOf(`${type}-${dataset}-0`)
         );
-      }
-    }
-  });
-
-  function relevanceScore(f: FeatureResult, maxSpatial: number, maxTemporal: number): number {
-    return f.spatialFrequency / maxSpatial + f.temporalFrequency / maxTemporal;
-  }
-
-  test('relevance: rotates record types and orders each lane most-unique first', async () => {
-    const cfg = await getGridConfig();
-    const data = await fetchAll('relevance');
-    expect(data.length).toBe(16);
-    assertRoundRobin(data.map((f) => f.recordType));
-    for (const type of TYPES) {
-      const lane = data.filter((f) => f.recordType === type);
-      for (let i = 1; i < lane.length; i++) {
-        const prev = relevanceScore(lane[i - 1], cfg.maxSpatialFrequency, cfg.maxTemporalFrequency);
-        const curr = relevanceScore(lane[i], cfg.maxSpatialFrequency, cfg.maxTemporalFrequency);
-        expect(curr).toBeGreaterThanOrEqual(prev - 1e-9);
-      }
-    }
-  });
-
-  test('relevance: asc direction flips each lane to least-unique first', async () => {
-    const cfg = await getGridConfig();
-    const data = await fetchAll('relevance', { sortDirection: 'asc' });
-    for (const type of TYPES) {
-      const lane = data.filter((f) => f.recordType === type);
-      for (let i = 1; i < lane.length; i++) {
-        const prev = relevanceScore(lane[i - 1], cfg.maxSpatialFrequency, cfg.maxTemporalFrequency);
-        const curr = relevanceScore(lane[i], cfg.maxSpatialFrequency, cfg.maxTemporalFrequency);
-        expect(curr).toBeLessThanOrEqual(prev + 1e-9);
       }
     }
   });

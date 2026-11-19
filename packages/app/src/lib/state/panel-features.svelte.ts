@@ -1,13 +1,15 @@
 /** Reactive fetcher for the features panel's population. */
-import { loadingState } from '$lib/state/loadingState.svelte';
-import { createError, createPageErrorData } from '$utils/error';
+import { loadingState } from '#lib/state/loadingState.svelte.js';
 import { untrack } from 'svelte';
 import type { FeatureResult, PlaceSearchMatch } from '@atm/shared/types';
-import type { FilterState } from '$types/filters';
-import { filterParams } from '$utils/filters';
-import type { UiSortMode } from '$components/FeaturesSortSelect.svelte';
-import type { AppError } from '$types/error';
-import { apiUrl } from '$utils/api';
+import type { FilterState } from '#lib/types/filters.js';
+import { filterParams } from '#lib/utils/filters.js';
+import type { UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
+import { apiUrl } from '#lib/utils/api.js';
+import { notifyFailure } from '#lib/state/notify.js';
+import { announcer } from '#lib/a11y/announcer.svelte.js';
+import { resultsSentence } from '#lib/a11y/announcements.js';
+import { subjectPhrase } from '#lib/utils/format.js';
 
 /**
  * What the panel is showing: one display cell (picked on the map) or a place's
@@ -36,9 +38,6 @@ function sortParams(query: PanelFeaturesQuery): Record<string, string> {
 	}
 	if (query.sortMode === 'temporal') {
 		return { sort: 'datePrecision', sortDirection: 'desc' };
-	}
-	if (query.sortMode === 'relevance') {
-		return { sort: 'relevance', sortDirection: 'desc' };
 	}
 	if (query.sortMode === 'bestMatch') {
 		return { sort: 'bestMatch', sortDirection: 'desc' };
@@ -77,13 +76,6 @@ function subjectParams(subject: PanelSubject): Record<string, string> {
 	};
 }
 
-function subjectContext(subject: PanelSubject): Record<string, string> {
-	if (subject.kind === 'cell') {
-		return { cellId: subject.cellId };
-	}
-	return { placeId: subject.place.placeId };
-}
-
 export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 	let features = $state<FeatureResult[]>([]);
 	let currentPage = $state(1);
@@ -91,8 +83,6 @@ export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 	let pageSize = $state(100);
 	let loading = $state(false);
 	let initialLoading = $state(true);
-	let errors = $state<AppError[]>([]);
-	const errorData = $derived(createPageErrorData(errors));
 
 	async function loadPage(page: number = 1) {
 		const query = getQuery();
@@ -112,7 +102,7 @@ export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 
 			const response = await fetch(apiUrl('/api/features', params));
 			if (!response.ok) {
-				throw new Error(`HTTP ${response.status}`);
+				throw response;
 			}
 
 			const data = await response.json();
@@ -121,18 +111,9 @@ export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 			currentPage = data.page || 1;
 			totalCount = data.total || 0;
 			pageSize = data.pageSize || 50;
-
-			errors = [];
+			announcer.announce(resultsSentence(totalCount, currentPage, pageSize, subjectPhrase(query.subject)));
 		} catch (err) {
-			console.error('Error loading panel data:', err);
-			errors = [
-				createError(
-					'error',
-					'Panel Data Load Failed',
-					err instanceof Error ? err.message : 'Failed to load panel data',
-					{ ...subjectContext(getQuery().subject), period: getQuery().period, page }
-				)
-			];
+			notifyFailure('featuresNotLoaded', err);
 		} finally {
 			loading = false;
 			loadingState.stopLoading();
@@ -153,7 +134,6 @@ export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 		currentPage = 1;
 		totalCount = 0;
 		pageSize = 100;
-		errors = [];
 		initialLoading = true;
 
 		untrack(() => {
@@ -181,9 +161,6 @@ export function createPanelFeatures(getQuery: () => PanelFeaturesQuery) {
 		},
 		get initialLoading() {
 			return initialLoading;
-		},
-		get errorData() {
-			return errorData;
 		},
 		changePage
 	};

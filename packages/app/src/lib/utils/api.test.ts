@@ -1,6 +1,6 @@
 import { describe, test, expect, vi } from 'vitest';
 
-vi.mock('$app/paths', () => ({ base: '/x' }));
+vi.mock('$app/paths', () => ({ resolve: (route: string) => `/x${route}` }));
 
 import { apiUrl } from './api';
 

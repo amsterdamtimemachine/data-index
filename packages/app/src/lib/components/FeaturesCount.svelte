@@ -1,27 +1,31 @@
+<!--
+	A count line. The component owns the number: the total, or the shown range of a
+	page when page props are given. The parent words the sentence around it through
+	the children snippet, which receives the number as text.
+-->
 <script lang="ts">
+	import type { Snippet } from 'svelte';
+
 	interface Props {
-		totalFeatures: number;
-		currentPage: number;
-		featuresPerPage: number;
-		// names the count's population, e.g. "van deze cel"
-		populationLabel?: string;
+		count: number;
+		currentPage?: number;
+		perPage?: number;
+		class?: string;
+		children: Snippet<[shown: string]>;
 	}
 
-	let { totalFeatures, currentPage, featuresPerPage, populationLabel = '' }: Props = $props();
+	let { count, currentPage, perPage, class: className, children }: Props = $props();
 
-	const totalPages = $derived(Math.ceil(totalFeatures / featuresPerPage));
-	const showingStart = $derived((currentPage - 1) * featuresPerPage + 1);
-	const showingEnd = $derived(Math.min(currentPage * featuresPerPage, totalFeatures));
-	const isPaginated = $derived(totalPages > 1);
-	
-	// English pluralization: "feature" (singular) vs "features" (plural)
-	const featuresText = $derived(totalFeatures === 1 ? 'feature' : 'features');
+	const shown = $derived.by(() => {
+		if (currentPage === undefined || perPage === undefined || count <= perPage) {
+			return String(count);
+		}
+		const start = (currentPage - 1) * perPage + 1;
+		const end = Math.min(currentPage * perPage, count);
+		return `${start}-${end} / ${count}`;
+	});
 </script>
 
-<p class="text-base text-gray-700">
-		{#if isPaginated}
-        Toont {showingStart}-{showingEnd} / {totalFeatures} {featuresText} {populationLabel}
-    {:else}
-        Toont {totalFeatures} {featuresText} {populationLabel}
-	{/if}
+<p class="text-base text-gray-700 {className || ''}">
+	{@render children(shown)}
 </p>

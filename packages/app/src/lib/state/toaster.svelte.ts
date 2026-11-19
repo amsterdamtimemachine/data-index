@@ -2,8 +2,9 @@ import { Toaster } from 'melt/builders';
 
 export type ToastData = {
 	title: string;
-	description: string;
-	type?: 'success' | 'error' | 'warning' | 'info';
+	description?: string;
+	// something failed to load: drawn with a red outline
+	failure?: boolean;
 };
 
 // App-wide singleton: any component imports addToast to fire a toast; Toaster.svelte

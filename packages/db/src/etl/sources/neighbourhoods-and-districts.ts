@@ -117,10 +117,15 @@ export async function ingest(filePath: string) {
     // Present-day (CBS) → open-ended window from the vintage year; historical units →
     // their own TTL begin/end (e.g. an 1850 buurt → since 1850, until 1909).
     const end = endYears.get(uri) ?? null;
-    const since = cbs
-      ? (type === 'district' ? CBS_WIJK_VALID_SINCE : CBS_BUURT_VALID_SINCE)
-      : `${begin}-01-01`;
-    const until = cbs ? null : (end ? `${end}-01-01` : null);
+    let since = `${begin}-01-01`;
+    let until: string | null = null;
+    if (cbs && type === 'district') {
+      since = CBS_WIJK_VALID_SINCE;
+    } else if (cbs) {
+      since = CBS_BUURT_VALID_SINCE;
+    } else if (end) {
+      until = `${end}-01-01`;
+    }
 
     districts.push({ uri, label, wkt, type, since, until });
   }

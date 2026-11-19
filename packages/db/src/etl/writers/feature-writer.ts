@@ -1,12 +1,12 @@
 /**
- * Feature-side DB writers: register a source's organisation/dataset/relation, and
+ * Feature-side DB writers: register a source's provider/dataset/relation, and
  * batch feature + feature_to_place link inserts. Used by the feature-ingest base
  * (ingest/ingestor.ts).
  */
 import { sql, inArray } from 'drizzle-orm';
 import { db } from '../../client';
 import {
-  organisations,
+  agents,
   datasets,
   relation,
   features,
@@ -16,21 +16,27 @@ import {
 
 type Link = { featureId: string; placeId: string; relationId: string };
 
+/** A relation a source links with; `dated` when the feature's date belongs to it. */
+export type SourceRelation = { id: string; label: string; dated?: boolean };
+
 /**
- * Upsert a source's organisation, dataset and (optionally) relation rows.
- * Idempotent — safe to call at the top of every ingest run.
+ * Upsert a source's provider (an Organization agent), dataset and (optionally)
+ * relation rows. Idempotent — safe to call at the top of every ingest run.
  */
 export async function upsertSource(opts: {
-  organisation: { id: string; label: string; url?: string };
-  dataset: { id: string; label: string; url?: string };
-  relation?: { id: string; label: string };
+  provider: { id: string; label: string; url?: string };
+  dataset: { id: string; label: string; url?: string; distributionUrl?: string };
+  relations?: SourceRelation[];
 }): Promise<void> {
-  await db.insert(organisations).values(opts.organisation).onConflictDoNothing();
+  await db.insert(agents).values({ ...opts.provider, kind: 'Organization' }).onConflictDoNothing();
+  const dataset = { ...opts.dataset, distributionUrl: opts.dataset.distributionUrl ?? null, providerId: opts.provider.id };
   await db.insert(datasets)
-    .values({ ...opts.dataset, organisationId: opts.organisation.id })
-    .onConflictDoNothing();
-  if (opts.relation) {
-    await db.insert(relation).values(opts.relation).onConflictDoNothing();
+    .values(dataset)
+    .onConflictDoUpdate({ target: datasets.id, set: { label: dataset.label, url: dataset.url, distributionUrl: dataset.distributionUrl } });
+  for (const r of opts.relations ?? []) {
+    await db.insert(relation)
+      .values({ id: r.id, label: r.label, dated: r.dated ?? false })
+      .onConflictDoUpdate({ target: relation.id, set: { label: r.label, dated: r.dated ?? false } });
   }
 }
 
@@ -41,7 +47,7 @@ export async function upsertSource(opts: {
  *
  * Idempotent re-ingest (features carry a deterministic id from featureId()):
  *  - features upsert (onConflictDoUpdate) so a corrected file refreshes content
- *    in place — but NOT temporal_frequency, which rebuild-index owns.
+ *    in place.
  *  - links are reconciled: the first time a feature is seen this run its existing
  *    feature_to_place rows are deleted, so a corrected place assignment replaces
  *    the old link instead of accumulating a second one. The delete happens once

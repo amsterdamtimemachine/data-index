@@ -19,16 +19,16 @@
     "@atm/shared": "workspace:*",
     "commander": "^12.1.0",
     "csv-parse": "^6.2.1",
-    "drizzle-orm": "^0.45.2",
-    "n3": "^2.7.12",
-    "pg": "^8.23.0",
+    "drizzle-orm": "^0.45.4",
+    "n3": "^2.13.12",
+    "pg": "^8.23.1",
     "@streamparser/json": "^0.0.22"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.16",
-    "@types/n3": "^1.26.3",
+    "@types/n3": "^1.26.4",
     "@types/pg": "^8.23.1",
-    "drizzle-kit": "^0.31.10",
-    "typescript": "^5.9.3"
+    "drizzle-kit": "^0.31.11",
+    "typescript": "^6.0.3"
   }
 }

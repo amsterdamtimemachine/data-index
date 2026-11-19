@@ -1,8 +1,8 @@
 // src/routes/api/places/+server.ts
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { searchPlaces, getPlaceById } from '@atm/db/queries';
-import { parseGridCols } from '$lib/server/query-params';
+import { parseGridCols } from '#lib/server/query-params.js';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -24,7 +24,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			if (match) {
 				matches = [match];
 			}
-			return json({ matches }, {
+			return Response.json({ matches }, {
 				headers: {
 					'Cache-Control': 'public, max-age=3600',
 					'Access-Control-Allow-Origin': '*'
@@ -36,7 +36,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		if (q) {
 			matches = await searchPlaces(q, { limit, cols });
 		}
-		return json({ matches }, {
+		return Response.json({ matches }, {
 			headers: {
 				'Cache-Control': 'public, max-age=3600',
 				'Access-Control-Allow-Origin': '*'
@@ -45,10 +45,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
 		console.error('Places API error:', err);
-		throw error(500, {
-			code: 'INTERNAL_ERROR',
-			message: 'Failed to search places'
-		});
+		throw error(500, 'Failed to search places', { code: 'INTERNAL_ERROR' });
 	}
 };
 

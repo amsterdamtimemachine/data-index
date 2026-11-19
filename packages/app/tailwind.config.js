@@ -3,9 +3,17 @@ export default {
 	content: ['./src/**/*.{html,js,svelte,ts}'],
 	theme: {
 		extend: {
+			boxShadow: {
+				// a fixed block casting over content that scrolls beneath it
+				panel: '0px 5px 20px 5px rgba(0,0,0,0.07)',
+				// the two edges of a scrolling region, each cast one way
+				'edge-down': '0px 3px 6px -2px rgba(0,0,0,0.12)',
+				'edge-up': '0px -3px 6px -2px rgba(0,0,0,0.12)'
+			},
 			colors: {
 				'link': '#6D5026',
 				'link-hover': '#78481e',
+				'atm-black': '#000000', // ink: text, icons, the map's drop shadows
 				'atm-sand': '#fcf8f7',
 				'atm-sand-darkish': '#f9f2f0',
 				'atm-sand-dark': '#f6e8df',
@@ -24,6 +32,7 @@ export default {
 				'atm-red-darkest-hover': '#522100',
 				'atm-blue':'#5e92f3',
 				'atm-blue-light':'#c2d0fb',
+				'atm-plum': '#5a3d7a', // the evidence of a link: the place name in the relation line and where the text names it
 				'status-error': 'ee3f00',
 				'status-warning': '#fff',
 				'status-success': '#fff',

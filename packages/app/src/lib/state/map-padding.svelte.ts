@@ -5,7 +5,7 @@
  * must not move the map. Mobile has neither overlay.
  */
 import { untrack } from 'svelte';
-import { createElementWidth } from '$utils/media.svelte';
+import { createElementWidth } from '#lib/utils/media.svelte.js';
 
 export type MapPaddingInputs = {
 	navElement: HTMLElement | undefined;

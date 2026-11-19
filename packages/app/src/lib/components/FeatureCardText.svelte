@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { translate } from '#lib/utils/translations.js';
 	type Props = {
 		text: string;
 		expanded?: boolean;
@@ -13,7 +14,8 @@
 </script>
 
 {#if expanded}
-	<div class="">
+	<!-- a reading measure: about 75 characters a line on desktop, the full width on a phone -->
+	<div class="max-w-[600px]">
 		<p class="p-2 text-gray-700 leading-relaxed whitespace-pre-wrap">
 			{text}
 		</p>
@@ -27,9 +29,10 @@
 				</div>
 				<button
 					class="mt-2 text-base text-blue-600 hover:text-blue-800 underline"
+					title={translate('showMore')}
 					onclick={() => (showFullText = true)}
 				>
-					Show more
+					{translate('showMore')}
 				</button>
 			{:else}
 				<div>
@@ -38,9 +41,10 @@
 				{#if needsTruncation}
 					<button
 						class="mt-2 text-base text-blue-600 hover:text-blue-800 underline"
+						title={translate('showLess')}
 						onclick={() => (showFullText = false)}
 					>
-						Show less
+						{translate('showLess')}
 					</button>
 				{/if}
 			{/if}

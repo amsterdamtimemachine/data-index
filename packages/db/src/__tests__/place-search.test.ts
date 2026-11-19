@@ -32,6 +32,9 @@ const TOREN_1700 = 'ps-toren-1700';
 const TOREN_HIST = 'ps-toren-hist';      // still-open street that was called Torenstraat until 1850
 const TOREN_ALIAS = 'ps-toren-alias';    // street begun 1950 with Torenstraat as an undated variant
 const TOREN_UNDATED = 'ps-toren-undated';
+const TOREN_SUPERSEDED = 'ps-toren-superseded'; // Torenstraat from 1890, no end; Torenlaan from 1920 is its name now
+const BAG_TWIN = 'ps-bag-9';           // the current register's row for Kerkstraat 9
+const BAG_ALONE = 'ps-bag-7';          // a current address no historical register knows
 const FID = '22222222-2222-2222-2222-2222222222aa';
 const FID2 = '22222222-2222-2222-2222-2222222222bb';
 
@@ -40,11 +43,11 @@ describe('place search', () => {
     await setupTestDb();
     await cleanTestDb();
     await upsertSource({
-      organisation: { id: 'ps-org', label: 'PS Org' },
+      provider: { id: 'ps-org', label: 'PS Org' },
       dataset: { id: 'ps-ds', label: 'PS DS' },
-      relation: { id: 'isAbout', label: 'Is About' },
+      relations: [{ id: 'isAbout', label: 'Is About' }],
     });
-    await db.execute(sql`INSERT INTO organisations (id, label) VALUES ('adamlink', 'Adamlink') ON CONFLICT (id) DO NOTHING`);
+    await db.execute(sql`INSERT INTO agents (id, label) VALUES ('adamlink', 'Adamlink'), ('bag', 'BAG') ON CONFLICT (id) DO NOTHING`);
 
     // homonym streets: one carries a feature, the other is a bare gazetteer entry
     await db.execute(sql`INSERT INTO place (id, type, name) VALUES
@@ -64,7 +67,17 @@ describe('place search', () => {
       (${TOREN_HIST}, 'street', 'Zuidstraat'),
       (${TOREN_ALIAS}, 'street', 'Torenplein'),
       (${TOREN_UNDATED}, 'street', 'Torenstraat')`);
-    await db.execute(sql`UPDATE place SET source = 'adamlink' WHERE id = ${RENUMBERED}`);
+    await db.execute(sql`UPDATE place SET source = 'adamlink' WHERE id IN (${RENUMBERED}, ${BOTH})`);
+    await db.execute(sql`INSERT INTO place (id, type, name, source) VALUES (${TOREN_SUPERSEDED}, 'street', 'Torenlaan', 'adamlink')`);
+    await db.execute(sql`INSERT INTO place_historical_name (id, place_id, name, since, until) VALUES
+      ('ps-hist-8', ${TOREN_SUPERSEDED}, 'Torenstraat', '1890-01-01', NULL),
+      ('ps-hist-9', ${TOREN_SUPERSEDED}, 'Torenlaan', '1920-01-01', NULL)`);
+    await db.execute(sql`INSERT INTO place (id, type, name, source) VALUES
+      (${BAG_TWIN}, 'address', 'Kerkstraat 9', 'bag'),
+      (${BAG_ALONE}, 'address', 'Kerkstraat 7', 'bag')`);
+    await db.execute(sql`INSERT INTO place_geometry (place_id, geometry, building_id) VALUES
+      (${BAG_TWIN}, ST_GeomFromText('POINT(120251 485251)', 28992), 'PSB1'),
+      (${BAG_ALONE}, ST_GeomFromText('POINT(120260 485260)', 28992), 'PSB2')`);
     // non-adamlink open-ended name: canonicalisation must leave it alone
     await db.execute(sql`INSERT INTO place (id, type, name, source) VALUES ('ps-foreign', 'street', 'Vreemdstraat', 'ps-org')`);
     await db.execute(sql`INSERT INTO place_historical_name (id, place_id, name, since, until) VALUES
@@ -79,6 +92,7 @@ describe('place search', () => {
       (${ADDR_NUMBERED}, ST_GeomFromText('POINT(121250 485950)', 28992)),
       (${DISTRICT_EXACT}, ST_GeomFromText('POLYGON((120800 485800, 120990 485800, 120990 485950, 120800 485950, 120800 485800))', 28992)),
       (${TOREN_UNDATED}, ST_GeomFromText('LINESTRING(120800 485990, 120900 485990)', 28992))`);
+    await db.execute(sql`UPDATE place_geometry SET building_id = 'PSB1' WHERE place_id = ${BOTH}`);
     // a historical area division: geometry valid for a closed era
     await db.execute(sql`INSERT INTO place_geometry (place_id, geometry, since, until) VALUES
       (${HOOD}, ST_GeomFromText('POLYGON((120400 485400, 120700 485400, 120700 485700, 120400 485700, 120400 485400))', 28992), '1850-01-01', '1909-12-31'),
@@ -122,11 +136,12 @@ describe('place search', () => {
   });
 
   test('exact matches follow a timeline: current youngest first, ended latest end first, undated last', async () => {
+    // an adamlink name without an end that the street no longer carries sorts as ended
     // the variant of the 1950 street sorts with its place; the historical match sorts
     // on its name's end (1850), not on its still-open geometry
     const matches = await searchPlaces('Torenstraat');
     const ids = matches.map((m) => m.placeId);
-    expect(ids).toEqual([TOREN_YOUNG, TOREN_ALIAS, TOREN_OPEN, TOREN_1900, TOREN_HIST, TOREN_1700, TOREN_UNDATED]);
+    expect(ids).toEqual([TOREN_YOUNG, TOREN_ALIAS, TOREN_OPEN, TOREN_1900, TOREN_HIST, TOREN_1700, TOREN_SUPERSEDED, TOREN_UNDATED]);
     expect(matches[1].matchedNameId).toBe('ps-hist-7');
     expect(matches[1].matchedWindow).toBeNull();
   });
@@ -183,6 +198,20 @@ describe('place search', () => {
     const hits = matches.filter((m) => m.placeId === BOTH);
     expect(hits.length).toBe(1);
     expect(hits[0].matchedWindow).toBeNull();
+  });
+
+  test('a house in both registers lists twice, the current register first, even before a dated old-name match', async () => {
+    const matches = await searchPlaces('Kerkstraat 9');
+    expect(matches.map((m) => m.placeId)).toEqual([BAG_TWIN, BOTH]);
+    expect(matches[0].recordedWindow).toBeNull();
+    expect(matches[1].recordedWindow).toEqual(['1900-01-01', '1943-01-01']);
+
+    const alone = await searchPlaces('Kerkstraat 7');
+    expect(alone.map((m) => m.placeId)).toEqual([BAG_ALONE]);
+
+    // Kerkstraat 9 was also the 1900 to 1943 name of the house: the current register still leads
+    const byOldName = await searchPlaces('Kerkstraat 9', { limit: 2 });
+    expect(byOldName[0].placeId).toBe(BAG_TWIN);
   });
 
   test('short queries return nothing', async () => {

@@ -1,4 +1,4 @@
-import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, RecordType } from "@atm/shared";
+import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, TheaterEventEntity, BillItem, ManuscriptEntity, Excerpt, RecordType, parsePartialDate, formatIsoDate } from "@atm/shared";
 import { formatDateRange } from "../util/dates";
 import { Draft } from "./ingestor";
 
@@ -26,13 +26,14 @@ export class PersonEntityFactory extends EntityFactory<PersonEntity> {
 
 export class CreativeWorkEntityFactory extends EntityFactory<CreativeWorkEntity> {
     create(feature: Draft, data: Map<string, unknown>): CreativeWorkEntity {
-        const dateCreated = formatDateRange(feature.startDate, feature.endDate);
+        // a text's date is the issue it was published in
+        const datePublished = formatDateRange(feature.startDate, feature.endDate);
 
         return {
             type: 'CreativeWork',
             name: feature.label,
             url: feature.url,
-            ...(dateCreated && { dateCreated })
+            ...(datePublished && { datePublished })
         } as CreativeWorkEntity;
     }
 }
@@ -40,20 +41,131 @@ export class CreativeWorkEntityFactory extends EntityFactory<CreativeWorkEntity>
 export class MediaObjectEntityFactory extends EntityFactory<MediaObjectEntity> {
     create(feature: Draft, data: Map<string, unknown>): MediaObjectEntity {
         const dateCreatedFormatted = formatDateRange(feature.startDate, feature.endDate);
+        const textDate = data.get('textDate');
+        let dateText: string | undefined;
+        if (typeof textDate === 'string' && textDate.trim()) {
+            dateText = textDate.trim();
+        }
 
         return {
             type: 'MediaObject',
             name: feature.label,
             contentUrl: feature.contentUrl!,
-            ...(dateCreatedFormatted && { dateCreated: dateCreatedFormatted })
+            ...(dateCreatedFormatted && { dateCreated: dateCreatedFormatted }),
+            ...(dateText && { dateText }),
         };
     } 
+}
+
+// the source row's shape, as the cinema-context source reads it
+type ProgrammeVenue = { perm_id?: string; url?: string; name?: string; type?: string };
+export type ProgrammeItem = { title?: string; url?: string; year?: string; country?: string; director?: string; production_company?: string; live?: string };
+
+/** A programme's bill in the source's order: films and live acts as they were billed. */
+export function programmeBill(items: ProgrammeItem[]): BillItem[] {
+    const bill: BillItem[] = [];
+    for (const item of items) {
+        if (item.title) {
+            bill.push({
+                type: 'Movie',
+                name: item.title,
+                ...(item.url && { url: item.url }),
+                ...(item.year && { dateCreated: item.year }),
+                ...(item.country && { countryOfOrigin: item.country }),
+                ...(item.director && { director: item.director }),
+                ...(item.production_company && { productionCompany: item.production_company }),
+            });
+        }
+        if (item.live) {
+            bill.push({ type: 'LiveAct', name: item.live });
+        }
+    }
+    return bill;
+}
+
+/** Whether a bill opens with a film: that makes the programme a screening, and its title the film. */
+export function leadsWithFilm(bill: BillItem[]): boolean {
+    return bill.length > 0 && bill[0].type === 'Movie';
+}
+
+/** A programme: a ScreeningEvent when its bill opens with a film, a TheaterEvent when it opens with an act. */
+export class ProgrammeEntityFactory extends EntityFactory<ScreeningEventEntity | TheaterEventEntity> {
+    create(feature: Draft, data: Map<string, unknown>): ScreeningEventEntity | TheaterEventEntity {
+        const venue = (data.get('venue') ?? {}) as ProgrammeVenue;
+        const address = data.get('address');
+        const date = data.get('date');
+        const permId = data.get('perm_id');
+        const bill = programmeBill((data.get('items') ?? []) as ProgrammeItem[]);
+
+        let type: 'ScreeningEvent' | 'TheaterEvent' = 'TheaterEvent';
+        if (leadsWithFilm(bill)) {
+            type = 'ScreeningEvent';
+        }
+        // the source's own precision, with its xx placeholders dropped
+        let startDate = feature.startDate;
+        if (typeof date === 'string') {
+            const parsed = parsePartialDate(date);
+            if (parsed) {
+                startDate = formatIsoDate(parsed);
+            }
+        }
+
+        return {
+            type,
+            ...(typeof permId === 'string' && { id: permId }),
+            name: feature.label,
+            startDate,
+            location: {
+                type: 'Place',
+                name: venue.name ?? '',
+                identifier: venue.perm_id ?? '',
+                ...(venue.url && { url: venue.url }),
+                ...(venue.type && { additionalType: venue.type }),
+                ...(typeof address === 'string' && address && { address }),
+            },
+            bill,
+        };
+    }
+}
+
+// the source row's shape, as the amsterdam-diaries source reads it
+type DiaryRef = { name?: string; url?: string };
+type DiaryAuthor = { name?: string; url?: string };
+
+export class ManuscriptEntityFactory extends EntityFactory<ManuscriptEntity> {
+    create(feature: Draft, data: Map<string, unknown>): ManuscriptEntity {
+        const diary = (data.get('diary') ?? {}) as DiaryRef;
+        const author = (data.get('author') ?? {}) as DiaryAuthor;
+        const name = data.get('name');
+        const date = data.get('date');
+        const excerpts = (data.get('excerpts') ?? []) as Excerpt[];
+
+        return {
+            type: 'Manuscript',
+            id: feature.id,
+            name: typeof name === 'string' && name ? name : feature.label,
+            ...(typeof date === 'string' && date && { dateCreated: date }),
+            // only the excerpt's own fields: the source row's place URI is the ingest's key, not the entity's
+            excerpts: excerpts.map((x) => ({ text: x.text, truncatedBefore: x.truncatedBefore, truncatedAfter: x.truncatedAfter, mentions: x.mentions })),
+            ...(author.name && { author: { type: 'Person' as const, name: author.name, ...(author.url && { url: author.url }) } }),
+            ...(diary.name && {
+                isPartOf: {
+                    type: 'Book' as const,
+                    name: diary.name,
+                    ...(diary.url && { url: diary.url }),
+                },
+            }),
+        };
+    }
 }
 
 const FACTORY_MAP: Record<RecordType, (new () => EntityFactory<EntityBase>) | null> = {
   image: MediaObjectEntityFactory,
   text: CreativeWorkEntityFactory,
   person: PersonEntityFactory,
+  // events and stories have no default shape: each such source names its own factory (see Ingestor.entityFactory)
+  event: null,
+  story: null,
   unknown: null,
 };
 

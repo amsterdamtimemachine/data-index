@@ -8,20 +8,23 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
-import { getCandidatesByPoint, getCandidatesByName, pickFinest, resolveNamePool, rank, type Candidate } from '../etl/places/place-candidates';
-import { inferByPoint, inferByName } from '../etl/places/place-inference';
+import { getCandidatesByPoint, getCandidatesByName, pickFinest, resolveNamePool, rank, twinOf, type Candidate } from '../etl/places/place-candidates';
+import { inferByPoint, inferByName, inferByPointConfirmed } from '../etl/places/place-inference';
 import { clearResolverCaches } from '../etl/places/cache';
 
 const Q = 'POINT(120000 485000)'; // RD query point
 
 async function seedOrgs() {
-  await db.execute(sql`INSERT INTO organisations (id, label) VALUES
+  await db.execute(sql`INSERT INTO agents (id, label) VALUES
     ('adamlink','Adamlink'), ('bag','BAG'), ('cbs','CBS'), ('nwb','NWB') ON CONFLICT (id) DO NOTHING`);
 }
 async function place(id: string, type: string, source: string, name: string | null, wktRD?: string, since: string | null = null, until: string | null = null) {
   await db.execute(sql`INSERT INTO place (id, type, source, name) VALUES (${id}, ${type}, ${source}, ${name})`);
   if (wktRD) await db.execute(sql`INSERT INTO place_geometry (place_id, geometry, since, until)
     VALUES (${id}, ST_GeomFromText(${wktRD}, 28992), ${since}, ${until})`);
+}
+async function building(placeId: string, buildingId: string) {
+  await db.execute(sql`UPDATE place_geometry SET building_id = ${buildingId} WHERE place_id = ${placeId}`);
 }
 async function histName(id: string, placeId: string, name: string, since: string | null, until: string | null) {
   await db.execute(sql`INSERT INTO place_historical_name (id, place_id, name, since, until) VALUES (${id}, ${placeId}, ${name}, ${since}, ${until})`);
@@ -218,5 +221,120 @@ describe('feature → place resolution', () => {
     // swapped lon/lat: POINT(52.37 4.9) in 4326 lands far outside the seeded area
     expect(await inferByPoint(JSON.stringify({ wkt: 'POINT(52.37 4.9)', start: '1920-01-01', end: '1920-01-01' })))
       .toEqual({ skip: 'cap-miss' });
+  });
+
+  // the same address as both sources record it: one BAG building, one house designation
+  async function seedTwins() {
+    await place('lp-115', 'address', 'adamlink', 'Binnen Amstel 115', 'POINT(120000 485010)');
+    await histName('n-115', 'lp-115', 'Binnen Amstel 115', '1943-01-01', '1943-12-31');
+    await building('lp-115', 'B1');
+    await place('bag-115', 'address', 'bag', 'Amstel 115', 'POINT(120000 485009)');
+    await building('bag-115', 'B1');
+  }
+
+  test('twins: same building and house designation across sources, not a unit of the house', async () => {
+    await seedTwins();
+    await place('bag-115-h', 'address', 'bag', 'Amstel 115-H', 'POINT(120000 485008)');
+    await building('bag-115-h', 'B1');
+    await place('bag-117', 'address', 'bag', 'Amstel 117', 'POINT(120000 485007)');
+    await building('bag-117', 'B1');
+    const ids = async (id: string) => (await twinOf(id, '1898-04-01', '1898-04-01')).map((t) => t.placeId);
+    expect(await ids('bag-115')).toEqual(['lp-115']);
+    expect(await ids('lp-115')).toEqual(['bag-115']);
+    expect(await ids('bag-115-h')).toEqual([]);
+    expect(await ids('bag-117')).toEqual([]);
+  });
+
+  test('twins: a shared name and the days to the nearest name record', async () => {
+    await seedTwins();
+    const [twin] = await twinOf('bag-115', '1898-04-01', '1898-04-01');
+    // the days from 1898-04-01 to the 1943 register
+    expect(twin).toEqual({ placeId: 'lp-115', sharesName: false, gapDays: 16345 });
+    const [back] = await twinOf('lp-115', '1898-04-01', '1898-04-01');
+    expect(back.sharesName).toBe(false);
+    expect(back.gapDays).toBeGreaterThan(365 * 100);
+  });
+
+  test('twins: a house number after a numbered street name', async () => {
+    await place('lp-12', 'address', 'adamlink', '1e Helmersstraat 12', 'POINT(120000 485010)');
+    await building('lp-12', 'B2');
+    await place('bag-12', 'address', 'bag', '1e Helmersstraat 12', 'POINT(120000 485009)');
+    await building('bag-12', 'B2');
+    await place('bag-1', 'address', 'bag', '1e Helmersstraat 1', 'POINT(120000 485008)');
+    await building('bag-1', 'B2');
+    expect((await twinOf('lp-12', '1990-01-01', '1990-01-01')).map((t) => t.placeId)).toEqual(['bag-12']);
+  });
+
+  test('several twins: the one that shares a name wins over another street in the building', async () => {
+    await place('lp-munt', 'address', 'adamlink', 'Muntplein 2', 'POINT(120000 485010)');
+    await histName('n-munt', 'lp-munt', 'Munt 2', '1943-01-01', '1943-12-31');
+    await building('lp-munt', 'B4');
+    await place('bag-munt', 'address', 'bag', 'Muntplein 2', 'POINT(120000 485009)');
+    await building('bag-munt', 'B4');
+    await place('bag-joris', 'address', 'bag', 'Sint Jorissteeg 2', 'POINT(120000 485008)');
+    await building('bag-joris', 'B4');
+    // only Adamlink knows the old name; the 1990 feature moves to the BAG twin on the same street
+    expect(await inferByName(nkey('Munt 2', '1990-01-01', '1990-01-01'))).toEqual({ placeId: 'bag-munt' });
+  });
+
+  test('several twins: the register nearest the feature date wins', async () => {
+    await place('bag-115', 'address', 'bag', 'Amstel 115', 'POINT(120000 485009)');
+    await building('bag-115', 'B1');
+    await place('lp-1909', 'address', 'adamlink', 'Binnen Amstel 115', 'POINT(120000 485010)');
+    await histName('n-1909', 'lp-1909', 'Binnen Amstel 115', '1909-01-01', '1909-12-31');
+    await building('lp-1909', 'B1');
+    await place('lp-1943', 'address', 'adamlink', 'Binnen Amstel 115', 'POINT(120000 485011)');
+    await histName('n-1943', 'lp-1943', 'Binnen Amstel 115', '1943-01-01', '1943-12-31');
+    await building('lp-1943', 'B1');
+    expect(await inferByName(nkey('Amstel 115', '1898-04-01', '1898-04-01'))).toEqual({ placeId: 'lp-1909' });
+    expect(await inferByName(nkey('Amstel 115', '1930-01-01', '1930-01-01'))).toEqual({ placeId: 'lp-1943' });
+  });
+
+  test('name match outside its era yields to its twin: a renamed street finds the old address', async () => {
+    await seedTwins();
+    expect(await inferByName(nkey('Amstel 115', '1898-04-01', '1898-04-01'))).toEqual({ placeId: 'lp-115' });
+    expect(await inferByName(nkey('Amstel 115', '1990-01-01', '1990-01-01'))).toEqual({ placeId: 'bag-115' });
+    expect(await inferByName(nkey('Binnen Amstel 115', '1990-01-01', '1990-01-01'))).toEqual({ placeId: 'bag-115' });
+  });
+
+  test('name match outside its era stands without a twin, or with several', async () => {
+    await place('lp-9', 'address', 'adamlink', 'Oude 9', 'POINT(120000 485010)');
+    await histName('n-9', 'lp-9', 'Oude 9', '1943-01-01', '1943-12-31');
+    expect(await inferByName(nkey('Oude 9', '1990-01-01', '1990-01-01'))).toEqual({ placeId: 'lp-9' });
+
+    await building('lp-9', 'B3');
+    await place('bag-9a', 'address', 'bag', 'Nieuwe 9', 'POINT(120000 485009)');
+    await building('bag-9a', 'B3');
+    await place('bag-9b', 'address', 'bag', 'Nieuwe 9', 'POINT(120000 485008)');
+    await building('bag-9b', 'B3');
+    clearResolverCaches();
+    expect(await inferByName(nkey('Oude 9', '1990-01-01', '1990-01-01'))).toEqual({ placeId: 'lp-9' });
+  });
+
+  test('text confirmation outside its era yields to the twin too', async () => {
+    await seedTwins();
+    const wgs = await db.execute<{ wkt: string }>(sql`SELECT ST_AsText(ST_Transform(ST_GeomFromText(${Q}, 28992), 4326)) AS wkt`);
+    const q = wgs.rows[0].wkt;
+    expect(await inferByPointConfirmed(q, 'Carré, Amstel 115, Amsterdam.', '1898-04-01', '1898-04-01')).toEqual({ placeId: 'lp-115' });
+  });
+
+  test('text confirmation: the named neighbour wins over the nearer point, nearest otherwise', async () => {
+    await place('lp-old', 'address', 'adamlink', 'E 52', 'POINT(120000 485001)');
+    await histName('n-old', 'lp-old', 'E 52', '1853-01-01', '1853-12-31');
+    await place('lp-new', 'address', 'adamlink', 'Kalverstraat 97', 'POINT(120000 484997)');
+    await histName('n-new', 'lp-new', 'Kalverstraat 97', '1876-01-01', '1876-12-31');
+
+    // the resolvers take WGS84, the fixtures are RD
+    const wgs = await db.execute<{ wkt: string }>(sql`SELECT ST_AsText(ST_Transform(ST_GeomFromText(${Q}, 28992), 4326)) AS wkt`);
+    const q = wgs.rows[0].wkt;
+
+    const plain = await inferByPoint(JSON.stringify({ wkt: q, start: '1903-03-09', end: '1903-03-09' }));
+    expect(plain).toEqual({ placeId: 'lp-old' });
+
+    const named = await inferByPointConfirmed(q, 'Perry & Co., Kalverstraat 97, Amsterdam.', '1903-03-09', '1903-03-09');
+    expect(named).toEqual({ placeId: 'lp-new' });
+
+    const unnamed = await inferByPointConfirmed(q, 'Hotel Ponsen, Dordrecht.', '1903-03-09', '1903-03-09');
+    expect(unnamed).toEqual({ placeId: 'lp-old' });
   });
 });

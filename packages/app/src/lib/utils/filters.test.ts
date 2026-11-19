@@ -18,8 +18,8 @@ function url(qs: string): URL {
 }
 
 describe('parseFilterState', () => {
-	test('absent params select everything, with no errors', () => {
-		const { filters, errors } = parseFilterState(url(''), metadata);
+	test('absent params select everything, with nothing unknown', () => {
+		const { filters, unknownValues } = parseFilterState(url(''), metadata);
 		expect(filters).toEqual({
 			recordTypes: ['image', 'text'],
 			datasets: ['beeldbank', 'delpher'],
@@ -28,24 +28,24 @@ describe('parseFilterState', () => {
 			tagOperator: 'OR',
 			searchQuery: null
 		});
-		expect(errors).toEqual([]);
+		expect(unknownValues).toEqual([]);
 	});
 
-	test('keeps valid values and reports invalid record types and tags', () => {
-		const { filters, errors } = parseFilterState(url('recordTypes=image,video&tags=maps,nope&tagOperator=and&q=brug'), metadata);
+	test('keeps valid values and lists the unknown ones as the link wrote them', () => {
+		const { filters, unknownValues } = parseFilterState(url('recordTypes=image,video&tags=maps,nope&tagOperator=and&q=brug'), metadata);
 		expect(filters.recordTypes).toEqual(['image']);
 		expect(filters.tags).toEqual(['maps']);
 		expect(filters.tagOperator).toBe('AND');
 		expect(filters.searchQuery).toBe('brug');
-		expect(errors.map((e) => e.title)).toEqual(['Ongeldig inhoudstype verwijderd', 'Ongeldig onderwerp verwijderd']);
+		expect(unknownValues).toEqual(['video', 'nope']);
 	});
 
 	test('a category with nothing valid falls back to everything', () => {
-		const { filters, errors } = parseFilterState(url('recordTypes=video&datasets=nope&placeTypes=nope'), metadata);
+		const { filters, unknownValues } = parseFilterState(url('recordTypes=video&datasets=nope&placeTypes=nope'), metadata);
 		expect(filters.recordTypes).toEqual(['image', 'text']);
 		expect(filters.datasets).toEqual(['beeldbank', 'delpher']);
 		expect(filters.placeTypes).toEqual(['address', 'street']);
-		expect(errors).toHaveLength(1); // only record types warn
+		expect(unknownValues).toEqual(['video', 'nope', 'nope']);
 	});
 
 	test('without metadata the categories stay empty but search and operator still parse', () => {

@@ -7,6 +7,7 @@
  * Direct DB inspections are kept in `dbAssertions.ts` so test bodies read
  * like behaviour assertions instead of SQL.
  */
+import type { MediaObjectEntity } from '@atm/shared';
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { setupTestDb, cleanTestDb, seedTestData, teardownTestDb } from './setup';
 import * as dbq from './dbAssertions';
@@ -27,7 +28,7 @@ beforeAll(async () => {
   await cleanTestDb();
   await seedTestData();
 
-  // Compute spatial_frequency and temporal_frequency
+  // Compute spatial_frequency
   const { rebuildIndex } = await import('../etl/post-process/rebuild-index');
   await rebuildIndex();
 });
@@ -124,7 +125,10 @@ describe('Feature ingestion', () => {
   });
 
   test('features have entity JSONB with correct schema.org type', async () => {
-    expect((await dbq.firstFeatureEntity('beeldbank')).type).toBe('MediaObject');
+    const image = await dbq.firstFeatureEntity('beeldbank');
+    expect(image.type).toBe('MediaObject');
+    // the archive's wording of the dating, beside the ISO dates
+    expect((image as MediaObjectEntity).dateText).toBeTruthy();
     expect((await dbq.firstFeatureEntity('joods-monument')).type).toBe('Person');
   });
 });
@@ -138,13 +142,6 @@ describe('rebuild-index', () => {
     const matches = await dbq.placesWithMatchingSpatialFrequencyCount();
     const total = await dbq.featuredPlaceCount();
     expect(matches).toBe(total);
-  });
-
-  test('temporal_frequency reflects year span / base_bin', async () => {
-    // JM features: 1900-1945 span = 45 years, base bin 10y → 5 (rounded up)
-    const tf = await dbq.firstFeatureTemporalFrequency('joods-monument');
-    expect(tf).toBeGreaterThanOrEqual(4);
-    expect(tf).toBeLessThanOrEqual(6);
   });
 });
 
@@ -226,26 +223,36 @@ describe('getFeatures', () => {
     expect(withHistorical).toBeDefined();
   });
 
-  test('resolves the place provider from place.source via the organisations join', async () => {
+  test('a feature carries its period and whether its relation is dated', async () => {
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, pageSize: 50 });
+    expect(r.data.length).toBeGreaterThan(0);
+    for (const f of r.data) {
+      expect(f.relationDated).toBe(false);
+      expect(f.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(f.endDate! >= f.startDate!).toBe(true);
+    }
+  });
+
+  test('resolves the place provider from place.source via the agents join', async () => {
     // Seeded places are all Adamlink LPs, so every feature carries the Adamlink provider.
     const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, pageSize: 50 });
     const withProvider = r.data.find(f => f.placeProviderLabel);
     expect(withProvider).toBeDefined();
     expect(withProvider!.placeSource).toBe('adamlink');
-    expect(withProvider!.placeProviderLabel).toBe(PLACE_PROVIDERS.adamlink.label); // from organisations, seeded from PLACE_PROVIDERS
+    expect(withProvider!.placeProviderLabel).toBe(PLACE_PROVIDERS.adamlink.label); // from agents, seeded from PLACE_PROVIDERS
     expect(withProvider!.placeProviderUrl).toBe(PLACE_PROVIDERS.adamlink.url);
     expect(withProvider!.placeUrl).toBeTruthy(); // per-record link, distinct from the provider homepage
   });
 
-  test('returns datasetLabel and organisationLabel matching the source tables', async () => {
+  test('returns datasetLabel and providerLabel matching the source tables', async () => {
     const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, datasetIds: ['joods-monument'], pageSize: 50 });
     const dsLabel = await dbq.datasetLabel('joods-monument');
-    const orgLabel = await dbq.organisationLabelForDataset('joods-monument');
+    const orgLabel = await dbq.providerLabelForDataset('joods-monument');
     expect(r.data.length).toBeGreaterThan(0);
     for (const f of r.data) {
       expect(f.datasetLabel).toBe(dsLabel); // value cross-check vs datasets table
-      expect(f.organisationLabel).toBe(orgLabel); // vs organisations table
-      expect(f.organisationUrl).toBeTruthy();
+      expect(f.providerLabel).toBe(orgLabel); // vs agents table
+      expect(f.providerUrl).toBeTruthy();
     }
   });
 

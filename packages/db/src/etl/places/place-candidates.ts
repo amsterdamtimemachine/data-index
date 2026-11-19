@@ -10,12 +10,11 @@
  * expression indexes on place and place_historical_name.
  */
 import { db } from '../../client';
-import { sql } from 'drizzle-orm/sql';
-import { ADDRESS_MAX_DISTANCE_M, STREET_MAX_DISTANCE_M, ERA_CUTOFF, CURRENT_ANCHOR } from '@atm/shared';
-import { wktToRd } from '../sql';
+import { sql, type SQL } from 'drizzle-orm/sql';
+import { ADDRESS_MAX_DISTANCE_M, STREET_MAX_DISTANCE_M, ERA_CUTOFF, CURRENT_ANCHOR, type PlaceType, type PlaceSource } from '@atm/shared';
+import { wktToRd, houseNumber } from '../sql';
 
-export type PlaceType = 'address' | 'street' | 'neighbourhood' | 'district';
-export type PlaceSource = 'adamlink' | 'bag' | 'nwb' | 'cbs';
+export type { PlaceType, PlaceSource };
 
 // address > street > neighbourhood > district — the finest-first priority
 export const GRANULARITIES: PlaceType[] = ['address', 'street', 'neighbourhood', 'district'];
@@ -41,7 +40,7 @@ export interface Candidate {
 
 export interface NameCandidate {
   placeId: string; name: string | null; type: PlaceType; source: PlaceSource;
-  via: 'current' | 'historical'; gapDays: number;
+  via: 'current' | 'historical'; gapDays: number; eraFit: boolean;
 }
 
 // ── temporal terms (the spec §4 vocabulary) — each reads the surrounding row's
@@ -66,9 +65,16 @@ const nameGapDays = (start: string, end: string) => sql`CASE
   ELSE GREATEST(since - ${end}::date, ${start}::date - (until - 1), 0)
 END`;
 
+// An address register covers the feature range: adamlink reaches before ERA_CUTOFF,
+// bag on/after it; a range straddling the cut fits both. Reads the row's source.
+const addressEraFit = (start: string, end: string) => sql`CASE source
+  WHEN 'adamlink' THEN ${start}::date < ${ERA_CUTOFF}::date
+  WHEN 'bag'      THEN ${end}::date >= ${ERA_CUTOFF}::date
+  ELSE false END`;
+
 // ══ FETCHERS ══════════════════════════════════════════════════════════════════
 
-// ── POINT signal: nearest address/street per source within cap + containing areas ──
+// ── POINT signal: every address/street within cap, nearest first, + containing areas ──
 // Address era-fit is OVERLAP-based: adamlink if the range reaches before ERA_CUTOFF,
 // bag if it reaches on/after it — a range straddling 1943 surfaces both, distance decides.
 // Area era-fit is [start,end] ⋂ [since,until); overlap length ranks among containers.
@@ -79,8 +85,7 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
   }>(sql`
     WITH q AS (SELECT ${wktToRd(wkt, srid)} AS g),
     near AS (
-      SELECT DISTINCT ON (p.type, p.source)
-             p.id, p.name, p.type, p.source, ST_Distance(pg.geometry, q.g) AS dist
+      SELECT p.id, p.name, p.type, p.source, ST_Distance(pg.geometry, q.g) AS dist
       FROM q, place_geometry pg JOIN place p ON p.id = pg.place_id
       WHERE p.type IN ('address', 'street')
         AND ST_DWithin(pg.geometry, q.g, ${MAX_POINT_CAP_M}::float8)
@@ -95,10 +100,7 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
     )
     SELECT id AS place_id, name, type, source, dist, NULL::int AS overlap_days,
            CASE type
-             WHEN 'address' THEN CASE source
-                                   WHEN 'adamlink' THEN ${start}::date < ${ERA_CUTOFF}::date
-                                   WHEN 'bag'      THEN ${end}::date >= ${ERA_CUTOFF}::date
-                                   ELSE false END
+             WHEN 'address' THEN ${addressEraFit(start, end)}
              WHEN 'street'  THEN source = 'adamlink'
            END AS era_fit,
            FALSE AS dated
@@ -125,7 +127,7 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
 export async function getCandidatesByName(name: string, start: string, end: string): Promise<NameCandidate[]> {
   const rows = await db.execute<{
     place_id: string; name: string | null; type: PlaceType;
-    source: PlaceSource; via: 'current' | 'historical'; gap_days: number;
+    source: PlaceSource; via: 'current' | 'historical'; gap_days: number; era_fit: boolean;
   }>(sql`
     WITH cand AS (
       SELECT p.id, p.name, p.type, p.source, 'current' AS via, NULL::date AS since, NULL::date AS until
@@ -138,28 +140,116 @@ export async function getCandidatesByName(name: string, start: string, end: stri
     ),
     scored AS (
       SELECT id, name, type, source, via,
-             ${nameGapDays(start, end)} AS gap_days
+             ${nameGapDays(start, end)} AS gap_days,
+             CASE WHEN type = 'address' THEN ${addressEraFit(start, end)} ELSE TRUE END AS era_fit
       FROM cand
     )
-    SELECT DISTINCT ON (id) id AS place_id, name, type, source, via, gap_days
+    SELECT DISTINCT ON (id) id AS place_id, name, type, source, via, gap_days, era_fit
     FROM scored
     ORDER BY id, gap_days   -- keep each place's nearest-in-time observation
   `);
   return rows.rows.map((r) => ({
     placeId: r.place_id, name: r.name, type: r.type,
-    source: r.source, via: r.via, gapDays: Number(r.gap_days),
+    source: r.source, via: r.via, gapDays: Number(r.gap_days), eraFit: r.era_fit,
   }));
+}
+
+export interface Twin {
+  placeId: string;
+  // the twin has gone by a name the place itself has had
+  sharesName: boolean;
+  // days from the feature range to the twin's nearest name record; null without a dated one
+  gapDays: number | null;
+}
+
+/**
+ * The same address as the other source records it: every address in the same BAG
+ * building, as both sources state it, with the same house designation. Several when
+ * one building has that number on two streets, when Adamlink keeps a point per
+ * register, or when BAG holds a unit in use and one formed; sharesName and gapDays
+ * tell them apart.
+ */
+export async function twinOf(placeId: string, start: string, end: string): Promise<Twin[]> {
+  const rows = await db.execute<{ id: string; shares_name: boolean; gap_days: number | null }>(sql`
+    WITH me AS (
+      SELECT p.id, p.source, pg.building_id, ${houseNumber(sql`p.name`)} AS house
+      FROM place p JOIN place_geometry pg ON pg.place_id = p.id
+      WHERE p.id = ${placeId} AND p.type = 'address'
+    ),
+    my_names AS (
+      SELECT LOWER(p.name) AS n FROM place p WHERE p.id = ${placeId} AND p.name IS NOT NULL
+      UNION
+      SELECT LOWER(hn.name) FROM place_historical_name hn WHERE hn.place_id = ${placeId} AND hn.name IS NOT NULL
+    ),
+    cand AS (
+      SELECT o.id, o.name
+      FROM me
+      JOIN place_geometry og ON og.building_id = me.building_id AND og.place_id <> me.id
+      JOIN place o ON o.id = og.place_id
+      WHERE o.type = 'address' AND o.source <> me.source
+        AND ${houseNumber(sql`o.name`)} = me.house
+    ),
+    cand_names AS (
+      SELECT c.id, LOWER(c.name) AS n, 'current' AS via, NULL::date AS since, NULL::date AS until
+      FROM cand c WHERE c.name IS NOT NULL
+      UNION ALL
+      SELECT c.id, LOWER(hn.name), 'historical', hn.since, hn.until
+      FROM cand c JOIN place_historical_name hn ON hn.place_id = c.id WHERE hn.name IS NOT NULL
+    ),
+    -- an undated historical row is a label, not an observation: no gap
+    scored AS (
+      SELECT id, n,
+             CASE WHEN via = 'historical' AND since IS NULL AND until IS NULL THEN NULL
+                  ELSE ${nameGapDays(start, end)} END AS gap
+      FROM cand_names
+    )
+    SELECT c.id,
+           EXISTS (SELECT 1 FROM scored s JOIN my_names m ON m.n = s.n WHERE s.id = c.id) AS shares_name,
+           (SELECT MIN(s.gap) FROM scored s WHERE s.id = c.id) AS gap_days
+    FROM cand c
+    ORDER BY c.id
+  `);
+  return rows.rows.map((r) => ({
+    placeId: r.id, sharesName: r.shares_name,
+    gapDays: r.gap_days === null ? null : Number(r.gap_days),
+  }));
+}
+
+// ── every name a place has gone by: the current one and each historical row, dated or not ──
+export async function getNamesForPlaces(placeIds: string[]): Promise<Map<string, string[]>> {
+  const names = new Map<string, string[]>();
+  if (placeIds.length === 0) return names;
+  const rows = await db.execute<{ place_id: string; name: string }>(sql`
+    SELECT p.id AS place_id, p.name
+    FROM place p WHERE p.id IN ${placeIds} AND p.name IS NOT NULL
+    UNION
+    SELECT hn.place_id, hn.name
+    FROM place_historical_name hn WHERE hn.place_id IN ${placeIds} AND hn.name IS NOT NULL
+  `);
+  for (const r of rows.rows) {
+    const list = names.get(r.place_id) ?? [];
+    list.push(r.name);
+    names.set(r.place_id, list);
+  }
+  return names;
 }
 
 // ══ SELECTION HELPERS ═════════════════════════════════════════════════════════
 // (turn a pool into resolved links — the resolver layer wires these together)
 
 // point-pool comparator: era-fit first, then longest overlap (areas) or nearest distance
-export const rank = (a: Candidate, b: Candidate) =>
-  Number(b.eraFit) - Number(a.eraFit)
-  || (a.overlapDays != null && b.overlapDays != null
-        ? (b.overlapDays - a.overlapDays) || (Number(b.dated) - Number(a.dated))
-        : a.distanceM - b.distanceM);
+export function rank(a: Candidate, b: Candidate): number {
+  if (a.eraFit !== b.eraFit) {
+    return Number(b.eraFit) - Number(a.eraFit);
+  }
+  if (a.overlapDays === null || b.overlapDays === null) {
+    return a.distanceM - b.distanceM;
+  }
+  if (a.overlapDays !== b.overlapDays) {
+    return b.overlapDays - a.overlapDays;
+  }
+  return Number(b.dated) - Number(a.dated);
+}
 
 // finest granularity present in `best`, following the address>street>… priority
 export function finestResolvable(best: Partial<Record<PlaceType, unknown>>): PlaceType | undefined {
@@ -175,8 +265,12 @@ export type NameResolution =
 
 export function resolveNamePool(pool: NameCandidate[]): NameResolution {
   if (pool.length === 0) return { kind: 'none' };
-  const sorted = [...pool].sort((a, b) =>
-    a.gapDays - b.gapDays || GRANULARITIES.indexOf(a.type) - GRANULARITIES.indexOf(b.type));
+  const sorted = [...pool].sort((a, b) => {
+    if (a.gapDays !== b.gapDays) {
+      return a.gapDays - b.gapDays;
+    }
+    return GRANULARITIES.indexOf(a.type) - GRANULARITIES.indexOf(b.type);
+  });
   const top = sorted[0];
   const tied = sorted.filter((c) => c.gapDays === top.gapDays && c.type === top.type);
   return tied.length > 1 ? { kind: 'ambiguous', tied } : { kind: 'resolved', winner: top };

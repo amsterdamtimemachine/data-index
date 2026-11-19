@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # Bun's updater reads bun.lock (not the binary bun.lockb). Weekly PRs for minor and
+  # patch releases; major versions are left out, they need a deliberate upgrade.
+  # Dependabot reads this file from the default branch only.
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

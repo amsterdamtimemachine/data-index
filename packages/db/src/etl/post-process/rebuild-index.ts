@@ -1,11 +1,10 @@
 import { sql } from 'drizzle-orm';
-import { PRECOMP_GRID_CELL_METERS, PRECOMP_TIME_BIN_YEARS } from '@atm/shared';
+import { PRECOMP_GRID_CELL_METERS } from '@atm/shared';
 import { db } from '../../client';
-import { placeGeometry, features, featureToPlace, placeCells, gridConfig } from '../../schema';
+import { placeGeometry, features, placeCells, gridConfig } from '../../schema';
 import { buildCellFeatures } from './build-cell-features';
 import { buildTagFeatures } from './build-tag-features';
-import { yearBin, cellIndex, cellEnvelope } from '../sql';
-import { datedFeatures } from '../../queries/time-filter';
+import { cellIndex, cellEnvelope } from '../sql';
 
 type BBoxRow = {
   min_x: number;
@@ -119,19 +118,6 @@ export async function rebuildIndex() {
     console.log(`  ${spatialResult.rowCount} places updated`);
   });
 
-  // Update temporal frequency on features: the number of base time bins the feature's
-  // range occupies — the same yearBin expansion build-cell-features indexes with, so
-  // the frequency counts exactly the bins the feature appears in.
-  console.log(`\nUpdating temporal frequency (base bin: ${PRECOMP_TIME_BIN_YEARS} years)...`);
-  const temporalResult = await db.execute(sql`
-    UPDATE ${features} f
-    SET temporal_frequency = GREATEST(1,
-      (${yearBin(sql`f.end_date`)} - ${yearBin(sql`f.start_date`)}) / ${PRECOMP_TIME_BIN_YEARS}::int + 1
-    )
-    WHERE ${datedFeatures(sql`f.start_date`, sql`f.end_date`)}
-  `);
-  console.log(`  ${temporalResult.rowCount} features updated`);
-
   // Canonicalise stored names, adamlink only: its name lists record an old name
   // on the place row while the name in force lives as an open-ended history row
   // (verified: every dead adamlink name carries an until). Other sources may use
@@ -169,12 +155,11 @@ export async function rebuildIndex() {
   }
 
   // Check coverage gaps
-  type CountRow = { total: string; missing_temporal: string };
+  type CountRow = { total: string };
   type PlaceCountRow = { total_places: string; missing_spatial: string };
   const [featureCoverage, placeCoverage] = await Promise.all([
     db.execute<CountRow>(sql`
-      SELECT COUNT(*) as total,
-        COUNT(*) - COUNT(temporal_frequency) as missing_temporal
+      SELECT COUNT(*) as total
       FROM ${features}
     `),
     db.execute<PlaceCountRow>(sql`
@@ -184,14 +169,11 @@ export async function rebuildIndex() {
       WHERE pg.geometry IS NOT NULL
     `)
   ]);
-  const { total, missing_temporal } = featureCoverage.rows[0];
+  const { total } = featureCoverage.rows[0];
   const { total_places, missing_spatial } = placeCoverage.rows[0];
 
   if (parseInt(missing_spatial) > 0) {
     console.log(`  ${missing_spatial}/${total_places} places with geometry have no spatial frequency`);
-  }
-  if (parseInt(missing_temporal) > 0) {
-    console.log(`  ${missing_temporal}/${total} features have no temporal frequency (missing start_date or end_date)`);
   }
 
   // Summary
@@ -218,35 +200,23 @@ export async function rebuildIndex() {
   const gridMaxX = min_x + (s.max_x + 1) * PRECOMP_GRID_CELL_METERS;
   const gridMaxY = min_y + (s.max_y + 1) * PRECOMP_GRID_CELL_METERS;
   type BoundsRow = { min_lon: string; max_lon: string; min_lat: string; max_lat: string };
-  type MaxFreqRow = { max_spatial: string; max_temporal: string };
 
-  const [boundsResult, freqResult] = await Promise.all([
-    db.execute<BoundsRow>(sql`
-      WITH grid AS (
-        SELECT ST_Transform(
-          ST_MakeEnvelope(${min_x}, ${min_y}, ${gridMaxX}, ${gridMaxY}, 28992),
-          4326
-        ) AS g
-      )
-      SELECT
-        ST_XMin(g)::text as min_lon,
-        ST_XMax(g)::text as max_lon,
-        ST_YMin(g)::text as min_lat,
-        ST_YMax(g)::text as max_lat
-      FROM grid
-    `),
-    db.execute<MaxFreqRow>(sql`
-      SELECT
-        COALESCE(MAX(pg.spatial_frequency), 1)::text as max_spatial,
-        COALESCE(MAX(f.temporal_frequency), 1)::text as max_temporal
-      FROM ${features} f
-      JOIN ${featureToPlace} fp ON f.id = fp.feature_id
-      JOIN ${placeGeometry} pg ON fp.place_id = pg.place_id
-    `)
-  ]);
+  const boundsResult = await db.execute<BoundsRow>(sql`
+    WITH grid AS (
+      SELECT ST_Transform(
+        ST_MakeEnvelope(${min_x}, ${min_y}, ${gridMaxX}, ${gridMaxY}, 28992),
+        4326
+      ) AS g
+    )
+    SELECT
+      ST_XMin(g)::text as min_lon,
+      ST_XMax(g)::text as max_lon,
+      ST_YMin(g)::text as min_lat,
+      ST_YMax(g)::text as max_lat
+    FROM grid
+  `);
 
   const bounds = boundsResult.rows[0];
-  const freq = freqResult.rows[0];
 
   await db.insert(gridConfig)
     .values({
@@ -261,8 +231,6 @@ export async function rebuildIndex() {
       maxLon: parseFloat(bounds.max_lon),
       minLat: parseFloat(bounds.min_lat),
       maxLat: parseFloat(bounds.max_lat),
-      maxSpatialFrequency: parseInt(freq.max_spatial),
-      maxTemporalFrequency: parseInt(freq.max_temporal),
     })
     .onConflictDoUpdate({
       target: gridConfig.id,
@@ -277,8 +245,6 @@ export async function rebuildIndex() {
         maxLon: parseFloat(bounds.max_lon),
         minLat: parseFloat(bounds.min_lat),
         maxLat: parseFloat(bounds.max_lat),
-        maxSpatialFrequency: parseInt(freq.max_spatial),
-        maxTemporalFrequency: parseInt(freq.max_temporal),
       }
     });
   console.log('  Grid config updated');
@@ -295,6 +261,4 @@ export async function rebuildIndex() {
   console.log(`  Grid range:       x[${s.min_x}–${s.max_x}] y[${s.min_y}–${s.max_y}]`);
   console.log(`  RD origin:        (${min_x.toFixed(0)}, ${min_y.toFixed(0)}) → (${gridMaxX.toFixed(0)}, ${gridMaxY.toFixed(0)})`);
   console.log(`  Grid bounds (WGS84): lon[${bounds.min_lon}–${bounds.max_lon}] lat[${bounds.min_lat}–${bounds.max_lat}]`);
-  console.log(`  Max frequencies:  spatial=${freq.max_spatial} temporal=${freq.max_temporal}`);
-  console.log(`  Temporal coverage: ${parseInt(total) - parseInt(missing_temporal)}/${total} features`);
 }

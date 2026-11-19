@@ -1,89 +1,44 @@
+<!--
+	The expanded card in a native modal dialog: the browser centres it in the top layer,
+	keeps focus inside it, closes it on Escape and makes the page behind it inert.
+-->
 <script lang="ts">
-	import { createDialog, melt, type CreateDialogProps } from '@melt-ui/svelte';
-	import { fade } from 'svelte/transition';
-	import { featureViewerState } from '$lib/state/featureState.svelte';
-	import X from 'phosphor-svelte/lib/X';
-	import type { FeatureResult } from '@atm/shared/types';
-	import FeatureCard from '$components/FeatureCard.svelte';
-	import Button from '$components/Button.svelte';
+	import { featureViewerState } from '#lib/state/featureState.svelte.js';
+	import FeatureCard from '#lib/components/FeatureCard.svelte';
 
-	const handleOpenChange: CreateDialogProps['onOpenChange'] = ({ next }) => {
-		if (next === false && featureViewerState.selectedFeature) {
-			featureViewerState.closeFeature();
+	// the dialog is named by the card's own heading, which carries this id
+	const TITLE_ID = 'feature-dialog-title';
+
+	const dialog = featureViewerState.dialog;
+	const selectedFeature = $derived(featureViewerState.selectedFeature);
+
+	// the card's width: a picture gets the room, anything read gets a reading measure,
+	// about 75 characters a line; a phone gets the full width either way
+	const widthClasses = $derived.by(() => {
+		if (selectedFeature?.entity?.type === 'MediaObject') {
+			return 'w-[90vw] max-w-4xl';
 		}
-		return next;
-	};
-
-	const {
-		elements: { overlay, content, title, close, portalled },
-		states: { open }
-	} = createDialog({
-		forceVisible: true,
-		defaultOpen: false,
-		role: 'dialog',
-		preventScroll: true,
-		onOpenChange: handleOpenChange
-	});
-
-	// Get current selected feature
-	let selectedFeature = $derived(featureViewerState.selectedFeature);
-
-	// Open dialog when feature is selected
-	$effect(() => {
-		if (featureViewerState.selectedFeature) {
-			open.set(true);
-		} else {
-			open.set(false);
-		}
+		return 'w-[90vw] max-w-[600px]';
 	});
 </script>
 
-{#if $open && selectedFeature}
-	<div use:melt={$portalled}>
-		<!-- Overlay/backdrop -->
-		<div
-			use:melt={$overlay}
-			class="fixed inset-0 z-50 bg-black/85"
-			transition:fade={{ duration: 150 }}
-		></div>
-
-		<!-- Layout layer: a reserved top strip for the close button, then the centering
-		     area. The card lives in the lower area with max-h-full, so no card height can
-		     ever cover the X. pointer-events-none lets backdrop clicks through to the
-		     overlay; the button and card re-enable their own. -->
-		<div class="fixed inset-0 z-50 flex flex-col pointer-events-none">
-			<div class="h-12 shrink-0 flex items-center justify-end px-3">
-				<Button
-					icon={X}
-					size={18}
-					meltAction={$close}
-					class="pointer-events-auto"
-					aria-label="Close feature detail viewer"
-				/>
-			</div>
-			<div class="flex-1 min-h-0 flex items-center justify-center px-3 pb-3">
-				<!-- Modal Content -->
-				<div
-					use:melt={$content}
-					class="pointer-events-auto w-[90vw] max-w-4xl max-h-full bg-white rounded-sm
-					       shadow-xl overflow-hidden flex flex-col"
-					transition:fade={{ duration: 100 }}
-				>
-					<!-- Hidden title for accessibility -->
-					<h2 use:melt={$title} class="sr-only">Feature Detail Viewer</h2>
-
-					<!-- Scrollable content area -->
-					<div class="overflow-y-auto flex-1 min-h-0">
-						<FeatureCard feature={selectedFeature} expanded={true} />
-					</div>
-				</div>
-			</div>
+<!-- open:flex, not flex: a display class would override the browser hiding a closed dialog -->
+<dialog
+	{...dialog.content}
+	aria-labelledby={TITLE_ID}
+	class="{widthClasses} max-h-[calc(100dvh-1.5rem)] p-0 border-0 bg-white rounded-sm shadow-xl overflow-hidden open:flex flex-col backdrop:bg-black/85"
+>
+	{#if selectedFeature}
+		<!-- the card caps itself at this height and scrolls its content region;
+		     the overflow here is only a fallback -->
+		<div class="flex flex-col flex-1 min-h-0 overflow-y-auto">
+			<FeatureCard
+				feature={selectedFeature}
+				expanded={true}
+				headingLevel={2}
+				headingId={TITLE_ID}
+				onClose={featureViewerState.closeFeature}
+			/>
 		</div>
-	</div>
-{/if}
-
-<style>
-	:global(body.modal-open) {
-		overflow: hidden;
-	}
-</style>
+	{/if}
+</dialog>

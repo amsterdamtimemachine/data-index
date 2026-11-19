@@ -10,8 +10,16 @@
       "import": "./dist/index.js"
     },
     "./types": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.js"
+    },
+    "./vocab": {
+      "types": "./dist/vocab/index.d.ts",
+      "import": "./dist/vocab/index.js"
+    },
+    "./dates": {
+      "types": "./dist/dates.d.ts",
+      "import": "./dist/dates.js"
     }
   },
   "scripts": {
@@ -20,7 +28,7 @@
     "clean": "rm -rf dist"
   },
   "devDependencies": {
-    "svelte": "^5.57.0",
-    "typescript": "^5.9.3"
+    "svelte": "^5.57.2",
+    "typescript": "^6.0.3"
   }
 }

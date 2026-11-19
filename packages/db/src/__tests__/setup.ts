@@ -64,23 +64,23 @@ export async function setupTestDb() {
   // schema changes (e.g. a newly added column) to an already-created table. Drop
   // first so the schema always matches this file — otherwise drift silently breaks
   // rebuild-index (which is how the missing grid_config.min_x/min_y went unnoticed).
-  await db.execute(sql`DROP TABLE IF EXISTS cell_features, grid_config, place_cells, tag_features, feature_tags, feature_to_place, features, place_historical_name, place_geometry, place, relation, tags, datasets, organisations CASCADE`);
+  await db.execute(sql`DROP TABLE IF EXISTS cell_features, grid_config, place_cells, tag_features, feature_tags, feature_to_place, features, place_historical_name, place_geometry, place, relation, tags, datasets, agents CASCADE`);
 
   await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS organisations (
-      id TEXT PRIMARY KEY, label TEXT NOT NULL, description TEXT, url TEXT
+    CREATE TABLE IF NOT EXISTS agents (
+      id TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT 'Organization', label TEXT NOT NULL, description TEXT, url TEXT
     )
   `);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS datasets (
-      id TEXT PRIMARY KEY, label TEXT NOT NULL, description TEXT, url TEXT,
-      organisation_id TEXT REFERENCES organisations(id)
+      id TEXT PRIMARY KEY, label TEXT NOT NULL, description TEXT, url TEXT, distribution_url TEXT,
+      provider_id TEXT REFERENCES agents(id)
     )
   `);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS place (
       id TEXT PRIMARY KEY, type TEXT NOT NULL,
-      name TEXT, source TEXT REFERENCES organisations(id), url TEXT
+      name TEXT, source TEXT REFERENCES agents(id), url TEXT
     )
   `);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_name_lower ON place USING btree (lower(name)) WHERE name IS NOT NULL`);
@@ -89,12 +89,14 @@ export async function setupTestDb() {
       place_id TEXT PRIMARY KEY REFERENCES place(id),
       geometry geometry(Geometry, 28992),
       spatial_frequency INTEGER,
-      source TEXT REFERENCES organisations(id),
+      source TEXT REFERENCES agents(id),
       url TEXT,
-      since DATE, until DATE
+      since DATE, until DATE,
+      building_id TEXT
     )
   `);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_geometry_geom ON place_geometry USING gist(geometry)`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_geometry_building ON place_geometry(building_id) WHERE building_id IS NOT NULL`);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS place_historical_name (
       id TEXT PRIMARY KEY, place_id TEXT NOT NULL REFERENCES place(id),
@@ -104,7 +106,7 @@ export async function setupTestDb() {
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_historical_name_place ON place_historical_name(place_id)`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_historical_name_place_since ON place_historical_name(place_id, since)`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_place_historical_name_lower ON place_historical_name USING btree (lower(name)) WHERE name IS NOT NULL`);
-  await db.execute(sql`CREATE TABLE IF NOT EXISTS relation (id TEXT PRIMARY KEY, label TEXT NOT NULL)`);
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS relation (id TEXT PRIMARY KEY, label TEXT NOT NULL, dated BOOLEAN NOT NULL DEFAULT false)`);
   await db.execute(sql`CREATE TABLE IF NOT EXISTS tags (id TEXT PRIMARY KEY, label TEXT NOT NULL)`);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS features (
@@ -114,7 +116,7 @@ export async function setupTestDb() {
       label_tsv TSVECTOR GENERATED ALWAYS AS (to_tsvector('dutch', label)) STORED,
       description TEXT, content_url TEXT, start_date DATE, end_date DATE,
       dataset_id TEXT REFERENCES datasets(id),
-      temporal_frequency INTEGER, entity JSONB
+      entity JSONB
     )
   `);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_features_dates ON features(start_date, end_date)`);
@@ -133,7 +135,7 @@ export async function setupTestDb() {
     CREATE TABLE IF NOT EXISTS feature_tags (
       feature_id UUID NOT NULL REFERENCES features(id),
       tag_id TEXT NOT NULL REFERENCES tags(id),
-      source TEXT NOT NULL
+      source TEXT NOT NULL REFERENCES agents(id)
     )
   `);
   await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS feature_tags_feature_id_tag_id_source_uq ON feature_tags(feature_id, tag_id, source)`);
@@ -171,16 +173,14 @@ export async function setupTestDb() {
       min_cell_y SMALLINT NOT NULL, max_cell_y SMALLINT NOT NULL,
       min_x DOUBLE PRECISION NOT NULL, min_y DOUBLE PRECISION NOT NULL,
       min_lon REAL NOT NULL, max_lon REAL NOT NULL,
-      min_lat REAL NOT NULL, max_lat REAL NOT NULL,
-      max_spatial_frequency INTEGER NOT NULL,
-      max_temporal_frequency INTEGER NOT NULL
+      min_lat REAL NOT NULL, max_lat REAL NOT NULL
     )
   `);
 }
 
 export async function cleanTestDb() {
   await assertTestDb();
-  await db.execute(sql`TRUNCATE cell_features, grid_config, place_cells, tag_features, feature_tags, feature_to_place, features, place_historical_name, place_geometry, place, relation, tags, datasets, organisations CASCADE`);
+  await db.execute(sql`TRUNCATE cell_features, grid_config, place_cells, tag_features, feature_tags, feature_to_place, features, place_historical_name, place_geometry, place, relation, tags, datasets, agents CASCADE`);
 }
 
 export async function teardownTestDb() {

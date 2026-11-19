@@ -7,21 +7,27 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { PRECOMP_TIME_BIN_YEARS, PRECOMP_GRID_CELL_METERS } from '@atm/shared';
 
+/** The house designation an address name ends in: "113", "2a", "113-h". */
+export function houseNumber(name: SQL): SQL {
+  return sql`regexp_replace(substring(lower(${name}) from '(\\d\\S*(?: [a-z])?)$'), ' ', '', 'g')`;
+}
+
 /**
  * WKT → stored RD/28992 geometry. RD input is inserted as-is; any other SRID is
  * transformed. One definition for both the place writers and the point resolver,
  * so read and write sides normalise identically.
  */
 export function wktToRd(wkt: string, srid: number): SQL {
-  return srid === 28992
-    ? sql`ST_GeomFromText(${wkt}, 28992)`
-    : sql`ST_Transform(ST_GeomFromText(${wkt}, ${srid}), 28992)`;
+  if (srid === 28992) {
+    return sql`ST_GeomFromText(${wkt}, 28992)`;
+  }
+  return sql`ST_Transform(ST_GeomFromText(${wkt}, ${srid}), 28992)`;
 }
 
 /**
  * Floor a date's year onto the base time-bin grid (multiples of
- * PRECOMP_TIME_BIN_YEARS) — the binning cell_features is built on, and the unit
- * temporal_frequency counts in. generateTimeSlices (JS) mirrors this anchoring.
+ * PRECOMP_TIME_BIN_YEARS) — the binning cell_features is built on.
+ * generateTimeSlices (JS) mirrors this anchoring.
  */
 export function yearBin(dateCol: SQL): SQL {
   return sql`(FLOOR(EXTRACT(YEAR FROM ${dateCol}) / ${PRECOMP_TIME_BIN_YEARS}::int) * ${PRECOMP_TIME_BIN_YEARS}::int)::int`;

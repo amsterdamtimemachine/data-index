@@ -7,6 +7,11 @@ const TRANSLATIONS: Record<string, string> = {
 	image: 'Afbeelding',
 	person: 'Persoon',
 	text: 'Tekst',
+	event: 'Evenement',
+	// an event's subtype, which names its type on the card in place of "Evenement"
+	screening: 'Filmvertoning',
+	performance: 'Voorstelling',
+	story: 'Verhaal',
 
 	// Place types
 	address: 'Adres',
@@ -33,12 +38,33 @@ const TRANSLATIONS: Record<string, string> = {
 
 	// Relations
 	isAbout: 'Gaat over',
+	mentions: 'Noemt',
+	screenedAt: 'Vertoond op',
+	performedAt: 'Opgevoerd op',
+
 	hadLastLivingLocation: 'Laatste woonadres',
 
 	// Entity fields
 	born: 'Geboren',
 	died: 'Overleden',
-	date: 'Datum',
+	// screening event rows
+	film: 'Film',
+	performer: 'Optreden',
+	dating: 'Datering',
+
+	// Months, for dates worded on cards
+	january: 'januari',
+	february: 'februari',
+	march: 'maart',
+	april: 'april',
+	may: 'mei',
+	june: 'juni',
+	july: 'juli',
+	august: 'augustus',
+	september: 'september',
+	october: 'oktober',
+	november: 'november',
+	december: 'december',
 	author: 'Auteur',
 
 	// Sorting
@@ -46,43 +72,104 @@ const TRANSLATIONS: Record<string, string> = {
 	sortSample: 'Van alles wat',
 	sortSpatial: 'Precies gelokaliseerd',
 	sortTemporal: 'Precies gedateerd',
-	sortRelevance: 'Relevantie',
 	sortOldest: 'Oudste eerst',
 	sortNewest: 'Nieuwste eerst',
 	sortBestMatch: 'Beste match',
 	reshuffle: 'Schud opnieuw',
 
 	// UI labels
-	searchPlaceholder: 'Zoek een plek op de kaart',
-	featureSearchPlaceholder: 'Zoek in de collectie',
-	applySearch: 'Zoek',
+	searchPlaceholder: 'Zoek een plek of zoekterm',
+	// the dropdown's text search row; {term} stands for what was typed
+	searchInTitles: 'Zoek ‘{term}’ in titels',
 	clearSearchFilter: 'Verwijder zoekfilter',
-	searchResult: 'resultaat',
-	searchResults: 'resultaten',
 	cellsOf: 'Cellen van',
 	cellOf: 'Cel van',
 	clearPlaceFilter: 'Verwijder plekfilter',
 	imageUnavailable: 'Afbeelding niet beschikbaar',
 	noFeaturesForSelection: 'Geen features gevonden voor deze selectie en periode.',
+	// the filter panel's sections
+	searchFilter: 'Zoeken op de kaart',
+	recordTypeFilter: 'Inhoudstype',
+	datasetFilter: 'Dataset',
+	datasetFilterTooltip: 'Filter op basis van de dataset waaruit de data afkomstig is.',
+	scaleFilter: 'Schaal',
+	scaleFilterTooltip: 'Hoe precies een feature op de kaart is geplaatst: op een adres, een straat, een buurt of een wijk.',
+	viewFilters: 'Bekijk',
+	navAbout: 'Over',
+
+	// cards, grid and panel
+	showMore: 'Meer tonen',
+	// the link after a story's excerpt to the entry's page at the source
+	readMore: 'Lees verder',
+	fullTextAtSource: 'Volledige tekst bij de bron',
+	showLess: 'Minder tonen',
+	noFeaturesToDisplay: 'Geen features om te tonen',
+	openFeature: 'Feature openen',
+	siteTitle: 'Amsterdam Time Machine Data Index',
+	results: 'Resultaten',
+	found: 'gevonden',
+	// the screen reader's sentence after results change: "Pagina 3 van 12, …", "Geen features …"
+	page: 'Pagina',
+	outOf: 'van',
+	none: 'Geen',
+	opensInNewWindow: 'opent in nieuw venster',
+	// the map region and its canvas, which the arrow keys pan
+	mapRegion: 'Kaart van Amsterdam',
+	mapCanvas: 'Kaart, verschuif met de pijltjestoetsen',
+	mapKeyboardHint: 'Kies een plek met het zoekveld, of een periode met de tijdlijn.',
+	// a filter section's question mark; the heading follows
+	explainAbout: 'Uitleg over',
+	pauseSearchTerm: 'Pauzeer zoekterm',
+	resumeSearchTerm: 'Pas zoekterm toe',
+	closeFeature: 'Feature sluiten',
+	closeFeaturesPanel: 'Paneel sluiten',
+	expandImage: 'Afbeelding vergroten',
+	selectedCellPosition: 'Positie van de geselecteerde cel op de kaart',
+	panelWidth: 'Paneelbreedte (kolommen)',
+
+	// controls, for screen readers
+	pagination: 'Paginering',
+	previousPage: 'Vorige pagina',
+	nextPage: 'Volgende pagina',
+	goToPage: 'Ga naar pagina',
+	dismissNotification: 'Melding sluiten',
+	timePeriodSelector: 'Tijdperiode kiezen',
+
 	// the empty panel's hints; {picture} and {button} stand for the inline elements
-	emptyPanelDotHint: 'Een rode stip op de tijdlijn {picture} laat zien in welke periodes de selectie wel data heeft. Klik op {button} rechtsonder om de tijdlijn van de selectie te tonen.',
-	redDotTimelineAlt: 'Tijdlijn met een rode stip onder een periode',
+	emptyPanelCityWideHint: 'Klik op {button} rechtsonder om de tijdlijn van de selectie te tonen: daar zie je in welke periodes de selectie wel features heeft.',
 	emptyPanelBarHint: 'Kies op de tijdlijn {picture} een periode met een rode balk: daar heeft de selectie wel features.',
 	emptyPanelOtherCell: 'Of kies een andere cel op de kaart.',
 	localTimelineAlt: 'Tijdlijn van de selectie met rode balken',
 	// the timeline hover
+	// the cell under the pointer, in the order its id has in a link (cell=51_53)
+	cellPosition: 'rij {row}, kolom {col}',
 	featureOne: 'feature',
 	featureMany: 'features',
+	showing: 'Toont',
+	venue: 'Venue',
+	// a programme's bill heading: "2 films en 1 optreden op het programma"
+	filmOne: 'film',
+	filmMany: 'films',
+	actOne: 'optreden',
+	actMany: 'optredens',
+	and: 'en',
+	or: 'of',
+	onTheProgramme: 'op het programma',
+	classifier: 'Classificatiemodel',
+	// a story's rows
+	diary: 'Dagboek',
 	inSelection: 'in de selectie',
 	periodLabel: 'Periode',
 	showPlaceFeatures: 'Features van deze plek tonen',
 	hidePlaceFeatures: 'Features van deze plek verbergen',
 	// the collapsed filter status line
+	statusAtScale: 'op',
+	statusInDatasets: 'in',
 	statusInCellsOf: 'in de cellen van',
 	statusWithSearch: 'met zoekterm',
-	searchTooltip: 'Doorzoek de titels van alle features. Voorlopig wordt alleen op titels gezocht, niet op beschrijvingen of volledige teksten. Na een geslaagde zoekopdracht tonen de kaart en de tijdlijn alleen de gevonden features.',
-	// the place search tooltip; {border} stands for the map's outline glyph
-	placeSearchTooltip: 'Zoek op huidige of historische plaatsnamen. De resultaten staan in chronologische volgorde. Kies een plek: de gouden rand {border} op de kaart markeert de cellen waarin de plek ligt en het paneel toont de features van die cellen.',
+	statusAboutTopics: 'over',
+	// the search tooltip; {border} stands for the map's outline glyph
+	searchTooltip: 'Een zoekterm doorzoekt voorlopig alleen titels, binnen de toegepaste filters. Bij een gekozen plek markeert de gouden rand {border} op de kaart de cellen waarin de plek ligt.',
 	ofThisCell: 'van deze cel',
 	timelineOfCell: 'Tijdlijn van deze cel',
 	timelineOf: 'Tijdlijn van',
@@ -90,53 +177,60 @@ const TRANSLATIONS: Record<string, string> = {
 	toggleGlobalTimeline: 'Tijdlijn van de hele stad tonen',
 	ofCellsOf: 'van de cellen van',
 	ofCellOf: 'van de cel van',
-	nowKnownAs: 'nu',
+	// after an old place name, the name it goes by now; {name} stands for it
+	nowKnownAs: '(nu {name})',
 	// place window words: "vanaf 1923", "1380 tot 1663", "in 1853"
 	windowSince: 'vanaf',
 	windowUntil: 'tot',
 	windowIn: 'in',
+	// what a search row's years mean: a street or area's existence ("bestaat vanaf 1663",
+	// "bestond 1850 tot 1909"), the years a name held ("naam 1850 tot 1943"), the years an
+	// address was noted on a register ("vermeld in 1853"), or a current register
+	existsSince: 'bestaat vanaf',
+	existed: 'bestond',
+	nameHeld: 'naam',
+	recorded: 'vermeld',
+	currentRegister: 'huidig',
 	filters: 'Filters',
-	dataset: 'Dataset',
-	dataProvider: 'Databron',
-	placeDataProvider: 'Locatiebron',
-	geometrySource: 'Geometriebron',
-	contentType: 'Inhoudstype',
+	// the heading over an expanded card's provenance
+	provenance: 'Herkomst',
+	dataProvider: 'Dataleverancier',
+	placeDataProvider: 'Locatieleverancier',
+	fullDataset: 'Volledige dataset',
+	geometryProvider: 'Geometrieleverancier',
+	published: 'Gepubliceerd',
+	written: 'Geschreven',
+	topicsTooltip: 'Onderwerpen zijn automatisch toegekend door een classificatiemodel, zonder handmatige correctie, en voorlopig alleen aan een deel van de datasets. Een grijs onderwerp heeft geen resultaten binnen de andere filters. Minimaal één: resultaten met minstens één gekozen onderwerp. Alle: alleen resultaten met alle gekozen onderwerpen.',
 	topics: 'Onderwerpen',
 	topicsAny: 'Minimaal één',
 	topicsAll: 'Alle',
 	clearAll: 'Wis alles',
-	toggleTopicOperator: 'Wissel tussen minimaal één en alle onderwerpen',
-	source: 'Bron',
+	// the topics' operator switch, named by what "on" means
+	topicOperator: 'Alle gekozen onderwerpen',
 
-	// Error titles
-	'Invalid Content Type Removed': 'Ongeldig inhoudstype verwijderd',
-	'Invalid Tag Removed': 'Ongeldig onderwerp verwijderd',
-	'Tag Counts Failed': 'Aantallen per onderwerp niet geladen',
-	'Invalid Input': 'Ongeldige invoer',
-	'Period Not Found': 'Periode niet gevonden',
-	'Invalid Cell': 'Ongeldige cel',
-	'Place Not Found': 'Plek niet gevonden',
-	'Place Filter Load Failed': 'Plekfilter laden mislukt',
-	'Place Search Failed': 'Zoeken naar plekken mislukt',
-
-	// Error messages
-	'is not a valid content type and was removed from your selection': 'is geen geldig inhoudstype en is verwijderd uit uw selectie',
-	'is not a valid tag and was removed from your selection': 'is geen geldig onderwerp en is verwijderd uit uw selectie',
-	'No valid content types found. Defaulting to all content types': 'Geen geldige inhoudstypes gevonden. Standaard ingesteld op alle inhoudstypes',
-	'invalid format. Expected YYYY_YYYY': 'ongeldig formaat. Verwacht YYYY_YYYY',
-	'Defaulting to most recent period': 'Standaard ingesteld op meest recente periode',
-	'invalid range. Start year must be less than end year': 'ongeldig bereik. Beginjaar moet kleiner zijn dan eindjaar',
-	spans: 'beslaat',
-	'years. Maximum 50 years supported': 'jaar. Maximaal 50 jaar ondersteund',
-	"doesn't exist in the dataset. Defaulting to most recent period": 'bestaat niet in de dataset. Standaard ingesteld op meest recente periode',
-	'not found. Please select a valid cell from the map': 'niet gevonden. Selecteer een geldige cel op de kaart',
-	'The place in this URL does not exist anymore. The place filter was removed.':
-		'De plek in deze URL bestaat niet meer. Het plekfilter is verwijderd.',
-	'Could not restore the place filter. Please try again later.':
-		'Kon het plekfilter niet herstellen. Probeer het later opnieuw.',
-	'Could not search places. Please try again later.':
-		'Kon geen plekken zoeken. Probeer het later opnieuw.',
-	'Could not load the topic counts.': 'Kon de aantallen per onderwerp niet laden.'
+	// Toasts: a title, and a sentence under <key>Text when the title needs one; {slots} are filled in
+	indexUnreachable: 'Index niet bereikbaar',
+	noInternet: 'Geen internetverbinding',
+	// added under a failure when the server answered with a status
+	failureCode: 'Foutcode {code}',
+	indexNotLoaded: 'Index niet geladen',
+	mapNotLoaded: 'Kaart niet geladen',
+	timelineNotLoaded: 'Tijdlijn niet geladen',
+	featuresNotLoaded: 'Features niet geladen',
+	topicCountsNotLoaded: 'Aantallen per onderwerp niet geladen',
+	topicCountsNotLoadedText: 'De onderwerpen werken nog wel.',
+	placeSearchFailed: 'Zoeken naar plekken mislukt',
+	placeFilterNotRestored: 'Plekfilter niet hersteld',
+	// one toast for everything wrong with a link on arrival
+	linkValueUnknownOne: 'Onbekende waarde in de link',
+	linkValueUnknownMany: 'Onbekende waarden in de link',
+	linkValueIgnoredOne: '{values} bestaat niet en wordt genegeerd.',
+	linkValueIgnoredMany: '{values} bestaan niet en worden genegeerd.',
+	linkPeriodReplaced: 'Periode {period} bestaat niet; de meest recente periode wordt getoond.',
+	// the error page
+	pageNotFound: 'Pagina niet gevonden',
+	somethingWentWrong: 'Er ging iets mis',
+	backToMap: 'Terug naar de kaart'
 };
 
 // Reverse map (built once)
@@ -168,17 +262,17 @@ export function reverseTranslateAll(dutch: string[]): string[] {
 	return dutch.map(reverseTranslate);
 }
 
-/**
- * Translate an error message by substring replacement (not a key lookup), so
- * dynamic messages with interpolated values still get their known phrases translated.
- */
-export function translateErrorMessage(message: string): string {
-	let translated = message;
-	// Apply translations for error message patterns
-	for (const [english, dutch] of Object.entries(TRANSLATIONS)) {
-		if (english.length > 20) { // Only match longer error message strings
-			translated = translated.replace(english, dutch);
+/** Whether a key has a translation of its own. */
+export function hasTranslation(key: string): boolean {
+	return key in TRANSLATIONS;
+}
+
+/** A translated template with its {name} slots filled in: fill('(nu {name})', { name: 'Dam' }). */
+export function fill(template: string, values: Record<string, string> = {}): string {
+	return template.replace(/\{(\w+)\}/g, (slot, name: string) => {
+		if (name in values) {
+			return values[name];
 		}
-	}
-	return translated;
+		return slot;
+	});
 }

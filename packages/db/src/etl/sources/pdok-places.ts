@@ -20,6 +20,7 @@ interface PdokProps {
   name: string;
   source: PlaceSource;
   url: string | null;
+  buildingId?: string | null;
 }
 
 type PdokFeature = Feature<Geometry, PdokProps>;
@@ -56,6 +57,7 @@ export const pdokRow = (f: PdokFeature): PlaceInsert => ({
   wkt: toWkt(f.geometry),
   source: f.properties.source,
   url: f.properties.url,
+  buildingId: f.properties.buildingId ?? null,
 });
 
 export async function ingest(filePath: string) {

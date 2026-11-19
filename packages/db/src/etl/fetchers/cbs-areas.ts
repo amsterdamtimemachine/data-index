@@ -30,12 +30,18 @@ export class CbsAreasFetcher extends PdokFetcher<CbsProps> {
 
   protected toPlace(feature: Feature<Geometry, CbsProps>, layer: string): PlaceDraft {
     const p = feature.properties;
-    const isBuurt = layer.endsWith('buurten');
-    const code = (isBuurt ? p.buurtcode : p.wijkcode)!;
+    let code = p.wijkcode!;
+    let type: PlaceDraft['type'] = 'district';
+    let name = p.wijknaam!;
+    if (layer.endsWith('buurten')) {
+      code = p.buurtcode!;
+      type = 'neighbourhood';
+      name = p.buurtnaam!;
+    }
     return {
       id: `cbs-${code}`,
-      type: isBuurt ? 'neighbourhood' : 'district',
-      name: (isBuurt ? p.buurtnaam : p.wijknaam)!,
+      type,
+      name,
       url: null,
       geometry: feature.geometry,
     };

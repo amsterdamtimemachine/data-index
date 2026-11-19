@@ -9,6 +9,7 @@ type BagProps = {
   huisletter?: string;
   toevoeging?: string;
   rdf_seealso?: string;
+  pandidentificatie?: string;
 };
 
 const SERVICE = 'https://service.pdok.nl/lv/bag/wfs/v2_0';
@@ -30,7 +31,7 @@ function addressLabel(p: BagProps): string {
 export class BagAddressesFetcher extends PdokFetcher<BagProps> {
   protected source = 'bag' as const;
   protected layers = ['bag:verblijfsobject'];
-  protected ndjson = true;
+  protected override ndjson = true;
 
   // Full ACTIVE_SCOPE: Amsterdam + Weesp (identificatie 0457*, still present
   // post-annexation; not in Adamlink). Peripheral parked — add here to re-expand.
@@ -42,14 +43,15 @@ export class BagAddressesFetcher extends PdokFetcher<BagProps> {
   // PDOK's BAG WFS caps startIndex paging, so a large municipality (Amsterdam ~470k)
   // is fetched by keyset pagination: sort by identificatie and page with
   // identificatie > last-seen instead of a growing offset.
-  protected async *places(g: Gemeente): AsyncGenerator<PlaceDraft> {
+  protected override async *places(g: Gemeente): AsyncGenerator<PlaceDraft> {
     const code = g.code.slice(2);
     const layer = this.layers[0];
     let cursor: string | null = null;
     for (;;) {
-      const filter = cursor
-        ? wrap(`<fes:And>${likeIdent(code)}${gtIdent(cursor)}</fes:And>`)
-        : this.gemeenteFilter(g);
+      let filter = this.gemeenteFilter(g);
+      if (cursor) {
+        filter = wrap(`<fes:And>${likeIdent(code)}${gtIdent(cursor)}</fes:And>`);
+      }
       const features = await this.fetchFeatures(this.service(), layer,
         `count=${PAGE}&sortBy=identificatie&filter=${encodeURIComponent(filter)}`);
       if (!features.length) break;
@@ -66,6 +68,7 @@ export class BagAddressesFetcher extends PdokFetcher<BagProps> {
       type: 'address',
       name: addressLabel(p),
       url: p.rdf_seealso ?? null,
+      buildingId: p.pandidentificatie || null,
       geometry: feature.geometry,
     };
   }

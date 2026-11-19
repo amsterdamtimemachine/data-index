@@ -1,26 +1,22 @@
 <!--
-	The map's filter sidebar: place, search term, record type, dataset, geometry, topics.
+	The map's filter sidebar: search (place or term), record type, dataset, scale, topics.
 	Owns the URL writing — each change sets/deletes its query param and navigates, which
 	re-runs the loader and re-fetches the map data.
 -->
 <script lang="ts">
 	import { asset } from '$app/paths';
 	import type { PlaceSearchMatch, VisualizationMetadata } from '@atm/shared/types';
-	import type { FilterState } from '$types/filters';
-	import { translate, translateAll, reverseTranslateAll } from '$utils/translations';
-	import { navigateParams, withoutPlace } from '$utils/navigate';
-	import { createTagCounts } from '$lib/state/tag-counts.svelte';
-	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
+	import type { FilterState } from '#lib/types/filters.js';
+	import { translate, translateAll, reverseTranslateAll } from '#lib/utils/translations.js';
+	import { navigateParams, withoutPlace } from '#lib/utils/navigate.js';
+	import { createTagCounts } from '#lib/state/tag-counts.svelte.js';
 	import Heading from './Heading.svelte';
-	import Tooltip from './Tooltip.svelte';
 	import TextWithSlots from './TextWithSlots.svelte';
-	import ToggleGroup from './ToggleGroup.svelte';
-	import Tag from './Tag.svelte';
 	import FilterSection from './FilterSection.svelte';
-import PlaceSearchInput from './PlaceSearchInput.svelte';
-import PlaceFilterTag from './PlaceFilterTag.svelte';
-import FeatureSearchInput from './FeatureSearchInput.svelte';
-import SearchFilterTag from './SearchFilterTag.svelte';
+	import FilterToggleGroup from './FilterToggleGroup.svelte';
+	import SearchInput from './SearchInput.svelte';
+	import PlaceFilterTag from './PlaceFilterTag.svelte';
+	import SearchFilterTag from './SearchFilterTag.svelte';
 	import Button from './Button.svelte';
 	import X from 'phosphor-svelte/lib/X';
 	import TagOperatorSwitch from './TagOperatorSwitch.svelte';
@@ -114,8 +110,8 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		}
 	}
 
-	function handleRecordTypeChange(selected: string[] | string) {
-		const dutch = Array.isArray(selected) ? selected : [selected];
+	function handleRecordTypeChange(selected: string[]) {
+		const dutch = selected;
 		const english = reverseTranslateAll(dutch);
 		navigateParams((p) => {
 			if (english.length > 0) p.set('recordTypes', english.join(','));
@@ -123,8 +119,8 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		});
 	}
 
-	function handleDatasetChange(selected: string[] | string) {
-		const labels = Array.isArray(selected) ? selected : [selected];
+	function handleDatasetChange(selected: string[]) {
+		const labels = selected;
 		const labelToId = new Map(datasets.map((s) => [s.label, s.id]));
 		const ids = labels.map((label) => labelToId.get(label) || label);
 		navigateParams((p) => {
@@ -133,8 +129,8 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		});
 	}
 
-	function handlePlaceTypeChange(selected: string[] | string) {
-		const dutch = Array.isArray(selected) ? selected : [selected];
+	function handlePlaceTypeChange(selected: string[]) {
+		const dutch = selected;
 		const raw = reverseTranslateAll(dutch);
 		navigateParams((p) => {
 			if (raw.length > 0) p.set('placeTypes', raw.join(','));
@@ -142,8 +138,8 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 		});
 	}
 
-	function handleTagsChange(selected: string | string[]) {
-		const dutch = Array.isArray(selected) ? selected : [selected];
+	function handleTagsChange(selected: string[]) {
+		const dutch = selected;
 		const ids = reverseTranslateAll(dutch);
 		navigateParams((p) => {
 			if (ids.length > 0) p.set('tags', ids.join(','));
@@ -200,102 +196,93 @@ import SearchFilterTag from './SearchFilterTag.svelte';
 
 <div class="p-3">
 	<div class="mb-4">
-		<Heading level={2} class="font-bold text-lg mb-2"> Filters </Heading>
+		<Heading level={2} class="font-bold text-lg mb-2">{translate('filters')}</Heading>
 
-		<div class="mb-4">
-			<div class="flex mb-2">
-				<Heading level={3} class="pr-2">Plek</Heading>
-				<Tooltip icon={QuestionMark} placement="bottom">
-					<TextWithSlots text={translate('placeSearchTooltip')}>
-						{#snippet children(slot)}
-							{#if slot === 'border'}
-								<img src={asset('/glyphs/PlaceBorder.svg')} alt="" width="24" height="24" class="inline align-middle mx-1" />
-							{/if}
-						{/snippet}
-					</TextWithSlots>
-				</Tooltip>
-			</div>
-			<PlaceSearchInput onSelect={handlePlaceSelect} {selectedPlace} />
+		<FilterSection heading={translate('searchFilter')}>
+			{#snippet tooltip()}
+				<TextWithSlots text={translate('searchTooltip')}>
+					{#snippet children(slot)}
+						{#if slot === 'border'}
+							<img src={asset('glyphs/PlaceBorder.svg')} alt="" width="24" height="24" class="inline align-middle mx-1" />
+						{/if}
+					{/snippet}
+				</TextWithSlots>
+			{/snippet}
+			<SearchInput onApplySearch={handleSearchApply} onSelectPlace={handlePlaceSelect} filterQuery={activeParams} />
 			{#if selectedPlace}
 				<div class="mt-2">
 					<PlaceFilterTag place={selectedPlace} onClear={handlePlaceClear} onToggle={onTogglePlacePanel} active={placePanelOpen} />
 				</div>
 			{/if}
-		</div>
-
-		<div class="mb-4">
-			<div class="flex mb-2">
-				<Heading level={3} class="pr-2">Zoekterm</Heading>
-				<Tooltip icon={QuestionMark} placement="bottom">{translate('searchTooltip')}</Tooltip>
-			</div>
-			<FeatureSearchInput onApply={handleSearchApply} filterQuery={activeParams} />
 			{#if currentSearchQuery}
 				<div class="mt-2">
 					<SearchFilterTag query={currentSearchQuery} onClear={handleSearchClear} onToggle={onToggleSearch} active={!searchPaused} />
 				</div>
 			{/if}
-		</div>
+		</FilterSection>
 
-		<FilterSection
-			heading="Inhoudstype"
-			tooltip="De data index bevat een selectie van afbeeldingen, persoonsdata en teksten uit Nederlandse kranten."
-			items={translatedRecordTypes}
-			selectedItems={translatedCurrentRecordTypes}
-			onItemSelected={handleRecordTypeChange}
-		/>
+		<FilterSection heading={translate('recordTypeFilter')}>
+			{#snippet children(headingId)}
+				<FilterToggleGroup
+					items={translatedRecordTypes}
+					selectedItems={translatedCurrentRecordTypes}
+					onItemSelected={handleRecordTypeChange}
+					labelledBy={headingId}
+				/>
+			{/snippet}
+		</FilterSection>
 	</div>
 
-	<FilterSection
-		heading="Dataset"
-		tooltip="Filter op basis van de dataset waaruit de data afkomstig is."
-		items={datasetLabels}
-		selectedItems={currentDatasetLabels}
-		onItemSelected={handleDatasetChange}
-	/>
+	<FilterSection heading={translate('datasetFilter')}>
+		{#snippet tooltip()}
+			{translate('datasetFilterTooltip')}
+		{/snippet}
+		{#snippet children(headingId)}
+			<FilterToggleGroup items={datasetLabels} selectedItems={currentDatasetLabels} onItemSelected={handleDatasetChange} labelledBy={headingId} />
+		{/snippet}
+	</FilterSection>
 
 	{#if placeTypes.length > 1}
-		<FilterSection
-			heading="Geometrie"
-			tooltip="Filter op basis van het type locatie waarmee de data is verbonden."
-			items={translatedPlaceTypes}
-			selectedItems={translatedCurrentPlaceTypes}
-			onItemSelected={handlePlaceTypeChange}
-		/>
+		<FilterSection heading={translate('scaleFilter')}>
+			{#snippet tooltip()}
+				{translate('scaleFilterTooltip')}
+			{/snippet}
+			{#snippet children(headingId)}
+				<FilterToggleGroup
+					items={translatedPlaceTypes}
+					selectedItems={translatedCurrentPlaceTypes}
+					onItemSelected={handlePlaceTypeChange}
+					labelledBy={headingId}
+				/>
+			{/snippet}
+		</FilterSection>
 	{/if}
 
 	{#if availableTags.length > 0}
-		<div class="mb-4">
-			<div class="flex mb-2">
-				<Heading level={3} class="pr-2">{translate('topics')}</Heading>
-				<Tooltip icon={QuestionMark} placement="bottom">
-					Onderwerpen zijn automatisch toegekend door beeldclassificatie, zonder handmatige correctie, en voorlopig alleen aan afbeeldingen. Een grijs onderwerp heeft geen resultaten binnen de andere filters. Minimaal één: resultaten met minstens één gekozen onderwerp. Alle: alleen resultaten met alle gekozen onderwerpen.
-				</Tooltip>
-			</div>
-			<TagOperatorSwitch
-				operator={currentTagOperator}
-				onOperatorChange={handleTagOperatorChange}
-				anyLabel={translate('topicsAny')}
-				allLabel={translate('topicsAll')}
-				class="mb-2"
-			/>
-			{#if currentTags.length > 0}
-				<Button icon={X} size={16} onclick={handleTagsClear} class="mb-2">{translate('clearAll')}</Button>
-			{/if}
-			<ToggleGroup
-				items={translatedTags}
-				selectedItems={translatedCurrentTags}
-				disabledItems={disabledTagLabels}
-				onItemSelected={handleTagsChange}
-				requireOneItemSelected={false}
-			>
-				{#snippet children(item, isSelected, isDisabled)}
-					{#if isSelected}
-						<Tag variant="selected-outline" disabled={isDisabled} interactive={true}>{item}</Tag>
-					{:else}
-						<Tag variant="outline" disabled={isDisabled} interactive={true}>{item}</Tag>
-					{/if}
-				{/snippet}
-			</ToggleGroup>
-		</div>
+		<FilterSection heading={translate('topics')}>
+			{#snippet tooltip()}
+				{translate('topicsTooltip')}
+			{/snippet}
+			{#snippet children(headingId)}
+				<TagOperatorSwitch
+					operator={currentTagOperator}
+					onOperatorChange={handleTagOperatorChange}
+					anyLabel={translate('topicsAny')}
+					allLabel={translate('topicsAll')}
+					class="mb-2"
+				/>
+				{#if currentTags.length > 0}
+					<Button icon={X} size={16} onclick={handleTagsClear} class="mb-2">{translate('clearAll')}</Button>
+				{/if}
+				<FilterToggleGroup
+					items={translatedTags}
+					selectedItems={translatedCurrentTags}
+					disabledItems={disabledTagLabels}
+					onItemSelected={handleTagsChange}
+					requireOne={false}
+					labelledBy={headingId}
+				/>
+			{/snippet}
+		</FilterSection>
 	{/if}
 </div>

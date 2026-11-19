@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { mergeCss } from '$utils/utils';
-	import { translate } from '$utils/translations';
+	import { mergeCss } from '#lib/utils/utils.js';
+	import { translate } from '#lib/utils/translations.js';
 	type Props = {
 		thumbnail: string;
 		alt?: string;
@@ -18,8 +18,14 @@
 		return 'h-32';
 	});
 	let imageLoading = $state(true);
+	// the picture's own width / height, once it has loaded; the box takes this shape
+	let aspect = $state(4 / 3);
 
-	const handleImageLoad = () => {
+	const handleImageLoad = (event: Event) => {
+		const img = event.currentTarget as HTMLImageElement;
+		if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+			aspect = img.naturalWidth / img.naturalHeight;
+		}
 		imageLoading = false;
 	};
 
@@ -29,17 +35,19 @@
 	};
 </script>
 
-<div class="flex-1">
+<div class="flex-1 min-h-0 flex flex-col">
 	{#if imageError}
 		<div class={mergeCss('w-full flex items-center justify-center text-base text-black', errorHeight)}>
 			{translate('imageUnavailable')}
 		</div>
 	{:else if expanded}
-		<div class="relative w-full border-y border-atm-sand-border">
+		<!-- a box of the picture's shape, which shrinks when the card runs out of room;
+		     the picture is drawn whole inside it, on a gold-gray passe-partout -->
+		<div class="relative w-full min-h-0 shrink overflow-hidden border-y border-atm-sand-border bg-atm-gold-gray" style:aspect-ratio={aspect}>
 			<img
 				src={thumbnail}
 				{alt}
-				class="w-full h-auto object-contain max-h-[70vh] rounded"
+				class="absolute inset-0 w-full h-full object-contain rounded"
 				class:hidden={imageLoading}
 				onload={handleImageLoad}
 				onerror={handleImageError}
@@ -56,9 +64,10 @@
 					type="button"
 					class="w-full block cursor-pointer hover:opacity-80 transition-opacity"
 					onclick={onExpand}
-					aria-label="Expand image"
+					aria-label={translate('expandImage')}
+					title={translate('expandImage')}
 				>
-					<div class="w-full aspect-[4/3] overflow-hidden rounded bg-gray-100">
+					<div class="w-full aspect-[4/3] overflow-hidden rounded bg-atm-gold-gray">
 						<img
 							src={thumbnail}
 							{alt}
@@ -70,7 +79,7 @@
 					</div>
 				</button>
 			{:else}
-				<div class="w-full aspect-[4/3] overflow-hidden rounded bg-gray-100">
+				<div class="w-full aspect-[4/3] overflow-hidden rounded bg-atm-gold-gray">
 					<img
 						src={thumbnail}
 						{alt}

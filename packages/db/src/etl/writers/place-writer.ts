@@ -8,7 +8,7 @@ import { PLACE_PROVIDERS, type PlaceSource } from '@atm/shared';
 import { db } from '../../client';
 import { wktToRd } from '../sql';
 import {
-  organisations,
+  agents,
   placeHistoricalName,
   place,
   placeGeometry,
@@ -16,13 +16,13 @@ import {
 } from '../../schema';
 
 /**
- * Seed the place-provider organisations (Adamlink/CBS/NWB/BAG) that `place.source`
+ * Seed the place-provider agents (Adamlink/CBS/NWB/BAG) that `place.source`
  * references. Idempotent; called by insertPlaces so every place has its provider row
  * before the foreign key is checked. The rows are a materialised copy of PLACE_PROVIDERS.
  */
 async function upsertProviders(): Promise<void> {
-  await db.insert(organisations)
-    .values(Object.entries(PLACE_PROVIDERS).map(([id, { label, url }]) => ({ id, label, url })))
+  await db.insert(agents)
+    .values(Object.entries(PLACE_PROVIDERS).map(([id, { label, url }]) => ({ id, kind: 'Organization' as const, label, url })))
     .onConflictDoNothing();
 }
 
@@ -58,6 +58,8 @@ export interface PlaceInsert {
   // existence for Adamlink streets. Left undefined for addresses. Dates as 'YYYY-MM-DD'.
   since?: string | null;
   until?: string | null;
+  // The BAG building the point stands in, as the source states it. Addresses only.
+  buildingId?: string | null;
 }
 
 /**
@@ -115,13 +117,14 @@ export async function insertPlaces(
         url: r.geometryUrl ?? null,
         since: r.since ?? null,
         until: r.until ?? null,
+        buildingId: r.buildingId ?? null,
       }))
     );
     if (opts.onConflict === 'replaceGeometry') {
       await geomQuery.onConflictDoUpdate({
         target: placeGeometry.placeId,
-        // provenance travels with the geometry; period (since/until) is preserved
-        set: { geometry: sql`excluded.geometry`, source: sql`excluded.source`, url: sql`excluded.url` },
+        // provenance and building travel with the geometry; period (since/until) is preserved
+        set: { geometry: sql`excluded.geometry`, source: sql`excluded.source`, url: sql`excluded.url`, buildingId: sql`excluded.building_id` },
       });
     } else {
       await geomQuery.onConflictDoUpdate({
@@ -132,6 +135,7 @@ export async function insertPlaces(
           url: sql`excluded.url`,
           since: sql`excluded.since`,
           until: sql`excluded.until`,
+          buildingId: sql`excluded.building_id`,
         },
       });
     }

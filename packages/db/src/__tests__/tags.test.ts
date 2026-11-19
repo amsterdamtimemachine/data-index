@@ -52,9 +52,9 @@ describe('tag filtering', () => {
     await setupTestDb();
     await cleanTestDb();
     await upsertSource({
-      organisation: { id: 'tg-org', label: 'TG Org' },
+      provider: { id: 'tg-org', label: 'TG Org' },
       dataset: { id: 'tg-ds', label: 'TG DS' },
-      relation: { id: 'isAbout', label: 'Is About' },
+      relations: [{ id: 'isAbout', label: 'Is About' }],
     });
 
     await db.execute(sql`
@@ -84,6 +84,7 @@ describe('tag filtering', () => {
         (${F4}, 'tp-nbhd',   'isAbout')
     `);
     await db.execute(sql`INSERT INTO tags (id, label) VALUES ('nature','nature'), ('transport','transport'), ('water','water')`);
+    await db.execute(sql`INSERT INTO agents (id, kind, label) VALUES ('a', 'SoftwareAgent', 'A'), ('b', 'SoftwareAgent', 'B')`);
     await db.execute(sql`
       INSERT INTO feature_tags (feature_id, tag_id, source) VALUES
         (${F1}, 'nature', 'a'), (${F1}, 'water', 'a'),
@@ -161,6 +162,14 @@ describe('tag filtering', () => {
     expect(timelineSum(filtered.timeline)).toBe(timelineSum(persons.timeline) + 1);
     const none = await getHeatmapTimeline({ cols: 50 }, undefined, undefined, undefined, 50, { tags: ['nope'] });
     expect(timelineSum(none.timeline)).toBe(0);
+  });
+
+  test('a feature carries the classifier models behind its tags', async () => {
+    const area = { kind: 'bounds' as const, bounds: await fullBounds() };
+    const result = await getFeatures({ area, sort: 'date', sortDirection: 'asc', pageSize: 10 });
+    const byId = new Map(result.data.map((f) => [f.id, f.classifiers]));
+    expect(byId.get(F1)).toEqual([{ id: 'a', label: 'A', url: undefined }]);
+    expect(byId.get(F4)).toEqual([{ id: 'a', label: 'A', url: undefined }, { id: 'b', label: 'B', url: undefined }]);
   });
 
   test('the feature list applies the same tag sets and returns tag ids', async () => {

@@ -9,6 +9,8 @@ interface PlaceRecord {
   name: string;
   source: PlaceSource;
   url: string | null;
+  // the BAG building (pand) an address stands in; addresses only
+  buildingId?: string | null;
   geometry: Geometry;
 }
 
@@ -55,7 +57,7 @@ function ndjsonWriter(path: string): Writer {
 const toFeature = (p: PlaceRecord): OutFeature => ({
   type: 'Feature',
   geometry: p.geometry,
-  properties: { id: p.id, type: p.type, name: p.name, source: p.source, url: p.url },
+  properties: { id: p.id, type: p.type, name: p.name, source: p.source, url: p.url, buildingId: p.buildingId ?? null },
 });
 
 export abstract class PdokFetcher<P = GeoJsonProperties> {

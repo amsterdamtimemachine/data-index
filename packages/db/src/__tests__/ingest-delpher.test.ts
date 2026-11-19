@@ -16,8 +16,8 @@ describe('delpher ingestion (WKT cascade match + period parse)', () => {
     await setupTestDb();
     await cleanTestDb();
     // One place exactly under the first article's point; nothing near the second.
-    // place.source FKs to organisations, so seed the Adamlink provider first.
-    await db.execute(sql`INSERT INTO organisations (id, label) VALUES ('adamlink', 'Adamlink')`);
+    // place.source FKs to agents, so seed the Adamlink provider first.
+    await db.execute(sql`INSERT INTO agents (id, label) VALUES ('adamlink', 'Adamlink')`);
     await db.execute(sql`INSERT INTO place (id, type, source) VALUES ('delpher-place', 'address', 'adamlink')`);
     await db.execute(sql`
       INSERT INTO place_geometry (place_id, geometry)
@@ -39,8 +39,8 @@ describe('delpher ingestion (WKT cascade match + period parse)', () => {
   });
 
   test('the matched feature is a Delpher text record with the parsed date range', async () => {
-    const r = await db.execute<{ record_type: string; dataset_id: string; url: string; start: string; end: string }>(sql`
-      SELECT record_type, dataset_id, url, start_date::text AS start, end_date::text AS end
+    const r = await db.execute<{ record_type: string; dataset_id: string; url: string; start: string; end: string; published: string | null }>(sql`
+      SELECT record_type, dataset_id, url, start_date::text AS start, end_date::text AS end, entity->>'datePublished' AS published
       FROM features WHERE url = 'https://www.delpher.nl/article/a1'
     `);
     const f = r.rows[0];
@@ -48,6 +48,7 @@ describe('delpher ingestion (WKT cascade match + period parse)', () => {
     expect(f.dataset_id).toBe('delpher');
     expect(f.start).toBe('1925-01-01');
     expect(f.end).toBe('1925-12-31'); // period [1925-01-01,1926-01-01) is half-open → inclusive last day
+    expect(f.published).toBe('1925-01-01/1925-12-31');
   });
 
   test('an inclusive "]" closer keeps the end day as-is (no −1 shift)', async () => {
@@ -65,6 +66,12 @@ describe('delpher ingestion (WKT cascade match + period parse)', () => {
       SELECT COUNT(*) AS count FROM features WHERE url = 'https://www.delpher.nl/article/a4'
     `);
     expect(parseInt(r.rows[0].count)).toBe(0);
+  });
+
+  test('the description keeps the opening of the article, not its text', async () => {
+    const r = await db.execute<{ description: string }>(sql`SELECT description FROM features WHERE url LIKE '%article/a1'`);
+    expect(r.rows[0].description.length).toBe(128);
+    expect(r.rows[0].description).toBe(('Amsterdam. '.repeat(20)).slice(0, 128));
   });
 
   test('the matched articles link to the place under their point', async () => {

@@ -1,12 +1,15 @@
 
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 import { page } from '$app/state';
-import { replaceState } from '$app/navigation';
-import type { AppError } from '$types/error';
+import { goto } from '$app/navigation';
+import type { HeatmapDimensions, PlaceSearchMatch } from '@atm/shared/types';
+import { getCellBoundsFromCellId } from '#lib/utils/heatmap.js';
 
 /**
  * The map view's selection — period and selected cell — mirrored into the URL
- * (replaceState, no navigation). The component is responsible for navigation decisions.
+ * (a shallow replace, no navigation), and what the user is pointing at. One instance
+ * for the app: the page initialises it, the map draws from it, the search writes
+ * the hover to it.
  */
 export function createMapSelection() {
 	let currentPeriod = $state<string>('');
@@ -17,16 +20,23 @@ export function createMapSelection() {
 		minLon: number;
 		maxLon: number;
 	} | null>(null);
-	let errors = $state<AppError[]>([]);
 
-	// Callback for cell selection
-	let onCellSelected = $state<
-		| ((
-				cellId: string | null,
-				bounds?: { minLat: number; maxLat: number; minLon: number; maxLon: number }
-		  ) => void)
-		| null
-	>(null);
+	// the grid, so a cell id resolves to its bounds
+	let dimensions = $state<HeatmapDimensions | null>(null);
+	// the cells of the search result under the pointer or the arrow keys
+	let hoveredCells = $state<number[] | null>(null);
+
+	function setDimensions(grid: HeatmapDimensions | null) {
+		dimensions = grid;
+	}
+
+	function hoverPlace(match: PlaceSearchMatch | null) {
+		if (match) {
+			hoveredCells = match.cells;
+		} else {
+			hoveredCells = null;
+		}
+	}
 
 	/**
 	 * Initializes the controller with server data.
@@ -86,34 +96,23 @@ export function createMapSelection() {
 	}
 
 	/**
-	 * Selects a cell and updates URL. Calls onCellSelected callback.
+	 * Selects a cell and updates the URL; its bounds follow from the grid.
 	 * Pass null to deselect the current cell.
 	 */
-	function selectCell(
-		cellId: string | null,
-		bounds?: { minLat: number; maxLat: number; minLon: number; maxLon: number }
-	) {
+	function selectCell(cellId: string | null) {
 		selectedCellId = cellId;
-		selectedCellBounds = bounds || null;
+		selectedCellBounds = null;
+		if (cellId && dimensions) {
+			selectedCellBounds = getCellBoundsFromCellId(cellId, dimensions);
+		}
 
 		if (cellId) {
 			updateUrlParams({ cell: cellId });
 		} else {
 			updateUrlParams({ cell: null });
 		}
-
-		// Call callback if provided
-		if (onCellSelected) {
-			onCellSelected(cellId, bounds);
-		}
 	}
 
-	/**
-	 * Clears all current errors. Useful when navigating or retrying operations.
-	 */
-	function clearErrors() {
-		errors = [];
-	}
 
 	/**
 	 * Updates URL parameters without triggering navigation.
@@ -123,22 +122,20 @@ export function createMapSelection() {
 	function updateUrlParams(params: Record<string, string | null>) {
 		if (!browser) return;
 
-		try {
-			const url = new URL(window.location.href);
+		const url = new URL(window.location.href);
 
-			Object.entries(params).forEach(([key, value]) => {
-				if (value) {
-					url.searchParams.set(key, value);
-				} else {
-					url.searchParams.delete(key);
-				}
-			});
+		Object.entries(params).forEach(([key, value]) => {
+			if (value) {
+				url.searchParams.set(key, value);
+			} else {
+				url.searchParams.delete(key);
+			}
+		});
 
-			replaceState(url.pathname + url.search, page.state);
-		} catch (error) {
+		goto(url.pathname + url.search, { shallow: true, replace: true, state: page.state }).catch((error) => {
 			// Router not initialized yet, skip URL update
 			console.debug('Router not ready, skipping URL update:', error);
-		}
+		});
 	}
 
 	return {
@@ -155,31 +152,23 @@ export function createMapSelection() {
 		get showCellModal() {
 			return !!selectedCellId;
 		},
-		get errors() {
-			return errors;
+
+		get hoveredCells() {
+			return hoveredCells;
 		},
 
 		// State management methods
 		initialize,
+		setDimensions,
 		updatePeriod,
 		selectCell,
-		clearErrors,
+		hoverPlace,
 
 		// URL utilities
 		updateUrlParam,
 		updateUrlParams,
-		syncUrlParameters,
-
-		// Callback setters
-		set onCellSelected(
-			callback:
-				| ((
-						cellId: string | null,
-						bounds?: { minLat: number; maxLat: number; minLon: number; maxLon: number }
-				  ) => void)
-				| null
-		) {
-			onCellSelected = callback;
-		}
+		syncUrlParameters
 	};
 }
+
+export const mapSelection = createMapSelection();

@@ -1,9 +1,10 @@
 <script lang="ts">
-	import Tag from '$components/Tag.svelte';
-	import Button from '$components/Button.svelte';
+	import Tag from '#lib/components/Tag.svelte';
+	import Button from '#lib/components/Button.svelte';
 	import X from 'phosphor-svelte/lib/X';
-	import { translate } from '$utils/translations';
-	import { formatPlaceTitle } from '$utils/format';
+	import MapPin from 'phosphor-svelte/lib/MapPin';
+	import { translate } from '#lib/utils/translations.js';
+	import { formatPlaceTitle } from '#lib/utils/format.js';
 	import type { PlaceSearchMatch } from '@atm/shared/types';
 
 	type Props = {
@@ -39,14 +40,14 @@
 </script>
 
 {#snippet chipContent()}
-	{`${cellsLabel} ${displayName}`}
+	<span class="inline-flex align-[-2px] mr-1"><MapPin size={14} weight="bold" /></span>{`${cellsLabel} ${displayName}`}
 {/snippet}
 
 <div class="flex items-center gap-2">
 	<Button icon={X} onclick={onClear} size={18} aria-label={translate('clearPlaceFilter')} class="shrink-0" />
 	<Tag {variant} interactive={true}>
 		{#if onToggle}
-			<button onclick={onToggle} aria-label={toggleLabel} aria-pressed={active} class="text-left cursor-pointer">
+			<button onclick={onToggle} aria-label={toggleLabel} title={toggleLabel} aria-pressed={active} class="text-left cursor-pointer">
 				{@render chipContent()}
 			</button>
 		{:else}

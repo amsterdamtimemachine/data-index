@@ -3,7 +3,7 @@
  * the term, every fetch drops it. Remembering the paused term means a new or
  * cleared term un-pauses by itself, while other filter changes keep it.
  */
-import type { FilterState } from '$types/filters';
+import type { FilterState } from '#lib/types/filters.js';
 
 export function createSearchPause(getFilters: () => FilterState) {
 	let pausedTerm = $state<string | null>(null);

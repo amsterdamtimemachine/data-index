@@ -1,46 +1,43 @@
 <!-- (map)/+page.svelte -->
 <script lang="ts">
+	import { translate } from '#lib/utils/translations.js';
 	import { resolve } from '$app/paths';
-	import { filterParams } from '$utils/filters';
-	import { formatPlaceTitle } from '$utils/format';
-	import { tick, untrack } from 'svelte';
+	import { filterParams } from '#lib/utils/filters.js';
+	import { formatPlaceTitle } from '#lib/utils/format.js';
+	import { tick, untrack, onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
-	import { navigateParams } from '$utils/navigate';
-	import { createMapSelection } from '$state/map-selection.svelte';
-	import { createTimelineScope } from '$state/timeline-scope.svelte';
-	import { createMapData } from '$state/map-data.svelte';
-	import { createMapPadding } from '$state/map-padding.svelte';
-	import { createSearchPause } from '$state/search-pause.svelte';
-	import { createPageErrorData, createValidationError } from '$utils/error';
-	import { validateCellId } from '$utils/utils';
-	import { createMediaQuery, MOBILE_QUERY, MOBILE_MAX_WIDTH } from '$utils/media.svelte';
+	import { navigateParams } from '#lib/utils/navigate.js';
+	import { mapSelection } from '#lib/state/map-selection.svelte.js';
+	import { createTimelineScope } from '#lib/state/timeline-scope.svelte.js';
+	import { createMapData } from '#lib/state/map-data.svelte.js';
+	import { createMapPadding } from '#lib/state/map-padding.svelte.js';
+	import { createSearchPause } from '#lib/state/search-pause.svelte.js';
+	import { isValidCellId } from '#lib/utils/utils.js';
+	import { notifyOnce, notifyFailure, linkMessage } from '#lib/state/notify.js';
+	import { createMediaQuery, MOBILE_QUERY, MOBILE_MAX_WIDTH } from '#lib/utils/media.svelte.js';
 	import FeaturesPanelResizeHandle, {
 		panelWidthCss,
 		type PanelCols
-	} from '$components/FeaturesPanelResizeHandle.svelte';
-	import { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
-	import Heatmap from '$components/Heatmap.svelte';
-	import TimePeriodSelector from '$components/TimePeriodSelector.svelte';
-	import FilterPanel from '$components/FilterPanel.svelte';
-	import FeaturesPanel from '$components/FeaturesPanel.svelte';
-	import NavContainer from '$components/NavContainer.svelte';
-	import FiltersStatusPanel from '$components/FiltersStatusPanel.svelte';
-	import ErrorHandler from '$components/ErrorHandler.svelte';
-	import FeatureDetailModal from '$components/FeatureDetailModal.svelte';
-	import Nav from '$components/Nav.svelte';
-	import NavItem from '$components/NavItem.svelte';
+	} from '#lib/components/FeaturesPanelResizeHandle.svelte';
+	import { type UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
+	import Heatmap from '#lib/components/Heatmap.svelte';
+	import TimePeriodSelector from '#lib/components/TimePeriodSelector.svelte';
+	import FilterPanel from '#lib/components/FilterPanel.svelte';
+	import FeaturesPanel from '#lib/components/FeaturesPanel.svelte';
+	import { announcer } from '#lib/a11y/announcer.svelte.js';
+	import { mapSentence } from '#lib/a11y/announcements.js';
+	import NavContainer from '#lib/components/NavContainer.svelte';
+	import FiltersStatusPanel from '#lib/components/FiltersStatusPanel.svelte';
+	import Nav from '#lib/components/Nav.svelte';
+	import NavItem from '#lib/components/NavItem.svelte';
 	import type { PageData } from './$types';
 	import type { HeatmapTimeline } from '@atm/shared/types';
-	import type { PanelSubject } from '$lib/state/panel-features.svelte';
-	import type { AppError } from '$types/error';
-	import { env } from '$env/dynamic/public';
-	import { createEmptyHeatmap, getCellBoundsFromCellId, getCellIdFromLonLat } from '$utils/heatmap';
+	import type { PanelSubject } from '#lib/state/panel-features.svelte.js';
+	import { PUBLIC_DEFAULT_CENTER } from '$app/env/public';
+	import { createEmptyHeatmap, getCellIdFromLonLat } from '#lib/utils/heatmap.js';
 
 
 	let { data }: { data: PageData } = $props();
-
-	// validation errors this page raises (a stale period or cell in the URL)
-	let pageErrors = $state<AppError[]>([]);
 
 	const isMobile = createMediaQuery(MOBILE_QUERY);
 
@@ -60,15 +57,21 @@
 		{
 			get params() {
 				return activeParams;
-			},
-			get recordTypes() {
-				return filters.recordTypes;
 			}
 		},
-		initializeFromHeatmap
+		initializeFromHeatmap,
+		// with the panel open its list speaks for the results; closed, the map's total does
+		(histogram) => {
+			if (!showPanel) {
+				announcer.announce(mapSentence(histogram.totalFeatures));
+			}
+		}
 	);
 	const heatmapTimeline = $derived(mapData.timeline);
 	const dimensions = $derived(mapData.dimensions);
+	$effect(() => {
+		mapSelection.setDimensions(dimensions ?? null);
+	});
 	const histogram = $derived(mapData.histogram);
 
 	// Page-owned so the chosen size survives the panel's open/close cycles.
@@ -115,9 +118,7 @@
 	});
 
 	let recordTypes = $derived(data?.metadata?.recordTypes || []);
-	let validatedPeriod = $derived(data?.validatedPeriod);
 
-	const mapSelection = createMapSelection();
 	let currentPeriod = $derived(mapSelection.currentPeriod);
 	let selectedCellId = $derived(mapSelection.selectedCellId);
 	let selectedCellBounds = $derived(mapSelection.selectedCellBounds);
@@ -147,12 +148,6 @@
 		}
 	});
 
-	let allErrors = $derived.by(() => {
-		const serverErrors = data.errorData?.errors || [];
-		const controllerErrors = mapSelection.errors || [];
-		return createPageErrorData([...serverErrors, ...pageErrors, ...mapData.errors, ...controllerErrors]);
-	});
-
 	let currentHeatmap = $derived(
 		heatmapTimeline?.[currentPeriod] ?? (dimensions ? createEmptyHeatmap() : null)
 	);
@@ -170,40 +165,41 @@
 	function initializeFromHeatmap() {
 		if (hasInitialized || !dimensions || !heatmapTimeline) return;
 		hasInitialized = true;
+		mapSelection.setDimensions(dimensions);
 
 		// Period: the URL param if it names a loaded slice, else the most recent one.
 		// Slice keys derive from the bin configuration, so bookmarked URLs can go stale.
+		// The period is the one wrong value that gets corrected: the page needs a slice.
 		let initialPeriod = getLastAvailablePeriod(heatmapTimeline);
-		if (validatedPeriod) {
-			if (heatmapTimeline[validatedPeriod]) {
-				initialPeriod = validatedPeriod;
+		let replacedPeriod: string | null = null;
+		if (data.periodParam) {
+			if (heatmapTimeline[data.periodParam]) {
+				initialPeriod = data.periodParam;
 			} else {
-				pageErrors = [
-					...pageErrors,
-					createValidationError(
-						'period',
-						validatedPeriod,
-						`Period "${validatedPeriod}" not found. Showing the most recent period instead.`
-					)
-				];
+				replacedPeriod = data.periodParam;
 			}
 		}
 		mapSelection.initialize(initialPeriod);
 
 		tick().then(() => {
-			// Validate the deep-linked cell against the now-available dimensions (this used
-			// to be done in the loader, but dimensions arrive client-side now).
+			const unknownValues = [...data.unknownValues];
+			if (replacedPeriod) {
+				mapSelection.updateUrlParam('period', initialPeriod);
+			}
+
+			// the deep-linked cell, checked against the now-available grid; a wrong one is ignored
 			if (data.cellParam && dimensions && !placePanelOpen) {
-				const validation = validateCellId(data.cellParam, dimensions);
-				if (validation.isValid) {
-					const bounds = getCellBoundsFromCellId(data.cellParam, dimensions);
-					if (bounds) mapSelection.selectCell(data.cellParam, bounds);
+				if (isValidCellId(data.cellParam, dimensions)) {
+					mapSelection.selectCell(data.cellParam);
 				} else {
-					pageErrors = [
-						...pageErrors,
-						createValidationError('cell', data.cellParam, validation.error || `Cell "${data.cellParam}" not found. Please select a valid cell from the map.`)
-					];
+					unknownValues.push(data.cellParam);
 				}
+			}
+
+			// everything wrong with the link, in one toast on arrival
+			const linkNotice = linkMessage(unknownValues, replacedPeriod);
+			if (linkNotice) {
+				notifyOnce(linkNotice);
 			}
 
 			// Set URL defaults if no parameters exist
@@ -219,12 +215,10 @@
 					mapSelection.syncUrlParameters(lastPeriod, defaultRecordTypes);
 
 					// Skip the default cell on mobile — the map opens unfiltered there.
-					if (window.innerWidth > MOBILE_MAX_WIDTH && env.PUBLIC_DEFAULT_CENTER && dimensions) {
-						const [lon, lat] = env.PUBLIC_DEFAULT_CENTER.split(',').map(Number);
+					if (window.innerWidth > MOBILE_MAX_WIDTH && PUBLIC_DEFAULT_CENTER && dimensions) {
+						const [lon, lat] = PUBLIC_DEFAULT_CENTER.split(',').map(Number);
 						if (Number.isFinite(lon) && Number.isFinite(lat)) {
-							const cellId = getCellIdFromLonLat(lon, lat, dimensions);
-							const bounds = getCellBoundsFromCellId(cellId, dimensions);
-							if (bounds) mapSelection.selectCell(cellId, bounds);
+							mapSelection.selectCell(getCellIdFromLonLat(lon, lat, dimensions));
 						}
 					}
 				}
@@ -264,11 +258,21 @@
 		}
 	});
 
-	// A filter change reloads the page data (new errorData); drop the previous load's
-	// client-side errors so they don't accumulate across navigations.
-	afterNavigate(() => {
-		pageErrors = [];
-		mapData.clearErrors();
+	// The loaders' failures, which they cannot show themselves. The metadata loads once
+	// per visit; the place is looked up again on every navigation, so it reports each time.
+	// A shallow navigation only rewrites the URL and loads nothing.
+	onMount(() => {
+		if (data.metadataFailure) {
+			notifyFailure('indexNotLoaded', data.metadataFailure);
+		}
+	});
+	afterNavigate(({ shallow }) => {
+		if (shallow) {
+			return;
+		}
+		if (data.placeRestoreFailure) {
+			notifyFailure('placeFilterNotRestored', data.placeRestoreFailure);
+		}
 	});
 
 	function handlePeriodChange(period: string) {
@@ -279,17 +283,7 @@
 	// Handle cell selection from map; selecting a cell takes over the panel from
 	// the place view, but never clears the place filter itself.
 	function handleCellClick(cellId: string | null) {
-		if (cellId && dimensions) {
-			// Calculate bounds on-demand from dimensions
-			const bounds = getCellBoundsFromCellId(cellId, dimensions);
-			if (bounds) {
-				mapSelection.selectCell(cellId, bounds);
-			} else {
-				mapSelection.selectCell(cellId);
-			}
-		} else {
-			mapSelection.selectCell(null);
-		}
+		mapSelection.selectCell(cellId);
 		if (cellId && placePanelOpen) {
 			setPlacePanel(false);
 		}
@@ -300,7 +294,6 @@
 			setPlacePanel(false);
 			return;
 		}
-		mapSelection.clearErrors();
 		mapSelection.selectCell(null);
 	}
 
@@ -386,11 +379,11 @@
 	<link rel="preload" as="fetch" href={mapData.histogramUrl} crossorigin="anonymous" />
 </svelte:head>
 
-<ErrorHandler errorData={allErrors} />
 
 <!-- inline 100dvh tracks the mobile browser chrome; browsers without dvh drop the
      declaration and fall back to the h-screen class -->
 <div class="relative flex flex-col w-screen h-screen" style:height="100dvh">
+	<h1 class="sr-only">{translate('siteTitle')}</h1>
 	<div class="relative flex-1">
 		{#if currentHeatmap && dimensions}
 			<Heatmap
@@ -398,6 +391,7 @@
 				{dimensions}
 				{selectedCellId}
 				placeCells={data.selectedPlace?.cells}
+				hoverCells={mapSelection.hoveredCells ?? undefined}
 				placeSelected={placePanelOpen}
 				padding={mapPadding.padding}
 				{handleCellClick}
@@ -407,7 +401,7 @@
 		<NavContainer bind:isExpanded={navExpanded} bind:element={navElement} class="absolute top-0 left-0 z-30">
 			{#snippet header()}
 				<Nav class="p-3">
-					<NavItem href={resolve('/about')} label="Over" />
+					<NavItem href={resolve('/about')} label={translate('navAbout')} />
 				</Nav>
 			{/snippet}
 			<FilterPanel
@@ -461,7 +455,7 @@
 			period={currentPeriod}
 			{histogram}
 			localHistogram={timelineScope.histogram}
-			markerHistogram={timelineScope.subjectSeries}
+			selectionHistogram={timelineScope.subjectSeries}
 			localLabel={timelineScope.label}
 			onToggleLocal={timelineScope.onToggle}
 			localToggleOn={timelineScope.switchOn}
@@ -471,5 +465,4 @@
 		/>
 	{/if}
 
-	<FeatureDetailModal />
 </div>

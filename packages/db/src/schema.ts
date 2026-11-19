@@ -1,4 +1,5 @@
-import { pgTable, text, date, smallint, integer, uuid, jsonb, real, doublePrecision, customType, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import type { AgentKind } from '@atm/shared';
+import { pgTable, text, date, smallint, integer, boolean, uuid, jsonb, real, doublePrecision, customType, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { PlaceSource } from '@atm/shared';
 
@@ -25,25 +26,30 @@ const roaringbitmap = customType<{ data: string; driverData: string }>({
 });
 
 // ============================================================================
-// ORGANISATIONS - Institutions that provide datasets (via datasets.organisation_id)
-// or place geometry (via place.source: Adamlink, CBS, NWB/Rijkswaterstaat, BAG/Kadaster)
+// AGENTS - Who produced data (PROV): an Organization providing a dataset (via
+// datasets.provider_id) or place geometry (via place.source: Adamlink, CBS,
+// NWB/Rijkswaterstaat, BAG/Kadaster), or a SoftwareAgent, a classifier model that
+// produced tags (via feature_tags.source)
 // ============================================================================
-export const organisations = pgTable('organisations', {
+export const agents = pgTable('agents', {
   id: text('id').primaryKey(),
+  kind: text('kind').$type<AgentKind>().notNull().default('Organization'),
   label: text('label').notNull(),
   description: text('description'),
   url: text('url')
 });
 
 // ============================================================================
-// DATASETS - Data collections from organisations
+// DATASETS - Data collections, each from a provider agent
 // ============================================================================
 export const datasets = pgTable('datasets', {
   id: text('id').primaryKey(),
   label: text('label').notNull(),
   description: text('description'),
   url: text('url'),
-  organisationId: text('organisation_id').references(() => organisations.id)
+  // the whole dataset as a download, Schema.org's distribution (e.g. a Zenodo record)
+  distributionUrl: text('distribution_url'),
+  providerId: text('provider_id').references(() => agents.id)
 });
 
 // ============================================================================
@@ -53,7 +59,7 @@ export const place = pgTable('place', {
   id: text('id').primaryKey(),                    // Adamlink URI ("https://adamlink.nl/geo/{street,district,lp}/…") or PDOK "{cbs,nwb,bag}-<code>"
   type: text('type').notNull(),                   // "address" | "street" | "neighbourhood" (buurt) | "district" (wijk)
   name: text('name'),                            // name shown for the place; dated past names live in place_historical_name
-  source: text('source').$type<PlaceSource>().references(() => organisations.id), // provider org, seeded from PLACE_PROVIDERS
+  source: text('source').$type<PlaceSource>().references(() => agents.id), // provider, seeded from PLACE_PROVIDERS
   url: text('url')                               // canonical record at the source (adamlink.nl / bag.basisregistraties.overheid.nl / …)
 }, (table) => [
   // exact case-insensitive name lookup (getCandidatesByName / inferByName)
@@ -71,15 +77,21 @@ export const placeGeometry = pgTable('place_geometry', {
   spatialFrequency: integer('spatial_frequency'), // number of base cells this geometry spans
   // Geometry provenance, set ONLY when it differs from the place's own (place.source/url) —
   // e.g. NWB backfilling an Adamlink street that has no line. null = same provider as the place.
-  source: text('source').$type<PlaceSource>().references(() => organisations.id),
+  source: text('source').$type<PlaceSource>().references(() => agents.id),
   url: text('url'),                               // link to the geometry's source record
   // The period the place existed in this shape: a division's validity for
   // neighbourhood/district, the street's existence for Adamlink streets; null for
   // addresses. until null = open/current.
   since: date('since'),
-  until: date('until')
+  until: date('until'),
+  // The BAG building (pand) the point stands in, as the source states it: Adamlink's
+  // geoWithin link for an LP, BAG's pandidentificatie for an address. Null for
+  // streets and areas. An address from each source in one building with the same
+  // house number is one address recorded twice (see twinOf).
+  buildingId: text('building_id')
 }, (table) => [
-  index('idx_place_geometry_geom').using('gist', table.geometry)
+  index('idx_place_geometry_geom').using('gist', table.geometry),
+  index('idx_place_geometry_building').on(table.buildingId).where(sql`${table.buildingId} is not null`)
 ]);
 
 // ============================================================================
@@ -108,7 +120,10 @@ export const placeHistoricalName = pgTable('place_historical_name', {
 // ============================================================================
 export const relation = pgTable('relation', {
   id: text('id').primaryKey(),
-  label: text('label').notNull()
+  label: text('label').notNull(),
+  // the feature's date belongs to the relation itself (screened at a place on a
+  // day), so the card words it with the place
+  dated: boolean('dated').notNull().default(false)
 });
 
 // ============================================================================
@@ -138,7 +153,6 @@ export const features = pgTable('features', {
   startDate: date('start_date').notNull(),
   endDate: date('end_date').notNull(),
   datasetId: text('dataset_id').notNull().references(() => datasets.id),
-  temporalFrequency: integer('temporal_frequency'),
   entity: jsonb('entity'),
 }, (table) => [
   index('idx_features_dates').on(table.startDate, table.endDate),
@@ -161,15 +175,16 @@ export const featureToPlace = pgTable('feature_to_place', {
 
 // ============================================================================
 // JUNCTION: feature_tags - Links features to tags
-// source is the tagger run that produced the row (e.g. 'siglip2-baseline-v1')
-// and is part of the key: re-ingesting a tagger replaces only its own rows.
+// source is the classifier model that produced the row (e.g. 'siglip2'), a
+// SoftwareAgent in agents, and is part of the key: re-ingesting a model replaces
+// only its own rows for the dataset.
 // The key is a unique index rather than a composite primary key: drizzle push
 // orders a new primary key before the column it needs and fails on an existing table.
 // ============================================================================
 export const featureTags = pgTable('feature_tags', {
   featureId: uuid('feature_id').notNull().references(() => features.id),
   tagId: text('tag_id').notNull().references(() => tags.id),
-  source: text('source').notNull()
+  source: text('source').notNull().references(() => agents.id)
 }, (table) => [
   uniqueIndex('feature_tags_feature_id_tag_id_source_uq').on(table.featureId, table.tagId, table.source),
   index('idx_feature_tags_tag').on(table.tagId)
@@ -252,15 +267,13 @@ export const gridConfig = pgTable('grid_config', {
   maxLon: real('max_lon').notNull(),
   minLat: real('min_lat').notNull(),
   maxLat: real('max_lat').notNull(),
-  maxSpatialFrequency: integer('max_spatial_frequency').notNull(),
-  maxTemporalFrequency: integer('max_temporal_frequency').notNull(),
 });
 
 // ============================================================================
 // TYPE EXPORTS (Drizzle-inferred types for internal use)
 // ============================================================================
-export type Organisation = typeof organisations.$inferSelect;
-export type NewOrganisation = typeof organisations.$inferInsert;
+export type Agent = typeof agents.$inferSelect;
+export type NewAgent = typeof agents.$inferInsert;
 
 export type Dataset = typeof datasets.$inferSelect;
 export type NewDataset = typeof datasets.$inferInsert;

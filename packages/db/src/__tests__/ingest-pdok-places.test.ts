@@ -51,6 +51,15 @@ describe('pdok-places ingestion (GeoJSON + NDJSON → place)', () => {
     expect(byId['bag-0457010000099997'].gtype).toBe('POINT');
   });
 
+  test('keeps the BAG building of an address; null without one', async () => {
+    const r = await db.execute<{ id: string; building_id: string | null }>(sql`
+      SELECT place_id AS id, building_id FROM place_geometry WHERE place_id LIKE 'bag-%' ORDER BY 1`);
+    expect(r.rows).toEqual([
+      { id: 'bag-0363010000099998', building_id: '0363100012182332' },
+      { id: 'bag-0457010000099997', building_id: null }
+    ]);
+  });
+
   test('every place has a matching place_geometry row (no dangling)', async () => {
     const r = await db.execute<{ count: string }>(sql`
       SELECT count(*) as count FROM place p WHERE NOT EXISTS (

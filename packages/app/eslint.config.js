@@ -44,11 +44,11 @@ export default [
 				{
 					// esquery ends a regex at the first `/`, hence \u002f
 					selector: 'Literal[value=/^\\u002fapi\\u002f/]:not(CallExpression[callee.name="apiUrl"] > Literal)',
-					message: 'Build API URLs with apiUrl() from $utils/api so the base path applies.'
+					message: 'Build API URLs with apiUrl() from #lib/utils/api.js so the base path applies.'
 				},
 				{
 					selector: 'TemplateElement[value.raw=/^\\u002fapi\\u002f/]',
-					message: 'Build API URLs with apiUrl() from $utils/api so the base path applies.'
+					message: 'Build API URLs with apiUrl() from #lib/utils/api.js so the base path applies.'
 				},
 				{
 					selector: 'SvelteAttribute[key.name="href"] > SvelteLiteral[value=/^\\u002f/]',

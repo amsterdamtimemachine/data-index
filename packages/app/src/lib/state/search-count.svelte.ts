@@ -1,9 +1,9 @@
 /** Reactive fetcher for the text-search preview count. */
 import debounce from 'lodash.debounce';
-import { apiUrl } from '$utils/api';
+import { apiUrl } from '#lib/utils/api.js';
+import { MIN_QUERY_LENGTH } from '#lib/utils/search-options.js';
 
 const DEBOUNCE_MS = 300;
-const MIN_QUERY_LENGTH = 2;
 
 export function createSearchCount() {
 	let count = $state<number | null>(null);

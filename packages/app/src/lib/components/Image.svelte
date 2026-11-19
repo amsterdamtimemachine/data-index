@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { mergeCss } from '$utils/utils';
+	import { mergeCss } from '#lib/utils/utils.js';
 
 	interface Props {
 		href?: string; // For svelte-markdown compatibility (image src)

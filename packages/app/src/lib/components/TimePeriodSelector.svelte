@@ -1,20 +1,20 @@
 <script lang="ts">
 	import type { Histogram, HistogramBin } from '@atm/shared/types';
-	import { mergeCss } from '$utils/utils';
-	import TimePeriodSelectorHistogram from '$components/TimePeriodSelectorHistogram.svelte';
-	import TimePeriodSelectorLabels from '$components/TimePeriodSelectorLabels.svelte';
-	import TimePeriodSelectorThumb from '$components/TimePeriodSelectorThumb.svelte';
-	import TimePeriodSelectorTrack from '$components/TimePeriodSelectorTrack.svelte';
-	import Button from '$components/Button.svelte';
+	import { mergeCss } from '#lib/utils/utils.js';
+	import TimePeriodSelectorHistogram from '#lib/components/TimePeriodSelectorHistogram.svelte';
+	import TimePeriodSelectorLabels from '#lib/components/TimePeriodSelectorLabels.svelte';
+	import TimePeriodSelectorThumb from '#lib/components/TimePeriodSelectorThumb.svelte';
+	import TimePeriodSelectorTrack from '#lib/components/TimePeriodSelectorTrack.svelte';
+	import Button from '#lib/components/Button.svelte';
 	import { asset } from '$app/paths';
-	import { translate } from '$utils/translations';
+	import { translate } from '#lib/utils/translations.js';
 
 	interface Props {
 		histogram: Histogram;
 		localHistogram?: Histogram | null;
-		// the selection's series whether or not it is on screen; drawn as dots under
-		// the city-wide bars
-		markerHistogram?: Histogram | null;
+		// the selection's series whether or not it is on screen: the hover names its
+		// count under the city-wide bars
+		selectionHistogram?: Histogram | null;
 		// names the local series ("deze cel", a place name); shown only while it is on screen
 		localLabel?: string;
 		// the switch between the city-wide and the selection's series: rendered only
@@ -29,7 +29,7 @@
 	let {
 		histogram,
 		localHistogram = null,
-		markerHistogram = null,
+		selectionHistogram = null,
 		localLabel = '',
 		onToggleLocal = undefined,
 		localToggleOn = false,
@@ -52,9 +52,9 @@
 	// the button shows the series a press leads to, not the one on screen
 	const toggleGlyph = $derived.by(() => {
 		if (localToggleOn) {
-			return asset('/glyphs/ToggleGlobalTimeline.svg');
+			return asset('glyphs/ToggleGlobalTimeline.svg');
 		}
-		return asset('/glyphs/ToggleLocalTimeline.svg');
+		return asset('glyphs/ToggleLocalTimeline.svg');
 	});
 	const toggleLabel = $derived.by(() => {
 		if (localToggleOn) {
@@ -62,6 +62,8 @@
 		}
 		return translate('toggleLocalTimeline');
 	});
+
+	const MIN_BIN_WIDTH = 60;
 
 	// Slider state
 	let currentIndex = $state(getInitialIndex());
@@ -174,12 +176,31 @@
 
 		event.preventDefault();
 		handleIndexChange(newIndex);
+		revealBin(newIndex);
+	}
+
+	// A period chosen with the keyboard may lie outside the scrolled view: scroll just
+	// enough to show its bin.
+	function revealBin(index: number) {
+		const wrapper = scrollWrapper;
+		const track = trackElement;
+		if (!wrapper || !track || timePeriods.length === 0) {
+			return;
+		}
+		const binWidth = track.scrollWidth / timePeriods.length;
+		const left = index * binWidth;
+		const right = left + binWidth;
+		if (left < wrapper.scrollLeft) {
+			wrapper.scrollLeft = left;
+		} else if (right > wrapper.scrollLeft + wrapper.clientWidth) {
+			wrapper.scrollLeft = right - wrapper.clientWidth;
+		}
 	}
 </script>
 
 <!-- Global pointer events for drag behavior: mouse drags reach the document directly;
-     touch drags reach it by bubbling from the thumb, which implicitly captures the
-     pointer and blocks scrolling via touch-action -->
+     touch drags reach it by bubbling from the pressed bin, which implicitly captures
+     the pointer and blocks scrolling via touch-action -->
 <svelte:document
 	onpointermove={handlePointerMove}
 	onpointerup={handlePointerUp}
@@ -196,18 +217,20 @@
 			<div class="h-1"></div>
 		{/if}
 		<div class="flex items-start gap-2">
-		<!-- Horizontal scroll wrapper for mobile; pointerdown only forfeits the one-shot
-		     auto-scroll, it is not an interaction affordance -->
+		<!-- The track scrolls at every width, so the toggle beside it always keeps its
+		     place; the hover tooltip is fixed to the screen, so the scrolling never clips
+		     it. pointerdown only forfeits the one-shot auto-scroll, it is not an
+		     interaction affordance -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			bind:this={scrollWrapper}
 			onpointerdown={() => (hasAutoScrolled = true)}
-			class="flex-1 min-w-0 overflow-x-auto max-[850px]:overflow-x-auto min-[851px]:overflow-x-visible relative max-[850px]:shadow-[inset_10px_0_10px_-10px_rgba(0,0,0,0.3),inset_-10px_0_10px_-10px_rgba(0,0,0,0.3)]"
+			class="flex-1 min-w-0 overflow-x-auto relative scroll-shadows"
 		>
-			<!-- 736 = md breakpoint (768) minus the px-4 gutters: the track must fit the wrapper once overflow goes visible -->
+			<!-- each bin at least 60px, so its year fits; narrower than that, the row scrolls -->
 			<div
 				class="relative"
-				style="min-width: max(736px, {histogram.bins.length * 60}px); width: 100%; height: {timelineHeight + 25}px;"
+				style="min-width: {histogram.bins.length * MIN_BIN_WIDTH}px; width: 100%; height: {timelineHeight + 25}px;"
 				bind:this={trackElement}
 			>
 			<!-- Histogram Layer: Histogram bars and grid -->
@@ -216,7 +239,6 @@
 				maxCount={histogram?.maxCount || 0}
 				localBins={localHistogram?.bins || []}
 				localMaxCount={localHistogram?.maxCount || 0}
-				markerBins={markerHistogram?.bins || []}
 				{timelineHeight}
 				{hideGlobal}
 			/>
@@ -224,26 +246,23 @@
 			<!-- Labels Layer: Year labels -->
 			<TimePeriodSelectorLabels {displayPeriods} {timelineHeight} />
 
-			<!-- Interactive Layer: Clickable track -->
+			<!-- Interactive Layer: the bins select, drag and show the tooltip -->
 			<TimePeriodSelectorTrack
 				bins={histogram.bins}
 				localBins={localHistogram?.bins || []}
-				markerBins={markerHistogram?.bins || []}
+				selectionBins={selectionHistogram?.bins || []}
 				{currentIndex}
 				onIndexChange={handleIndexChange}
+				onDragStart={handleDragStart}
 				{timelineHeight}
 				onKeyDown={handleKeyDown}
 			/>
 
-			<!-- Thumb Layer: Draggable indicator -->
+			<!-- Thumb Layer: the frame around the selected bin, drawing only -->
 			<TimePeriodSelectorThumb
 				{currentIndex}
 				totalBins={histogram.bins.length}
-				localBins={localHistogram?.bins || []}
-				{isDragging}
-				onDragStart={handleDragStart}
 				{timelineHeight}
-				bins={histogram.bins}
 			/>
 			</div>
 		</div>

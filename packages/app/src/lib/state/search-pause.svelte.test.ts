@@ -3,7 +3,7 @@
  * a new or cleared term un-pauses by itself, other filter changes keep the pause.
  */
 import { describe, test, expect } from 'vitest';
-import type { FilterState } from '$types/filters';
+import type { FilterState } from '#lib/types/filters.js';
 import { createSearchPause } from './search-pause.svelte';
 
 function filters(overrides: Partial<FilterState> = {}): FilterState {

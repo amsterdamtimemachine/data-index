@@ -1,15 +1,15 @@
 <script lang="ts">
-	import Pagination from '$components/Pagination.svelte';
-	import FeaturesCount from '$components/FeaturesCount.svelte';
-	import Button from '$components/Button.svelte';
+	import Pagination from '#lib/components/Pagination.svelte';
+	import FeaturesCount from '#lib/components/FeaturesCount.svelte';
+	import Button from '#lib/components/Button.svelte';
 	import X from 'phosphor-svelte/lib/X';
-	import MapThumbnail from '$components/MapThumbnail.svelte';
-	import FeaturesSortSelect, { type UiSortMode } from '$components/FeaturesSortSelect.svelte';
-	import { createMediaQuery, MOBILE_QUERY } from '$utils/media.svelte';
-	import { translate } from '$utils/translations';
-	import { formatPlaceTitle } from '$utils/format';
+	import MapThumbnail from '#lib/components/MapThumbnail.svelte';
+	import FeaturesSortSelect, { type UiSortMode } from '#lib/components/FeaturesSortSelect.svelte';
+	import { createMediaQuery, MOBILE_QUERY } from '#lib/utils/media.svelte.js';
+	import { translate } from '#lib/utils/translations.js';
+	import { subjectPhrase } from '#lib/utils/format.js';
 	import type { HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
-	import type { PanelSubject } from '$lib/state/panel-features.svelte';
+	import type { PanelSubject } from '#lib/state/panel-features.svelte.js';
 
 	interface Props {
 		subject: PanelSubject;
@@ -77,19 +77,8 @@
 	});
 	const highlightSelected = $derived(subject.kind === 'place');
 
-	// the count names its population: this cell, or the place's cells — with the
-	// clicked alias and, when it differs, the current name (the card convention)
-	const populationLabel = $derived.by(() => {
-		if (subject.kind === 'cell') {
-			return translate('ofThisCell');
-		}
-		const place = subject.place;
-		let phrase = translate('ofCellsOf');
-		if (place.cells.length === 1) {
-			phrase = translate('ofCellOf');
-		}
-		return `${phrase} ${formatPlaceTitle(place)}`;
-	});
+	// the count names its population: this cell, or the place's cells
+	const populationLabel = $derived(subjectPhrase(subject));
 
 	// desktop: live period; mobile: frozen at cell selection
 	const thumbnailPeriod = $derived.by(() => {
@@ -111,11 +100,12 @@
 		}
 		return 32;
 	});
+
 </script>
 
 <div
 	data-layout={headerLayout}
-	class="panel-header sticky min-h-[50px] p-3 md:p-4 top-0 z-10 bg-atm-sand border-b border-atm-sand-border shadow-[0px_5px_20px_5px_rgba(0,0,0,0.07)]
+	class="panel-header sticky min-h-[50px] p-3 md:p-4 top-0 z-10 bg-atm-sand border-b border-atm-sand-border shadow-panel
 	       grid items-center gap-x-3 gap-y-2"
 >
 	{#if timeline && dimensions}
@@ -132,23 +122,19 @@
 			/>
 		</div>
 	{/if}
+	<h2 class="sr-only">{translate('results')}</h2>
 	{#if !initialLoading && totalCount > 0}
 		<div class="header-count">
-			<FeaturesCount totalFeatures={totalCount} {currentPage} featuresPerPage={pageSize} {populationLabel} />
+			<FeaturesCount count={totalCount} {currentPage} perPage={pageSize}>
+				{#snippet children(shown)}
+					{translate('showing')} {shown} {translate('featureMany')} {populationLabel}
+				{/snippet}
+			</FeaturesCount>
 		</div>
 		{#if hasPagination}
-			<!-- pagination builder captures count/perPage once -->
-			{#key `${totalCount}-${pageSize}`}
-				<div class="header-pages min-w-0">
-					<Pagination
-						totalItems={totalCount}
-						{currentPage}
-						itemsPerPage={pageSize}
-						{onPageChange}
-						{loading}
-					/>
-				</div>
-			{/key}
+			<div class="header-pages min-w-0">
+				<Pagination totalItems={totalCount} {currentPage} itemsPerPage={pageSize} {onPageChange} {loading} />
+			</div>
 		{/if}
 		{#if onSortChange && onShuffle}
 			<div class="header-sort">
@@ -157,7 +143,7 @@
 		{/if}
 	{/if}
 	<div class="header-close justify-self-end">
-		<Button icon={X} onclick={onClose} size={18} aria-label="Close features panel" />
+		<Button icon={X} onclick={onClose} size={18} aria-label={translate('closeFeaturesPanel')} />
 	</div>
 </div>
 

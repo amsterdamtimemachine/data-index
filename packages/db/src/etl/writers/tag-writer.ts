@@ -11,7 +11,7 @@
  */
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { features, featureTags, tags } from '../../schema';
+import { agents, features, featureTags, tags } from '../../schema';
 
 type Executor = Pick<typeof db, 'execute'>;
 type MatchRow = { matched: string; unmatched: string };
@@ -21,6 +21,14 @@ export type TagWriteReport = {
   unmatched: number; // features referenced but absent (rows skipped)
   rows: number;      // feature_tags rows written
 };
+
+/** The classifier model behind a tags file, as a SoftwareAgent; a rerun refreshes its name and link. */
+export async function upsertClassifier(executor: Executor, classifier: { id: string; label: string; url?: string }): Promise<void> {
+  await executor.execute(sql`
+    INSERT INTO ${agents} (id, kind, label, url)
+    VALUES (${classifier.id}, 'SoftwareAgent', ${classifier.label}, ${classifier.url ?? null})
+    ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, label = excluded.label, url = excluded.url`);
+}
 
 export function createTagWriter(executor: Executor, tagger: string, dataset: string, batchSize = 10000) {
   let featureIds: string[] = [];

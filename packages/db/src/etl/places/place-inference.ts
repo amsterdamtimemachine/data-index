@@ -2,7 +2,8 @@ import { db } from '../../client';
 import { createCachedResolver } from './cache';
 import { PlaceIdRow } from '../../row-types';
 import { sql } from 'drizzle-orm/sql';
-import { getCandidatesByPoint, getCandidatesByName, pickFinest, resolveNamePool } from './place-candidates';
+import { getCandidatesByPoint, getCandidatesByName, getNamesForPlaces, pickFinest, resolveNamePool, twinOf, type Candidate, type PlaceType } from './place-candidates';
+import { confirmByText } from './place-confirm';
 import type { Resolved } from './place-index';
 
 const allPlacesCTE = sql`
@@ -19,10 +20,33 @@ const allPlacesCTE = sql`
       AND (pn.since IS NOT NULL OR pn.until IS NOT NULL);
 `
 
+const twins = createCachedResolver(async (key: string) => {
+    const { placeId, start, end } = JSON.parse(key);
+    return twinOf(placeId, start, end);
+});
+
+// An address matched outside its register's era moves to the same address as the other
+// source records it. Among several twins, those that share one of the place's names
+// (the same street, not another street in the building), then those nearest the
+// feature date (the register closest in time); the match stands unless one is left,
+// being the only evidence there is. Streets and areas have no register split.
+async function eraTwin(placeId: string, type: PlaceType, eraFit: boolean, start: string, end: string): Promise<string> {
+    if (type !== 'address' || eraFit) { return placeId }
+    let found = await twins(JSON.stringify({ placeId, start, end }));
+    const named = found.filter((t) => t.sharesName);
+    if (named.length > 0) { found = named }
+    if (found.length > 1) {
+        const nearest = Math.min(...found.map((t) => t.gapDays ?? Infinity));
+        found = found.filter((t) => (t.gapDays ?? Infinity) === nearest);
+    }
+    if (found.length === 1) { return found[0].placeId }
+    return placeId;
+}
+
 /**
  * Resolve a place-name string to the single place it names — exact case-insensitive
  * match (LOWER(name) =), nearest-in-time by the feature date range, unique winner by
- * gap → finest type. Returns a tagged skip (→ the cascade tries the next method, else
+ * gap → finest type; an address outside its era yields to its twin (eraTwin). Returns a tagged skip (→ the cascade tries the next method, else
  * the feature is skipped): 'no-match' when the name matches nothing (or is empty),
  * 'ambiguous' for two equal-gap same-type places, 'undated' when the feature has no date.
  * Cache key is JSON `{area, start, end}` — the trie's type is NOT a filter (a
@@ -34,7 +58,7 @@ export const inferByName = createCachedResolver(async (key: string): Promise<Res
     if (!area) { return { skip: 'no-match' } }
     if (!start || !end) { return { skip: 'undated' } }
     const r = resolveNamePool(await getCandidatesByName(area, start, end));
-    if (r.kind === 'resolved') { return { placeId: r.winner.placeId } }
+    if (r.kind === 'resolved') { return { placeId: await eraTwin(r.winner.placeId, r.winner.type, r.winner.eraFit, start, end) } }
     return { skip: r.kind === 'ambiguous' ? 'ambiguous' : 'no-match' };
 })
 
@@ -51,8 +75,24 @@ export const inferByPoint = createCachedResolver(async (key: string): Promise<Re
     if (!wkt) { return { skip: 'no-match' } }
     if (!start || !end) { return { skip: 'undated' } }
     const best = pickFinest(await getCandidatesByPoint(wkt, start, end));
-    return best ? { placeId: best.placeId } : { skip: 'cap-miss' };
+    return best ? { placeId: await eraTwin(best.placeId, best.type, best.eraFit, start, end) } : { skip: 'cap-miss' };
 });
+
+const pointPool = createCachedResolver(async (key: string): Promise<Candidate[]> => {
+    const { wkt, start, end } = JSON.parse(key);
+    return getCandidatesByPoint(wkt, start, end);
+});
+
+/** The point cascade, with the feature's text deciding between neighbours it names. */
+export async function inferByPointConfirmed(wkt: string, text: string, start: string, end: string): Promise<Resolved> {
+    if (!wkt) { return { skip: 'no-match' } }
+    if (!start || !end) { return { skip: 'undated' } }
+    const pool = await pointPool(JSON.stringify({ wkt, start, end }));
+    const named = pool.filter((c) => c.type === 'address' || c.type === 'street').map((c) => c.placeId);
+    const names = await getNamesForPlaces(named);
+    const best = pickFinest(confirmByText(pool, names, text));
+    return best ? { placeId: await eraTwin(best.placeId, best.type, best.eraFit, start, end) } : { skip: 'cap-miss' };
+}
 
 /**
  * Fetches place_id based solely on the provided adamlinkuri

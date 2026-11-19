@@ -51,11 +51,11 @@ describe('tags ingestion', () => {
     await setupTestDb();
     await cleanTestDb();
     await upsertSource({
-      organisation: { id: 'tg-org', label: 'TG Org' },
+      provider: { id: 'tg-org', label: 'TG Org' },
       dataset: { id: DATASET, label: 'TG DS' },
     });
     await upsertSource({
-      organisation: { id: 'tg-org', label: 'TG Org' },
+      provider: { id: 'tg-org', label: 'TG Org' },
       dataset: { id: OTHER_DATASET, label: 'TG Other' },
     });
     await db.execute(sql`
@@ -138,5 +138,13 @@ describe('tags ingestion', () => {
     const after = await rowsFor('siglip-test');
     expect(after.filter((r) => r.feature_id !== O1)).toEqual(before);
     expect(after.filter((r) => r.feature_id === O1).map((r) => r.tag_id)).toEqual(['birds_eye_view', 'bridge_canal']);
+  });
+
+  test('the run is a SoftwareAgent named by its options, refreshed on rerun', async () => {
+    const before = await db.execute<{ kind: string; label: string; url: string | null }>(sql`SELECT kind, label, url FROM agents WHERE id = 'siglip-test'`);
+    expect(before.rows[0]).toEqual({ kind: 'SoftwareAgent', label: 'siglip-test', url: null });
+    await ingest(FILE, { tagger: 'siglip-test', dataset: DATASET, taggerLabel: 'SigLIP test', taggerUrl: 'https://example.org/siglip' });
+    const after = await db.execute<{ kind: string; label: string; url: string | null }>(sql`SELECT kind, label, url FROM agents WHERE id = 'siglip-test'`);
+    expect(after.rows[0]).toEqual({ kind: 'SoftwareAgent', label: 'SigLIP test', url: 'https://example.org/siglip' });
   });
 });

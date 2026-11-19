@@ -6,7 +6,7 @@
 	import { Select as MeltSelect } from 'melt/builders';
 	import CaretDown from 'phosphor-svelte/lib/CaretDown';
 	import CaretUp from 'phosphor-svelte/lib/CaretUp';
-	import { mergeCss } from '$utils/utils';
+	import { mergeCss } from '#lib/utils/utils.js';
 
 	type Props = {
 		options: SelectOption<T>[];
@@ -43,10 +43,11 @@
 <button
 	{...select.trigger}
 	class={mergeCss(
-		'h-[32px] flex items-center justify-between gap-2 px-3 bg-atm-sand-darkish rounded border border-atm-gold border-[1px] hover:bg-atm-sand-dark text-sm',
+		'focus-ring h-[32px] flex items-center justify-between gap-2 px-3 bg-atm-sand-darkish rounded border border-atm-gold border-[1px] hover:bg-atm-sand-dark text-sm',
 		className
 	)}
 	aria-label={ariaLabel}
+	title={ariaLabel}
 >
 	{currentLabel}
 	{#if select.open}
