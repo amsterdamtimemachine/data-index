@@ -120,6 +120,9 @@ export async function getCandidatesByPoint(wkt: string, start: string, end: stri
       SELECT p.id, p.name, p.type, p.source, pg.since, pg.until, ST_Distance(pg.geometry, q.g) AS dist
       FROM q, place_geometry pg JOIN place p ON p.id = pg.place_id
       WHERE p.type IN ${CONTAINMENT_TYPES}
+        -- true of every row the next condition keeps (a container is at distance 0, a
+        -- point within its own cap), and the one the spatial index can answer
+        AND ST_DWithin(pg.geometry, q.g, ${MAX_POINT_CAP_M}::float8)
         AND (ST_Intersects(pg.geometry, q.g)
              OR (GeometryType(pg.geometry) = 'POINT' AND ST_DWithin(pg.geometry, q.g, ${capByType})))
         AND (p.type NOT IN ${LIFESPAN_TYPES} OR ${windowOverlaps(start, end, sql`pg.since`, sql`pg.until`)})
