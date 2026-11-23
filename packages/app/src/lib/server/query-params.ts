@@ -4,13 +4,27 @@
  * when the param is absent or empty so it maps straight onto the optional query
  * arguments in @atm/db.
  */
-import type { RecordType, PlaceType } from '@atm/shared/types';
+import { error } from '@sveltejs/kit';
+import type { RecordType, PlaceType, TagOperator, MatchFilters } from '@atm/shared/types';
+import {
+	MAX_FILTER_ITEMS,
+	DISPLAY_GRID_DEFAULT_COLS,
+	DISPLAY_GRID_MIN_COLS,
+	DISPLAY_GRID_MAX_COLS
+} from '@atm/shared';
 
-/** Parse a comma-separated query param into a trimmed string[], or undefined. */
+/**
+ * Parse a comma-separated query param into a trimmed string[], or undefined.
+ * Capped at MAX_FILTER_ITEMS so a caller can't force an oversized IN (…) / tag query.
+ */
 export function parseList(url: URL, name: string): string[] | undefined {
 	const raw = url.searchParams.get(name);
 	if (!raw) return undefined;
-	const items = raw.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+	const items = raw
+		.split(',')
+		.map((s) => s.trim())
+		.filter((s) => s.length > 0)
+		.slice(0, MAX_FILTER_ITEMS);
 	return items.length > 0 ? items : undefined;
 }
 
@@ -24,4 +38,103 @@ export function parsePlaceTypes(url: URL): PlaceType[] | undefined {
 
 export function parseDatasets(url: URL): string[] | undefined {
 	return parseList(url, 'datasets');
+}
+
+/** Shuffle seed for the sample sort — any string, capped so it can't bloat the query. */
+export function parseSeed(url: URL): string | undefined {
+	const raw = url.searchParams.get('seed');
+	if (!raw) {
+		return undefined;
+	}
+	return raw.slice(0, 64);
+}
+
+/**
+ * Free-text feature search (`q`): dutch FTS with websearch syntax. Any string is
+ * safe to forward (websearch_to_tsquery never throws on user input); trimmed and
+ * capped like the place id params. Blank → undefined → no filter.
+ */
+export function parseSearchQuery(url: URL): string | undefined {
+	const raw = url.searchParams.get('q');
+	if (!raw) {
+		return undefined;
+	}
+	const trimmed = raw.trim().slice(0, 512);
+	if (trimmed.length === 0) {
+		return undefined;
+	}
+	return trimmed;
+}
+
+/** Tag filter (`tags`): tag ids. An unknown id matches nothing, so nothing to validate here. */
+export function parseTags(url: URL): string[] | undefined {
+	return parseList(url, 'tags');
+}
+
+/** `tagOperator`: AND when asked for, otherwise OR. Never throws. */
+export function parseTagOperator(url: URL): TagOperator {
+	if ((url.searchParams.get('tagOperator') || '').toUpperCase() === 'AND') {
+		return 'AND';
+	}
+	return 'OR';
+}
+
+/**
+ * The per-feature match filters (text search + tag selection) every count
+ * endpoint accepts, parsed once so heatmap, histogram and feature list can't
+ * read them differently.
+ */
+export function parseMatchFilters(url: URL): MatchFilters {
+	return {
+		searchQuery: parseSearchQuery(url),
+		tags: parseTags(url),
+		tagOperator: parseTagOperator(url)
+	};
+}
+
+export type Bounds = { minLon: number; maxLon: number; minLat: number; maxLat: number };
+
+/**
+ * Parse the minLon/maxLon/minLat/maxLat quartet. Returns undefined when not all
+ * four are present (callers decide whether bounds are required); throws a 400 for
+ * non-numeric values or an inverted/degenerate box — rejecting those up front
+ * beats doing a grid lookup + empty query for a box that can never contain
+ * anything. Shared by the features and histogram endpoints so "a bounds param"
+ * always means the same thing.
+ */
+export function parseBounds(url: URL): Bounds | undefined {
+	const minLon = url.searchParams.get('minLon');
+	const maxLon = url.searchParams.get('maxLon');
+	const minLat = url.searchParams.get('minLat');
+	const maxLat = url.searchParams.get('maxLat');
+
+	if (!minLon || !maxLon || !minLat || !maxLat) {
+		return undefined;
+	}
+
+	const bounds = {
+		minLon: parseFloat(minLon),
+		maxLon: parseFloat(maxLon),
+		minLat: parseFloat(minLat),
+		maxLat: parseFloat(maxLat)
+	};
+
+	if (Object.values(bounds).some(isNaN)) {
+		throw error(400, 'Bounds must be valid numbers', { code: 'INVALID_BOUNDS' });
+	}
+	if (bounds.minLon >= bounds.maxLon || bounds.minLat >= bounds.maxLat) {
+		throw error(400, 'Bounds must have minLon < maxLon and minLat < maxLat', {
+			code: 'INVALID_BOUNDS'
+		});
+	}
+	return bounds;
+}
+
+/** Display grid width (`cols`), clamped; the default when absent or malformed. */
+export function parseGridCols(url: URL): number {
+	const value = url.searchParams.get('cols');
+	if (value === null) return DISPLAY_GRID_DEFAULT_COLS;
+	const parsed = parseInt(value, 10);
+	if (isNaN(parsed)) return DISPLAY_GRID_DEFAULT_COLS;
+	return Math.min(Math.max(parsed, DISPLAY_GRID_MIN_COLS), DISPLAY_GRID_MAX_COLS);
 }

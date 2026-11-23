@@ -1,187 +1,130 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import FeaturesGrid from '$components/FeaturesGrid.svelte';
-	import Pagination from '$components/Pagination.svelte';
-	import FeaturesCount from '$components/FeaturesCount.svelte';
-	import Button from '$components/Button.svelte';
-	import Tooltip from '$components/Tooltip.svelte';
-	import X from 'phosphor-svelte/lib/X';
-	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
-	import type { FeatureResult } from '@atm/shared/types';
-	import { loadingState } from '$lib/state/loadingState.svelte';
-	import { createError, createPageErrorData } from '$utils/error';
-	import ErrorHandler from '$components/ErrorHandler.svelte';
-	import type { RecordType } from '@atm/shared/types';
-	import type { AppError } from '$types/error';
+	import type { Category } from '#lib/utils/filters.js';
+	import { translate } from '#lib/utils/translations.js';
+	import { asset } from '$app/paths';
+	import FeaturesGrid from '#lib/components/FeaturesGrid.svelte';
+	import Image from '#lib/components/Image.svelte';
+	import ButtonIllustration from '#lib/components/ButtonIllustration.svelte';
+	import TextWithSlots from '#lib/components/TextWithSlots.svelte';
+	import FeaturesPanelHeader from '#lib/components/FeaturesPanelHeader.svelte';
+	import type { UiSortMode } from '#lib/utils/sort-modes.js';
+	import { createPanelFeatures, type PanelSubject } from '#lib/state/panel-features.svelte.js';
+	import type { HeatmapTimeline, HeatmapDimensions } from '@atm/shared/types';
+	import type { FilterState } from '#lib/types/filters.js';
 
 	interface Props {
-		cellId: string;
+		subject: PanelSubject;
+		placeCells?: number[];
 		period: string;
-		bounds?: { minLat: number; maxLat: number; minLon: number; maxLon: number };
-		recordTypes: RecordType[];
-		placeTypes?: string[];
-		datasets: string[];
-		tags: string[];
-		tagOperator?: 'AND' | 'OR';
+		// the applied filters, so the list agrees with the heatmap
+		filters: FilterState;
 		onClose?: () => void;
+		timeline?: HeatmapTimeline;
+		dimensions?: HeatmapDimensions;
+		selectionPeriod?: string;
+		gridColumns?: number;
+		sortMode?: UiSortMode;
+		sampleSeed?: string;
+		onSortChange?: (mode: UiSortMode) => void;
+		onShuffle?: () => void;
+		// what the timeline shows, when an empty panel can point the user at it: the
+		// city-wide series with the switch (desktop), or the selection's own series
+		timelineView?: 'cityWide' | 'local';
+		// the filter categories with nothing selected: there is nothing to list, and the panel says so
+		emptyCategories?: Category[];
 	}
 
-	let { cellId, period, bounds, recordTypes, placeTypes = [], datasets, tags, tagOperator = 'OR', onClose }: Props = $props();
+	let {
+		subject,
+		placeCells = undefined,
+		period,
+		filters,
+		onClose,
+		timeline,
+		dimensions,
+		selectionPeriod,
+		gridColumns,
+		sortMode = 'sample',
+		sampleSeed,
+		onSortChange,
+		onShuffle,
+		timelineView = undefined,
+		emptyCategories = []
+	}: Props = $props();
 
-	// Cell data state
-	let allFeatures = $state<FeatureResult[]>([]);
-	let currentPage = $state(1);
-	let totalCount = $state(0);
-	let pageSize = $state(100); // From API response
-	let loading = $state(false);
-	let initialLoading = $state(true);
-	let errors = $state<AppError[]>([]);
-	let errorData = $derived(createPageErrorData(errors));
+	const panelFeatures = createPanelFeatures(() => ({
+		subject,
+		period,
+		filters,
+		sortMode,
+		sampleSeed,
+		idle: emptyCategories.length > 0
+	}));
 
-	// Layout memory for stable masonry across pagination
-	let layoutMemory = new Map<string, number>(); // featureId -> columnIndex
-	let currentContext = $state(''); // Track current data context
+	const emptyCategoryNames = $derived(
+		emptyCategories.map((c) => translate(`${c}Category`)).join(` ${translate('and')} `)
+	);
 
-	/**
-	 * Clear layout memory when data context changes
-	 */
-	function clearLayoutMemory() {
-		layoutMemory.clear();
-	}
-
-	async function loadCellData(page: number = 1) {
-		loading = true;
-		loadingState.startLoading();
-
-		try {
-			if (!bounds) {
-				throw new Error('No bounds available for this cell');
-			}
-
-			// Parse period to get time slice key
-			const timeSlice = period;
-
-			// Build URL for local /api/features endpoint
-			const params = new URLSearchParams({
-				minLon: bounds.minLon.toString(),
-				maxLon: bounds.maxLon.toString(),
-				minLat: bounds.minLat.toString(),
-				maxLat: bounds.maxLat.toString(),
-				page: page.toString(),
-				timeSlice,
-				tagOperator
-			});
-
-			if (recordTypes.length > 0) {
-				params.set('recordTypes', recordTypes.join(','));
-			}
-			if (placeTypes.length > 0) {
-				params.set('placeTypes', placeTypes.join(','));
-			}
-			if (datasets.length > 0) {
-				params.set('datasets', datasets.join(','));
-			}
-			if (tags.length > 0) {
-				params.set('tags', tags.join(','));
-			}
-
-			const response = await fetch(`/api/features?${params}`);
-			if (!response.ok) {
-				throw new Error(`HTTP ${response.status}`);
-			}
-
-			const data = await response.json();
-
-			allFeatures = data.data || [];
-			currentPage = data.page || 1;
-			totalCount = data.total || 0;
-			pageSize = data.pageSize || 50;
-
-			errors = [];
-		} catch (err) {
-			console.error('Error loading cell data:', err);
-			errors = [
-				createError(
-					'error',
-					'Cell Data Load Failed',
-					err instanceof Error ? err.message : 'Failed to load cell data',
-					{ cellId, period, page, recordTypes, tags }
-				)
-			];
-		} finally {
-			loading = false;
-			loadingState.stopLoading();
-		}
-	}
-
-	function handlePageChange(newPage: number) {
-		if (loading) return; // Prevent multiple concurrent requests
-		loadCellData(newPage);
-	}
-
-	// Detect context changes and clear memory when needed
-	$effect(() => {
-		// Create context key from always-available props
-		const newContext = `${cellId}_${period}`;
-
-		if (currentContext !== newContext) {
-			clearLayoutMemory();
-			currentContext = newContext;
-		}
-	});
-
-	$effect(() => {
-		// Reset state when cellId or period changes
-		allFeatures = [];
-		currentPage = 1;
-		totalCount = 0;
-		pageSize = 100;
-		errors = [];
-		initialLoading = true;
-
-		// Load new data
-		loadCellData(1).finally(() => {
-			initialLoading = false;
-		});
-	});
-
-	function closeModal() {
+	function handleClose() {
 		if (onClose) {
 			onClose();
 		}
 	}
 </script>
 
-<ErrorHandler {errorData} />
-
-<!-- Data Header -->
-<div
-	class="sticky h-[50px] p-3 top-0 z-10 bg-atm-sand border-b border-atm-sand-border flex items-center justify-between shadow-[0px_5px_20px_5px_rgba(0,0,0,0.07)]"
->
-	<div class="flex items-center gap-4">
-		{#if !initialLoading && totalCount > 0}
-			<FeaturesCount totalFeatures={totalCount} {currentPage} featuresPerPage={pageSize} />
-			{#if totalCount > pageSize}
-				<!-- Re-seed the builder (count/perPage are captured once) when the dataset changes -->
-				{#key `${totalCount}-${pageSize}`}
-					<Pagination
-						totalItems={totalCount}
-						{currentPage}
-						itemsPerPage={pageSize}
-						onPageChange={handlePageChange}
-						{loading}
-					/>
-				{/key}
-			{/if}
-		{/if}
-	</div>
-	<Button icon={X} onclick={closeModal} size={18} aria-label="Close features panel" />
-</div>
+<FeaturesPanelHeader
+	{subject}
+	{placeCells}
+	{period}
+	{selectionPeriod}
+	{timeline}
+	{dimensions}
+	{sortMode}
+	{onSortChange}
+	{onShuffle}
+	totalCount={panelFeatures.totalCount}
+	currentPage={panelFeatures.currentPage}
+	pageSize={panelFeatures.pageSize}
+	loading={panelFeatures.loading}
+	initialLoading={panelFeatures.initialLoading}
+	onPageChange={panelFeatures.changePage}
+	onClose={handleClose}
+/>
 
 <div class="min-h-full bg-atm-sand-dark">
-	{#if allFeatures.length > 0}
-		<FeaturesGrid features={allFeatures} {layoutMemory} />
-	{:else if !initialLoading && !loading}
-		<div class="text-base text-gray-500 p-4">No features found for this cell and period</div>
+	{#if emptyCategories.length > 0}
+		<p class="text-base text-black p-4 leading-loose">
+			{translate('noneSelected').replace('{filter}', emptyCategoryNames)}
+		</p>
+	{:else if panelFeatures.features.length > 0}
+		<FeaturesGrid features={panelFeatures.features} columns={gridColumns} />
+	{:else if !panelFeatures.initialLoading && !panelFeatures.loading}
+		<p class="text-base text-black p-4 leading-loose">
+			<span class="font-bold">{translate('noFeaturesForSelection')}</span>
+			{#if timelineView === 'cityWide'}
+				<TextWithSlots text={translate('emptyPanelCityWideHint')}>
+					{#snippet children(slot)}
+						{#if slot === 'button'}
+							<ButtonIllustration glyph="glyphs/ToggleLocalTimeline.svg" />
+						{/if}
+					{/snippet}
+				</TextWithSlots>
+			{:else if timelineView === 'local'}
+				<TextWithSlots text={translate('emptyPanelBarHint')}>
+					{#snippet children(slot)}
+						{#if slot === 'picture'}
+							<Image
+								src={asset('images/local-timeline-detail.png')}
+								alt={translate('localTimelineAlt')}
+								inline
+							/>
+						{/if}
+					{/snippet}
+				</TextWithSlots>
+			{/if}
+			{#if timelineView}
+				{translate('emptyPanelOtherCell')}
+			{/if}
+		</p>
 	{/if}
 </div>

@@ -8,7 +8,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
-import { upsertSource } from '../etl/helpers';
+import { upsertSource } from '../etl/writers/feature-writer';
 import { rebuildIndex } from '../etl/post-process/rebuild-index';
 
 let counter = 0;
@@ -17,9 +17,9 @@ let counter = 0;
 async function cellsForGeometry(wkt: string, type = 'neighbourhood'): Promise<Set<string>> {
   await cleanTestDb();
   await upsertSource({
-    organisation: { id: 'geo-org', label: 'Geo Org' },
+    provider: { id: 'geo-org', label: 'Geo Org' },
     dataset: { id: 'geo-ds', label: 'Geo DS' },
-    relation: { id: 'isAbout', label: 'Is About' },
+    relations: [{ id: 'isAbout', label: 'Is About' }],
   });
   const pid = `geo-${counter}`;
   const fid = `22222222-2222-2222-2222-${String(counter).padStart(12, '0')}`;

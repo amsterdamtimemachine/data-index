@@ -1,0 +1,4 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[121000,487000],[121100,487000],[121100,487100],[121000,487100],[121000,487000]]]]},"properties":{"id":"cbs-BU0457TEST","type":"neighbourhood","name":"Testbuurt","source":"cbs","url":null}},
+{"type":"Feature","geometry":{"type":"MultiLineString","coordinates":[[[121000,487000],[121200,487050]]]},"properties":{"id":"nwb-0363300099999999","type":"street","name":"Teststraat","source":"nwb","url":"https://bagviewer.example/#?searchQuery=0363300099999999"}}
+]}

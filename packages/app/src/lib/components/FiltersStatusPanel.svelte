@@ -1,97 +1,122 @@
 <script lang="ts">
-	import { mergeCss } from '$utils/utils';
-	import { translateAll } from '$utils/translations';
+	import { mergeCss } from '#lib/utils/utils.js';
+	import { translate, translateAll } from '#lib/utils/translations.js';
+	import { selectsAll } from '#lib/utils/filters.js';
+	import { formatPlaceTitle } from '#lib/utils/format.js';
 	import Tag from './Tag.svelte';
-	import type { RecordType } from '@atm/shared/types';
+	import MapPin from 'phosphor-svelte/lib/MapPin';
+	import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass';
+	import type { FiltersStatus } from '#lib/types/filters.js';
 
 	interface Props {
-		selectedRecordTypes: RecordType[];
-		allRecordTypes: RecordType[];
-		selectedPlaceTypes?: string[];
-		allPlaceTypes?: string[];
-		selectedDatasets: string[];
-		allDatasets: string[];
-		selectedTags: string[];
-		tagOperator?: 'AND' | 'OR';
+		// everything the line describes, with a paused search term already left out
+		status: FiltersStatus;
 		class?: string;
 	}
 
-	let {
-		selectedRecordTypes,
-		allRecordTypes,
-		selectedPlaceTypes = [],
-		allPlaceTypes = [],
-		selectedDatasets,
-		allDatasets,
-		selectedTags,
-		tagOperator = 'OR',
-		class: className
-	}: Props = $props();
+	let { status, class: className }: Props = $props();
 
-	const hasAllTypes = $derived(
-		selectedRecordTypes.length === 0 ||
-			(selectedRecordTypes.length === allRecordTypes.length &&
-				allRecordTypes.every((type) => selectedRecordTypes.includes(type)))
-	);
+	const filters = $derived(status.filters);
+	const selectedPlace = $derived(status.place);
+	const allRecordTypes = $derived(status.metadata?.recordTypes ?? []);
+	const allPlaceTypes = $derived(status.metadata?.placeTypes ?? []);
+	const allDatasets = $derived(status.metadata?.datasets ?? []);
 
-	const hasAllPlaceTypes = $derived(
-		selectedPlaceTypes.length === 0 ||
-			(selectedPlaceTypes.length === allPlaceTypes.length &&
-				allPlaceTypes.every((pt) => selectedPlaceTypes.includes(pt)))
-	);
-
-	const hasAllDatasets = $derived(
-		selectedDatasets.length === 0 ||
-			(selectedDatasets.length === allDatasets.length &&
-				allDatasets.every((ds) => selectedDatasets.includes(ds)))
-	);
-
-	const displayedRecordTypes = $derived(
-		translateAll(hasAllTypes ? allRecordTypes : selectedRecordTypes)
-	);
-
-	const displayedPlaceTypes = $derived(
-		translateAll(hasAllPlaceTypes ? [] : selectedPlaceTypes)
-	);
-
-	const displayedDatasets = $derived(
-		hasAllDatasets ? allDatasets : selectedDatasets
-	);
+	// a category that selects everything reads as everything, not as a list of picks; one
+	// with nothing selected reads as "geen"
+	const displayedRecordTypes = $derived.by(() => {
+		if (filters.recordTypes.length === 0) {
+			return [translate('nothing')];
+		}
+		if (selectsAll(filters.recordTypes, allRecordTypes)) {
+			return translateAll(allRecordTypes);
+		}
+		return translateAll(filters.recordTypes);
+	});
+	const displayedPlaceTypes = $derived.by(() => {
+		if (filters.placeTypes.length === 0) {
+			return [translate('nothing')];
+		}
+		if (selectsAll(filters.placeTypes, allPlaceTypes)) {
+			return translateAll(allPlaceTypes);
+		}
+		return translateAll(filters.placeTypes);
+	});
+	const displayedDatasets = $derived.by(() => {
+		if (filters.datasets.length === 0) {
+			return [translate('nothing')];
+		}
+		const label = new Map(allDatasets.map((d) => [d.id, d.label]));
+		let ids = filters.datasets;
+		if (
+			selectsAll(
+				filters.datasets,
+				allDatasets.map((d) => d.id)
+			)
+		) {
+			ids = allDatasets.map((d) => d.id);
+		}
+		return ids.map((id) => label.get(id) || id);
+	});
+	const searchQuery = $derived(filters.searchQuery);
+	const selectedTags = $derived(filters.tags);
+	const tagOperator = $derived(filters.tagOperator);
+	const tagJoiner = $derived.by(() => {
+		if (tagOperator === 'AND') {
+			return translate('and');
+		}
+		return translate('or');
+	});
 </script>
 
 <div
 	class={mergeCss('bg-atm-sand border border-atm-sand-border rounded-sm shadow-sm p-1', className)}
 >
 	<div class="text-base font-sans text-black flex flex-wrap items-center gap-1">
-		<span>Bekijk</span>
-		{#each displayedRecordTypes as recordType, index}
+		<span>{translate('viewFilters')}</span>
+		{#each displayedRecordTypes as recordType, index (index)}
 			<Tag variant="selected-outline">{recordType}</Tag>
 			{#if index < displayedRecordTypes.length - 1}
-				<span>of</span>
+				<span>{translate('or')}</span>
 			{/if}
 		{/each}
 		{#if displayedPlaceTypes.length > 0}
-			<span>op</span>
-			{#each displayedPlaceTypes as placeType, index}
+			<span>{translate('statusAtScale')}</span>
+			{#each displayedPlaceTypes as placeType, index (index)}
 				<Tag variant="selected-outline">{placeType}</Tag>
 				{#if index < displayedPlaceTypes.length - 1}
-					<span>of</span>
+					<span>{translate('or')}</span>
 				{/if}
 			{/each}
 		{/if}
-		<span>in</span>
-		{#each displayedDatasets as dataset, index}
+		<span>{translate('statusInDatasets')}</span>
+		{#each displayedDatasets as dataset, index (index)}
 			<Tag variant="selected-outline">{dataset}</Tag>
 			{#if index < displayedDatasets.length - 1}
-				<span>en</span>
+				<span>{translate('and')}</span>
 			{/if}
 		{/each}
+		{#if selectedPlace}
+			<span>{translate('statusInCellsOf')}</span>
+			<Tag variant="selected-outline">
+				<span class="inline-flex align-[-2px] mr-1"><MapPin size={14} weight="bold" /></span
+				>{formatPlaceTitle(selectedPlace)}
+			</Tag>
+		{/if}
+		{#if searchQuery}
+			<span>{translate('statusWithSearch')}</span>
+			<Tag variant="selected-outline">
+				<span class="inline-flex align-[-2px] mr-1"
+					><MagnifyingGlass size={14} weight="bold" /></span
+				>{searchQuery}
+			</Tag>
+		{/if}
 		{#if selectedTags.length > 0}
-			<span>{tagOperator === 'AND' ? 'en' : 'of'}</span>
-			{#each selectedTags as tag, index}
-				<Tag variant="selected">{tag}</Tag>
+			<span>{translate('statusAboutTopics')}</span>
+			{#each selectedTags as tag, index (index)}
+				<Tag variant="selected-outline">{translate(tag)}</Tag>
 				{#if index < selectedTags.length - 1}
-					<span>{tagOperator === 'AND' ? 'en' : 'of'}</span>
+					<span>{tagJoiner}</span>
 				{/if}
 			{/each}
 		{/if}

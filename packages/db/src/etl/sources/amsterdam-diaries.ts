@@ -1,0 +1,140 @@
+/**
+ * Import Amsterdam Diaries entries: one dated diary entry as a story, placed at
+ * every Amsterdam place it mentions. The index keeps what, when, where and why it
+ * is here; the people and places an entry names are the source's to show.
+ *
+ * Reads the JSONL exported from the Amsterdam Diaries Time Machine dump: one line
+ * per entry and place, the same entry fields repeated with a different `place`, so
+ * the writer links the one feature to each place in turn. A street, address or
+ * building resolves by its Adamlink id; a Wikidata place by the name the source gives
+ * it, when the index holds a place of that name, else by its point through the era
+ * cascade. The entity carries an excerpt of the transcription per place,
+ * each stamped with the index place its mention resolved to, so the card can open
+ * the text at the place it shows; the description holds the first excerpt's
+ * opening. Dates keep the source's precision: a day, a month, or a year.
+ *
+ * Usage: bun run db:ingest -s amsterdam-diaries -f <path-to-amsterdam-diaries.jsonl>
+ */
+import { Draft, Ingestor } from '../ingest/ingestor';
+import { ManuscriptEntityFactory } from '../ingest/entity-factory';
+import { ExtractionArgs, PlaceExtractionMethod, Resolved } from '../places/place-index';
+import { NewFeature } from '../../schema';
+import { Excerpt, ManuscriptEntity, RecordType, parsePartialDate, partialDateRange } from '@atm/shared';
+
+type DiaryPlace = { uri: string; name: string; kind: string; geom_wkt: string };
+
+type DiaryEntryRecord = {
+  id: string;
+  url: string;
+  name: string | null;
+  date: string | null;
+  // each with the mention's URI, which picks the place to resolve and is not kept
+  excerpts: Array<Excerpt & { place: string }>;
+  diary: { name: string | null; url: string | null };
+  author: { name: string | null; url: string | null };
+  // this row's place, and every Amsterdam place of the entry
+  place: DiaryPlace;
+  places: DiaryPlace[];
+  // the place's Adamlink id when it is one the index holds by id (a street, an
+  // address or a building); empty otherwise, so the name, then the point, takes over
+  place_uri?: string;
+  place_name?: string;
+  geom_wkt?: string;
+};
+
+const EXCERPT_LENGTH = 128;
+
+/** The entry's period at the source's precision; null when unparseable. */
+export function parseEntryDate(raw: string | null): { startDate: string; endDate: string } | null {
+  if (!raw) return null;
+  const date = parsePartialDate(raw);
+  if (!date) return null;
+  return partialDateRange(date);
+}
+
+export class AmsterdamDiariesIngestor extends Ingestor<DiaryEntryRecord> {
+  protected ORG_ID = 'amsterdam-time-machine';
+  protected ORG_LABEL = 'Amsterdam Time Machine';
+  protected ORG_URL = 'https://amsterdamtimemachine.nl';
+
+  protected DATASET_ID = 'amsterdam-diaries';
+  protected DATASET_LABEL = 'Amsterdam Diaries Time Machine';
+  protected DATASET_URL = 'https://diaries.amsterdamtimemachine.nl';
+  protected override DATASET_DISTRIBUTION_URL = 'https://zenodo.org/records/14385058';
+
+  protected RECORD_TYPE: RecordType = 'story';
+  // the writer named the place; the entry is not about it (Schema.org CreativeWork.mentions)
+  protected RELATION_ID = 'mentions';
+  protected RELATION_LABEL = 'Mentions';
+
+  protected PLACE_EXTRACTION_METHODS: ExtractionArgs<DiaryEntryRecord> = [
+    { method: PlaceExtractionMethod.URI, column: 'place_uri' },
+    { method: PlaceExtractionMethod.NAME, column: 'place_name' },
+    { method: PlaceExtractionMethod.WKT, column: 'geom_wkt' },
+  ];
+
+  protected override entityFactory() {
+    return new ManuscriptEntityFactory();
+  }
+
+  // the place methods read columns of the row: lift the place's id, name and point to the top
+  private placeColumns(row: DiaryEntryRecord, place: DiaryPlace): DiaryEntryRecord {
+    row.geom_wkt = place.geom_wkt;
+    row.place_name = place.name;
+    if (place.kind === 'street' || place.kind === 'address' || place.kind === 'building') {
+      row.place_uri = place.uri;
+    } else {
+      row.place_uri = '';
+    }
+    return row;
+  }
+
+  // The base writes an entity the first time it sees a feature, so the first row of
+  // an entry resolves every place of the entry and stamps each excerpt; the later
+  // rows repeat it from the resolver caches.
+  protected override async sourceToFeature(source: DiaryEntryRecord): Promise<[NewFeature | undefined, Resolved | undefined]> {
+    const [feature, resolved] = await super.sourceToFeature(source);
+    if (!feature || !resolved || !('placeId' in resolved)) {
+      return [feature, resolved];
+    }
+    const entity = feature.entity as ManuscriptEntity;
+    const draft = { startDate: feature.startDate, endDate: feature.endDate } as Draft;
+    for (const [i, excerpt] of entity.excerpts.entries()) {
+      const uri = source.excerpts[i].place;
+      if (uri === source.place.uri) {
+        excerpt.placeId = resolved.placeId;
+        continue;
+      }
+      const place = source.places?.find((p) => p.uri === uri);
+      if (!place) {
+        continue;
+      }
+      const other = await this.extractPlace(this.placeColumns({} as DiaryEntryRecord, place), draft);
+      if ('placeId' in other) {
+        excerpt.placeId = other.placeId;
+      }
+    }
+    return [feature, resolved];
+  }
+
+  protected transform(source: DiaryEntryRecord): Draft | undefined {
+    const dates = parseEntryDate(source.date);
+    if (!dates || !source.excerpts?.length || !source.place) {
+      return undefined;
+    }
+    this.placeColumns(source, source.place);
+    return {
+      id: source.id,
+      url: source.url,
+      label: source.diary?.name || source.name || '',
+      description: source.excerpts[0].text.slice(0, EXCERPT_LENGTH),
+      startDate: dates.startDate,
+      endDate: dates.endDate,
+    };
+  }
+}
+
+export async function ingest(filePath: string) {
+  const ingestor = new AmsterdamDiariesIngestor();
+  await ingestor.ingest(filePath);
+}

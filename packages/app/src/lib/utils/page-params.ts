@@ -1,0 +1,94 @@
+/**
+ * Pure parsers for the map page's URL params (universal loader — no server-only
+ * imports). Presentation knobs clamp; they never throw.
+ */
+import type { TagOperator } from '@atm/shared/types';
+import { UI_SORT_MODES, type UiSortMode } from './sort-modes';
+
+const ID_MAX_LENGTH = 512;
+const SEED_MAX_LENGTH = 64;
+
+/** The expanded card a link carries: the feature's id and the place its card is at. */
+export function parseFeatureSelection(url: URL): {
+	featureId: string | null;
+	placeId: string | null;
+} {
+	const feature = url.searchParams.get('feature');
+	const at = url.searchParams.get('at');
+	return {
+		featureId: feature ? feature.slice(0, ID_MAX_LENGTH) : null,
+		placeId: at ? at.slice(0, ID_MAX_LENGTH) : null
+	};
+}
+
+/** The place selection references: place id and, optionally, the clicked name row. */
+export function parsePlaceSelection(url: URL): { placeId: string | null; nameId: string | null } {
+	let placeId: string | null = null;
+	const placeParam = url.searchParams.get('place');
+	if (placeParam) {
+		placeId = placeParam.slice(0, ID_MAX_LENGTH);
+	}
+	let nameId: string | null = null;
+	const nameParam = url.searchParams.get('name');
+	if (nameParam) {
+		nameId = nameParam.slice(0, ID_MAX_LENGTH);
+	}
+	return { placeId, nameId };
+}
+
+/** The place-panel flag; only '1' opens it. */
+export function parsePlacePanelFlag(url: URL): boolean {
+	return url.searchParams.get('placePanel') === '1';
+}
+
+/**
+ * Free-text feature search (`q`), mirroring the server-side parseSearchQuery:
+ * trimmed, clamped, blank collapses to null (no filter).
+ */
+export function parseSearchQuery(url: URL): string | null {
+	const raw = url.searchParams.get('q');
+	if (!raw) {
+		return null;
+	}
+	const trimmed = raw.trim().slice(0, ID_MAX_LENGTH);
+	if (trimmed.length === 0) {
+		return null;
+	}
+	return trimmed;
+}
+
+/**
+ * The tag selection (`tags`, `tagOperator`), mirroring the server-side parsers:
+ * trimmed ids, and AND only when asked for. The item cap lives server-side (the
+ * shared config reads process.env, which the browser does not have).
+ */
+export function parseTagSelection(url: URL): { tags: string[]; tagOperator: TagOperator } {
+	let tags: string[] = [];
+	const raw = url.searchParams.get('tags');
+	if (raw) {
+		tags = raw
+			.split(',')
+			.map((t) => t.trim())
+			.filter((t) => t.length > 0);
+	}
+	let tagOperator: TagOperator = 'OR';
+	if ((url.searchParams.get('tagOperator') || '').toUpperCase() === 'AND') {
+		tagOperator = 'AND';
+	}
+	return { tags, tagOperator };
+}
+
+/** Sort mode (unknown modes fall back to the default) and shuffle seed. */
+export function parseSortSelection(url: URL): { sort: UiSortMode; sampleSeed: string | undefined } {
+	let sort: UiSortMode = 'sample';
+	const sortParam = url.searchParams.get('sort');
+	if (sortParam && (UI_SORT_MODES as string[]).includes(sortParam)) {
+		sort = sortParam as UiSortMode;
+	}
+	let sampleSeed: string | undefined = undefined;
+	const seedParam = url.searchParams.get('sampleSeed');
+	if (seedParam) {
+		sampleSeed = seedParam.slice(0, SEED_MAX_LENGTH);
+	}
+	return { sort, sampleSeed };
+}

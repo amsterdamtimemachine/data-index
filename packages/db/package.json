@@ -13,10 +13,12 @@
     "db:studio": "drizzle-kit studio",
     "db:ingest": "bun run src/etl/index.ts ingest",
     "db:rebuild-index": "bun run src/etl/index.ts rebuild-index",
-    "test": "DATABASE_URL=postgresql://test:test@localhost:5434/dataindex_test CACHE_TTL_MINUTES=0 bun test"
+    "test": "bun test --env-file=../../.env.test",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@atm/shared": "workspace:*",
+    "@streamparser/json": "^0.0.22",
     "commander": "^12.1.0",
     "csv-parse": "^7.0.3",
     "drizzle-orm": "^0.45.4",
@@ -24,9 +26,13 @@
     "pg": "^8.23.1"
   },
   "devDependencies": {
-    "@types/n3": "^1.26.5",
+    "@eslint/js": "^9.39.5",
+    "@types/n3": "^1.26.6",
     "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.11",
-    "typescript": "^5.9.3"
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.73.0"
   }
 }

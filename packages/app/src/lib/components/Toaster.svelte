@@ -1,8 +1,18 @@
 <script lang="ts">
+	import { translate } from '#lib/utils/translations.js';
 	import { fade } from 'svelte/transition';
 	import X from 'phosphor-svelte/lib/X';
-	import Button from '$components/Button.svelte';
-	import { toaster } from '$state/toaster.svelte';
+	import Button from '#lib/components/Button.svelte';
+	import { toaster } from '#lib/state/toaster.svelte.js';
+
+	// a failure is outlined red; the words still say what happened
+	function toastClasses(failure: boolean | undefined): string {
+		const base = 'rounded-lg bg-white text-gray-800 shadow-md';
+		if (failure) {
+			return `${base} border border-atm-red`;
+		}
+		return `${base} border border-atm-sand-border`;
+	}
 </script>
 
 <!-- toaster.root renders a native popover="manual". Its UA styles centre it (inset:0;
@@ -14,32 +24,29 @@
 	{#each toaster.toasts as toast (toast.id)}
 		<div
 			{...toast.content}
-			in:fade={{ duration: 150 }}
-			out:fade={{ duration: 450 }}
-			class="rounded-lg bg-white text-gray-800 shadow-md border max-w-sm"
-			class:border-red-200={toast.data.type === 'error'}
-			class:border-yellow-200={toast.data.type === 'warning'}
-			class:border-green-200={toast.data.type === 'success'}
-			class:border-blue-200={toast.data.type === 'info'}
+			in:fade={{ duration: 75 }}
+			out:fade={{ duration: 225 }}
+			class={toastClasses(toast.data.failure)}
 		>
-			<div class="relative w-[24rem] max-w-[calc(100vw-2rem)] p-5">
+			<!-- as wide as its words, up to 20rem; a phone keeps a margin -->
+			<div class="relative w-max max-w-[min(20rem,calc(100vw-2rem))] p-5">
 				<div class="pr-10">
-					<h3 {...toast.title} class="flex items-center gap-2 font-bold text-sm mb-1">
-						{toast.data.title}
-						<span
-							class="size-1.5 rounded-full"
-							class:bg-red-500={toast.data.type === 'error'}
-							class:bg-yellow-500={toast.data.type === 'warning'}
-							class:bg-green-500={toast.data.type === 'success'}
-							class:bg-blue-500={toast.data.type === 'info'}
-						></span>
-					</h3>
-					<div {...toast.description} class="text-sm text-gray-600">
-						{toast.data.description}
+					<h3 {...toast.title} class="font-bold text-sm">{toast.data.title}</h3>
+					<!-- one line per thing to say; a long value from a link wraps inside the toast -->
+					<div
+						{...toast.description}
+						class="text-sm text-gray-600 mt-1 empty:hidden whitespace-pre-line [overflow-wrap:anywhere]"
+					>
+						{toast.data.description ?? ''}
 					</div>
 				</div>
 				<div class="absolute top-2 right-2">
-					<Button icon={X} onclick={toast.removeSelf} size={18} aria-label="Dismiss notification" />
+					<Button
+						icon={X}
+						onclick={toast.removeSelf}
+						size={18}
+						aria-label={translate('dismissNotification')}
+					/>
 				</div>
 			</div>
 		</div>

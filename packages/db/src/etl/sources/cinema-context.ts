@@ -1,0 +1,102 @@
+/**
+ * Import Cinema Context programmes: one programme of one venue on one date as an
+ * event, at the venue's address.
+ *
+ * Reads the JSONL exported from the Cinema Context database dump: one line per
+ * programme with its venue, the venue's address as written and its point, the items
+ * in order, and the newspapers it was listed in. Only the films are kept: a programme
+ * becomes a ScreeningEvent screened at its venue with its films as items, its live acts
+ * are left out, and a programme without a film is not ingested. The label is the
+ * first film.
+ *
+ * The place is the venue's address, matched by name against the dated address names;
+ * a match outside its register's era moves to the same address as the other source
+ * records it (see eraTwin). An address written as a range or a description matches
+ * nothing and falls back to the point. Dates keep the
+ * source's precision: a day, a month for "1907-05-xx", a year for "1907".
+ *
+ * Usage: bun run db:ingest -s cinema-context -f <path-to-cinema-context.jsonl>
+ */
+import { Draft, Ingestor } from '../ingest/ingestor';
+import { ProgrammeEntityFactory, type SourceItem } from '../ingest/entity-factory';
+import { ExtractionArgs, PlaceExtractionMethod } from '../places/place-index';
+import { RecordType, parsePartialDate, partialDateRange } from '@atm/shared';
+
+type CinemaContextRecord = {
+  perm_id: string | null;
+  // the programme's page at the source, present with a permanent id
+  url: string | null;
+  programme_id: string;
+  date: string | null;
+  venue: { perm_id: string | null; url: string | null; name: string | null; type: string | null };
+  // the venue's address as the source writes it
+  address: string | null;
+  geom_wkt: string;
+  items: SourceItem[];
+};
+
+const SCREENED_AT = { id: 'screenedAt', label: 'Screened at', dated: true };
+
+/** The first film on the programme, as the source words it; none without a film. */
+function firstFilm(items: SourceItem[]): string | undefined {
+  return items.find((item) => item.title)?.title;
+}
+
+/** The programme's period at the source's precision; null when unparseable. */
+export function parseProgrammeDate(raw: string | null): { startDate: string; endDate: string } | null {
+  if (!raw) return null;
+  const date = parsePartialDate(raw);
+  if (!date) return null;
+  return partialDateRange(date);
+}
+
+export class CinemaContextIngestor extends Ingestor<CinemaContextRecord> {
+  protected ORG_ID = 'cinema-context';
+  protected ORG_LABEL = 'Cinema Context';
+  protected ORG_URL = 'https://cinemacontext.nl';
+
+  protected DATASET_ID = 'cinema-context';
+  protected DATASET_LABEL = 'Cinema Context';
+  protected DATASET_URL = 'https://cinemacontext.nl';
+
+  protected RECORD_TYPE: RecordType = 'event';
+  protected RELATION_ID = SCREENED_AT.id;
+  protected RELATION_LABEL = SCREENED_AT.label;
+
+  protected PLACE_EXTRACTION_METHODS: ExtractionArgs<CinemaContextRecord> = [
+    { method: PlaceExtractionMethod.NAME, column: 'address' },
+    { method: PlaceExtractionMethod.WKT, column: 'geom_wkt' },
+  ];
+
+  protected override entityFactory() {
+    return new ProgrammeEntityFactory();
+  }
+
+  // dated: the card words a programme's date with its place
+  protected override relations() {
+    return [SCREENED_AT];
+  }
+
+  protected transform(source: CinemaContextRecord): Draft | undefined {
+    const dates = parseProgrammeDate(source.date);
+    const first = firstFilm(source.items ?? []);
+    if (!dates || !first) {
+      return undefined;
+    }
+    return {
+      // the permanent id where the source has one; the internal id keeps the rest stable
+      id: source.perm_id ?? `programme-${source.programme_id}`,
+      url: source.url ?? '',
+      label: first,
+      description: '',
+      startDate: dates.startDate,
+      endDate: dates.endDate,
+    };
+  }
+}
+
+const ingestor = new CinemaContextIngestor();
+
+export async function ingest(filePath: string) {
+  await ingestor.ingest(filePath);
+}

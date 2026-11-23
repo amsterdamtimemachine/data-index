@@ -1,97 +1,101 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
-	import FeatureCard from '$components/FeatureCard.svelte';
-	import { createMasonryMemoized, type MasonryMemoizedInstance } from '$utils/masonry';
+	import { translate } from '#lib/utils/translations.js';
+	import { onMount, onDestroy, untrack } from 'svelte';
+	import FeatureCard from '#lib/components/FeatureCard.svelte';
+	import { createMasonry, type MasonryInstance } from '#lib/utils/masonry.js';
+	import { MAX_PANEL_COLS } from '#lib/components/FeaturesPanelResizeHandle.svelte';
 	import debounce from 'lodash.debounce';
 	import type { FeatureResult } from '@atm/shared/types';
 
 	type Props = {
 		features: FeatureResult[];
 		columns?: number;
-		layoutMemory?: Map<string, number>;
 	};
-	let { features, columns, layoutMemory }: Props = $props();
+	let { features, columns }: Props = $props();
 
-	// Use programmatic responsive columns if no explicit columns prop provided
+	// Also the number of column divs rendered below — a columns prop above this is capped.
+	const MAX_COLUMNS = MAX_PANEL_COLS;
+
 	const useResponsiveColumns = $derived(columns === undefined);
 
 	let masonryContainer = $state<HTMLElement>();
-	let masonry: MasonryMemoizedInstance | null = null;
+	let masonry = $state<MasonryInstance | null>(null);
 	let windowWidth = $state(0);
+	// Container stays invisible (but measurable) until the first layout has placed items,
+	// so there is no flash of the un-columned grid.
+	let ready = $state(false);
 
-	// Calculate columns based on window width (updated breakpoints)
 	function calculateColumns(width: number): number {
 		if (width <= 650) return 1;
 		if (width <= 1024) return 2;
 		return 3;
 	}
 
-	// Get current column count
-	let currentColumns = $derived(useResponsiveColumns ? calculateColumns(windowWidth) : columns || 3);
-
-	// Debounced resize handler
-	const debouncedResize = debounce(() => {
+	const currentColumns = $derived.by(() => {
 		if (useResponsiveColumns) {
-			windowWidth = window.innerWidth;
+			return calculateColumns(windowWidth);
 		}
+		return Math.min(columns || 3, MAX_COLUMNS);
+	});
+
+	const debouncedResize = debounce(() => {
+		windowWidth = window.innerWidth;
 	}, 150);
 
 	onMount(() => {
-		// Initialize window width
-		if (useResponsiveColumns) {
-			windowWidth = window.innerWidth;
-			window.addEventListener('resize', debouncedResize);
-		}
-
-		if (masonryContainer) {
-			try {
-				masonry = createMasonryMemoized(masonryContainer, {
-					debounceDelay: 150,
-					layoutMemory: layoutMemory || new Map()
-				});
-				// Initial layout
-				masonry.layout(currentColumns, true);
-			} catch (error) {
-				console.error('Failed to initialize memoized masonry layout:', error);
-			}
-		}
+		windowWidth = window.innerWidth;
 	});
 
-	onDestroy(() => {
-		if (useResponsiveColumns) {
-			window.removeEventListener('resize', debouncedResize);
-		}
-		masonry?.destroy();
-	});
-
-	// Re-layout when features or column count changes
+	// (Re)create the masonry instance whenever the container element (re)appears.
 	$effect(() => {
-		if (masonry) {
-			if (features.length > 0) {
-				// Force layout when features change, use timeout for DOM updates
-				setTimeout(() => masonry?.layout(currentColumns, true), 10);
-			} else {
-				// Just column count change, no force needed
-				masonry.layout(currentColumns);
-			}
-		}
+		if (!masonryContainer) return;
+		const instance = createMasonry(masonryContainer);
+		masonry = instance;
+		return () => {
+			instance.destroy();
+			masonry = null;
+			ready = false;
+		};
 	});
+
+	// Re-layout on feature or column changes. Runs post-flush, so the items are in the
+	// DOM; image space is reserved via aspect-ratio, so heights are already final.
+	let lastFeatures: FeatureResult[] | null = null;
+	$effect(() => {
+		const instance = masonry;
+		const list = features;
+		const cols = currentColumns;
+		if (!instance) return;
+		untrack(() => {
+			instance.layout(cols, list !== lastFeatures);
+			lastFeatures = list;
+			ready = true;
+		});
+	});
+
+	onDestroy(() => debouncedResize.cancel());
 </script>
+
+<svelte:window onresize={debouncedResize} />
 
 <div class="w-full">
 	{#if features.length === 0}
-		<div class="text-gray-500 p-3">No features to display</div>
+		<div class="text-gray-500 p-3">{translate('noFeaturesToDisplay')}</div>
 	{:else}
+		<!-- after layout the DOM holds the cards in column order, top to bottom then the next
+		     column, which is the order the columns read; the list roles survive the move -->
 		<div
 			class="masonry-layout p-3"
+			class:invisible={!ready}
+			role="list"
 			bind:this={masonryContainer}
 			style:grid-template-columns={`repeat(${currentColumns}, minmax(0, 1fr))`}
 		>
-			{#each Array(3) as _, columnIndex}
-				<div class="masonry-column"></div>
+			{#each Array.from({ length: MAX_COLUMNS }, (_, i) => i) as columnIndex (columnIndex)}
+				<div class="masonry-column" role="presentation"></div>
 			{/each}
 			{#each features as feature, index (index)}
-				<div class="masonry-item" data-feature-id={feature.id}>
+				<div class="masonry-item" role="listitem" data-index={index} data-feature-id={feature.id}>
 					<FeatureCard {feature} />
 				</div>
 			{/each}

@@ -1,33 +1,29 @@
+<!-- The app's button: an optional Phosphor icon, an optional label, and any button attribute passed on -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { mergeCss } from '$utils/utils';
-	import { melt, type AnyMeltElement } from '@melt-ui/svelte';
+	import type { HTMLButtonAttributes } from 'svelte/elements';
+	import { mergeCss } from '#lib/utils/utils.js';
 	import type { PhosphorIcon, PhosphorIconProps } from '@atm/shared/types';
 
-	interface Props {
-		onclick?: () => void;
+	type Props = Omit<HTMLButtonAttributes, 'class' | 'color' | 'children'> & {
 		class?: string;
-		disabled?: boolean;
 		icon?: PhosphorIcon;
 		size?: number;
 		weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone';
+		// the icon's colour
 		color?: string;
 		children?: Snippet;
-		'aria-label'?: string;
-		meltAction?: any; // Melt UI action - type varies by context
-	}
+	};
 
+	// the rest carries any button attribute through
 	let {
-		onclick,
 		class: className,
-		disabled = false,
 		icon: Icon,
 		size = 18,
 		weight = 'bold',
 		color = 'black',
 		children,
-		'aria-label': ariaLabel,
-		meltAction
+		...rest
 	}: Props = $props();
 
 	const iconProps: PhosphorIconProps = $derived({
@@ -37,36 +33,46 @@
 		mirrored: false
 	});
 
+	// every button shows the browser's own tooltip after a hover: its title, else its
+	// label, else its visible text
+	const title = $derived.by(() => {
+		if (rest.title) {
+			return rest.title;
+		}
+		return rest['aria-label'] ?? undefined;
+	});
+
+	// a button with neither a title nor a label takes its visible text, read when it mounts
+	function titleFromText(node: HTMLButtonElement) {
+		if (!node.title) {
+			node.title = node.textContent?.trim() ?? '';
+		}
+	}
+
 	const baseClasses =
-		'h-[32px] w-[32px] flex justify-center items-center bg-atm-sand-darkish rounded border border-atm-gold border-[1px] hover:bg-atm-sand-dark disabled:opacity-50 disabled:cursor-not-allowed text-sm';
-	const paddingClasses = $derived(Icon ? 'p-1' : 'px-3 py-2');
+		'focus-ring h-[32px] flex justify-center items-center bg-atm-sand-darkish rounded border border-atm-gold border-[1px] hover:bg-atm-sand-dark disabled:opacity-50 disabled:cursor-not-allowed text-sm';
+	// icon-only stays a 32px square; a label, with or without a glyph, sizes to its text
+	const shapeClasses = $derived.by(() => {
+		if (Icon && children) {
+			return 'px-2 gap-1';
+		}
+		if (Icon) {
+			return 'w-[32px] p-1';
+		}
+		return 'px-3';
+	});
 </script>
 
-{#if meltAction}
-	<button
-		{onclick}
-		{disabled}
-		class={mergeCss(`${baseClasses} ${paddingClasses}`, className)}
-		aria-label={ariaLabel}
-		use:melt={meltAction}
-	>
-		{#if Icon}
-			<Icon {...iconProps} />
-		{:else if children}
-			{@render children()}
-		{/if}
-	</button>
-{:else}
-	<button
-		{onclick}
-		{disabled}
-		class={mergeCss(`${baseClasses} ${paddingClasses}`, className)}
-		aria-label={ariaLabel}
-	>
-		{#if Icon}
-			<Icon {...iconProps} />
-		{:else if children}
-			{@render children()}
-		{/if}
-	</button>
-{/if}
+<button
+	{...rest}
+	{title}
+	use:titleFromText
+	class={mergeCss(`${baseClasses} ${shapeClasses}`, className)}
+>
+	{#if Icon}
+		<Icon {...iconProps} />
+	{/if}
+	{#if children}
+		{@render children()}
+	{/if}
+</button>

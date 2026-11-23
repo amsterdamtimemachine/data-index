@@ -29,3 +29,15 @@ export function calculateHistogramBarHeights(
 		return Math.max(scaledHeight, minHeight);
 	});
 }
+
+/**
+ * The selection's count for one time slice, from the selection's series, for the
+ * timeline tooltip's "in de selectie" line; null when the selection has nothing there.
+ */
+export function selectionCountFor(selectionBins: HistogramBin[], key: string): number | null {
+	const match = selectionBins.find((bin) => bin.timeSlice.key === key);
+	if (!match || match.count === 0) {
+		return null;
+	}
+	return match.count;
+}

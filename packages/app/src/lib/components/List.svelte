@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { mergeCss } from '$utils/utils';
+	import { mergeCss } from '#lib/utils/utils.js';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -9,17 +9,12 @@
 		children?: Snippet;
 	}
 
-	let {
-		ordered = false,
-		start,
-		class: className,
-		children
-	}: Props = $props();
+	let { ordered = false, start, class: className, children }: Props = $props();
 
 	const baseClasses = 'space-y-1 mb-4';
 	const orderedClasses = 'list-decimal list-inside pl-4';
 	const unorderedClasses = 'list-disc list-inside pl-4';
-	
+
 	const listClasses = $derived(ordered ? orderedClasses : unorderedClasses);
 </script>
 

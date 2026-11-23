@@ -1,0 +1,62 @@
+// below Tailwind's md breakpoint — where the features panel goes fullscreen
+export const MOBILE_MAX_WIDTH = 767;
+export const MOBILE_QUERY = `(max-width: ${MOBILE_MAX_WIDTH}px)`;
+
+// hover-capable pointer — taps synthesise mouseenter without a matching leave
+export const HOVER_QUERY = '(hover: hover) and (pointer: fine)';
+
+/**
+ * Reactive media query. Call during component initialisation; `.matches` tracks
+ * the environment (resize, rotation) and the listener is cleaned up with the
+ * component. SSR renders as false until hydration.
+ */
+export function createMediaQuery(query: string): { readonly matches: boolean } {
+	let matches = $state(false);
+
+	$effect(() => {
+		const mql = window.matchMedia(query);
+		matches = mql.matches;
+		const onChange = (e: MediaQueryListEvent) => {
+			matches = e.matches;
+		};
+		mql.addEventListener('change', onChange);
+		return () => mql.removeEventListener('change', onChange);
+	});
+
+	return {
+		get matches() {
+			return matches;
+		}
+	};
+}
+
+/**
+ * An element's rendered width in pixels, kept current by a ResizeObserver. The
+ * getter is read reactively, so a bound element that appears later is picked up.
+ * SSR renders as 0 until hydration.
+ */
+export function createElementWidth(getElement: () => HTMLElement | undefined): {
+	readonly px: number;
+} {
+	let px = $state(0);
+
+	$effect(() => {
+		const element = getElement();
+		if (!element) {
+			px = 0;
+			return;
+		}
+		px = element.offsetWidth;
+		const observer = new ResizeObserver(() => {
+			px = element.offsetWidth;
+		});
+		observer.observe(element);
+		return () => observer.disconnect();
+	});
+
+	return {
+		get px() {
+			return px;
+		}
+	};
+}

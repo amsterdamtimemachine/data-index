@@ -1,189 +1,334 @@
 <!--
-	The map's filter sidebar: record type, dataset, geometry, and (when ready) topics.
+	The map's filter sidebar: search (place or term), record type, dataset, scale, topics.
 	Owns the URL writing — each change sets/deletes its query param and navigates, which
 	re-runs the loader and re-fetches the map data.
 -->
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import type { RecordType, PlaceType } from '@atm/shared/types';
-	import { translateAll, reverseTranslateAll } from '$utils/translations';
-	import QuestionMark from 'phosphor-svelte/lib/QuestionMark';
+	import { asset } from '$app/paths';
+	import type { PlaceSearchMatch, VisualizationMetadata } from '@atm/shared/types';
+	import type { FilterState } from '#lib/types/filters.js';
+	import { translate } from '#lib/utils/translations.js';
+	import { navigateParams, withoutPlace } from '#lib/utils/navigate.js';
+	import { createFilterCounts } from '#lib/state/filter-counts.svelte.js';
 	import Heading from './Heading.svelte';
-	import Tooltip from './Tooltip.svelte';
-	import ToggleGroup from './ToggleGroup.svelte';
-	import Tag from './Tag.svelte';
+	import TextWithSlots from './TextWithSlots.svelte';
 	import FilterSection from './FilterSection.svelte';
-	import TagsANDSelector from './TagsANDSelector.svelte';
+	import FilterToggleGroup from './FilterToggleGroup.svelte';
+	import SearchInput from './SearchInput.svelte';
+	import PlaceFilterTag from './PlaceFilterTag.svelte';
+	import SearchFilterTag from './SearchFilterTag.svelte';
+	import Link from './Link.svelte';
+	import { selectsAll, NONE, CATEGORIES, type Category } from '#lib/utils/filters.js';
+	import type { ValueCount } from '@atm/shared/types';
 	import TagOperatorSwitch from './TagOperatorSwitch.svelte';
-	import DummyTagsSection from './DummyTagsSection.svelte';
 
 	interface Props {
-		recordTypes?: RecordType[];
-		currentRecordTypes?: RecordType[];
-		placeTypes?: PlaceType[];
-		currentPlaceTypes?: PlaceType[];
-		datasets?: { id: string; label: string }[];
-		currentDatasets?: string[];
-		availableTags?: string[];
-		currentTags?: string[];
-		currentTagOperator?: 'AND' | 'OR';
+		metadata: VisualizationMetadata | null;
+		// the URL's filter state, what the controls show
+		filters: FilterState;
+		// the applied filters as request params (a paused search term left out), so the
+		// preview counts match what the map shows
+		activeParams?: string;
+		selectedPlace?: PlaceSearchMatch | null;
+		onTogglePlacePanel?: () => void;
+		placePanelOpen?: boolean;
+		searchPaused?: boolean;
+		onToggleSearch?: () => void;
+		// a category is empty: nothing to list, so the search's preview count stays quiet
+		idle?: boolean;
+		// the period and, in the timeline's local mode, the cell or place the counts are taken within
+		countsScope?: string;
 	}
 
 	let {
-		recordTypes = [],
-		currentRecordTypes = [],
-		placeTypes = [],
-		currentPlaceTypes = [],
-		datasets = [],
-		currentDatasets = [],
-		availableTags = [],
-		currentTags = [],
-		currentTagOperator = 'OR'
+		metadata,
+		filters,
+		activeParams = '',
+		selectedPlace = null,
+		onTogglePlacePanel = undefined,
+		placePanelOpen = false,
+		searchPaused = false,
+		onToggleSearch = undefined,
+		idle = false,
+		countsScope = ''
 	}: Props = $props();
 
-	// keep false until real tags are added to the app
-	const TAGS_FEATURE_READY = false;
+	const recordTypes = $derived(metadata?.recordTypes ?? []);
+	const placeTypes = $derived(metadata?.placeTypes ?? []);
+	const datasets = $derived(metadata?.datasets ?? []);
+	const availableTags = $derived(metadata?.tags ?? []);
+	const currentTags = $derived(filters.tags);
+	const currentTagOperator = $derived(filters.tagOperator);
+	const currentSearchQuery = $derived(filters.searchQuery);
 
-	// Dutch labels for display; the handlers translate the selection back before writing it.
-	let translatedRecordTypes = $derived(translateAll(recordTypes));
-	let translatedCurrentRecordTypes = $derived(translateAll(currentRecordTypes));
-	let translatedPlaceTypes = $derived(translateAll(placeTypes));
-	let translatedCurrentPlaceTypes = $derived(translateAll(currentPlaceTypes));
-
-	let datasetLabels = $derived(datasets.map((s) => s.label));
+	// the toggle groups speak in ids; a dataset shows its own label, the rest are translated
 	let datasetLookup = $derived(new Map(datasets.map((s) => [s.id, s.label])));
-	let currentDatasetLabels = $derived(currentDatasets.map((id) => datasetLookup.get(id) || id));
+	const datasetIds = $derived(datasets.map((s) => s.id));
+	const datasetLabel = (id: string) => datasetLookup.get(id) || id;
 
-	// Local mirrors so the disabled topics UI can update optimistically before the
-	// navigation lands; the props take over again on the next load.
-	let tagOperator = $derived<'AND' | 'OR'>(currentTagOperator);
-	let selectedTags = $derived<string[]>(currentTags);
+	// What every filter value is worth under the other filters, the period and the scope,
+	// shown beside it. The applied filters travel as they are, an emptied category as
+	// 'none', so the server counts that category's own values and zeroes the rest.
+	const filterCounts = createFilterCounts();
+	const countsQuery = $derived.by(() => {
+		const params = new URLSearchParams(activeParams);
+		if (metadata) {
+			for (const category of CATEGORIES) {
+				if (filters[category].length === 0) {
+					params.set(category, NONE);
+				}
+			}
+		}
+		for (const [name, value] of new URLSearchParams(countsScope)) {
+			params.set(name, value);
+		}
+		return params.toString();
+	});
+	const hasMetadata = $derived(metadata !== null);
+	$effect(() => {
+		if (hasMetadata) {
+			filterCounts.load(countsQuery);
+		} else {
+			filterCounts.reset();
+		}
+	});
+	// a list's counts by id, every known value present
+	function countsById(
+		ids: string[],
+		counted: ValueCount[] | undefined
+	): Map<string, number> | undefined {
+		if (!counted) {
+			return undefined;
+		}
+		const byId = new Map(counted.map((c) => [c.id, c.count]));
+		return new Map(ids.map((id) => [id, byId.get(id) ?? 0]));
+	}
+	const recordTypeCounts = $derived(countsById(recordTypes, filterCounts.counts?.recordTypes));
+	const datasetCounts = $derived(countsById(datasetIds, filterCounts.counts?.datasets));
+	const placeTypeCounts = $derived(countsById(placeTypes, filterCounts.counts?.placeTypes));
+	const tagCounts = $derived(countsById(availableTags, filterCounts.counts?.tags));
 
-	function navigate(mutate: (params: URLSearchParams) => void) {
-		const url = new URL(window.location.href);
-		mutate(url.searchParams);
-		goto(url.pathname + url.search);
+	// a category's param: absent for everything, NONE for nothing, else the picks
+	function writeCategory(p: URLSearchParams, name: Category, values: string[], all: string[]) {
+		if (selectsAll(values, all)) {
+			p.delete(name);
+		} else if (values.length === 0) {
+			p.set(name, NONE);
+		} else {
+			p.set(name, values.join(','));
+		}
 	}
 
-	function handleRecordTypeChange(selected: string[] | string) {
-		const dutch = Array.isArray(selected) ? selected : [selected];
-		const english = reverseTranslateAll(dutch);
-		navigate((p) => {
-			if (english.length > 0) p.set('recordTypes', english.join(','));
-			else p.delete('recordTypes');
-			p.delete('tags'); // resetTags
-		});
+	function handleRecordTypeChange(selected: string[]) {
+		navigateParams((p) => writeCategory(p, 'recordTypes', selected, recordTypes));
 	}
 
-	function handleDatasetChange(selected: string[] | string) {
-		const labels = Array.isArray(selected) ? selected : [selected];
-		const labelToId = new Map(datasets.map((s) => [s.label, s.id]));
-		const ids = labels.map((label) => labelToId.get(label) || label);
-		navigate((p) => {
-			if (ids.length > 0) p.set('datasets', ids.join(','));
-			else p.delete('datasets');
-		});
+	function handleDatasetChange(selected: string[]) {
+		navigateParams((p) => writeCategory(p, 'datasets', selected, datasetIds));
 	}
 
-	function handlePlaceTypeChange(selected: string[] | string) {
-		const dutch = Array.isArray(selected) ? selected : [selected];
-		const raw = reverseTranslateAll(dutch);
-		navigate((p) => {
-			if (raw.length > 0) p.set('placeTypes', raw.join(','));
-			else p.delete('placeTypes');
-		});
+	function handlePlaceTypeChange(selected: string[]) {
+		navigateParams((p) => writeCategory(p, 'placeTypes', selected, placeTypes));
 	}
 
-	function handleTagsChange(tags: string | string[]) {
-		const tagArray = Array.isArray(tags) ? tags : [tags];
-		navigate((p) => {
-			if (tagArray.length > 0) p.set('tags', tagArray.join(','));
+	// the header button: with everything pressed it releases all, else it presses all
+	function handleCategoryToggle(name: Category, all: string[]) {
+		const allPressed = selectsAll(filters[name], all);
+		navigateParams((p) => writeCategory(p, name, allPressed ? [] : all, all));
+	}
+
+	function handleTagsChange(ids: string[]) {
+		navigateParams((p) => {
+			if (ids.length > 0) p.set('tags', ids.join(','));
 			else p.delete('tags');
 		});
 	}
 
+	function handleTagsClear() {
+		navigateParams((p) => {
+			p.delete('tags');
+		});
+	}
+
+	// a picked place opens its panel at once; the cell gives way to it
+	function handlePlaceSelect(match: PlaceSearchMatch) {
+		navigateParams((p) => {
+			p.set('place', match.placeId);
+			if (match.matchedNameId) {
+				p.set('name', match.matchedNameId);
+			} else {
+				p.delete('name');
+			}
+			p.set('placePanel', '1');
+			p.delete('cell');
+		});
+	}
+
+	function handlePlaceClear() {
+		navigateParams(withoutPlace);
+	}
+
+	function handleSearchApply(q: string) {
+		navigateParams((p) => {
+			p.set('q', q);
+		});
+	}
+
+	function handleSearchClear() {
+		navigateParams((p) => {
+			p.delete('q');
+		});
+	}
+
+	// The selection survives an operator change; the counts and the map answer for it.
 	function handleTagOperatorChange(operator: 'AND' | 'OR') {
-		tagOperator = operator;
-		selectedTags = [];
-		navigate((p) => {
+		navigateParams((p) => {
 			p.set('tagOperator', operator);
-			p.delete('tags'); // resetTags
 		});
 	}
 </script>
 
+{#snippet categoryToggle(name: Category, all: string[])}
+	<Link onclick={() => handleCategoryToggle(name, all)}>
+		{selectsAll(filters[name], all) ? translate('clearAll') : translate('selectAll')}
+	</Link>
+{/snippet}
+
 <div class="p-3">
 	<div class="mb-4">
-		<Heading level={2} class="font-bold text-lg mb-2"> Filters </Heading>
+		<Heading level={2} class="font-bold text-lg mb-2">{translate('filters')}</Heading>
 
-		<FilterSection
-			heading="Inhoudstype"
-			tooltip="De data index bevat een selectie van afbeeldingen, persoonsdata en teksten uit Nederlandse kranten."
-			items={translatedRecordTypes}
-			selectedItems={translatedCurrentRecordTypes}
-			onItemSelected={handleRecordTypeChange}
-		/>
+		<FilterSection heading={translate('searchFilter')}>
+			{#snippet tooltip()}
+				<TextWithSlots text={translate('searchTooltip')}>
+					{#snippet children(slot)}
+						{#if slot === 'border'}
+							<img
+								src={asset('glyphs/PlaceBorder.svg')}
+								alt=""
+								width="24"
+								height="24"
+								class="inline align-middle mx-1"
+							/>
+						{/if}
+					{/snippet}
+				</TextWithSlots>
+			{/snippet}
+			<SearchInput
+				onApplySearch={handleSearchApply}
+				onSelectPlace={handlePlaceSelect}
+				filterQuery={idle ? null : activeParams}
+			/>
+			{#if selectedPlace}
+				<div class="mt-2">
+					<PlaceFilterTag
+						place={selectedPlace}
+						onClear={handlePlaceClear}
+						onToggle={onTogglePlacePanel}
+						active={placePanelOpen}
+					/>
+				</div>
+			{/if}
+			{#if currentSearchQuery}
+				<div class="mt-2">
+					<SearchFilterTag
+						query={currentSearchQuery}
+						onClear={handleSearchClear}
+						onToggle={onToggleSearch}
+						active={!searchPaused}
+					/>
+				</div>
+			{/if}
+		</FilterSection>
+
+		<FilterSection heading={translate('recordTypeFilter')}>
+			{#snippet action()}
+				{@render categoryToggle('recordTypes', recordTypes)}
+			{/snippet}
+			{#snippet children(headingId)}
+				<FilterToggleGroup
+					items={recordTypes}
+					selectedItems={filters.recordTypes}
+					label={translate}
+					counts={recordTypeCounts}
+					onItemSelected={handleRecordTypeChange}
+					requireOne={false}
+					labelledBy={headingId}
+				/>
+			{/snippet}
+		</FilterSection>
 	</div>
 
-	<FilterSection
-		heading="Dataset"
-		tooltip="Filter op basis van de dataset waaruit de data afkomstig is."
-		items={datasetLabels}
-		selectedItems={currentDatasetLabels}
-		onItemSelected={handleDatasetChange}
-	/>
+	<FilterSection heading={translate('datasetFilter')}>
+		{#snippet tooltip()}
+			{translate('datasetFilterTooltip')}
+		{/snippet}
+		{#snippet action()}
+			{@render categoryToggle('datasets', datasetIds)}
+		{/snippet}
+		{#snippet children(headingId)}
+			<FilterToggleGroup
+				items={datasetIds}
+				selectedItems={filters.datasets}
+				label={datasetLabel}
+				counts={datasetCounts}
+				onItemSelected={handleDatasetChange}
+				requireOne={false}
+				labelledBy={headingId}
+			/>
+		{/snippet}
+	</FilterSection>
 
 	{#if placeTypes.length > 1}
-		<FilterSection
-			heading="Geometrie"
-			tooltip="Filter op basis van het type locatie waarmee de data is verbonden."
-			items={translatedPlaceTypes}
-			selectedItems={translatedCurrentPlaceTypes}
-			onItemSelected={handlePlaceTypeChange}
-		/>
+		<FilterSection heading={translate('scaleFilter')}>
+			{#snippet tooltip()}
+				{translate('scaleFilterTooltip')}
+			{/snippet}
+			{#snippet action()}
+				{@render categoryToggle('placeTypes', placeTypes)}
+			{/snippet}
+			{#snippet children(headingId)}
+				<FilterToggleGroup
+					items={placeTypes}
+					selectedItems={filters.placeTypes}
+					label={translate}
+					counts={placeTypeCounts}
+					onItemSelected={handlePlaceTypeChange}
+					requireOne={false}
+					labelledBy={headingId}
+				/>
+			{/snippet}
+		</FilterSection>
 	{/if}
 
-	<!-- Topics Section - Use dummy version until tags data is ready -->
-	{#if TAGS_FEATURE_READY}
-		<div class="mb-4">
-			<div class="flex">
-				<Heading level={3} class="pr-2"> Onderwerpen </Heading>
-				<Tooltip icon={QuestionMark} text="Thematic categories based on newspaper sections, applied across all data using machine learning." placement="bottom" />
-			</div>
-			<div class="mt-2 mb-3">
+	{#if availableTags.length > 0}
+		<FilterSection heading={translate('topics')}>
+			{#snippet tooltip()}
+				{translate('topicsTooltip')}
+			{/snippet}
+			{#snippet action()}
+				{#if currentTags.length > 0}
+					<Link onclick={handleTagsClear}>{translate('clearAll')}</Link>
+				{/if}
+			{/snippet}
+			{#snippet children(headingId)}
 				<TagOperatorSwitch
-					operator={tagOperator}
+					operator={currentTagOperator}
 					onOperatorChange={handleTagOperatorChange}
-					class="block"
+					anyLabel={translate('topicsAny')}
+					allLabel={translate('topicsAll')}
+					class="mb-2"
 				/>
-				<span class="text-xs text-black">
-					{tagOperator === 'AND' ? 'Include only content with all selected topics' : 'Include content with any selected topics'}
-				</span>
-			</div>
-		</div>
-
-		{#if tagOperator === 'AND'}
-			<TagsANDSelector
-				recordTypes={currentRecordTypes}
-				allRecordTypes={recordTypes}
-				availableTags={availableTags}
-				selectedTags={selectedTags}
-				onTagsSelected={handleTagsChange}
-			/>
-		{:else}
-			<ToggleGroup
-				items={availableTags}
-				selectedItems={selectedTags}
-				onItemSelected={handleTagsChange}
-				requireOneItemSelected={false}>
-				{#snippet children(item, isSelected, isDisabled)}
-					<Tag variant={isSelected ? 'selected' : 'default'} disabled={isDisabled} interactive={true}>
-						{item}
-					</Tag>
-				{/snippet}
-			</ToggleGroup>
-		{/if}
-	{:else}
-		<DummyTagsSection />
+				<FilterToggleGroup
+					items={availableTags}
+					selectedItems={currentTags}
+					label={translate}
+					counts={tagCounts}
+					onItemSelected={handleTagsChange}
+					requireOne={false}
+					labelledBy={headingId}
+				/>
+			{/snippet}
+		</FilterSection>
 	{/if}
 </div>

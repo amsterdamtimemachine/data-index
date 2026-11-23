@@ -1,0 +1,135 @@
+/**
+ * Amsterdam Diaries ingestion: an entry is a story linked to every Amsterdam place
+ * it mentions, a street by its Adamlink id and a building by its point, dated at the
+ * source's precision, with its transcription in a Manuscript entity and its opening
+ * as the description. Fixture: one entry over two places, one month-dated entry, one
+ * undated entry that is skipped.
+ */
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
+import { sql } from 'drizzle-orm';
+import { resolve } from 'path';
+import type { ManuscriptEntity } from '@atm/shared';
+import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
+import { parseEntryDate } from '../etl/sources/amsterdam-diaries';
+
+type Row = { id: string; url: string; label: string; record_type: string; description: string; start: string; end: string; entity: ManuscriptEntity };
+
+describe('amsterdam-diaries ingestion', () => {
+  beforeAll(async () => {
+    await setupTestDb();
+    await cleanTestDb();
+    await db.execute(sql`INSERT INTO agents (id, label) VALUES ('adamlink', 'Adamlink')`);
+    // the street and the building by their Adamlink ids; an address at the building's
+    // point, which the id outranks
+    await db.execute(sql`INSERT INTO place (id, type, source, name) VALUES
+      ('https://adamlink.nl/geo/street/prinsengracht/3684', 'street', 'adamlink', 'Prinsengracht'),
+      ('https://adamlink.nl/geo/building/koninklijk-concertgebouw/30', 'building', 'adamlink', 'Koninklijk Concertgebouw'),
+      ('ad-concertgebouw', 'address', 'adamlink', 'Concertgebouwplein 10')`);
+    await db.execute(sql`INSERT INTO place_geometry (place_id, geometry) VALUES
+      ('https://adamlink.nl/geo/street/prinsengracht/3684', ST_Transform(ST_GeomFromText('LINESTRING(4.88 52.36, 4.885 52.365)', 4326), 28992)),
+      ('https://adamlink.nl/geo/building/koninklijk-concertgebouw/30', ST_Transform(ST_GeomFromText('POINT(4.9 52.37)', 4326), 28992)),
+      ('ad-concertgebouw', ST_Transform(ST_GeomFromText('POINT(4.9 52.37)', 4326), 28992))`);
+    // a Wikidata place the source names: the index holds the name as a building and, later, a street
+    await db.execute(sql`INSERT INTO place (id, type, source, name) VALUES
+      ('https://adamlink.nl/geo/building/olympisch-stadion/398', 'building', 'adamlink', 'Olympisch Stadion'),
+      ('https://adamlink.nl/geo/street/olympisch-stadion/3292', 'street', 'adamlink', 'Olympisch Stadion')`);
+    await db.execute(sql`INSERT INTO place_geometry (place_id, geometry, since) VALUES
+      ('https://adamlink.nl/geo/building/olympisch-stadion/398', ST_Transform(ST_GeomFromText('POINT(4.8545 52.3435)', 4326), 28992), '1928-01-01'),
+      ('https://adamlink.nl/geo/street/olympisch-stadion/3292', ST_Transform(ST_GeomFromText('LINESTRING(4.853 52.342, 4.855 52.344)', 4326), 28992), '1998-01-01')`);
+    const { ingest } = await import('../etl/sources/amsterdam-diaries');
+    await ingest(resolve(__dirname, 'fixtures/amsterdam-diaries.jsonl'));
+  });
+
+  afterAll(async () => {
+    await cleanTestDb();
+    await teardownTestDb();
+  });
+
+  async function rows(): Promise<Row[]> {
+    const r = await db.execute<Row>(sql`
+      SELECT id, url, label, record_type, description, start_date::text AS start, end_date::text AS end, entity
+      FROM features ORDER BY start_date`);
+    return r.rows;
+  }
+
+  test('every dated entry becomes one story; the undated one is skipped', async () => {
+    const all = await rows();
+    expect(all.length).toBe(2);
+    expect(all.every((f) => f.record_type === 'story')).toBe(true);
+    expect(all.map((f) => f.label)).toEqual(['Dagboek Els Polak, deel 2', 'Dagboek Els Polak, deel 2']);
+  });
+
+  test('an entry is linked to each place it mentions: the street and the building by id', async () => {
+    const r = await db.execute<{ place_id: string; relation_id: string }>(sql`
+      SELECT fp.place_id, fp.relation_id FROM feature_to_place fp JOIN features f ON f.id = fp.feature_id
+      WHERE f.start_date = '1941-03-19' ORDER BY fp.place_id`);
+    expect(r.rows.map((x) => x.place_id)).toEqual(['https://adamlink.nl/geo/building/koninklijk-concertgebouw/30', 'https://adamlink.nl/geo/street/prinsengracht/3684']);
+    expect(r.rows.every((x) => x.relation_id === 'mentions')).toBe(true);
+  });
+
+  test('a Wikidata place links by the name the source gives it, to the namesake that existed at the date', async () => {
+    const r = await db.execute<{ place_id: string }>(sql`
+      SELECT fp.place_id FROM feature_to_place fp JOIN features f ON f.id = fp.feature_id
+      WHERE f.start_date = '1943-01-01' ORDER BY fp.place_id`);
+    expect(r.rows.map((x) => x.place_id)).toEqual(['https://adamlink.nl/geo/building/olympisch-stadion/398', 'https://adamlink.nl/geo/street/prinsengracht/3684']);
+  });
+
+  test('dates keep the source precision; the description is the opening of the text', async () => {
+    const all = await rows();
+    const month = all.find((f) => f.start === '1943-01-01')!;
+    expect(month.end).toBe('1943-01-31');
+    expect(month.entity.dateCreated).toBe('1943-01');
+    const day = all.find((f) => f.start === '1941-03-19')!;
+    expect(day.description).toBe("19 Maart '41.\nVader is weer thuis!!!!");
+    expect(day.url).toBe('https://id.amsterdamtimemachine.nl/ark:/81741/amsterdam-diaries/annotations/entries/1');
+  });
+
+  test('the entity is a Manuscript with its excerpts, author and diary', async () => {
+    const all = await rows();
+    const e = all.find((f) => f.start === '1941-03-19')!.entity;
+    expect(e.type).toBe('Manuscript');
+    expect(e.name).toBe("19 Maart '41.");
+    for (const gone of ['mentions', 'textLength']) {
+      expect(e).not.toHaveProperty(gone);
+    }
+    expect(Object.keys(e.excerpts[0]).sort()).toEqual(['mentions', 'placeId', 'text', 'truncatedAfter', 'truncatedBefore']);
+    expect(e.excerpts.map((x: { text: string }) => x.text)).toEqual(["19 Maart '41.\nVader is weer thuis!!!!", "19 Maart '41.\nVader is weer thuis!!!!"]);
+    expect(e.author).toEqual({ type: 'Person', name: 'Els Polak', url: 'https://diaries.amsterdamtimemachine.nl/dagboekschrijfsters/els-polak' });
+    expect(e.isPartOf).toEqual({ type: 'Book', name: 'Dagboek Els Polak, deel 2', url: 'https://resolver.kb.nl/resolve?urn=urn:gvn:EVDO01:IIAV002_IAV001000041' });
+  });
+
+  test('each excerpt is stamped with the index place its mention resolved to', async () => {
+    const all = await rows();
+    const e = all.find((f) => f.start === '1941-03-19')!.entity;
+    // the street and the building by their ids, in the row's order
+    expect(e.excerpts.map((x: { placeId?: string }) => x.placeId)).toEqual(['https://adamlink.nl/geo/street/prinsengracht/3684', 'https://adamlink.nl/geo/building/koninklijk-concertgebouw/30']);
+    // the street by its id, the Wikidata place by its name
+    const named = all.find((f) => f.start === '1943-01-01')!.entity;
+    expect(named.excerpts.map((x: { placeId?: string }) => x.placeId)).toEqual(['https://adamlink.nl/geo/street/prinsengracht/3684', 'https://adamlink.nl/geo/building/olympisch-stadion/398']);
+  });
+
+  test('an excerpt carries the images anchored in it; an excerpt without any has no images field', async () => {
+    const all = await rows();
+    const single = all.find((f) => f.start === '1943-01-01')!.entity;
+    expect(single.excerpts[0].images).toEqual([{
+      source: 'https://images.diaries.amsterdamtimemachine.nl/iiif/urn-gvn-EVDO01-IIAV002_IAV001000030-large_10.jpg',
+      region: '80,806,1083,654',
+      anchor: 0
+    }]);
+    const e = all.find((f) => f.start === '1941-03-19')!.entity;
+    expect(e.excerpts[0]).not.toHaveProperty('images');
+  });
+
+  test('the dataset records where the whole of it can be downloaded', async () => {
+    const r = await db.execute<{ distribution_url: string | null }>(sql`SELECT distribution_url FROM datasets WHERE id = 'amsterdam-diaries'`);
+    expect(r.rows[0].distribution_url).toBe('https://zenodo.org/records/14385058');
+  });
+
+  test('date parsing keeps the source precision and rejects what it cannot read', () => {
+    expect(parseEntryDate('1941-03-19')).toEqual({ startDate: '1941-03-19', endDate: '1941-03-19' });
+    expect(parseEntryDate('1943-01')).toEqual({ startDate: '1943-01-01', endDate: '1943-01-31' });
+    expect(parseEntryDate('1940')).toEqual({ startDate: '1940-01-01', endDate: '1940-12-31' });
+    expect(parseEntryDate('1941-02-30')).toBeNull();
+    expect(parseEntryDate(null)).toBeNull();
+  });
+});

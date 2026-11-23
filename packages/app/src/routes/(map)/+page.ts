@@ -1,165 +1,85 @@
-// Validates the URL's filter/period params against metadata and shapes the initial UI
-// state. Metadata itself comes from the layout load (fetched once, reused across filter
+// Reads the URL's filters and place against metadata and shapes the initial UI state.
+// Metadata itself comes from the layout load (fetched once, reused across filter
 // navigations); the heavy heatmap/histogram are fetched client-side by the page component
 // so the shell renders immediately — see +layout.ts and +page.svelte.
+//
+// What is wrong with the link travels to the page as data, since a loader cannot show a
+// toast: the values the index does not have (ignored), and a place lookup that failed.
+// The period is checked by the page against the loaded heatmap, the one list of slices.
 
 import type { PageLoad } from './$types';
-import type { RecordType, PlaceType } from '@atm/shared/types';
-import type { AppError } from '$types/error';
-import { createPageErrorData, createError, createValidationError, createPeriodNotFoundError } from '$utils/error';
-import { translateAll } from '$utils/translations';
+import type { PlaceSearchMatch } from '@atm/shared/types';
+import type { UiSortMode } from '#lib/utils/sort-modes.js';
+import {
+	parsePlaceSelection,
+	parsePlacePanelFlag,
+	parseSortSelection
+} from '#lib/utils/page-params.js';
+import { parseFilterState } from '#lib/utils/filters.js';
+import { apiUrl } from '#lib/utils/api.js';
+import { describeFailure, type Failure } from '#lib/utils/fetchJson.js';
 
-// Helper functions for period validation
-function isValidPeriodFormat(period: string): boolean {
-	return /^\d{4}_\d{4}$/.test(period);
-}
+export const load: PageLoad = async ({ url, parent, fetch }) => {
+	const { metadata } = await parent();
 
-function isChronologicallyValid(period: string): boolean {
-	const [start, end] = period.split('_').map(Number);
-	return start < end;
-}
-
-export const load: PageLoad = async ({ url, parent }) => {
-	const { metadata, metadataErrors } = await parent();
-	const errors: AppError[] = [...metadataErrors];
-
-	// Parse URL parameters
-	const recordTypesParam = url.searchParams.get('recordTypes');
-	const datasetsParam = url.searchParams.get('datasets');
-	const placeTypesParam = url.searchParams.get('placeTypes');
-	const tagsParam = url.searchParams.get('tags');
-	const tagOperatorParam = url.searchParams.get('tagOperator');
 	const cellParam = url.searchParams.get('cell');
 	const periodParam = url.searchParams.get('period');
 
-	const filterParams = new URLSearchParams();
-	if (recordTypesParam) filterParams.set('recordTypes', recordTypesParam);
-	if (datasetsParam) filterParams.set('datasets', datasetsParam);
-	if (placeTypesParam) filterParams.set('placeTypes', placeTypesParam);
-	const filterQuery = filterParams.toString();
+	// One filter state, validated against metadata; unknown values drop out and are listed.
+	// The page serialises it for every fetch, so nothing is parsed twice.
+	const parsed = parseFilterState(url, metadata);
+	const filters = parsed.filters;
+	const unknownValues = [...parsed.unknownValues];
 
-	// Determine recordTypes to use for UI state
-	let currentRecordTypes: RecordType[] = [];
-	if (metadata?.recordTypes) {
-		if (recordTypesParam) {
-			const requestedTypes = recordTypesParam.split(',').map((t) => t.trim()) as RecordType[];
-			const validTypes = requestedTypes.filter((type) => metadata.recordTypes.includes(type));
-			const invalidTypes = requestedTypes.filter((type) => !metadata.recordTypes.includes(type));
-
-			if (validTypes.length > 0) {
-				for (const invalidType of invalidTypes) {
-					errors.push(
-						createError(
-							'warning',
-							'Invalid Content Type Removed',
-							`"${invalidType}" is not a valid content type and was removed from your selection.`,
-							{ invalidType, availableTypes: translateAll(metadata.recordTypes) }
-						)
-					);
-				}
-				currentRecordTypes = validTypes;
-			} else {
-				// All requested types invalid: warn, and reflect all types in the UI. The
-				// component's fetch already ran with the raw param, so the map shows empty.
-				errors.push(
-					createValidationError(
-						'recordTypes',
-						recordTypesParam,
-						`No valid content types found. Showing all content types: ${translateAll(metadata.recordTypes).join(', ')}`
-					)
-				);
-				currentRecordTypes = metadata.recordTypes;
+	// Selected place (the search filter): hydrate the id into a full match — this is also
+	// how a shared URL restores its selection. A place the index does not have is an
+	// unknown value; a lookup that failed is not, the place may well exist.
+	const placeSelection = parsePlaceSelection(url);
+	let selectedPlace: PlaceSearchMatch | null = null;
+	let placeRestoreFailure: Failure | null = null;
+	if (placeSelection.placeId) {
+		try {
+			const params = new URLSearchParams({ id: placeSelection.placeId });
+			if (placeSelection.nameId) {
+				params.set('nameId', placeSelection.nameId);
 			}
-		} else {
-			currentRecordTypes = metadata.recordTypes;
-		}
-	}
-
-	// Determine sources to use
-	let currentDatasets: string[] = [];
-	if (metadata?.datasets) {
-		const availableDatasetIds = metadata.datasets.map((s) => s.id);
-		if (datasetsParam) {
-			const requestedDatasets = datasetsParam.split(',').map((s) => s.trim());
-			currentDatasets = requestedDatasets.filter((s) => availableDatasetIds.includes(s));
-			if (currentDatasets.length === 0) {
-				currentDatasets = availableDatasetIds;
+			const res = await fetch(apiUrl('/api/places', params));
+			if (!res.ok) {
+				throw res;
 			}
-		} else {
-			currentDatasets = availableDatasetIds;
-		}
-	}
-
-	// Determine place types to use
-	let currentPlaceTypes: PlaceType[] = [];
-	if (metadata?.placeTypes) {
-		if (placeTypesParam) {
-			const requestedPlaceTypes = placeTypesParam.split(',').map((t) => t.trim()) as PlaceType[];
-			currentPlaceTypes = requestedPlaceTypes.filter((t) => metadata.placeTypes.includes(t));
-			if (currentPlaceTypes.length === 0) {
-				currentPlaceTypes = metadata.placeTypes;
+			const placeData = await res.json();
+			selectedPlace = placeData.matches[0] || null;
+			if (!selectedPlace) {
+				unknownValues.push(placeSelection.placeId);
+			} else if (placeSelection.nameId && selectedPlace.matchedNameId !== placeSelection.nameId) {
+				// the place exists, the name in the link does not: shown under its current name
+				unknownValues.push(placeSelection.nameId);
 			}
-		} else {
-			currentPlaceTypes = metadata.placeTypes;
+		} catch (err) {
+			console.warn('Place lookup failed:', err);
+			placeRestoreFailure = describeFailure(err);
 		}
 	}
 
-	// Parse tags if provided. Existence is validated against metadata here; the tags
-	// feature is not yet exposed in the UI, so no tag data is fetched.
-	let currentTags: string[] | undefined;
-	const currentTagOperator = tagOperatorParam === 'AND' ? 'AND' : 'OR';
-
-	if (metadata?.tags && tagsParam) {
-		const requestedTags = tagsParam.split(',').map((t) => t.trim()) as string[];
-		const existingTags = requestedTags.filter((tag) => metadata.tags.includes(tag));
-		const nonExistentTags = requestedTags.filter((tag) => !metadata.tags.includes(tag));
-
-		for (const invalidTag of nonExistentTags) {
-			errors.push(
-				createError('warning', 'Invalid Tag Removed', `"${invalidTag}" is not a valid tag and was removed from your search.`, {
-					invalidTag,
-					availableTags: metadata.tags
-				})
-			);
-		}
-		currentTags = existingTags;
+	// Place panel open flag; only meaningful with a resolved place.
+	let placePanelOpen = false;
+	if (parsePlacePanelFlag(url) && selectedPlace) {
+		placePanelOpen = true;
 	}
 
-	// Validate the period param against metadata (format, chronology, availability). The
-	// default when it's absent or invalid needs the heatmap timeline, so it's computed in
-	// the component once that arrives; here we only pass through a valid period, or null.
-	let validatedPeriod: string | null = null;
-	if (periodParam && metadata) {
-		const metadataPeriods = metadata.timeSlices.map((slice) => slice.key);
-
-		if (!isValidPeriodFormat(periodParam)) {
-			errors.push(
-				createValidationError('period', periodParam, 'invalid format. Expected YYYY_YYYY (e.g., 1950_2000). Defaulting to most recent period')
-			);
-		} else if (!isChronologicallyValid(periodParam)) {
-			errors.push(
-				createValidationError('period', periodParam, 'invalid range. Start year must be less than end year. Defaulting to most recent period')
-			);
-		}
-		// Availability also bounds duration: a period is one bin wide, so an over-wide one
-		// simply isn't a slice and is rejected here.
-		else if (!metadataPeriods.includes(periodParam)) {
-			const fallbackPeriod = metadataPeriods[metadataPeriods.length - 1] || '';
-			errors.push(createPeriodNotFoundError(periodParam, metadataPeriods, fallbackPeriod));
-		} else {
-			validatedPeriod = periodParam;
-		}
-	}
+	const sortSelection = parseSortSelection(url);
+	const currentSort: UiSortMode = sortSelection.sort;
+	const currentSampleSeed = sortSelection.sampleSeed;
 
 	return {
-		filterQuery,
+		filters,
 		cellParam,
-		currentRecordTypes,
-		currentPlaceTypes,
-		currentDatasets,
-		currentTags,
-		currentTagOperator,
-		validatedPeriod,
-		errorData: createPageErrorData(errors)
+		periodParam,
+		currentSort,
+		currentSampleSeed,
+		selectedPlace,
+		placePanelOpen,
+		unknownValues,
+		placeRestoreFailure
 	};
 };

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { mergeCss } from '$utils/utils';
-	import Tag from '$components/Tag.svelte';
+	import { mergeCss } from '#lib/utils/utils.js';
+	import Tag from '#lib/components/Tag.svelte';
 
 	interface Props {
 		tags: string[];
@@ -9,7 +9,7 @@
 		expanded?: boolean;
 	}
 
-	let { tags, class: className, maxVisible = 2, expanded = false }: Props = $props();
+	let { tags, class: className, maxVisible = 3, expanded = false }: Props = $props();
 
 	const visibleTags = $derived(expanded ? tags : tags.slice(0, maxVisible));
 	const hiddenCount = $derived(tags.length - maxVisible);
@@ -18,7 +18,7 @@
 
 {#if tags && tags.length > 0}
 	<div class={mergeCss('flex flex-wrap gap-1', className)}>
-		{#each visibleTags as tag}
+		{#each visibleTags as tag (tag)}
 			<Tag>{tag}</Tag>
 		{/each}
 		{#if showOverflow}

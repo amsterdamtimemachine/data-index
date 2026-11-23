@@ -1,94 +1,83 @@
-// Single translation map: all UI strings in one place
-const TRANSLATIONS: Record<string, string> = {
-	// Placeholders
-	unknown: 'Onbekend',
-
-	// Record types
-	image: 'Afbeelding',
-	person: 'Persoon',
-	text: 'Tekst',
-
-	// Place types
-	address: 'Adres',
-	street: 'Straat',
-	neighbourhood: 'Buurt',
-	district: 'Wijk',
-
-	// Relations
-	isAbout: 'Gaat over',
-	hadLastLivingLocation: 'Laatste woonadres',
-
-	// Entity fields
-	born: 'Geboren',
-	died: 'Overleden',
-	date: 'Datum',
-	author: 'Auteur',
-
-	// UI labels
-	filters: 'Filters',
-	dataset: 'Dataset',
-	contentType: 'Inhoudstype',
-	topics: 'Onderwerpen',
-	source: 'Bron',
-
-	// Error titles
-	'Invalid Content Type Removed': 'Ongeldig inhoudstype verwijderd',
-	'Invalid Input': 'Ongeldige invoer',
-	'Period Not Found': 'Periode niet gevonden',
-	'Invalid Cell': 'Ongeldige cel',
-
-	// Error messages
-	'is not a valid content type and was removed from your selection': 'is geen geldig inhoudstype en is verwijderd uit uw selectie',
-	'No valid content types found. Defaulting to all content types': 'Geen geldige inhoudstypes gevonden. Standaard ingesteld op alle inhoudstypes',
-	'invalid format. Expected YYYY_YYYY': 'ongeldig formaat. Verwacht YYYY_YYYY',
-	'Defaulting to most recent period': 'Standaard ingesteld op meest recente periode',
-	'invalid range. Start year must be less than end year': 'ongeldig bereik. Beginjaar moet kleiner zijn dan eindjaar',
-	spans: 'beslaat',
-	'years. Maximum 50 years supported': 'jaar. Maximaal 50 jaar ondersteund',
-	"doesn't exist in the dataset. Defaulting to most recent period": 'bestaat niet in de dataset. Standaard ingesteld op meest recente periode',
-	'not found. Please select a valid cell from the map': 'niet gevonden. Selecteer een geldige cel op de kaart'
-};
-
-// Reverse map (built once)
-const REVERSE: Record<string, string> = Object.fromEntries(
-	Object.entries(TRANSLATIONS).map(([k, v]) => [v, k])
-);
-
 /**
- * Translate a key to Dutch. Returns the key itself if no translation exists.
+ * The UI's strings in the page's language. Dutch is the default; `lang=en` in the URL
+ * asks for English. The language is fixed for a page's lifetime: the switch reloads the
+ * page, so nothing here is reactive. In the browser it is read once from the address;
+ * on the server each request supplies its own (see hooks.server.ts). Source data
+ * (titles, descriptions, place and dataset names) is never translated.
+ * PUBLIC_DUTCH_ONLY=true keeps every page Dutch.
  */
+import { PUBLIC_DUTCH_ONLY } from '$app/env/public';
+import { NL } from './translations/nl';
+import { EN } from './translations/en';
+
+export const LANGUAGES = ['nl', 'en'] as const;
+export type Language = (typeof LANGUAGES)[number];
+export const DEFAULT_LANGUAGE: Language = 'nl';
+export const LANGUAGE_PARAM = 'lang';
+export const ENGLISH_ENABLED = PUBLIC_DUTCH_ONLY !== 'true';
+
+const MAPS: Record<Language, Record<string, string>> = { nl: NL, en: EN };
+
+/** The language a `lang` value asks for; anything unknown or absent is the default. */
+export function parseLanguage(
+	value: string | null | undefined,
+	englishEnabled = ENGLISH_ENABLED
+): Language {
+	if (englishEnabled && value === 'en') {
+		return 'en';
+	}
+	return DEFAULT_LANGUAGE;
+}
+
+function addressLanguage(): Language {
+	if (typeof window === 'undefined' || !window.location) {
+		return DEFAULT_LANGUAGE;
+	}
+	return parseLanguage(new URLSearchParams(window.location.search).get(LANGUAGE_PARAM));
+}
+
+const pageLanguage = addressLanguage();
+let languageSource: () => Language = () => pageLanguage;
+
+/** Replace where the language comes from: the server reads it per request. */
+export function setLanguageSource(source: () => Language) {
+	languageSource = source;
+}
+
+export function currentLanguage(): Language {
+	return languageSource();
+}
+
+/** An internal link that keeps the page's language: the default language adds nothing. */
+export function withLanguage(href: string): string {
+	const language = currentLanguage();
+	if (language === DEFAULT_LANGUAGE) {
+		return href;
+	}
+	const joiner = href.includes('?') ? '&' : '?';
+	return `${href}${joiner}${LANGUAGE_PARAM}=${language}`;
+}
+
+/** A key's string in the page's language. Returns the key itself if no translation exists. */
 export function translate(key: string): string {
-	return TRANSLATIONS[key] || key;
+	return MAPS[currentLanguage()][key] || key;
 }
 
-/**
- * Reverse translate a Dutch string back to its English key.
- */
-export function reverseTranslate(dutch: string): string {
-	return REVERSE[dutch] || dutch;
-}
-
-/** Translate an array of keys to Dutch. */
 export function translateAll(keys: string[]): string[] {
 	return keys.map(translate);
 }
 
-/** Reverse translate an array of Dutch strings back to their English keys. */
-export function reverseTranslateAll(dutch: string[]): string[] {
-	return dutch.map(reverseTranslate);
+/** Whether a key has a translation of its own. */
+export function hasTranslation(key: string): boolean {
+	return key in NL;
 }
 
-/**
- * Translate an error message by substring replacement (not a key lookup), so
- * dynamic messages with interpolated values still get their known phrases translated.
- */
-export function translateErrorMessage(message: string): string {
-	let translated = message;
-	// Apply translations for error message patterns
-	for (const [english, dutch] of Object.entries(TRANSLATIONS)) {
-		if (english.length > 20) { // Only match longer error message strings
-			translated = translated.replace(english, dutch);
+/** A translated template with its {name} slots filled in: fill('(nu {name})', { name: 'Dam' }). */
+export function fill(template: string, values: Record<string, string> = {}): string {
+	return template.replace(/\{(\w+)\}/g, (slot, name: string) => {
+		if (name in values) {
+			return values[name];
 		}
-	}
-	return translated;
+		return slot;
+	});
 }

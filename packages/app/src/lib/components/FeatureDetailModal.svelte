@@ -1,81 +1,48 @@
+<!--
+	The expanded card in a native modal dialog: the browser centres it in the top layer,
+	keeps focus inside it, closes it on Escape and makes the page behind it inert.
+-->
 <script lang="ts">
-	import { createDialog, melt, type CreateDialogProps } from '@melt-ui/svelte';
-	import { fade } from 'svelte/transition';
-	import { featureViewerState } from '$lib/state/featureState.svelte';
-	import X from 'phosphor-svelte/lib/X';
-	import type { FeatureResult } from '@atm/shared/types';
-	import FeatureCard from '$components/FeatureCard.svelte';
-	import Button from '$components/Button.svelte';
+	import { featureViewerState } from '#lib/state/featureState.svelte.js';
+	import FeatureCard from '#lib/components/FeatureCard.svelte';
+	import LoadingBar from '#lib/components/LoadingBar.svelte';
 
-	const handleOpenChange: CreateDialogProps['onOpenChange'] = ({ next }) => {
-		if (next === false && featureViewerState.selectedFeature) {
-			featureViewerState.closeFeature();
+	// the dialog is named by the card's own heading, which carries this id
+	const TITLE_ID = 'feature-dialog-title';
+
+	const dialog = featureViewerState.dialog;
+	const selectedFeature = $derived(featureViewerState.selectedFeature);
+
+	// the card's width: a picture gets the room, anything read gets a reading measure,
+	// about 75 characters a line; a phone gets the full width either way
+	const widthClasses = $derived.by(() => {
+		if (selectedFeature?.entity?.type === 'MediaObject') {
+			return 'w-[90vw] max-w-4xl';
 		}
-		return next;
-	};
-
-	const {
-		elements: { overlay, content, title, close, portalled },
-		states: { open }
-	} = createDialog({
-		forceVisible: true,
-		defaultOpen: false,
-		role: 'dialog',
-		preventScroll: true,
-		onOpenChange: handleOpenChange
-	});
-
-	// Get current selected feature
-	let selectedFeature = $derived(featureViewerState.selectedFeature);
-
-	// Open dialog when feature is selected
-	$effect(() => {
-		if (featureViewerState.selectedFeature) {
-			open.set(true);
-		} else {
-			open.set(false);
-		}
+		return 'w-[90vw] max-w-[600px]';
 	});
 </script>
 
-{#if $open && selectedFeature}
-	<div use:melt={$portalled}>
-		<!-- Overlay/backdrop -->
-		<div
-			use:melt={$overlay}
-			class="fixed inset-0 z-50 bg-black/85 flex items-center justify-center"
-			transition:fade={{ duration: 150 }}
-		>
-			<Button
-				icon={X}
-				size={18}
-				meltAction={$close}
-				class="absolute right-3 top-3"
-				aria-label="Close feature detail viewer"
+<!-- open:flex, not flex: a display class would override the browser hiding a closed dialog -->
+<dialog
+	{...dialog.content}
+	aria-labelledby={TITLE_ID}
+	class="{widthClasses} max-h-[calc(100dvh-1.5rem)] p-0 border-0 bg-white rounded-sm shadow-xl overflow-hidden open:flex flex-col backdrop:bg-black/85"
+>
+	<!-- the dialog sits in the top layer, above the page's bar, so it carries its own: a
+	     fixed child of the dialog lies against the viewport but paints in the top layer -->
+	<LoadingBar class="fixed top-0 left-0 w-screen z-10" />
+	{#if selectedFeature}
+		<!-- the card caps itself at this height and scrolls its content region;
+		     the overflow here is only a fallback -->
+		<div class="flex flex-col flex-1 min-h-0 overflow-y-auto">
+			<FeatureCard
+				feature={selectedFeature}
+				expanded={true}
+				headingLevel={2}
+				headingId={TITLE_ID}
+				onClose={featureViewerState.closeFeature}
 			/>
 		</div>
-
-		<!-- Modal Content -->
-		<div
-			use:melt={$content}
-			class="fixed left-1/2 top-1/2 z-50 w-[90vw] max-w-4xl max-h-[90vh]
-			       -translate-x-1/2 -translate-y-1/2 bg-white rounded-sm shadow-xl
-			       overflow-hidden flex flex-col"
-			transition:fade={{ duration: 100 }}
-		>
-			<!-- Hidden title for accessibility -->
-			<h2 use:melt={$title} class="sr-only">Feature Detail Viewer</h2>
-
-			<!-- Scrollable content area -->
-			<div class="overflow-y-auto flex-1">
-				<FeatureCard feature={selectedFeature} expanded={true} />
-			</div>
-		</div>
-	</div>
-{/if}
-
-<style>
-	:global(body.modal-open) {
-		overflow: hidden;
-	}
-</style>
+	{/if}
+</dialog>

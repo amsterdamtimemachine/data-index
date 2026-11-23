@@ -1,7 +1,7 @@
 node_modules/
 dist/
 build/
-
+packages/db/src/etl/proto/
 # SvelteKit
 .svelte-kit/
 
@@ -34,7 +34,7 @@ super_entity_plan.md
 place_cells_plan.md
 
 # Local scripts
-reingest.sh
+reingest*.sh
 
 # Binaries
 *.bin

@@ -1,4 +1,4 @@
-# Postgres 16 + PostGIS 3.4 + pg_roaringbitmap.
+# Postgres 16 + PostGIS 3.5 + pg_roaringbitmap.
 #
 # roaringbitmap backs the precomputed heatmap/histogram rollup: it stores the set
 # of feature ids per (cell, bin, filter) bucket, so rolling up to any display grid
@@ -11,11 +11,23 @@
 #
 # with_llvm=no skips PGXS's LLVM bitcode step (it wants a clang the image lacks).
 # The bitcode only feeds JIT inlining, and JIT is off on this workload anyway.
-FROM postgis/postgis:16-3.4
+#
+# postgis/postgis has no bare `16` tag (only `16-3.4`, `16-3.5`, `16-master`-nightly), so the
+# base is pinned to a specific stable minor. The published image `data-index/db:16` is a fixed
+# tag deploys pull; it does NOT auto-update — CI overwrites it only when this base minor is
+# bumped here (a minor bump then needs `ALTER EXTENSION postgis UPDATE;` on an existing volume).
+# postgresql-server-dev-16 tracks the PG major, which is what pg_roaringbitmap compiles against.
+FROM postgis/postgis:16-3.5
 
 ARG ROARINGBITMAP_VERSION=v1.2.0
+# The base is Debian 11, past its end of life (August 2026), and its mirrors no longer
+# serve a consistent package set. A dated snapshot does; bump the date only together
+# with the base image.
+ARG DEBIAN_SNAPSHOT=20260830T000000Z
 
 RUN set -eux; \
+    printf 'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/%s bullseye main\ndeb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/%s bullseye-security main\ndeb [check-valid-until=no] http://snapshot.debian.org/archive/debian/%s bullseye-updates main\n' \
+        "$DEBIAN_SNAPSHOT" "$DEBIAN_SNAPSHOT" "$DEBIAN_SNAPSHOT" > /etc/apt/sources.list; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         build-essential \

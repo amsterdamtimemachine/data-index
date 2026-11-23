@@ -53,7 +53,7 @@ async function assertCellsMatch(h: Heatmap, dim: HeatmapDimensions) {
   expect(h.indices.length).toBeGreaterThan(0);
   for (let i = 0; i < h.indices.length; i++) {
     const bounds = cellBounds(h.indices[i], dim);
-    const feats = await getFeatures({ bounds, recordTypes: ['image'], timeSlice: SLICE, pageSize: 1 });
+    const feats = await getFeatures({ area: { kind: 'bounds', bounds }, recordTypes: ['image'], timeSlice: SLICE, pageSize: 1 });
     expect(feats.total).toBe(h.counts[i]);
   }
 }
@@ -63,8 +63,8 @@ describe('heatmap ↔ features cell-count consistency', () => {
     await setupTestDb();
     await cleanTestDb();
 
-    await db.execute(sql`INSERT INTO organisations (id, label) VALUES ('test-org', 'Test Org')`);
-    await db.execute(sql`INSERT INTO datasets (id, label, organisation_id) VALUES ('test-ds', 'Test DS', 'test-org')`);
+    await db.execute(sql`INSERT INTO agents (id, label) VALUES ('test-org', 'Test Org')`);
+    await db.execute(sql`INSERT INTO datasets (id, label, provider_id) VALUES ('test-ds', 'Test DS', 'test-org')`);
 
     // A street spanning ~6 base cells (500m line) + two point addresses elsewhere.
     await db.execute(sql`
@@ -136,7 +136,7 @@ describe('heatmap ↔ features cell-count consistency', () => {
     expect(maxCount).toBeGreaterThan(1); // folding happened (a multi-feature cell)
     expect(maxCount).toBeLessThan(6); // not inflated
     // The whole dataset still has exactly 5 distinct features (clamped full-extent query).
-    const all = await getFeatures({ bounds: ALL_BOUNDS, recordTypes: ['image'], timeSlice: SLICE, pageSize: 50 });
+    const all = await getFeatures({ area: { kind: 'bounds', bounds: ALL_BOUNDS }, recordTypes: ['image'], timeSlice: SLICE, pageSize: 50 });
     expect(all.total).toBe(5);
   });
 });

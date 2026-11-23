@@ -6,9 +6,13 @@ import {
 	parseRowColFromCellId,
 	calculateCellBounds,
 	getCellBoundsFromCellId,
+	getCellIdFromLonLat,
 	generateCellIdMap,
 	generateCellGeometries,
-	createEmptyHeatmap
+	createEmptyHeatmap,
+	placeOutlineGeometry,
+	cellIdAtLonLat,
+	staleCells
 } from './heatmap';
 
 // A simple 2×2 grid over a 10°(lon) × 20°(lat) box — easy exact maths.
@@ -66,10 +70,20 @@ describe('cell id <-> row/col', () => {
 
 describe('calculateCellBounds (uniform interpolation)', () => {
 	test('first cell spans the first sub-rectangle', () => {
-		expect(calculateCellBounds(0, 0, GRID)).toEqual({ minLon: 0, maxLon: 5, minLat: 0, maxLat: 10 });
+		expect(calculateCellBounds(0, 0, GRID)).toEqual({
+			minLon: 0,
+			maxLon: 5,
+			minLat: 0,
+			maxLat: 10
+		});
 	});
 	test('last row/col snap to the exact grid max (inclusive boundary)', () => {
-		expect(calculateCellBounds(1, 1, GRID)).toEqual({ minLon: 5, maxLon: 10, minLat: 10, maxLat: 20 });
+		expect(calculateCellBounds(1, 1, GRID)).toEqual({
+			minLon: 5,
+			maxLon: 10,
+			minLat: 10,
+			maxLat: 20
+		});
 	});
 });
 
@@ -80,6 +94,26 @@ describe('getCellBoundsFromCellId', () => {
 	test('out-of-range or malformed → null', () => {
 		expect(getCellBoundsFromCellId('5_5', GRID)).toBeNull();
 		expect(getCellBoundsFromCellId('nope', GRID)).toBeNull();
+	});
+});
+
+describe('getCellIdFromLonLat (inverse of calculateCellBounds, clamped)', () => {
+	// GRID: 2×2 over lon [0,10] (cellWidth 5), lat [0,20] (cellHeight 10).
+	test('a point resolves to the cell that contains it', () => {
+		expect(getCellIdFromLonLat(2, 5, GRID)).toBe('0_0');
+		expect(getCellIdFromLonLat(7, 15, GRID)).toBe('1_1');
+		expect(getCellIdFromLonLat(7, 5, GRID)).toBe('0_1');
+	});
+	test('the max edge clamps into range instead of overflowing', () => {
+		expect(getCellIdFromLonLat(10, 20, GRID)).toBe('1_1'); // floor gives 2,2 → clamped to 1,1
+	});
+	test('points outside the grid clamp to the nearest edge cell', () => {
+		expect(getCellIdFromLonLat(-5, -5, GRID)).toBe('0_0');
+		expect(getCellIdFromLonLat(100, 100, GRID)).toBe('1_1');
+	});
+	test('the result always round-trips to valid bounds (never null)', () => {
+		const id = getCellIdFromLonLat(10, 20, GRID);
+		expect(getCellBoundsFromCellId(id, GRID)).not.toBeNull();
 	});
 });
 
@@ -160,5 +194,117 @@ describe('generateCellGeometries — reprojected (proj4, RD→WGS84)', () => {
 		const cell01 = cells.find((c) => c.cellId === '0_1')!;
 		// cell(0,0) SE corner === cell(0,1) SW corner
 		expect(cell00.coordinates[0][1]).toEqual(cell01.coordinates[0][0]);
+	});
+});
+
+describe('placeOutlineGeometry', () => {
+	// 4×3 grid, unit degrees — index = row * 4 + col
+	const DIMS: HeatmapDimensions = {
+		colsAmount: 4,
+		rowsAmount: 3,
+		minLon: 0,
+		maxLon: 4,
+		minLat: 0,
+		maxLat: 3
+	};
+	const geoms = generateCellGeometries(DIMS);
+
+	test('a single cell yields one closed ring of its four edges', () => {
+		const outline = placeOutlineGeometry([5], geoms, DIMS.colsAmount);
+		expect(outline.geometry.coordinates.length).toBe(1);
+		const ring = outline.geometry.coordinates[0][0];
+		expect(ring.length).toBe(5);
+		expect(ring[0]).toEqual(ring[4]);
+	});
+
+	test('shared edges vanish: a horizontal pair is one ring of six edges', () => {
+		const outline = placeOutlineGeometry([5, 6], geoms, DIMS.colsAmount);
+		expect(outline.geometry.coordinates.length).toBe(1);
+		expect(outline.geometry.coordinates[0][0].length).toBe(7);
+	});
+
+	test('a solid 2x2 block is one ring on its border, nothing interior', () => {
+		const outline = placeOutlineGeometry([0, 1, 4, 5], geoms, DIMS.colsAmount);
+		expect(outline.geometry.coordinates.length).toBe(1);
+		const ring = outline.geometry.coordinates[0][0];
+		expect(ring.length).toBe(9);
+		for (const [x, y] of ring) {
+			const onBorder = x === 0 || x === 2 || y === 0 || y === 2;
+			expect(onBorder).toBe(true);
+		}
+	});
+
+	test('row wrap is not adjacency: end of one row and start of the next are two rings', () => {
+		// index 3 = (row 0, col 3), index 4 = (row 1, col 0) — consecutive indices, not neighbours
+		const outline = placeOutlineGeometry([3, 4], geoms, DIMS.colsAmount);
+		expect(outline.geometry.coordinates.length).toBe(2);
+	});
+
+	test('a real-world grid, where neighbouring corners differ in the last decimal, still closes', () => {
+		// the city's bounds: cell edges come from two different sums and rarely agree exactly
+		const CITY: HeatmapDimensions = {
+			colsAmount: 125,
+			rowsAmount: 83,
+			minLon: 4.727581842727254,
+			maxLon: 5.1079051517864,
+			minLat: 52.27655601547094,
+			maxLat: 52.43263852195789
+		};
+		const city = generateCellGeometries(CITY);
+		// cells 2 and 3 meet where the two sums disagree
+		expect(city[2].coordinates[0][1]).not.toEqual(city[3].coordinates[0][0]);
+		const outline = placeOutlineGeometry([2, 3, 4], city, CITY.colsAmount);
+		expect(outline.geometry.coordinates.length).toBe(1);
+		const [ring] = outline.geometry.coordinates[0];
+		expect(ring[0]).toEqual(ring[ring.length - 1]);
+		expect(ring.length).toBe(9);
+	});
+
+	test('cells touching only at a corner stay two rings', () => {
+		// index 0 = (row 0, col 0), index 5 = (row 1, col 1)
+		const outline = placeOutlineGeometry([0, 5], geoms, DIMS.colsAmount);
+		expect(outline.geometry.coordinates.length).toBe(2);
+		for (const [ring] of outline.geometry.coordinates) {
+			expect(ring.length).toBe(5);
+		}
+	});
+});
+
+describe('cellIdAtLonLat (the hover lookup, unclamped)', () => {
+	test('lon/lat mode resolves the containing cell and rejects points outside', () => {
+		expect(cellIdAtLonLat(2, 5, GRID, false)).toBe('0_0');
+		expect(cellIdAtLonLat(7, 15, GRID, false)).toBe('1_1');
+		expect(cellIdAtLonLat(12, 5, GRID, false)).toBeNull();
+		expect(cellIdAtLonLat(2, -1, GRID, false)).toBeNull();
+	});
+
+	test('reprojected mode resolves in RD space, matching the drawn (rotated) cells', () => {
+		// the centroid of each rendered ring must map back to that ring's cell
+		for (const cell of generateCellGeometries(RD_GRID, true)) {
+			const ring = cell.coordinates[0].slice(0, 4);
+			const lon = ring.reduce((sum, [x]) => sum + x, 0) / 4;
+			const lat = ring.reduce((sum, [, y]) => sum + y, 0) / 4;
+			expect(cellIdAtLonLat(lon, lat, RD_GRID, true)).toBe(cell.cellId);
+		}
+	});
+
+	test('reprojected mode rejects a point outside the RD grid', () => {
+		// a corner of the far-away lon/lat box is nowhere near the 2km RD square
+		expect(cellIdAtLonLat(0, 0, RD_GRID, true)).toBeNull();
+	});
+
+	test('reprojected mode without an RD frame falls back to lon/lat', () => {
+		expect(cellIdAtLonLat(2, 5, GRID, true)).toBe('0_0');
+	});
+});
+
+describe('staleCells', () => {
+	test('returns the previously active cells missing from the new set', () => {
+		const active = new Map([['b', 1]]);
+		expect(staleCells(['a', 'b', 'c'], active)).toEqual(['a', 'c']);
+	});
+
+	test('nothing previous means nothing to reset', () => {
+		expect(staleCells([], new Set(['a']))).toEqual([]);
 	});
 });

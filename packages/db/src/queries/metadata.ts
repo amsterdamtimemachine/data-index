@@ -1,19 +1,14 @@
 import { sql } from 'drizzle-orm';
-import type {
-  VisualizationMetadata,
-  RecordType,
-  PlaceType,
-} from '@atm/shared';
-import { computeTimeSlices, computeTimeRange } from './time-slices';
+import type { VisualizationMetadata, PlaceType } from '@atm/shared';
+import { computeTimeSlices } from './time-slices';
 import { getRecordTypes } from './record-types';
+import { createTTLCache } from './cache';
 import { db } from '../client';
-import { features, datasets, tags, featureTags, placeCells, featureToPlace, place } from '../schema';
-import type { CountRow } from '../row-types';
+import { datasets, tagFeatures, cellFeatures } from '../schema';
 
 // Query result types
 type PlaceTypeRow = { place_type: PlaceType };
 type TagRow = { id: string };
-type RecordTypeCountRow = { record_type: RecordType; count: string };
 type SourceRow = { id: string; label: string };
 
 /**
@@ -29,88 +24,56 @@ async function getDatasets(): Promise<{ id: string; label: string }[]> {
 }
 
 /**
- * Get distinct place types that have features linked to them
+ * Place types that have features on the map. Read from cell_features — the
+ * population the heatmap counts — instead of joining every feature→place link.
  */
 async function getPlaceTypes(): Promise<PlaceType[]> {
   const result = await db.execute<PlaceTypeRow>(sql`
-    SELECT DISTINCT ${place.type} as place_type
-    FROM ${place}
-    JOIN ${featureToPlace} ON ${place.id} = ${featureToPlace.placeId}
-    ORDER BY ${place.type}
+    SELECT DISTINCT ${cellFeatures.placeType} as place_type
+    FROM ${cellFeatures}
+    ORDER BY ${cellFeatures.placeType}
   `);
   return result.rows.map(r => r.place_type);
 }
 
 /**
- * Get all tags that are actually used (linked to features)
+ * Tag ids the index knows: the tags with a rebuilt bitmap, so the list and the
+ * counts (getFilterCounts) always describe the same tags.
  */
 async function getTags(): Promise<string[]> {
   const result = await db.execute<TagRow>(sql`
-    SELECT DISTINCT ${tags.id} as id
-    FROM ${tags}
-    JOIN ${featureTags} ON ${tags.id} = ${featureTags.tagId}
-    ORDER BY ${tags.id}
+    SELECT ${tagFeatures.tagId} as id
+    FROM ${tagFeatures}
+    ORDER BY ${tagFeatures.tagId}
   `);
   return result.rows.map(r => r.id);
 }
 
-/**
- * Get statistics about the data
- */
-async function getStats(): Promise<{
-  totalFeatures: number;
-  featuresPerRecordType: Record<RecordType, number>;
-  gridCellCount: number;
-}> {
-  const [totalResult, perTypeResult, cellCountResult] = await Promise.all([
-    db.execute<CountRow>(sql`SELECT COUNT(*) as count FROM ${features}`),
-    db.execute<RecordTypeCountRow>(sql`
-      SELECT ${features.recordType} as record_type, COUNT(*) as count
-      FROM ${features}
-      WHERE ${features.recordType} IS NOT NULL
-      GROUP BY ${features.recordType}
-    `),
-    db.execute<CountRow>(sql`SELECT COUNT(DISTINCT (${placeCells.cellX}, ${placeCells.cellY})) as count FROM ${placeCells}`)
-  ]);
-
-  const featuresPerRecordType: Record<string, number> = {};
-  for (const row of perTypeResult.rows) {
-    featuresPerRecordType[row.record_type] = parseInt(row.count);
-  }
-
-  return {
-    totalFeatures: parseInt(totalResult.rows[0].count),
-    featuresPerRecordType: featuresPerRecordType as Record<RecordType, number>,
-    gridCellCount: parseInt(cellCountResult.rows[0].count)
-  };
-}
+const cache = createTTLCache<VisualizationMetadata>();
 
 /**
- * Get complete visualization metadata
+ * Complete visualization metadata. Cached: every page load awaits this during
+ * SSR, and it only changes after a rebuild.
  */
 export async function getMetadata(): Promise<VisualizationMetadata> {
-  const [timeSlices, timeRange, recordTypes, placeTypes, availableDatasets, availableTags, stats] = await Promise.all([
+  const cached = cache.get();
+  if (cached) return cached;
+
+  const [timeSlices, recordTypes, placeTypes, availableDatasets, availableTags] = await Promise.all([
     computeTimeSlices(),
-    computeTimeRange(),
     getRecordTypes(),
     getPlaceTypes(),
     getDatasets(),
-    getTags(),
-    getStats()
+    getTags()
   ]);
 
-  return {
+  const metadata: VisualizationMetadata = {
     timeSlices,
-    timeRange,
     recordTypes,
     placeTypes,
     datasets: availableDatasets,
-    tags: availableTags,
-    stats: {
-      totalFeatures: stats.totalFeatures,
-      featuresPerRecordType: stats.featuresPerRecordType,
-      timeSliceCount: timeSlices.length,
-      gridCellCount: stats.gridCellCount,
-    }
+    tags: availableTags
   };
+  cache.set(metadata);
+  return metadata;
 }

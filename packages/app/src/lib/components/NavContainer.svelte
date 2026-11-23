@@ -1,20 +1,29 @@
 <script lang="ts">
-	import Button from '$components/Button.svelte';
+	import Button from '#lib/components/Button.svelte';
 	import List from 'phosphor-svelte/lib/List';
 	import X from 'phosphor-svelte/lib/X';
 	import { cubicOut } from 'svelte/easing';
 	import { tweened } from 'svelte/motion';
-	import { mergeCss } from '$utils/utils';
+	import { mergeCss } from '#lib/utils/utils.js';
+	import { translate } from '#lib/utils/translations.js';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
 		class?: string;
 		isExpanded: boolean;
+		// the container element, for a parent that lays out around it
+		element?: HTMLDivElement;
 		header?: Snippet;
 		children?: Snippet;
 	}
 
-	let { class: className, isExpanded = $bindable(true), header, children }: Props = $props();
+	let {
+		class: className,
+		isExpanded = $bindable(true),
+		element = $bindable(),
+		header,
+		children
+	}: Props = $props();
 
 	const navPosition = tweened(isExpanded ? 0 : -100, {
 		duration: 200,
@@ -40,21 +49,32 @@
 
 <div
 	id="table-of-contents-container"
+	bind:this={element}
 	class={mergeCss(
-		'absolute left-0 top-0 w-[250px] h-full xl:w-[290px] 2xl:w-[400px] border-r border-atm-sand-border bg-atm-sand-dark shadow-[5px_0px_20px_5px_rgba(0,0,0,0.07)]',
+		'absolute left-0 top-0 h-full border-r border-atm-sand-border bg-atm-sand-dark shadow-[5px_0px_20px_5px_rgba(0,0,0,0.07)]',
+		// width: on mobile two thirds of what is left beside the 32px toggle button below,
+		// which sits outside the container; fixed widths from the md breakpoint up
+		'w-[calc((100vw-32px)*0.66)] md:w-[250px] lg:w-[290px] xl:w-[400px]',
 		className
 	)}
 	style="transform: translateX({$navPosition}%);"
-	aria-hidden={!isExpanded}
 >
+	<!-- outside the hidden part, so it stays reachable while the panel is closed -->
 	<Button
 		onclick={toggleToc}
 		icon={isExpanded ? X : List}
 		class="absolute right-[-32px] top-[50%] h-[32px] w-[32px] rounded-l-none border-l-atm-sand-border"
 		size={18}
-		aria-label={isExpanded ? 'Close navigation menu' : 'Open navigation menu'}
+		aria-label={translate('filters')}
+		aria-expanded={isExpanded}
+		aria-controls="filters-panel"
 	/>
-	<div class="w-full h-full flex flex-col" inert={!isExpanded}>
+	<div
+		id="filters-panel"
+		class="w-full h-full flex flex-col"
+		inert={!isExpanded}
+		aria-hidden={!isExpanded}
+	>
 		{#if header}
 			<div class="shrink-0">
 				{@render header()}

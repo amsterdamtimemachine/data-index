@@ -1,8 +1,12 @@
 import { sql } from 'drizzle-orm';
-import { PRECOMP_GRID_CELL_METERS, PRECOMP_TIME_BIN_YEARS } from '@atm/shared';
+import { PRECOMP_GRID_CELL_METERS, PLACE_TYPES, PLACE_TYPE_SPECS } from '@atm/shared';
 import { db } from '../../client';
-import { placeGeometry, features, featureToPlace, placeCells, gridConfig } from '../../schema';
+import { placeGeometry, features, placeCells, gridConfig } from '../../schema';
 import { buildCellFeatures } from './build-cell-features';
+import { buildTagFeatures } from './build-tag-features';
+import { ensureSearchColumn } from './search-column';
+import { ensureNameIndexes } from './name-indexes';
+import { cellIndex, cellEnvelope } from '../sql';
 
 type BBoxRow = {
   min_x: number;
@@ -21,9 +25,26 @@ type StatsRow = {
 };
 
 export async function rebuildIndex() {
+  console.log('=== Text search column ===\n');
+  if (await ensureSearchColumn()) {
+    console.log('Rebuilt features.search_tsv: its expression had changed.\n');
+  } else {
+    console.log('features.search_tsv is up to date.\n');
+  }
+
+  console.log('=== Place name indexes ===\n');
+  const recreated = await ensureNameIndexes();
+  if (recreated.length > 0) {
+    console.log(`Recreated without their predicate: ${recreated.join(', ')}.\n`);
+  } else {
+    console.log('The place name indexes are up to date.\n');
+  }
+
   console.log('=== Rebuilding place_cells at 100m resolution ===\n');
 
-  // Get bounds from places that have features linked (in RD coordinates)
+  // Bounds from ALL place geometry (RD): the grid frame follows the gazetteer
+  // (everything ingested under ACTIVE_SCOPE), not the data — features can come
+  // and go without shifting cell ids.
   const bbox = await db.execute<BBoxRow>(sql`
     SELECT
       ST_XMin(ST_Extent(pg.geometry)) as min_x,
@@ -31,7 +52,6 @@ export async function rebuildIndex() {
       ST_XMax(ST_Extent(pg.geometry)) as max_x,
       ST_YMax(ST_Extent(pg.geometry)) as max_y
     FROM ${placeGeometry} pg
-    WHERE EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = pg.place_id)
   `);
   const { min_x, min_y, max_x, max_y } = bbox.rows[0];
 
@@ -45,116 +65,135 @@ export async function rebuildIndex() {
   console.log(`Cell size: ${PRECOMP_GRID_CELL_METERS}m`);
   console.log(`Grid dimensions: ${gridCols} × ${gridRows} (max ${gridCols * gridRows} cells)\n`);
 
-  // Clear existing data
-  console.log('Clearing existing place_cells...');
-  await db.execute(sql`TRUNCATE ${placeCells}`);
+  // Rebuild place_cells and spatial frequency in one transaction: SET LOCAL lifts
+  // the pool's defensive statement_timeout (sized for API queries, not batch
+  // rasterisation), and readers never see a half-built table.
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL statement_timeout = 0`);
 
-  // Populate place_cells. Points keep the dumppoints path; lines and polygons use the
-  // intersect-fill below (exact, and benchmarked faster than dumppoints on streets).
-  console.log('Populating place_cells...');
-  const t = Date.now();
+    console.log('Clearing existing place_cells...');
+    await tx.execute(sql`TRUNCATE ${placeCells}`);
 
-  // Points: each point lands in exactly one cell.
-  const pointResult = await db.execute(sql`
-    INSERT INTO place_cells (place_id, cell_x, cell_y)
-    SELECT DISTINCT
-      pg.place_id as place_id,
-      FLOOR((ST_X((dp).geom) - ${min_x}) / ${PRECOMP_GRID_CELL_METERS})::smallint as cell_x,
-      FLOOR((ST_Y((dp).geom) - ${min_y}) / ${PRECOMP_GRID_CELL_METERS})::smallint as cell_y
-    FROM ${placeGeometry} pg
-    CROSS JOIN LATERAL ST_DumpPoints(pg.geometry) dp
-    WHERE GeometryType(pg.geometry) IN ('POINT', 'MULTIPOINT')
-      AND EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = pg.place_id)
-  `);
+    // Populate place_cells. Points keep the dumppoints path; lines and polygons use the
+    // intersect-fill below (exact, and benchmarked faster than dumppoints on streets).
+    console.log('Populating place_cells...');
+    const t = Date.now();
 
-  // Lines and polygons: rasterise — keep every grid cell whose rectangle intersects
-  // the geometry (a line's crossed cells, a polygon's filled interior). Exact, unlike
-  // dumppoints (which can miss cells a line briefly clips, and left polygon interiors
-  // empty), and benchmarked faster than dumppoints on real street data. Origin and
-  // cell size are cast to float8 so the cell-envelope arithmetic stays floating point.
-  const fillResult = await db.execute(sql`
-    WITH featured AS (
-      SELECT pg.place_id as id, pg.geometry
+    // Points: each point lands in exactly one cell.
+    const pointResult = await tx.execute(sql`
+      INSERT INTO place_cells (place_id, cell_x, cell_y)
+      SELECT DISTINCT
+        pg.place_id as place_id,
+        ${cellIndex(sql`ST_X((dp).geom)`, min_x)}::smallint as cell_x,
+        ${cellIndex(sql`ST_Y((dp).geom)`, min_y)}::smallint as cell_y
       FROM ${placeGeometry} pg
-      WHERE pg.geometry IS NOT NULL
-        AND GeometryType(pg.geometry) NOT IN ('POINT', 'MULTIPOINT')
-        AND EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = pg.place_id)
-    )
-    INSERT INTO place_cells (place_id, cell_x, cell_y)
-    SELECT f.id, gx::smallint, gy::smallint
-    FROM featured f
-    CROSS JOIN LATERAL generate_series(
-      FLOOR((ST_XMin(f.geometry) - ${min_x}::float8) / ${PRECOMP_GRID_CELL_METERS}::float8)::int,
-      FLOOR((ST_XMax(f.geometry) - ${min_x}::float8) / ${PRECOMP_GRID_CELL_METERS}::float8)::int
-    ) AS gx
-    CROSS JOIN LATERAL generate_series(
-      FLOOR((ST_YMin(f.geometry) - ${min_y}::float8) / ${PRECOMP_GRID_CELL_METERS}::float8)::int,
-      FLOOR((ST_YMax(f.geometry) - ${min_y}::float8) / ${PRECOMP_GRID_CELL_METERS}::float8)::int
-    ) AS gy
-    WHERE ST_Intersects(
-      f.geometry,
-      ST_MakeEnvelope(
-        ${min_x}::float8 + gx * ${PRECOMP_GRID_CELL_METERS}::float8,
-        ${min_y}::float8 + gy * ${PRECOMP_GRID_CELL_METERS}::float8,
-        ${min_x}::float8 + (gx + 1) * ${PRECOMP_GRID_CELL_METERS}::float8,
-        ${min_y}::float8 + (gy + 1) * ${PRECOMP_GRID_CELL_METERS}::float8,
-        28992
+      CROSS JOIN LATERAL ST_DumpPoints(pg.geometry) dp
+      WHERE GeometryType(pg.geometry) IN ('POINT', 'MULTIPOINT')
+    `);
+
+    // Lines and polygons: rasterise — keep every grid cell whose rectangle intersects
+    // the geometry (a line's crossed cells, a polygon's filled interior). Exact, unlike
+    // dumppoints (which can miss cells a line briefly clips, and left polygon interiors
+    // empty), and benchmarked faster than dumppoints on real street data. Origin and
+    // cell size are cast to float8 so the cell-envelope arithmetic stays floating point.
+    const fillResult = await tx.execute(sql`
+      WITH shaped AS (
+        SELECT pg.place_id as id, pg.geometry
+        FROM ${placeGeometry} pg
+        WHERE pg.geometry IS NOT NULL
+          AND GeometryType(pg.geometry) NOT IN ('POINT', 'MULTIPOINT')
       )
-    )
-  `);
+      INSERT INTO place_cells (place_id, cell_x, cell_y)
+      SELECT f.id, gx::smallint, gy::smallint
+      FROM shaped f
+      CROSS JOIN LATERAL generate_series(
+        ${cellIndex(sql`ST_XMin(f.geometry)`, min_x)}::int,
+        ${cellIndex(sql`ST_XMax(f.geometry)`, min_x)}::int
+      ) AS gx
+      CROSS JOIN LATERAL generate_series(
+        ${cellIndex(sql`ST_YMin(f.geometry)`, min_y)}::int,
+        ${cellIndex(sql`ST_YMax(f.geometry)`, min_y)}::int
+      ) AS gy
+      WHERE ST_Intersects(f.geometry, ${cellEnvelope(sql`gx`, sql`gy`, min_x, min_y)})
+    `);
 
-  const rowCount = (pointResult.rowCount ?? 0) + (fillResult.rowCount ?? 0);
-  console.log(`✅ Inserted ${rowCount} rows in ${Date.now() - t}ms`);
+    const rowCount = (pointResult.rowCount ?? 0) + (fillResult.rowCount ?? 0);
+    console.log(`Inserted ${rowCount} rows (${pointResult.rowCount ?? 0} points, ${fillResult.rowCount ?? 0} rasterised) in ${Date.now() - t}ms`);
 
-  // Update spatial frequency on place_geometry (number of cells each geometry spans)
-  console.log('Updating spatial frequency...');
-  const spatialResult = await db.execute(sql`
-    UPDATE ${placeGeometry} pg
-    SET spatial_frequency = sub.cell_count
+    // Update spatial frequency on place_geometry (number of cells each geometry spans)
+    console.log('Updating spatial frequency...');
+    const spatialResult = await tx.execute(sql`
+      UPDATE ${placeGeometry} pg
+      SET spatial_frequency = sub.cell_count
+      FROM (
+        SELECT place_id, COUNT(*) as cell_count
+        FROM ${placeCells}
+        GROUP BY place_id
+      ) sub
+      WHERE pg.place_id = sub.place_id
+    `);
+    console.log(`  ${spatialResult.rowCount} places updated`);
+  });
+
+  // Canonicalise stored names, adamlink only: its name lists record an old name
+  // on the place row while the name in force lives as an open-ended history row
+  // (verified: every dead adamlink name carries an until). Other sources may use
+  // an open until to mean "end unknown", so they are left alone. A row with no
+  // since is a label without a period, never a current name. The old name is
+  // never lost — it exists as its own (dated) history row. Only for the types whose
+  // latest open name is the name now (PLACE_TYPE_SPECS): a building keeps the
+  // source's label, its names follow its use.
+  const renamedTypes = PLACE_TYPES.filter((t) => PLACE_TYPE_SPECS[t].currentName === 'latestOpenName');
+  console.log('\nCanonicalising place names...');
+  const nameResult = await db.execute(sql`
+    UPDATE place p
+    SET name = n.name
     FROM (
-      SELECT place_id, COUNT(*) as cell_count
-      FROM ${placeCells}
-      GROUP BY place_id
-    ) sub
-    WHERE pg.place_id = sub.place_id
+      SELECT DISTINCT ON (place_id) place_id, name
+      FROM place_historical_name
+      WHERE until IS NULL AND since IS NOT NULL AND name IS NOT NULL
+      ORDER BY place_id, since DESC
+    ) n
+    WHERE p.id = n.place_id AND p.name IS DISTINCT FROM n.name
+      AND p.source = 'adamlink' AND p.type IN ${renamedTypes}
   `);
-  console.log(`  ✅ ${spatialResult.rowCount} places updated`);
+  console.log(`  ${nameResult.rowCount} places renamed to their current name`);
 
-  // Update temporal frequency on features (number of base time bins each feature spans)
-  console.log(`\nUpdating temporal frequency (base bin: ${PRECOMP_TIME_BIN_YEARS} years)...`);
-  const temporalResult = await db.execute(sql`
-    UPDATE ${features} f
-    SET temporal_frequency = GREATEST(1, CEIL(
-      (EXTRACT(YEAR FROM f.end_date) - EXTRACT(YEAR FROM f.start_date)) / ${PRECOMP_TIME_BIN_YEARS}
-    ))
-    WHERE f.start_date IS NOT NULL AND f.end_date IS NOT NULL
+  // Audit: two open-ended names for one place is contradictory data; the latest
+  // since wins above, but it should be seen, not silent.
+  type ContradictionRow = { n: string };
+  const contradictions = await db.execute<ContradictionRow>(sql`
+    SELECT COUNT(*) AS n FROM (
+      SELECT place_id FROM place_historical_name
+      WHERE until IS NULL AND since IS NOT NULL AND name IS NOT NULL
+      GROUP BY place_id HAVING COUNT(DISTINCT name) > 1
+    ) multi
   `);
-  console.log(`  ✅ ${temporalResult.rowCount} features updated`);
+  const contradictionCount = parseInt(contradictions.rows[0].n);
+  if (contradictionCount > 0) {
+    console.log(`  ${contradictionCount} places have multiple open-ended names (latest since won)`);
+  }
 
   // Check coverage gaps
-  type CountRow = { total: string; missing_temporal: string };
+  type CountRow = { total: string };
   type PlaceCountRow = { total_places: string; missing_spatial: string };
   const [featureCoverage, placeCoverage] = await Promise.all([
     db.execute<CountRow>(sql`
-      SELECT COUNT(*) as total,
-        COUNT(*) - COUNT(temporal_frequency) as missing_temporal
+      SELECT COUNT(*) as total
       FROM ${features}
     `),
     db.execute<PlaceCountRow>(sql`
       SELECT COUNT(*) as total_places,
         COUNT(*) - COUNT(spatial_frequency) as missing_spatial
       FROM ${placeGeometry} pg
-      WHERE EXISTS (SELECT 1 FROM ${featureToPlace} fp WHERE fp.place_id = pg.place_id)
+      WHERE pg.geometry IS NOT NULL
     `)
   ]);
-  const { total, missing_temporal } = featureCoverage.rows[0];
+  const { total } = featureCoverage.rows[0];
   const { total_places, missing_spatial } = placeCoverage.rows[0];
 
   if (parseInt(missing_spatial) > 0) {
-    console.log(`  ⚠ ${missing_spatial}/${total_places} featured places have no spatial frequency`);
-  }
-  if (parseInt(missing_temporal) > 0) {
-    console.log(`  ⚠ ${missing_temporal}/${total} features have no temporal frequency (missing start_date or end_date)`);
+    console.log(`  ${missing_spatial}/${total_places} places with geometry have no spatial frequency`);
   }
 
   // Summary
@@ -181,35 +220,23 @@ export async function rebuildIndex() {
   const gridMaxX = min_x + (s.max_x + 1) * PRECOMP_GRID_CELL_METERS;
   const gridMaxY = min_y + (s.max_y + 1) * PRECOMP_GRID_CELL_METERS;
   type BoundsRow = { min_lon: string; max_lon: string; min_lat: string; max_lat: string };
-  type MaxFreqRow = { max_spatial: string; max_temporal: string };
 
-  const [boundsResult, freqResult] = await Promise.all([
-    db.execute<BoundsRow>(sql`
-      WITH grid AS (
-        SELECT ST_Transform(
-          ST_MakeEnvelope(${min_x}, ${min_y}, ${gridMaxX}, ${gridMaxY}, 28992),
-          4326
-        ) AS g
-      )
-      SELECT
-        ST_XMin(g)::text as min_lon,
-        ST_XMax(g)::text as max_lon,
-        ST_YMin(g)::text as min_lat,
-        ST_YMax(g)::text as max_lat
-      FROM grid
-    `),
-    db.execute<MaxFreqRow>(sql`
-      SELECT
-        COALESCE(MAX(pg.spatial_frequency), 1)::text as max_spatial,
-        COALESCE(MAX(f.temporal_frequency), 1)::text as max_temporal
-      FROM ${features} f
-      JOIN ${featureToPlace} fp ON f.id = fp.feature_id
-      JOIN ${placeGeometry} pg ON fp.place_id = pg.place_id
-    `)
-  ]);
+  const boundsResult = await db.execute<BoundsRow>(sql`
+    WITH grid AS (
+      SELECT ST_Transform(
+        ST_MakeEnvelope(${min_x}, ${min_y}, ${gridMaxX}, ${gridMaxY}, 28992),
+        4326
+      ) AS g
+    )
+    SELECT
+      ST_XMin(g)::text as min_lon,
+      ST_XMax(g)::text as max_lon,
+      ST_YMin(g)::text as min_lat,
+      ST_YMax(g)::text as max_lat
+    FROM grid
+  `);
 
   const bounds = boundsResult.rows[0];
-  const freq = freqResult.rows[0];
 
   await db.insert(gridConfig)
     .values({
@@ -224,8 +251,6 @@ export async function rebuildIndex() {
       maxLon: parseFloat(bounds.max_lon),
       minLat: parseFloat(bounds.min_lat),
       maxLat: parseFloat(bounds.max_lat),
-      maxSpatialFrequency: parseInt(freq.max_spatial),
-      maxTemporalFrequency: parseInt(freq.max_temporal),
     })
     .onConflictDoUpdate({
       target: gridConfig.id,
@@ -240,14 +265,13 @@ export async function rebuildIndex() {
         maxLon: parseFloat(bounds.max_lon),
         minLat: parseFloat(bounds.min_lat),
         maxLat: parseFloat(bounds.max_lat),
-        maxSpatialFrequency: parseInt(freq.max_spatial),
-        maxTemporalFrequency: parseInt(freq.max_temporal),
       }
     });
-  console.log('  ✅ Grid config updated');
+  console.log('  Grid config updated');
 
   // Depends on place_cells, so it has to come after the rasterisation above.
   await buildCellFeatures();
+  await buildTagFeatures();
 
   console.log(`\n=== Summary ===`);
   console.log(`  Features:         ${total}`);
@@ -257,6 +281,4 @@ export async function rebuildIndex() {
   console.log(`  Grid range:       x[${s.min_x}–${s.max_x}] y[${s.min_y}–${s.max_y}]`);
   console.log(`  RD origin:        (${min_x.toFixed(0)}, ${min_y.toFixed(0)}) → (${gridMaxX.toFixed(0)}, ${gridMaxY.toFixed(0)})`);
   console.log(`  Grid bounds (WGS84): lon[${bounds.min_lon}–${bounds.max_lon}] lat[${bounds.min_lat}–${bounds.max_lat}]`);
-  console.log(`  Max frequencies:  spatial=${freq.max_spatial} temporal=${freq.max_temporal}`);
-  console.log(`  Temporal coverage: ${parseInt(total) - parseInt(missing_temporal)}/${total} features`);
 }
