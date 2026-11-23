@@ -18,12 +18,12 @@
   },
   "dependencies": {
     "@atm/shared": "workspace:*",
+    "@streamparser/json": "^0.0.22",
     "commander": "^12.1.0",
-    "csv-parse": "^6.2.1",
+    "csv-parse": "^7.0.3",
     "drizzle-orm": "^0.45.4",
     "n3": "^2.13.12",
-    "pg": "^8.23.1",
-    "@streamparser/json": "^0.0.22"
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
