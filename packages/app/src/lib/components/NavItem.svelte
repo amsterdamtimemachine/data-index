@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ButtonLink from './ButtonLink.svelte';
 	import { page } from '$app/state';
+	import { withLanguage } from '#lib/utils/translations.js';
 
 	interface Props {
 		href: string;
@@ -17,6 +18,6 @@
 	);
 </script>
 
-<ButtonLink {href} {target} {rel} active={isActive}>
+<ButtonLink href={withLanguage(href)} {target} {rel} active={isActive}>
 	{label}
 </ButtonLink>

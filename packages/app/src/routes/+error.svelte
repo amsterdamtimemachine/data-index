@@ -4,7 +4,7 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { browser } from '$app/env';
-	import { translate } from '#lib/utils/translations.js';
+	import { translate, withLanguage } from '#lib/utils/translations.js';
 	import Heading from '#lib/components/Heading.svelte';
 	import Link from '#lib/components/Link.svelte';
 
@@ -24,5 +24,5 @@
 	class="min-h-screen bg-atm-sand flex flex-col items-center justify-center gap-4 p-6 text-center"
 >
 	<Heading level={1}>{title}</Heading>
-	<Link href={resolve('/(map)')}>{translate('backToMap')}</Link>
+	<Link href={withLanguage(resolve('/(map)'))}>{translate('backToMap')}</Link>
 </div>
