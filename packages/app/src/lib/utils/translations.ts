@@ -4,7 +4,9 @@
  * page, so nothing here is reactive. In the browser it is read once from the address;
  * on the server each request supplies its own (see hooks.server.ts). Source data
  * (titles, descriptions, place and dataset names) is never translated.
+ * PUBLIC_DUTCH_ONLY=true keeps every page Dutch.
  */
+import { PUBLIC_DUTCH_ONLY } from '$app/env/public';
 import { NL } from './translations/nl';
 import { EN } from './translations/en';
 
@@ -12,12 +14,16 @@ export const LANGUAGES = ['nl', 'en'] as const;
 export type Language = (typeof LANGUAGES)[number];
 export const DEFAULT_LANGUAGE: Language = 'nl';
 export const LANGUAGE_PARAM = 'lang';
+export const ENGLISH_ENABLED = PUBLIC_DUTCH_ONLY !== 'true';
 
 const MAPS: Record<Language, Record<string, string>> = { nl: NL, en: EN };
 
 /** The language a `lang` value asks for; anything unknown or absent is the default. */
-export function parseLanguage(value: string | null | undefined): Language {
-	if (value === 'en') {
+export function parseLanguage(
+	value: string | null | undefined,
+	englishEnabled = ENGLISH_ENABLED
+): Language {
+	if (englishEnabled && value === 'en') {
 		return 'en';
 	}
 	return DEFAULT_LANGUAGE;

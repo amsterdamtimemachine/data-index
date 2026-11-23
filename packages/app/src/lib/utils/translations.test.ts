@@ -46,6 +46,11 @@ describe('translations', () => {
 		expect(parseLanguage(null)).toBe('nl');
 	});
 
+	test('a Dutch-only site ignores the lang param', () => {
+		expect(parseLanguage('en', false)).toBe('nl');
+		expect(parseLanguage('nl', false)).toBe('nl');
+	});
+
 	test('an internal link keeps the language; the default adds nothing', () => {
 		expect(withLanguage('/about')).toBe('/about');
 		speak('en');

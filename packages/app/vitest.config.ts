@@ -12,7 +12,8 @@ export default defineConfig({
 	resolve: {
 		conditions: ['browser'],
 		alias: {
-			'$app/paths': fileURLToPath(new URL('./vitest.app-paths.ts', import.meta.url))
+			'$app/paths': fileURLToPath(new URL('./vitest.app-paths.ts', import.meta.url)),
+			'$app/env/public': fileURLToPath(new URL('./vitest.app-env-public.ts', import.meta.url))
 		}
 	},
 	test: {

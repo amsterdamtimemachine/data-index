@@ -289,7 +289,7 @@ Each match carries the matched name, the id of the matched historical name row w
 
 ### Language
 
-The UI is Dutch by default and English with `lang=en` in the URL; the NL/EN switch beside the About button writes it. The strings live in `packages/app/src/lib/utils/translations/nl.ts` and `en.ts`, which must carry the same keys. Source data (titles, descriptions, place and dataset names) is never translated, and topics show in English as the classifier's own labels. The about page has one text per language, `content.nl.svx` and `content.en.svx`.
+The UI is Dutch by default and English with `lang=en` in the URL; the NL/EN switch beside the About button writes it. The strings live in `packages/app/src/lib/utils/translations/nl.ts` and `en.ts`, which must carry the same keys. Source data (titles, descriptions, place and dataset names) is never translated, and topics show in English as the classifier's own labels. The about page has one text per language, `content.nl.svx` and `content.en.svx`. `PUBLIC_DUTCH_ONLY=true` keeps the site Dutch: the switch is hidden and `lang=en` is ignored.
 
 ### Text search
 

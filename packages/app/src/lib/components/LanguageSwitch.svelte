@@ -2,6 +2,7 @@
 	The language switch: one button showing the language a press leads to, EN on a Dutch
 	page and NL on an English one. It is a link to this same view in that language, and
 	following it reloads the page, since the language is fixed for a page's lifetime.
+	Absent while the site is Dutch only.
 -->
 <script lang="ts">
 	import { page } from '$app/state';
@@ -10,6 +11,7 @@
 		translate,
 		currentLanguage,
 		DEFAULT_LANGUAGE,
+		ENGLISH_ENABLED,
 		LANGUAGE_PARAM,
 		type Language
 	} from '#lib/utils/translations.js';
@@ -29,16 +31,18 @@
 	});
 </script>
 
-<ButtonLink
-	{href}
-	target=""
-	rel=""
-	class="uppercase"
-	lang={other}
-	hreflang={other}
-	title={translate(NAMES[other])}
-	aria-label={translate(NAMES[other])}
-	data-sveltekit-reload
->
-	{other}
-</ButtonLink>
+{#if ENGLISH_ENABLED}
+	<ButtonLink
+		{href}
+		target=""
+		rel=""
+		class="uppercase"
+		lang={other}
+		hreflang={other}
+		title={translate(NAMES[other])}
+		aria-label={translate(NAMES[other])}
+		data-sveltekit-reload
+	>
+		{other}
+	</ButtonLink>
+{/if}
