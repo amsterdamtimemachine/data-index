@@ -12,8 +12,7 @@ import { translate } from './translations';
 
 // labels of content the card renders outside its field rows
 const CONTENT_LABELS: Partial<Record<Entity['type'], string[]>> = {
-	ScreeningEvent: ['film', 'performer'],
-	TheaterEvent: ['film', 'performer'],
+	ScreeningEvent: ['film'],
 	Manuscript: ['text']
 };
 

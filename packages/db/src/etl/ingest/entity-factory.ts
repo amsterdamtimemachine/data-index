@@ -1,4 +1,4 @@
-import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, TheaterEventEntity, ProgrammeItem, ManuscriptEntity, Excerpt, RecordType, parsePartialDate, formatIsoDate } from "@atm/shared";
+import { CreativeWorkEntity, EntityBase, MediaObjectEntity, PersonEntity, ScreeningEventEntity, MovieEntity, ManuscriptEntity, Excerpt, RecordType, parsePartialDate, formatIsoDate } from "@atm/shared";
 import { formatDateRange } from "../util/dates";
 import { Draft } from "./ingestor";
 
@@ -59,14 +59,18 @@ export class MediaObjectEntityFactory extends EntityFactory<MediaObjectEntity> {
 
 // the source row's shape, as the cinema-context source reads it
 type ProgrammeVenue = { perm_id?: string; url?: string; name?: string; type?: string };
-export type SourceItem = { title?: string; url?: string; year?: string; country?: string; director?: string; production_company?: string; live?: string };
+// a live act comes as an item without a title, and is left out
+export type SourceItem = { title?: string; url?: string; year?: string; country?: string; director?: string; production_company?: string };
 
-/** A programme's items in the source's order: films and live acts as the source lists them. */
-export function programmeItems(items: SourceItem[]): ProgrammeItem[] {
-    const programme: ProgrammeItem[] = [];
+/**
+ * A programme's films in the source's order. Live acts are left out: the index keeps
+ * Cinema Context's screenings, and a programme without a film is not ingested.
+ */
+function programmeFilms(items: SourceItem[]): MovieEntity[] {
+    const films: MovieEntity[] = [];
     for (const item of items) {
         if (item.title) {
-            programme.push({
+            films.push({
                 type: 'Movie',
                 name: item.title,
                 ...(item.url && { url: item.url }),
@@ -76,31 +80,19 @@ export function programmeItems(items: SourceItem[]): ProgrammeItem[] {
                 ...(item.production_company && { productionCompany: item.production_company }),
             });
         }
-        if (item.live) {
-            programme.push({ type: 'LiveAct', name: item.live });
-        }
     }
-    return programme;
+    return films;
 }
 
-/** Whether a programme opens with a film: that makes it a screening, and its title the film. */
-export function leadsWithFilm(items: ProgrammeItem[]): boolean {
-    return items.length > 0 && items[0].type === 'Movie';
-}
-
-/** A programme: a ScreeningEvent when it opens with a film, a TheaterEvent when it opens with an act. */
-export class ProgrammeEntityFactory extends EntityFactory<ScreeningEventEntity | TheaterEventEntity> {
-    create(feature: Draft, data: Map<string, unknown>): ScreeningEventEntity | TheaterEventEntity {
+/** A programme as a screening, with its films as its items. */
+export class ProgrammeEntityFactory extends EntityFactory<ScreeningEventEntity> {
+    create(feature: Draft, data: Map<string, unknown>): ScreeningEventEntity {
         const venue = (data.get('venue') ?? {}) as ProgrammeVenue;
         const address = data.get('address');
         const date = data.get('date');
         const permId = data.get('perm_id');
-        const items = programmeItems((data.get('items') ?? []) as SourceItem[]);
+        const items = programmeFilms((data.get('items') ?? []) as SourceItem[]);
 
-        let type: 'ScreeningEvent' | 'TheaterEvent' = 'TheaterEvent';
-        if (leadsWithFilm(items)) {
-            type = 'ScreeningEvent';
-        }
         // the source's own precision, with its xx placeholders dropped
         let startDate = feature.startDate;
         if (typeof date === 'string') {
@@ -111,7 +103,7 @@ export class ProgrammeEntityFactory extends EntityFactory<ScreeningEventEntity |
         }
 
         return {
-            type,
+            type: 'ScreeningEvent',
             ...(typeof permId === 'string' && { id: permId }),
             name: feature.label,
             startDate,

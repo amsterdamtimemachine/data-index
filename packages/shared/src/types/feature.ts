@@ -34,7 +34,7 @@ export interface MatchFilters {
  */
 export interface EntityBase {
   id?: string;
-  type: "Person" | "CreativeWork" | "MediaObject" | "ScreeningEvent" | "TheaterEvent" | "Manuscript";
+  type: "Person" | "CreativeWork" | "MediaObject" | "ScreeningEvent" | "Manuscript";
   name: string;
 }
 
@@ -87,30 +87,13 @@ export interface VenueEntity {
   address?: string;
 }
 
-/** A live act on a programme, as the source words it. */
-export interface LiveActEntity {
-  type: "LiveAct";
-  name: string;
-}
-
-export type ProgrammeItem = MovieEntity | LiveActEntity;
-
-/** One programme at a venue on a date, with its items in the source's order. */
-interface ProgrammeEntity extends EntityBase {
+/** One programme at a venue on a date, with its films in the source's order; the title is the first. */
+export interface ScreeningEventEntity extends EntityBase {
+  type: "ScreeningEvent";
   // source precision: YYYY-MM-DD, YYYY-MM or YYYY
   startDate: string;
   location: VenueEntity;
-  items: ProgrammeItem[];
-}
-
-/** A programme opening with a film; the title is that film. */
-export interface ScreeningEventEntity extends ProgrammeEntity {
-  type: "ScreeningEvent";
-}
-
-/** A programme opening with a live act; the title is that act. */
-export interface TheaterEventEntity extends ProgrammeEntity {
-  type: "TheaterEvent";
+  items: MovieEntity[];
 }
 
 /** The diary an entry belongs to, with its page at the holding archive. */
@@ -166,7 +149,7 @@ export interface ManuscriptEntity extends EntityBase {
 }
 
 /** Discriminated union of all concrete entity types. */
-export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity | ScreeningEventEntity | TheaterEventEntity | ManuscriptEntity;
+export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity | ScreeningEventEntity | ManuscriptEntity;
 
 
 // the place types, as the registry in vocab orders them

@@ -10,7 +10,6 @@ const TRANSLATIONS: Record<string, string> = {
 	event: 'Evenement',
 	// an event's subtype, which names its type on the card in place of "Evenement"
 	screening: 'Filmvertoning',
-	performance: 'Voorstelling',
 	story: 'Verhaal',
 
 	// Place types
@@ -41,7 +40,6 @@ const TRANSLATIONS: Record<string, string> = {
 	isAbout: 'Gaat over',
 	mentions: 'Noemt',
 	screenedAt: 'Vertoond op',
-	performedAt: 'Opgevoerd op',
 
 	hadLastLivingLocation: 'Laatste woonadres',
 
@@ -50,7 +48,6 @@ const TRANSLATIONS: Record<string, string> = {
 	died: 'Overleden',
 	// screening event rows
 	film: 'Film',
-	performer: 'Optreden',
 	dating: 'Datering',
 
 	// Months, for dates worded on cards
@@ -158,12 +155,8 @@ const TRANSLATIONS: Record<string, string> = {
 	featureMany: 'features',
 	showing: 'Toont',
 	venue: 'Venue',
-	// the matches of a search the collapsed card does not show, listed under it
-	// a programme's heading: "2 films en 1 optreden op het programma"
-	filmOne: 'film',
+	// a programme's heading: "2 films op het programma"
 	filmMany: 'films',
-	actOne: 'optreden',
-	actMany: 'optredens',
 	and: 'en',
 	or: 'of',
 	onTheProgramme: 'op het programma',
