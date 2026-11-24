@@ -4,7 +4,7 @@
 # Synthetic street for the integration seed: gives beeldbank's street-fallback path
 # (empty address → resolve via street) a place to resolve to, so seedTestData
 # exercises LINESTRING ingestion + rasterisation the way production does. The
-# build.py-generated beeldbank.csv carries one matching row (street = this URI,
+# beeldbank.csv fixture carries one matching row (street = this URI,
 # empty address). ~137m line → spans a couple of base cells (multi-cell line path).
 <https://adamlink.nl/geo/street/seed-straat/1>
     skos:prefLabel "Seed Straat" ;
