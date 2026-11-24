@@ -33,8 +33,9 @@ geom_plan.md
 super_entity_plan.md
 place_cells_plan.md
 
-# Local scripts
-reingest*.sh
+# Local scripts and reingest settings
+/reingest*.sh
+reingest.env
 
 # Binaries
 *.bin

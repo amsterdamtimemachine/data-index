@@ -1,7 +1,9 @@
-import { writeFileSync, createWriteStream } from 'fs';
+import { writeFileSync } from 'fs';
 import type { Feature, FeatureCollection, Geometry, GeoJsonProperties } from 'geojson';
 import type { PlaceType, PlaceSource } from '@atm/shared';
 import { type Gemeente } from './config';
+import { getJson } from '../util/http';
+import { jsonlWriter } from '../util/jsonl';
 
 interface PlaceRecord {
   id: string;
@@ -24,18 +26,6 @@ const FES = 'http://www.opengis.net/fes/2.0';
 export const fesEq = (field: string, value: string) =>
   `<fes:Filter xmlns:fes="${FES}"><fes:PropertyIsEqualTo><fes:ValueReference>${field}</fes:ValueReference><fes:Literal>${value}</fes:Literal></fes:PropertyIsEqualTo></fes:Filter>`;
 
-async function getJson<T>(url: string, retries = 2): Promise<T> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      const res = await fetch(url, { headers: { 'User-Agent': 'atm-fetcher/1.0' }, signal: AbortSignal.timeout(30000) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
-    } catch (err) {
-      if (attempt >= retries) throw err;
-    }
-  }
-}
-
 interface Writer { write(f: OutFeature): void; close(): Promise<void>; }
 
 function geojsonWriter(path: string): Writer {
@@ -43,14 +33,6 @@ function geojsonWriter(path: string): Writer {
   return {
     write: f => features.push(f),
     close: async () => writeFileSync(path, JSON.stringify({ type: 'FeatureCollection', features })),
-  };
-}
-
-function ndjsonWriter(path: string): Writer {
-  const stream = createWriteStream(path);
-  return {
-    write: f => stream.write(JSON.stringify(f) + '\n'),
-    close: () => new Promise<void>((resolve, reject) => { stream.on('error', reject); stream.end(() => resolve()); }),
   };
 }
 
@@ -98,7 +80,7 @@ export abstract class PdokFetcher<P = GeoJsonProperties> {
   }
 
   async run(outPath: string) {
-    const writer = this.ndjson ? ndjsonWriter(outPath) : geojsonWriter(outPath);
+    const writer: Writer = this.ndjson ? jsonlWriter<OutFeature>(outPath) : geojsonWriter(outPath);
     let written = 0;
     for (const g of this.gemeenten()) {
       for await (const draft of this.places(g)) {

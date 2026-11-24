@@ -83,6 +83,28 @@ program
   });
 
 program
+  .command('extract')
+  .description('Extract a source\'s records from its dump into the file its ingest reads')
+  .requiredOption('-s, --source <name>', 'Extractor name')
+  .requiredOption('-i, --input <path>', 'The source\'s dump: a file or directory, as the extractor reads it')
+  .requiredOption('-o, --out <path>', 'Output file path')
+  .option('-m, --municipality <path>', 'Municipality boundary GeoJSON from db:fetch, the territory the extract keeps')
+  .action(async (opts) => {
+    try {
+      const mod = await import(`./extractors/${opts.source}.ts`);
+      if (!mod.run) {
+        console.error(`Extractor ${opts.source} does not export a run function`);
+        process.exit(1);
+      }
+      await mod.run(opts.input, opts.out, { municipality: opts.municipality });
+      process.exit(0);
+    } catch (error) {
+      console.error('Extract failed:', error);
+      process.exit(1);
+    }
+  });
+
+program
   .command('fetch')
   .description('Fetch reference place data from PDOK into a ground-truth file')
   .requiredOption('-s, --source <name>', 'Fetcher name')
