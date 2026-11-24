@@ -8,7 +8,7 @@ program
 
 program
   .command('rebuild-index')
-  .description('Rebuild the spatial grid index and compute temporal and spatial frequencies')
+  .description('Rebuild the spatial grid index and compute spatial frequencies')
   .action(async () => {
     try {
       await rebuildIndex();
@@ -24,6 +24,12 @@ program
   .description('Ingest data from a source')
   .requiredOption('-s, --source <name>', 'Source name to ingest')
   .requiredOption('-f, --file <path>', 'Input file path')
+  .option('-x, --adamlink-streets <path>', 'Adamlink straten TTL (required by the nwb-streets source, to dedup against)')
+  .option('-m, --municipality <path>', 'Municipality boundary GeoJSON from db:fetch (required by the buildings source, its scope)')
+  .option('-t, --tagger <id>', 'Id of the classifier model, stamped on its rows (required by the tags source)')
+  .option('-d, --dataset <id>', 'Dataset whose natural keys the file carries (required by the tags source)')
+  .option('--tagger-label <name>', 'Name of the classifier model, shown on cards (tags source; defaults to the id)')
+  .option('--tagger-url <url>', 'Link for the classifier model, its model card or repository (tags source)')
   .action(async (opts) => {
     try {
       // Dynamically import the source module
@@ -59,12 +65,61 @@ program
       console.log(`Ingesting from source: ${opts.source}`);
       console.log(`File: ${opts.file}\n`);
 
-      await sourceModule.ingest(opts.file);
+      await sourceModule.ingest(opts.file, {
+        adamlinkStreets: opts.adamlinkStreets,
+        municipality: opts.municipality,
+        tagger: opts.tagger,
+        dataset: opts.dataset,
+        taggerLabel: opts.taggerLabel,
+        taggerUrl: opts.taggerUrl,
+      });
 
-      console.log('\nRun `bun run db:rebuild-index` to rebuild the spatial grid index and compute temporal and spatial frequencies.');
+      console.log('\nRun `db:rebuild-index` once all sources are ingested.');
       process.exit(0);
     } catch (error) {
       console.error('Ingestion failed:', error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('extract')
+  .description('Extract a source\'s records from its dump into the file its ingest reads')
+  .requiredOption('-s, --source <name>', 'Extractor name')
+  .requiredOption('-i, --input <path>', 'The source\'s dump: a file or directory, as the extractor reads it')
+  .requiredOption('-o, --out <path>', 'Output file path')
+  .option('-m, --municipality <path>', 'Municipality boundary GeoJSON from db:fetch, the territory the extract keeps')
+  .action(async (opts) => {
+    try {
+      const mod = await import(`./extractors/${opts.source}.ts`);
+      if (!mod.run) {
+        console.error(`Extractor ${opts.source} does not export a run function`);
+        process.exit(1);
+      }
+      await mod.run(opts.input, opts.out, { municipality: opts.municipality });
+      process.exit(0);
+    } catch (error) {
+      console.error('Extract failed:', error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('fetch')
+  .description('Fetch reference place data from PDOK into a ground-truth file')
+  .requiredOption('-s, --source <name>', 'Fetcher name')
+  .requiredOption('-o, --out <path>', 'Output file path')
+  .action(async (opts) => {
+    try {
+      const mod = await import(`./fetchers/${opts.source}.ts`);
+      if (!mod.run) {
+        console.error(`Fetcher ${opts.source} does not export a run function`);
+        process.exit(1);
+      }
+      await mod.run(opts.out);
+      process.exit(0);
+    } catch (error) {
+      console.error('Fetch failed:', error);
       process.exit(1);
     }
   });

@@ -204,9 +204,9 @@ export async function datasetLabel(datasetId: string): Promise<string> {
   return r.rows[0].label;
 }
 
-export async function organisationLabelForDataset(datasetId: string): Promise<string> {
+export async function providerLabelForDataset(datasetId: string): Promise<string> {
   const r = await db.execute<{ label: string }>(sql`
-    SELECT o.label FROM datasets d JOIN organisations o ON d.organisation_id = o.id
+    SELECT o.label FROM datasets d JOIN agents o ON d.provider_id = o.id
     WHERE d.id = ${datasetId}
   `);
   return r.rows[0].label;
@@ -239,14 +239,6 @@ export async function featuredPlaceCount(): Promise<number> {
     SELECT COUNT(DISTINCT fp.place_id) as count FROM feature_to_place fp
   `);
   return parseInt(r.rows[0].count);
-}
-
-export async function firstFeatureTemporalFrequency(datasetId: string): Promise<number> {
-  const r = await db.execute<{ temporal_frequency: number }>(sql`
-    SELECT temporal_frequency FROM features
-    WHERE dataset_id = ${datasetId} LIMIT 1
-  `);
-  return r.rows[0].temporal_frequency;
 }
 
 // ─── test setup helpers ─────────────────────────────────────────────────────

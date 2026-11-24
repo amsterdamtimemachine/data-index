@@ -1,0 +1,344 @@
+import type {
+	Entity,
+	PersonEntity,
+	MediaObjectEntity,
+	CreativeWorkEntity,
+	ScreeningEventEntity,
+	ManuscriptEntity,
+	FeatureResult
+} from '@atm/shared/types';
+import { formatPartialDate, formatPeriod, formatNowKnownAs } from './format';
+import { SEARCH_MARK_START } from '@atm/shared/vocab';
+import { pickExcerpt } from './excerpts';
+import { translate } from './translations';
+
+/**
+ * One label:value row on a card, as text ready to print. `href` turns the value into
+ * a link, `labelHref` the label.
+ */
+export type FieldRow = { label: string; value: string; href?: string; labelHref?: string };
+
+const isPerson = (e: Entity): e is PersonEntity => e.type === 'Person';
+const isMedia = (e: Entity): e is MediaObjectEntity => e.type === 'MediaObject';
+const isCreativeWork = (e: Entity): e is CreativeWorkEntity => e.type === 'CreativeWork';
+// a programme of films at a venue
+const isProgramme = (e: Entity): e is ScreeningEventEntity => e.type === 'ScreeningEvent';
+const isManuscript = (e: Entity): e is ManuscriptEntity => e.type === 'Manuscript';
+
+/** A publication date worded at its precision; a start/end range worded as a period. */
+function formatPublished(date: string): string {
+	const [start, end] = date.split('/');
+	if (end) {
+		return formatPeriod(start, end);
+	}
+	return formatPartialDate(start);
+}
+
+/** An image's dating as the archive words it; else its dates, worded at their precision. */
+function imageDating(entity: MediaObjectEntity): string {
+	if (entity.dateText) {
+		return entity.dateText;
+	}
+	if (!entity.dateCreated) {
+		return translate('unknown');
+	}
+	const [start, end] = entity.dateCreated.split('/');
+	if (end) {
+		return formatPeriod(start, end);
+	}
+	return formatPartialDate(start);
+}
+
+/** A person's date worded at its precision, with the place after it: "20 april 1894, Amsterdam". */
+function withPlace(date?: string, place?: string): string {
+	if (!date) {
+		return translate('unknown');
+	}
+	if (!place) {
+		return formatPartialDate(date);
+	}
+	return `${formatPartialDate(date)}, ${place}`;
+}
+
+type CardFieldSpec = {
+	// a translate() key
+	label: string;
+	// formatted value; null hides the row
+	value: (entity: Entity) => string | null;
+	// a link for the value
+	href?: (entity: Entity) => string | undefined;
+	summary?: boolean; // also show on the collapsed card, not just the expanded detail
+};
+
+// a programme's venue; its date is in the relation line, its items the card's content (programmeRows)
+const PROGRAMME_FIELDS: CardFieldSpec[] = [
+	{
+		label: 'venue',
+		value: (e) => (isProgramme(e) ? e.location.name : null),
+		href: (e) => (isProgramme(e) ? e.location.url : undefined),
+		summary: true
+	}
+];
+
+/**
+ * The label:value fields each entity type exposes. This is the single place that
+ * decides which fields exist and where they show: flip `summary` to surface a field
+ * on the collapsed card, add an entry to introduce a new field. FieldList renders
+ * whatever the resolvers below return, so layout never needs touching.
+ */
+const CARD_FIELDS: Partial<Record<Entity['type'], CardFieldSpec[]>> = {
+	Person: [
+		{
+			label: 'born',
+			value: (e) => (isPerson(e) ? withPlace(e.birthDate, e.birthPlace) : null),
+			summary: true
+		},
+		{
+			label: 'died',
+			value: (e) => (isPerson(e) ? withPlace(e.deathDate, e.deathPlace) : null),
+			summary: true
+		}
+	],
+	// a text's date is the issue it appeared in
+	CreativeWork: [
+		{
+			label: 'published',
+			value: (e) => (isCreativeWork(e) && e.datePublished ? formatPublished(e.datePublished) : null)
+		}
+	],
+	MediaObject: [
+		{ label: 'dating', value: (e) => (isMedia(e) ? imageDating(e) : null) },
+		{ label: 'author', value: (e) => (isMedia(e) ? e.author || translate('unknown') : null) }
+	],
+	ScreeningEvent: PROGRAMME_FIELDS,
+	Manuscript: [
+		// the day, month or year the entry was written, as the annotators dated it
+		{
+			label: 'written',
+			value: (e) => (isManuscript(e) && e.dateCreated ? formatPartialDate(e.dateCreated) : null)
+		},
+		{
+			label: 'author',
+			value: (e) => (isManuscript(e) ? (e.author?.name ?? null) : null),
+			href: (e) => (isManuscript(e) ? e.author?.url : undefined),
+			summary: true
+		},
+		{
+			label: 'diary',
+			value: (e) => (isManuscript(e) ? (e.isPartOf?.name ?? null) : null),
+			href: (e) => (isManuscript(e) ? e.isPartOf?.url : undefined)
+		}
+	]
+};
+
+/** The labels of the fields the card can show for this entity type, collapsed or expanded. */
+export function cardFieldLabels(type: Entity['type']): string[] {
+	return (CARD_FIELDS[type] ?? []).map((spec) => spec.label);
+}
+
+// the entity's fields in their order, those `keep` says, as rows
+function fieldRows(
+	entity: Entity,
+	keep: (spec: CardFieldSpec, value: string) => boolean
+): FieldRow[] {
+	const fields: FieldRow[] = [];
+	for (const spec of CARD_FIELDS[entity.type] ?? []) {
+		const value = spec.value(entity);
+		if (value == null || !keep(spec, value)) continue;
+		const href = spec.href ? spec.href(entity) : undefined;
+		fields.push({ label: translate(spec.label), value, href });
+	}
+	return fields;
+}
+
+/** Entity fields to render for the given mode (collapsed keeps only `summary` fields). */
+export function resolveCardFields(entity: Entity, expanded: boolean): FieldRow[] {
+	return fieldRows(entity, (spec) => expanded || spec.summary === true);
+}
+
+/**
+ * The collapsed card's fields with a search on: its summary fields, and every row only
+ * the expanded card shows whose value the search marked, in the expanded order (a
+ * programme's items first, then its fields), so a match is never out of sight.
+ */
+export function collapsedFields(feature: FeatureResult): FieldRow[] {
+	const entity = feature.entity;
+	if (!entity) return [];
+	const joins = (value: string): boolean => value.includes(SEARCH_MARK_START);
+	const items = programmeRows(entity).filter((row) => joins(row.value));
+	const fields = fieldRows(entity, (spec, value) => spec.summary === true || joins(value));
+	return [...items, ...fields];
+}
+
+/** An entity's subtype as a translate() key, its most specific type; null without one. */
+export function entitySubtype(entity: Entity | undefined): string | null {
+	if (entity?.type === 'ScreeningEvent') {
+		return 'screening';
+	}
+	return null;
+}
+
+/**
+ * A heading for a programme of more than one film: "3 films op het programma". Null
+ * for a single film, which the title already names.
+ */
+export function programmeHeading(entity: Entity | undefined): string | null {
+	if (!entity || !isProgramme(entity) || entity.items.length < 2) {
+		return null;
+	}
+	return `${entity.items.length} ${translate('filmMany')} ${translate('onTheProgramme')}`;
+}
+
+/** A programme's films as rows in the source's order, each linked to its page. */
+export function programmeRows(entity: Entity | undefined): FieldRow[] {
+	if (!entity || !isProgramme(entity)) {
+		return [];
+	}
+	return entity.items.map((item) => ({
+		label: translate('film'),
+		value: item.name,
+		href: item.url
+	}));
+}
+
+/** The feature's most specific type: its subtype where it has one ("Filmvertoning"), else its record type ("Afbeelding"). */
+export function typeLabel(feature: FeatureResult): string {
+	const subtype = entitySubtype(feature.entity);
+	if (subtype) {
+		return translate(subtype);
+	}
+	return translate(feature.recordType);
+}
+
+/**
+ * The line under a card's title, in parts so the place can be a link: the type, how
+ * the feature relates to its place, the place's name as it was then (linked to the
+ * place's own record) with today's name after it when they differ, and the date when
+ * it belongs to the relation. "Filmvertoning • Vertoond op Ceintuurbaan 338, 5 januari 1934"
+ */
+export type RelationLine = {
+	type: string;
+	relation?: string;
+	place?: string;
+	placeHref?: string;
+	// " (nu Dam)", when the name shown is an old one
+	now?: string;
+	// ", 5 januari 1934", when the date belongs to the relation
+	date?: string;
+};
+
+// A BAG address links to the BAG viewer: the identifier the source gives
+// (bag.basisregistraties.overheid.nl/bag/id/…) serves data, but its page for
+// browsers is gone. Other places link where their source points.
+const BAG_PLACE_PREFIX = 'bag-';
+const BAG_VIEWER = 'https://bagviewer.kadaster.nl/lvbag/bag-viewer/#?searchQuery=';
+
+function placeHref(feature: FeatureResult): string | undefined {
+	if (feature.placeSource === 'bag' && feature.placeId?.startsWith(BAG_PLACE_PREFIX)) {
+		return `${BAG_VIEWER}${feature.placeId.slice(BAG_PLACE_PREFIX.length)}`;
+	}
+	return feature.placeUrl;
+}
+
+export function relationLine(feature: FeatureResult): RelationLine {
+	const line: RelationLine = { type: typeLabel(feature) };
+	if (feature.relationId) {
+		line.relation = translate(feature.relationId);
+	}
+	const placeName = feature.historicalLabel || feature.displayName;
+	if (placeName) {
+		line.place = placeName;
+		line.placeHref = placeHref(feature);
+	}
+	if (
+		feature.historicalLabel &&
+		feature.displayName &&
+		feature.historicalLabel !== feature.displayName
+	) {
+		line.now = ` ${formatNowKnownAs(feature.displayName)}`;
+	}
+	if (feature.relationDated && feature.startDate && feature.endDate) {
+		line.date = `, ${formatPeriod(feature.startDate, feature.endDate)}`;
+	}
+	return line;
+}
+
+/**
+ * Where the feature comes from, below its dataset link at the card's top left: its
+ * provider when that is someone else than the dataset; who provides the place, and
+ * the line when another provider drew it; last, the classifier models behind its
+ * tags. Detail only.
+ */
+export function dataSourceFields(feature: FeatureResult, expanded: boolean): FieldRow[] {
+	if (!expanded) return [];
+	const rows: FieldRow[] = [];
+	if (feature.providerLabel && feature.providerLabel !== feature.datasetLabel) {
+		rows.push({
+			label: translate('dataProvider'),
+			value: feature.providerLabel,
+			href: feature.providerUrl
+		});
+	}
+	if (feature.placeProviderLabel) {
+		rows.push({
+			label: translate('placeDataProvider'),
+			value: feature.placeProviderLabel,
+			href: feature.placeProviderUrl
+		});
+	}
+	if (feature.geometryProviderLabel) {
+		rows.push({
+			label: translate('geometryProvider'),
+			value: feature.geometryProviderLabel,
+			href: feature.geometryProviderUrl
+		});
+	}
+	if (feature.datasetDistributionUrl) {
+		rows.push({
+			label: translate('fullDataset'),
+			value: new URL(feature.datasetDistributionUrl).host,
+			href: feature.datasetDistributionUrl
+		});
+	}
+	for (const classifier of feature.classifiers ?? []) {
+		rows.push({ label: translate('classifier'), value: classifier.label, href: classifier.url });
+	}
+	return rows;
+}
+
+/**
+ * What a card shows as its content, by entity type: a picture, a programme's items,
+ * a story's excerpt, or the description alone. The one place that maps a type to a
+ * kind; FeatureCardContent renders the kind.
+ */
+export type ContentKind = 'picture' | 'programme' | 'story' | 'text';
+
+const CONTENT_KIND: Record<Entity['type'], ContentKind> = {
+	MediaObject: 'picture',
+	ScreeningEvent: 'programme',
+	Manuscript: 'story',
+	Person: 'text',
+	CreativeWork: 'text'
+};
+
+export function contentKind(entity: Entity | undefined): ContentKind {
+	if (!entity) {
+		return 'text';
+	}
+	return CONTENT_KIND[entity.type];
+}
+
+/** Whether the expanded card's content scrolls: a programme's items or a story's text do; a picture shrinks to the room instead. */
+export function scrollingContent(feature: FeatureResult, expanded: boolean): boolean {
+	if (!expanded || !feature.entity) {
+		return false;
+	}
+	const kind = contentKind(feature.entity);
+	if (kind === 'programme') {
+		return programmeRows(feature.entity).length > 0;
+	}
+	if (kind === 'story' && isManuscript(feature.entity)) {
+		return pickExcerpt(feature.entity, feature.placeId) !== null;
+	}
+	return false;
+}

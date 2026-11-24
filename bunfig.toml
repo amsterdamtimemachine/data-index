@@ -1,0 +1,3 @@
+# `bun test` runs the db package only; the app's tests are vitest (bun run test → turbo).
+[test]
+root = "packages/db"

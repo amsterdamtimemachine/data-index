@@ -1,0 +1,257 @@
+import { upsertSource, createFeatureWriter, type SourceRelation } from '../writers/feature-writer';
+import { featureUuid } from '../util/ids';
+import { NewFeature } from '../../schema';
+import { createEntityFactory, EntityFactory } from './entity-factory';
+import { EntityBase, RecordType } from '@atm/shared';
+import { FileReader } from './file-reader';
+import { sql, type SQL } from 'drizzle-orm';
+import { db } from '../../client';
+import type { CountRow } from '../../row-types';
+import { LIFESPAN_TYPES } from '../places/place-candidates';
+import { DateRange, ExtractionArgs, PlaceIndex, Resolved, SkipReason } from '../places/place-index';
+
+export type Draft = Omit<NewFeature, 'recordType' | 'datasetId'>
+
+// How many rows resolve their place at the same time. The lookups wait on the database
+// more than they compute, so several at once pay off on a machine with cores to spare;
+// on a single core set INGEST_CONCURRENCY=1. Kept under the connection pool's size.
+const MAX_CONCURRENCY = 10;
+const CONCURRENCY = Math.min(Math.max(parseInt(process.env.INGEST_CONCURRENCY ?? '8', 10) || 8, 1), MAX_CONCURRENCY);
+
+/**
+ * Abstract class used for ingesting datasets. Use as follows:
+ * 1. Create new file, create a new exportable class extending this Ingestor-class
+ * 2. Create a data-interface object corresponding to the structure of an object in the dataset
+ *   2.1 Place the data-interface object as type-argument in the extension (between <>)
+ * 3. Defined all required abstract propterties
+ * 4. Implement the abstract-transform method, mapping the data-interface object to a more db-ready object
+ * 5. Define & export a ingest(filePath: string) function (call the ingest func in it) at the end of the file
+ */
+export abstract class Ingestor<SourceRecord extends Record<string, unknown>> {
+    protected BATCH_SIZE = 1000;
+
+    protected abstract ORG_ID: string; // Example: 'my-org';
+    protected abstract ORG_LABEL: string; // Example: 'My Organization';
+    protected abstract ORG_URL: string; // Example: 'https://org-url.com';
+
+
+    protected abstract DATASET_ID: string; // Example: 'my-dataset';
+    protected abstract DATASET_LABEL: string; // Example: 'My Dataset';
+    protected abstract DATASET_URL: string; // Example: 'https://dataset-url.com';
+    // the whole dataset as a download, when one is public (e.g. a Zenodo record)
+    protected DATASET_DISTRIBUTION_URL?: string;
+
+    protected abstract RECORD_TYPE: RecordType; // Possible values: 'image' | 'text' | 'person'
+    protected abstract RELATION_ID: string; // Example: 'isAbout';
+    protected abstract RELATION_LABEL: string; // Example: 'Is About';
+
+    protected abstract PLACE_EXTRACTION_METHODS: ExtractionArgs<SourceRecord>;
+
+    protected abstract transform(source: SourceRecord): Draft | undefined;
+
+    /**
+     * The entity factory for this source: by default the one the record type maps to.
+     * A source whose entity shape is its own (a screening under the event type) overrides this.
+     */
+    protected entityFactory(): EntityFactory<EntityBase> {
+        return createEntityFactory(this.RECORD_TYPE)
+    }
+
+    /** Every relation this source links with; by default its one relation. */
+    protected relations(): SourceRelation[] {
+        return [{ id: this.RELATION_ID, label: this.RELATION_LABEL }]
+    }
+
+    /** The relation a record's place link takes; by default the source's one relation. */
+    protected relationFor(_source: SourceRecord): string {
+        return this.RELATION_ID
+    }
+
+    protected pi: PlaceIndex<SourceRecord> | undefined;
+    protected ef: EntityFactory<EntityBase> | undefined;
+    protected fr: FileReader<SourceRecord> | undefined;
+    // created in init, before any record is written
+    protected writer!: ReturnType<typeof createFeatureWriter>;
+
+    /**
+     * Appends the metadata of the (concrete) class to the database
+     */
+    private async upsertDatasource() {
+        await upsertSource({
+            provider: { id: this.ORG_ID, label: this.ORG_LABEL, url: this.ORG_URL },
+            dataset: { id: this.DATASET_ID, label: this.DATASET_LABEL, url: this.DATASET_URL, distributionUrl: this.DATASET_DISTRIBUTION_URL },
+            relations: this.relations(),
+        })
+    }
+
+    /**
+     * Extract the place from a source-record. 
+     * @param source 
+     * @param draft necessary to extract the dates from the object. 
+     * @returns place_id of place found within SourceRecord
+     */
+    protected async extractPlace(source: SourceRecord, draft: Draft) {
+        const dateRange = { start: draft.startDate, end: draft.endDate } as DateRange
+        return this.pi!.extract(source, dateRange)
+    }
+
+    /**
+     * Maps the draft & entity to a complete NewFeature-object ready for database ingestion
+     * @param feature 
+     * @param entity 
+     * @returns Database-ready NewFeature-object
+     */
+    protected constructFeature(feature: Draft, entity: EntityBase): NewFeature {
+        return {
+            ...feature,
+            id: featureUuid(this.DATASET_ID, feature.id),
+            datasetId: this.DATASET_ID,
+            recordType: this.RECORD_TYPE,
+            entity: entity
+        } as NewFeature
+    }
+
+    /**
+     * First transforms a SourceRecord to a Draft (temp object), then extracts place & creates corresponding entity. At last, construct db-ready feature-object
+     * @param source 
+     * @returns array containing the feature-object and corresponding place_id
+     */
+    protected async sourceToFeature(source: SourceRecord): Promise<[NewFeature | undefined, Resolved | undefined]> {
+        const draft: Draft | undefined = this.transform(source)
+
+        if (!draft) { return [undefined, undefined] }
+
+        const resolved = await this.extractPlace(source, draft)
+        const entity: EntityBase = this.ef!.create(draft, new Map<string, unknown>(Object.entries(source as object)))
+        const feature = this.constructFeature(draft, entity) as NewFeature
+
+        return [feature, resolved]
+    }
+
+    /**
+     * Loops over the provided sourcerecords, transforming them to (db-ready) features, and writing them to the database
+     * @param sources asynciterable of source-records. Can be obtained using the FileReader-class
+     */
+    protected async ingestSourceRecords(sources: AsyncIterable<SourceRecord>) {
+        const fMap = new Map<string, Set<string>>();
+
+        const skips: Record<SkipReason, number> = { ambiguous: 0, 'cap-miss': 0, undated: 0, 'no-match': 0 }
+        let noData = 0   // transform produced no draft
+        let errors = 0
+
+        // a row's failure is the row's, not the run's
+        const resolveRow = async (source: SourceRecord) => {
+            try {
+                return { source, row: await this.sourceToFeature(source) }
+            } catch (error) {
+                return { source, error }
+            }
+        }
+
+        // the rows of a chunk resolve together, then are counted and written in the file's order
+        const settle = async (chunk: SourceRecord[]) => {
+            for (const { source, row, error } of await Promise.all(chunk.map(resolveRow))) {
+                if (!row) {
+                    console.error(`Failed to process row: ${JSON.stringify(source).slice(0, 200)}:`, error)
+                    errors++
+                    continue
+                }
+                const [feature, resolved] = row
+                if (!feature || !resolved) { noData++; continue }
+                if ('skip' in resolved) { skips[resolved.skip]++; continue }
+
+                const placeId = resolved.placeId
+                if (!fMap.has(feature.id)) {
+                    this.writer.addFeature(feature)
+                    fMap.set(feature.id, new Set<string>())
+                }
+
+                if (!fMap.get(feature.id)!.has(placeId)) {
+                    this.writer.addLink({ featureId: feature.id, placeId, relationId: this.relationFor(source) })
+                    fMap.get(feature.id)?.add(placeId)
+                }
+            }
+            await this.writer.flushIfFull()
+        }
+
+        let chunk: SourceRecord[] = []
+        for await (const source of sources) {
+            chunk.push(source)
+            if (chunk.length >= CONCURRENCY) {
+                await settle(chunk)
+                chunk = []
+            }
+        }
+        await settle(chunk)
+
+        await this.writer.flush()
+        const skipped = skips.ambiguous + skips['cap-miss'] + skips.undated + skips['no-match'] + noData + errors
+        console.log(`\nDone: ${fMap.size} features linked, ${skipped} skipped`)
+        let tail = ''
+        if (noData) {
+            tail += `; no-data ${noData}`
+        }
+        if (errors) {
+            tail += `; errors ${errors}`
+        }
+        console.log(`  unresolved — no-match ${skips['no-match']}, ambiguous ${skips.ambiguous}, cap-miss ${skips['cap-miss']}, undated ${skips.undated}${tail}`)
+        const outOfPeriod = await countOutOfPeriodLinks(this.DATASET_ID)
+        console.log(`  out of period — ${outOfPeriod} links to a place that did not exist at the feature's date`)
+    }
+
+    /**
+     * function called by ingestion-script(s). It creates the necessary sub-classes, reads the data-file, & calls ingestions of the records
+     * @param filePath 
+     * @returns -
+     */
+    public async ingest(filePath: string) {
+        await requireInIndex(
+            sql`SELECT COUNT(*) AS count FROM place`,
+            'ingest the place layers first: the index holds no place a feature could link to'
+        )
+        await this.upsertDatasource();
+
+        this.pi = await PlaceIndex.create(this.PLACE_EXTRACTION_METHODS)
+        this.ef = this.entityFactory()
+        this.writer = createFeatureWriter(this.BATCH_SIZE)
+        this.fr = new FileReader()
+
+        const fileStream = this.fr.createFileReadStream(filePath)
+        if (!fileStream) { console.log('Failed to load & parse file to correct format.'); return; }
+        
+        await this.ingestSourceRecords(fileStream)
+    }
+}
+
+/**
+ * What a source needs in the index before it can run, checked first so a wrong order
+ * stops with the command to run instead of failing mid-batch or linking nothing.
+ * `count` is a query returning one `count`; zero is the missing prerequisite.
+ */
+export async function requireInIndex(count: SQL, message: string): Promise<void> {
+    const result = await db.execute<CountRow>(count)
+    if (parseInt(result.rows[0].count) === 0) {
+        throw new Error(message)
+    }
+}
+
+/**
+ * Links a dataset holds to a place that did not exist at the feature's date: the
+ * source and the place data disagree about when the place existed. Counted for the
+ * ingest summary and never acted on; the source's link stands. Only lifespan types
+ * count (PLACE_TYPE_SPECS): an address has no period of its own, and an area's dates
+ * are a version's, which the resolver itself may pick out of period.
+ */
+export async function countOutOfPeriodLinks(datasetId: string): Promise<number> {
+    // until is exclusive, as place_geometry records it
+    const result = await db.execute<CountRow>(sql`
+        SELECT COUNT(*) AS count
+        FROM feature_to_place fp
+        JOIN features f ON f.id = fp.feature_id
+        JOIN place p ON p.id = fp.place_id
+        JOIN place_geometry pg ON pg.place_id = fp.place_id
+        WHERE f.dataset_id = ${datasetId} AND p.type IN ${LIFESPAN_TYPES}
+          AND (pg.since > f.end_date OR pg.until <= f.start_date)
+    `)
+    return parseInt(result.rows[0].count)
+}

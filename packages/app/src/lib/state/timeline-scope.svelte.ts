@@ -1,0 +1,202 @@
+/**
+ * The timeline's scope: the whole city, or the panel subject (a cell or a place).
+ * Owns the subject series, their fetching and loading state, and the desktop switch
+ * between the two; the page only describes the subject.
+ */
+import type { Histogram, HeatmapCellBounds } from '@atm/shared/types';
+import { translate } from '#lib/utils/translations.js';
+import { apiUrl } from '#lib/utils/api.js';
+import { fetchJson } from '#lib/utils/fetchJson.js';
+import { EMPTY_HISTOGRAM } from '#lib/utils/empty-data.js';
+
+// read lazily, so an effect tracks only the fields it uses
+export type TimelineScopeInputs = {
+	isMobile: boolean;
+	// mobile: the open cell modal or place panel is the switch
+	cellModalOpen: boolean;
+	placePanelOpen: boolean;
+	// the open place, named as the panel names it; null without one
+	placeTitle: string | null;
+	// the subjects' series are fetched from these: the selected cell's bounds, the
+	// open place's id, and the filter params every fetch inherits; null params mean
+	// there is nothing to fetch (a category is empty)
+	cellBounds: HeatmapCellBounds | null;
+	placeId: string | null;
+	params: string | null;
+};
+
+export type Fetcher = typeof fetchJson;
+
+/** One subject's series with its request bookkeeping. */
+function createSubjectSeries() {
+	let series = $state<Histogram | null>(null);
+	let loading = $state(false);
+	// an aborted request settles after its successor started; only the latest clears
+	let latest = 0;
+
+	function request(): { loaded: (h: Histogram) => void; settled: () => void } {
+		series = null;
+		loading = true;
+		const id = ++latest;
+		return {
+			loaded(h: Histogram) {
+				series = h;
+			},
+			settled() {
+				if (id === latest) {
+					loading = false;
+				}
+			}
+		};
+	}
+
+	function clear() {
+		series = null;
+		loading = false;
+		++latest;
+	}
+
+	return {
+		get series() {
+			if (!series || series.bins.length === 0) {
+				return null;
+			}
+			return series;
+		},
+		get loading() {
+			return loading;
+		},
+		request,
+		clear
+	};
+}
+
+export function createTimelineScope(inputs: TimelineScopeInputs, fetcher: Fetcher = fetchJson) {
+	const cell = createSubjectSeries();
+	const place = createSubjectSeries();
+	// the desktop switch; off by default, so selecting never flips the view by itself
+	let switchOn = $state(false);
+
+	// the subject's series: the open place's, else the cell's
+	const series = $derived.by(() => {
+		if (inputs.placePanelOpen) {
+			return place.series;
+		}
+		return cell.series;
+	});
+	const pending = $derived(cell.loading || place.loading);
+	const available = $derived(series !== null || pending);
+
+	const showsLocal = $derived.by(() => {
+		if (inputs.isMobile) {
+			return inputs.cellModalOpen || inputs.placePanelOpen;
+		}
+		return switchOn;
+	});
+
+	// what the timeline gets: nothing (city-wide), the subject's series, or the empty band
+	const histogram = $derived.by(() => {
+		if (!showsLocal) {
+			return null;
+		}
+		if (series) {
+			return series;
+		}
+		if (pending) {
+			return EMPTY_HISTOGRAM;
+		}
+		return null;
+	});
+
+	const label = $derived.by(() => {
+		if (inputs.placePanelOpen && inputs.placeTitle) {
+			return `${translate('timelineOf')} ${inputs.placeTitle}`;
+		}
+		return translate('timelineOfCell');
+	});
+
+	function toggle() {
+		switchOn = !switchOn;
+	}
+
+	// losing the last subject ends the local view: the next selection starts city-wide
+	function resetIfIdle() {
+		if (!available) {
+			switchOn = false;
+		}
+	}
+
+	// one request per subject, its series cleared up front so a switch never shows
+	// the previous subject's bars; a failed request silently leaves the city-wide view
+	function fetchSeries(subject: ReturnType<typeof createSubjectSeries>, query: URLSearchParams) {
+		const request = subject.request();
+		return fetcher<Histogram>(
+			apiUrl('/api/histogram', query),
+			request.loaded,
+			() => {},
+			() => {
+				request.settled();
+				resetIfIdle();
+			}
+		);
+	}
+
+	$effect(() => {
+		const bounds = inputs.cellBounds;
+		const params = inputs.params;
+		if (!bounds || params === null) {
+			cell.clear();
+			resetIfIdle();
+			return;
+		}
+		const query = new URLSearchParams(params);
+		query.set('minLon', String(bounds.minLon));
+		query.set('maxLon', String(bounds.maxLon));
+		query.set('minLat', String(bounds.minLat));
+		query.set('maxLat', String(bounds.maxLat));
+		return fetchSeries(cell, query);
+	});
+
+	$effect(() => {
+		const placeId = inputs.placeId;
+		const params = inputs.params;
+		if (!placeId || params === null) {
+			place.clear();
+			resetIfIdle();
+			return;
+		}
+		const query = new URLSearchParams(params);
+		query.set('placeId', placeId);
+		return fetchSeries(place, query);
+	});
+
+	return {
+		get histogram() {
+			return histogram;
+		},
+		/** the subject's series regardless of the switch: the hover's selection count under the city-wide bars */
+		get subjectSeries() {
+			return series;
+		},
+		get label() {
+			return label;
+		},
+		get available() {
+			return available;
+		},
+		get switchOn() {
+			return switchOn;
+		},
+		/** whether the band shows the subject's series: the filter counts follow the same scope */
+		get showsLocal() {
+			return showsLocal;
+		},
+		/** the switch handler for the timeline; absent on mobile, where the modal decides */
+		get onToggle() {
+			if (inputs.isMobile) {
+				return undefined;
+			}
+			return toggle;
+		}
+	};
+}

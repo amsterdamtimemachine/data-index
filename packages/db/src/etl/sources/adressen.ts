@@ -18,9 +18,14 @@ import { readFileSync } from 'fs';
 import { Parser } from 'n3';
 import { sql } from 'drizzle-orm';
 import { db } from '../../client';
-import { createNameWriter } from '../helpers';
+import { createNameWriter } from '../writers/place-writer';
+import { requireInIndex } from '../ingest/ingestor';
 
 export async function ingest(filePath: string) {
+  await requireInIndex(
+    sql`SELECT COUNT(*) AS count FROM place WHERE id LIKE 'https://adamlink.nl/geo/lp/%'`,
+    'ingest lps first: the adressen name the LPS points, which the index does not hold yet'
+  );
   console.log(`Parsing ${filePath}...`);
   const quads = new Parser().parse(readFileSync(filePath, 'utf8'));
 
@@ -62,7 +67,10 @@ export async function ingest(filePath: string) {
     const since = preds.find(p => p.predicate.endsWith('hasEarliestBeginTimeStamp'))?.object || null;
     const until = preds.find(p => p.predicate.endsWith('hasLatestEndTimeStamp'))?.object || null;
     const sourceRef = preds.find(p => p.predicate.endsWith('documentedIn'))?.object;
-    const source = sourceRef ? (sourceLabels.get(sourceRef) ?? sourceRef.split('/geo/source/')[1]) : null;
+    let source: string | null = null;
+    if (sourceRef) {
+      source = sourceLabels.get(sourceRef) ?? sourceRef.split('/geo/source/')[1];
+    }
 
     names.add({ id: subj, placeId, name, since, until, source });
     await names.flushIfFull();
@@ -72,7 +80,8 @@ export async function ingest(filePath: string) {
 
   console.log(`Inserted ${written} place names (${skipped} skipped: LP place not found)`);
 
-  // Set place.name to the most recent named entry per place.
+  // Set place.name to the most recent observation per address; a street's undated
+  // name rows are aliases and its name stays the straten ingest's preferred label.
   console.log('Updating place names...');
   const result = await db.execute(sql`
     UPDATE place SET name = sub.name
@@ -82,7 +91,7 @@ export async function ingest(filePath: string) {
       WHERE name IS NOT NULL
       ORDER BY place_id, since DESC
     ) sub
-    WHERE place.id = sub.place_id
+    WHERE place.id = sub.place_id AND place.type = 'address'
   `);
   console.log(`Done: ${written} names, ${result.rowCount} place names updated`);
 }

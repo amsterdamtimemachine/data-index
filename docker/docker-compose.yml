@@ -28,11 +28,7 @@ services:
     networks:
       - atm-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/metadata"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    # health check: the image's own, which includes the base path
 
 networks:
   atm-network:

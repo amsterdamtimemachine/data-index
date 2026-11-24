@@ -4,7 +4,7 @@
 
 The Amsterdam Time Machine [Data Index](https://data.amsterdamtimemachine.nl) provides location-based access to historical information about Amsterdam across centuries. It serves as a unified entry point to heritage collections from multiple Amsterdam and national institutions, connecting digitised sources through place and time.
 
-The interface overlays Amsterdam with a spatial heatmap grid and a timeline spanning the 17th century to the present in configurable periods. Each grid cell shows the density of available data for that area and time period. Clicking a cell reveals the available images, texts, and person records from that neighbourhood. All results link directly to the original source at the holding institution.
+The interface overlays Amsterdam with a spatial heatmap grid and a timeline spanning the 16th century to the present in configurable periods. Each grid cell shows the density of available data for that area and time period. Clicking a cell reveals the available images, texts, and person records from that neighbourhood, and the timeline can be switched to show that cell's or place's own distribution instead of the city-wide one. All results link directly to the original source at the holding institution.
 
 Rather than curating or contextualising the data, the index presents sources as they are, including any OCR errors or metadata gaps. This makes visible not only what is documented but also what is missing, inviting critical reflection on digitisation practices and historical documentation.
 
@@ -22,6 +22,9 @@ Rather than curating or contextualising the data, the index presents sources as 
     - [Place names at query time](#place-names-at-query-time)
   - [Temporal indexing](#temporal-indexing)
   - [Unique features rank higher](#unique-features-rank-higher)
+  - [Feature sorting](#feature-sorting)
+  - [Place search](#place-search)
+  - [Text search](#text-search)
 - [Dating](#dating)
   - [Feature dates](#feature-dates)
   - [Place dates](#place-dates)
@@ -29,6 +32,7 @@ Rather than curating or contextualising the data, the index presents sources as 
   - [Dates sources](#dates-sources)
   - [Dates resolution](#dates-resolution)
 - [Data ingestion](#data-ingestion)
+  - [Getting the data](#getting-the-data)
   - [Place data ingestion](#place-data-ingestion)
     - [Place datasets](#place-datasets)
   - [Minimum required fields per feature](#minimum-required-fields-per-feature)
@@ -39,12 +43,14 @@ Rather than curating or contextualising the data, the index presents sources as 
   - [Prerequisites](#prerequisites)
   - [First time setup](#first-time-setup)
   - [Database UI](#database-ui)
+  - [URLs and the base path](#urls-and-the-base-path)
   - [Testing](#testing)
 - [Production](#production)
   - [Self-hosted setup](#self-hosted-setup)
   - [Existing Postgres setup](#existing-postgres-setup)
   - [Deploying a new image](#deploying-a-new-image)
   - [Adding a second deployment on the same host](#adding-a-second-deployment-on-the-same-host)
+  - [Serving under a path prefix](#serving-under-a-path-prefix)
   - [Environment variables](#environment-variables)
 
 ## Stack
@@ -52,7 +58,7 @@ Rather than curating or contextualising the data, the index presents sources as 
 ```
 packages/
   shared/       TypeScript types and configuration
-  db/           PostgreSQL 16 + PostGIS 3.4, Drizzle ORM, ETL scripts
+  db/           PostgreSQL 16 + PostGIS, Drizzle ORM, ETL scripts
   app/          SvelteKit 5, MapLibre GL, TailwindCSS
 ```
 
@@ -62,8 +68,9 @@ Runtime: Bun. Infrastructure: Docker Compose. Map tiles: OpenFreeMap.
 
 ```mermaid
 erDiagram
-    organisations {
+    agents {
         text id PK "e.g. stadsarchief"
+        text kind  "Organization | SoftwareAgent | Person"
         text label  "e.g. Amsterdam Stadsarchief"
         text description  "e.g. Amsterdam city archives"
         text url  "e.g. https://archief.amsterdam"
@@ -74,26 +81,32 @@ erDiagram
         text label  "e.g. Beeldbank"
         text description  "e.g. Historical image archive"
         text url  "e.g. https://archief.amsterdam/beeldbank"
-        text organisation_id FK "e.g. stadsarchief"
+        text distribution_url  "the whole dataset as a download, e.g. a Zenodo record"
+        text provider_id FK "e.g. stadsarchief"
     }
 
     place {
-        text id PK "e.g. lp-1000001"
-        text type  "address | street | neighbourhood | district"
+        text id PK "e.g. https://adamlink.nl/geo/lp/1000001"
+        text type  "address | building | street | neighbourhood | district"
         text name  "e.g. Prins Hendrikkade 93"
+        text source FK "provider org: adamlink | cbs | nwb | bag"
+        text url  "link to the origin record"
     }
 
     place_geometry {
-        text place_id PK "e.g. lp-1000001"
+        text place_id PK "e.g. https://adamlink.nl/geo/lp/1000001"
         geometry geometry  "POINT, LINESTRING, or POLYGON"
         integer spatial_frequency  "e.g. 47 # cells spanned"
+        text source  "geometry provider when it differs from place.source (e.g. nwb); null = same"
+        text url  "link to the geometry's source record; null = same as place.url"
         date since  "neighbourhood/district era start; null for address/street"
         date until  "era end; null = open/current"
+        text building_id  "BAG building (pand) an address stands in, as its source states; null otherwise"
     }
 
     place_historical_name {
         text id PK "e.g. https://adamlink.nl/geo/address/A1"
-        text place_id FK "e.g. lp-1000001"
+        text place_id FK "e.g. https://adamlink.nl/geo/lp/1000001"
         text name  "e.g. Prins Hendrikkade 93"
         date since  "e.g. 1943-01-01"
         date until  "e.g. 1976-01-01"
@@ -103,11 +116,12 @@ erDiagram
     relation {
         text id PK "e.g. isAbout"
         text label  "e.g. Is About"
+        boolean dated  "the feature's date belongs to the relation, e.g. screenedAt"
     }
 
     tags {
-        text id PK "e.g. nature"
-        text label  "e.g. Nature"
+        text id PK "classifier key, e.g. bridge_canal"
+        text label  "e.g. bridge canal # the app translates by id"
     }
 
     feature_to_place {
@@ -119,6 +133,12 @@ erDiagram
     feature_tags {
         uuid feature_id FK "links to features"
         text tag_id FK "links to tags"
+        text source FK "classifier model, e.g. google/siglip2-base-patch16-224 # unique with feature_id + tag_id"
+    }
+
+    tag_features {
+        text tag_id PK "links to tags"
+        roaringbitmap feature_ids  "feature_int_id set over every tagger # rebuilt by rebuild-index"
     }
 
     place_cells {
@@ -149,25 +169,26 @@ erDiagram
         real max_lon
         real min_lat
         real max_lat
-        integer max_spatial_frequency  "relevance normaliser"
-        integer max_temporal_frequency  "relevance normaliser"
     }
 
     features {
         uuid id PK "generated UUID"
         text url  "e.g. https://archief.amsterdam/beeldbank/detail/00007c22-..."
-        text record_type  "image | text | person"
+        text record_type  "image | text | person | event | story"
         text label  "e.g. Rosendaalstraat 91-97"
         text description  "e.g. Photo of street corner"
         text content_url  "e.g. https://images.memorix.nl/..."
         date start_date  "e.g. 1948-09-01 (histogram placement)"
         date end_date  "e.g. 1948-09-30 (histogram placement)"
         text dataset_id FK "e.g. stadsarchief-beeldbank"
-        integer temporal_frequency  "e.g. 2 # base time bins spanned"
-        jsonb entity  "e.g. Person | CreativeWork | MediaObject"
+        jsonb entity  "e.g. Person | CreativeWork | MediaObject | ScreeningEvent | Manuscript"
+        integer feature_int_id  "identity # the surrogate the bitmaps store"
+        tsvector search_tsv "generated: title, description, searchable entity fields # words as written, kept current by rebuild-index"
     }
 
-    organisations||--o{datasets:"has datasets"
+    agents||--o{datasets:"provides"
+    agents||--o{place:"provides geometry"
+    agents||--o{feature_tags:"classified"
     datasets||--o{features:"has"
     place||--||place_geometry:"has geometry"
     place||--o{place_historical_name:"has historical names"
@@ -177,20 +198,24 @@ erDiagram
     relation||--o{feature_to_place:"describes"
     features||--o{feature_tags:"tagged"
     tags||--o{feature_tags:"links"
+    tags||--||tag_features:"rolled up into"
+    features||..o{tag_features:"counted in"
     place_cells||..o{cell_features:"rolled up into"
     features||..o{cell_features:"counted in"
 ```
 
-- **organisations**: Institutions that provide datasets
-- **datasets**: Data collections from organisations
-- **place**: Physical location identity (id, type, name)
+- **agents**: Who produced data, after PROV: an `Organization` that provides a dataset (`datasets.provider_id`) or place geometry (`place.source`), or a `SoftwareAgent`, a classifier model that produced tags (`feature_tags.source`). The `kind` column tells them apart; nothing lists agents directly, they are reached through what they produced
+- **datasets**: Data collections, each from a provider agent, loosely after Schema.org's `Dataset`: `url` is the collection's site, `distribution_url` the whole dataset as a download when the source offers one (a Zenodo record for the diaries), shown on the card as Volledige dataset
+- **place**: Physical location identity (id, type, name); `source` is the provider agent
 - **place_geometry**: A place's geometry (RD / EPSG:28992) and the period it was valid (1:1 with place)
-- **place_historical_name**: Dated past names linked to places (addresses, streets), used to show what a location was called at a given time
-- **tags**: Thematic categories (e.g. Nature, Transport, Living) assigned to features. Work in progress, generated via AI classification across datasets
-- **features**: Images, texts, persons, or other content items linked to places and displayed in the UI
+- **place_historical_name**: Dated past names linked to places (addresses, streets), used to show what a location was called at a given time. Undated Adamlink name variants (spelling variants, abbreviations, old names without a date) are kept too, as rows without a `since` or `until`: a row with a period is an observation of what the place was called then, a row without one is a label. The place search finds labels and shows the current name in brackets after them, while feature-to-place resolution and name canonicalisation consider dated rows only
+- **tags**: Classifier vocabulary, keyed by the classifier's own labels (e.g. `bridge_canal`); the app shows them in Dutch by id. Assigned to features through `feature_tags`, one row per feature, tag and tagger run (`source`). For now only images carry tags
+- **features**: Images, texts, persons, events and stories linked to places and displayed in the UI.
+- **relation** / **feature_to_place**: How a feature relates to a place, one row per link. Each source names its relation: an article or an image `isAbout` an address, a cinema programme is `screenedAt` its venue's address, a Joods Monument person `hadLastLivingLocation`. The card words the relation before the place name through the app's translation map
 - **place_cells**: Pre-computed spatial grid that powers the heatmap. Each place is mapped to the 100m cells its geometry covers (one cell for a point, many for a street or neighbourhood). Features inherit cell coverage through their place link, cell assignments are stored once per place rather than duplicated per feature.
-- **cell_features**: Which features occupy each cell, base time bin and category — the cell-major counterpart of `place_cells`, written by `rebuild-index`. It materialises the `features → feature_to_place → place → place_cells` hop plus the time bin, so the heatmap and histogram read one table instead of re-running that join per request. Each bucket holds its feature set as a **roaring bitmap** rather than a count: merging buckets is then a set union, which de-duplicates a feature spanning several cells or place types, so base cells can be rolled up into *any* display grid and still yield an exact distinct count. The bitmap stores a dense integer surrogate assigned during the rebuild (roaringbitmap holds int4; `features.id` is a 128-bit uuid) — only cardinality is ever read back, never identity, so the mapping is discarded.
-- **grid_config**: Single row (`id = 'current'`) of grid metadata written by `rebuild-index`: the RD/28992 grid origin (`min_x`, `min_y`), the base-cell index extent, the WGS84 bounds of the cell grid, and the max spatial/temporal frequencies used to normalise relevance. Read once per heatmap/feature request.
+- **cell_features**: Which features occupy each cell, base time bin and category — the cell-major counterpart of `place_cells`, written by `rebuild-index`. It materialises the `features → feature_to_place → place → place_cells` hop plus the time bin, so the heatmap and histogram read one table instead of re-running that join per request. Each bucket holds its feature set as a **roaring bitmap** rather than a count: merging buckets is then a set union, which de-duplicates a feature spanning several cells or place types, so base cells can be rolled up into *any* display grid and still yield an exact distinct count. The bitmap stores `features.feature_int_id`, a dense integer surrogate (roaringbitmap holds int4; `features.id` is a 128-bit uuid), so an external id set built on the same column — text-search matches, a tag's `tag_features` bitmap — can be intersected with the buckets.
+- **feature_tags** / **tag_features**: Classifier tags per feature. `feature_tags` holds one row per feature, tag and `source` (the classifier model that produced it, e.g. `google/siglip2-base-patch16-224`, its Hugging Face name, a SoftwareAgent linked to its model page), so re-ingesting a tagger replaces only its own rows for that dataset, and one tagger run over several datasets is one file per dataset. `tag_features` is the query-side rollup, one roaring bitmap of `feature_int_id` per tag unioned over every tagger, rebuilt by `rebuild-index` like `cell_features`, so tags follow the same rule as every other ingest. A tag filter is then a single bitmap intersection against each `cell_features` bucket, the same path a text search takes.
+- **grid_config**: Single row (`id = 'current'`) of grid metadata written by `rebuild-index`: the RD/28992 grid origin (`min_x`, `min_y`), the base-cell index extent, and the WGS84 bounds of the cell grid. Read once per heatmap/feature request.
 
 ## Indexing
 
@@ -198,7 +223,7 @@ The data index is restricted to historical features that can be both spatially l
 
 ### Spatial indexing
 
-Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a geometry (POINT, LINESTRING, or POLYGON) in **RD New (EPSG:28992, metres)**. Query responses reproject to **WGS84 (EPSG:4326)** before sending to the client. `rebuild-index` overlays the city with a regular grid of `PRECOMP_GRID_CELL_METERS`-wide cells (default 100m) whose origin is the south-west corner of the bounding box of all feature-linked `place` geometries, and writes the cells each of those feature-linked places covers to `place_cells` — one set of cells per place, not per feature. Places with no linked feature are skipped entirely, so ingesting unreferenced geometry (e.g. the present-day districts until a dataset uses them) adds no cells and never enlarges the grid. A point lands in one cell, a line in the cells it crosses, and a polygon is filled (its interior, not just its outline). These mappings are computed in PostGIS: points with `ST_DumpPoints`, lines and polygons by rasterising each candidate cell with `ST_Intersects` against its `ST_MakeEnvelope`. Features inherit cell coverage through their place link.
+Each feature is linked to one or more `place` rows via `feature_to_place`. Each place stores a geometry (POINT, LINESTRING, or POLYGON) in **RD New (EPSG:28992, metres)**. Query responses reproject to **WGS84 (EPSG:4326)** before sending to the client. `rebuild-index` overlays the city with a regular grid of `PRECOMP_GRID_CELL_METERS`-wide cells (default 100m) whose origin is the south-west corner of the bounding box of all ingested `place` geometries, and writes the cells each place covers to `place_cells` — one set of cells per place, not per feature. The grid frame follows the gazetteer (everything ingested under `ACTIVE_SCOPE`), not the data, so features can be added or removed without shifting cell ids. Unlinked places still add nothing to the heatmap: `cell_features` and every count flow through `feature_to_place`, so a place without features occupies cells in `place_cells` but contributes no data anywhere. A point lands in one cell, a line in the cells it crosses, and a polygon is filled (its interior, not just its outline). These mappings are computed in PostGIS: points with `ST_DumpPoints`, lines and polygons by rasterising each candidate cell with `ST_Intersects` against its `ST_MakeEnvelope`. Features inherit cell coverage through their place link.
 
 `rebuild-index` then rolls that join up into `cell_features`, one bucket per (base cell, base time bin, record type, dataset, place type), each holding the set of features it contains. Heatmap and histogram requests read only that table — filtering buckets and unioning their bitmaps — instead of re-joining `place_cells` → `feature_to_place` → `features` and computing `COUNT(DISTINCT feature_id)` on every request. The union is what makes it exact: a street spanning several base cells that fold into one display cell is counted once, so any display resolution can be served from the same buckets. On the full dataset that took the heatmap from ~13s to under a second.
 
@@ -208,7 +233,7 @@ Heatmap density is rendered with log-normalised counts (`log(count+1) / log(maxC
 
 ### Place data naming 
 
-Every `place` has a geometry and a `name`, and may have dated historical names in `place_historical_name`. How geometry and naming interact with the temporal index depends on geometry type and related data available in Adamlink. At the moment, a feature can link to only a single place. 
+Every `place` has a geometry and a `name`, and may have dated historical names in `place_historical_name`. The `name` always holds the name in force today. For Adamlink places `rebuild-index` enforces this: where the stored name differs from an open-ended historical name row, the stored name is replaced by it. Old names are never lost, they stay findable as their own dated rows. Other sources are left alone, since an open end date may mean the end is simply unknown. How geometry and naming interact with the temporal index depends on geometry type and related data available in Adamlink. At the moment, a feature can link to only a single place. 
 
 #### Address place
 Address place is a single numbered city address such as Prins Henrikkade 15. It is represented by single `POINT` geometry. Each address is labelled by multiple historical names taken from `addressen.ttl`'s `rdfs:label`, each dated by its `sem:hasEarliestBeginTimeStamp` and `sem:hasLatestEndTimeStamp` fields. The `name` is derived from the most recent historical name. In the heatmap its point occupies a single grid cell.
@@ -231,7 +256,7 @@ The naming model above determines what the API returns per place type. `getFeatu
 
 ### Temporal indexing
 
-Each feature has `start_date` and `end_date`, both inclusive at the year level. A feature with `start_date=1900-06-15` and `end_date=1900-08-30` covers exactly the year 1900. Time is divided into base bins of `PRECOMP_TIME_BIN_YEARS` years (default 10), each spanning `[bin_start, bin_end)`: start year inclusive, end year exclusive. A feature is assigned to every bin its year range overlaps: a feature spanning 1900–1925 with 10-year bins falls into `[1900,1910)`, `[1910,1920)`, and `[1920,1930)`. Its `temporal_frequency` is the count of those bins (3 here).
+Each feature has `start_date` and `end_date`, both inclusive at the year level. A feature with `start_date=1900-06-15` and `end_date=1900-08-30` covers exactly the year 1900. Time is divided into base bins of `PRECOMP_TIME_BIN_YEARS` years (default 50), each spanning `[bin_start, bin_end)`: start year inclusive, end year exclusive. A feature is assigned to every bin its year range overlaps: a feature spanning 1900–1925 with 10-year bins falls into `[1900,1910)`, `[1910,1920)`, and `[1920,1930)`.
 
 The timeline (rendered as a histogram) uses the same overlap logic but at the display bin size requested by the client. Display bin size is clamped to `[DISPLAY_TIME_BIN_MIN_YEARS, DISPLAY_TIME_BIN_MAX_YEARS]` and rounded down to a multiple of `PRECOMP_TIME_BIN_YEARS` — the `cell_features` rollup stores counts per base bin, so a display bin has to be a whole number of them (a 25-year bin can't split a decade).
 
@@ -239,21 +264,50 @@ Timeline bar heights use the same log normalisation as the heatmap.
 
 ### Unique features rank higher
 
-Indexing also stores two counters per feature. `spatial_frequency` counts the base cells a feature's place(s) touch. `temporal_frequency` counts the base bins its date range covers. They serve as a specificity signal: a photograph of one building on one day is more useful than a region-wide survey spanning centuries. Both are normalised by the dataset maximum and summed into a `relevance_score`:
+Indexing also stores `spatial_frequency`: the number of base cells a feature's place touches. It serves as a specificity signal: a photograph of one building is more useful than a survey of a whole district. The spatial sort below puts the lowest counts first.
 
-```
-relevance_score = spatial_frequency / max_spatial + temporal_frequency / max_temporal
-```
+### Feature sorting
 
-Lower scores mean features more unique to the time and place.
+The cell view sorts features in one of five modes. All modes are deterministic.
+
+- **Sample** (default, in the UI and the API). A fair cross-section of the cell. Record types take turns in the list. Within each type, datasets take turns. Order inside a dataset comes from a seeded shuffle (`md5(id || seed)`). In the UI the seed defaults to the cell id. The shuffle button sets a `sampleSeed` URL parameter, so a shared link reproduces the exact order. One seed produces one global order, which keeps pagination consistent across pages. With topics selected, the shuffle is weighted: a feature matching more of the selected tags draws a better place, with weight 2 to the power of its matches, so richer matches drift up without fixing the order.
+- **Spatial** ("Precies gelokaliseerd" in the UI). The same type and dataset rotation, but each dataset's items are ordered by `spatial_frequency`. Items tied to the smallest place come first.
+- **Temporal** ("Precies gedateerd" in the UI). The same rotation, ordered by date range length (`end_date - start_date`). Items with the tightest dating come first: a single day before a month, a month before a year.
+- **Oldest / newest**. Plain chronological order on `start_date`. No rotation. An explicit date sort returns true chronology, even when that puts several items of one type in a row.
+
+`/api/features` accepts `sort` (`sample` / `spatialFrequency` / `datePrecision` / `date`), `sortDirection`, and `seed`. `sort` defaults to `sample`. `seed` is optional: without one the sample order is fixed and reproducible, and every request without a seed gets the same order. With a tag selection, the sample shuffle is weighted: a feature carrying one more of the selected tags is twice as likely to come earlier, so richer matches drift up without fixing the order.
+
+`/api/features` also takes `featureId`, a feature's id, and returns that feature's rows as the list shows them, one per place it is at, or the one at `featurePlaceId`; bounds or a place then narrow it but are not required. The app writes the expanded card to its own URL as `feature` and `at` the same way, so a link opens with the card.
+
+### Place search
+
+`/api/places` finds places by name prefix, across all place types and all sources. It searches current names, dated historical names and undated name variants together, so an old street name or a spelling variant finds today's street, and a match on anything but the current name carries that current name in brackets, as feature cards do. Address places only match when the query contains a digit, which keeps a street search from flooding with its house numbers. Each row says what its years mean, in the source's terms: a street or area's existence ("bestaat vanaf 1663", "bestond 1850 tot 1909"), the years a street's old name held ("naam 1850 tot 1943"), the registers an address was noted on ("vermeld in 1853" for the matched record, "vermeld 1832 tot 1943" over all of them), or "huidig" for a place from a current register, which carries no dates. A house in both registers lists twice. Exact name matches rank first, and among them a current register's rows lead; the rest follow a timeline: rows still current, youngest first, then ended rows, latest end first, then rows without dates. An old Adamlink street name the street no longer carries counts as ended even when Adamlink gives it no end date. A dated historical name takes its own place on that timeline, an undated variant takes its place's, so a variant of a living street ranks as current while displaying no date. Place type and name only break ties, and whether a place has features plays no part.
+
+Each match carries the matched name, the id of the matched historical name row when one applies, its validity window when that row has one, the place's own geometry window when the place has one, the feature count, and the place's cells as display-grid indices in the same space as heatmap indices. The dropdown shows the period of the name it displays: a match on the current name carries the place's window, a match on a historical name row carries that row's window, so an undated variant carries none rather than borrowing the place's. The UI stores a selection in the URL as the place id plus the matched name row id, so a shared link restores the exact clicked alias.
+
+`/api/places` accepts `q` (search) or `id` with optional `nameId` (restore), plus `cols` and `limit`. `/api/features` and `/api/histogram` accept `placeId` to scope their results to the display cells one place lies in, at the grid width `cols` like the heatmap, so a selected place reads exactly like clicking the cells the map outlines for it: whatever else lies in those cells counts too.
+
+### Language
+
+The UI is Dutch by default and English with `lang=en` in the URL; the NL/EN switch beside the About button writes it. The strings live in `packages/app/src/lib/utils/translations/nl.ts` and `en.ts`, which must carry the same keys. Source data (titles, descriptions, place and dataset names) is never translated, and topics show in English as the classifier's own labels. The about page has one text per language, `content.nl.svx` and `content.en.svx`. `PUBLIC_DUTCH_ONLY=true` keeps the site Dutch: the switch is hidden and `lang=en` is ignored.
+
+### Text search
+
+`/api/heatmaps`, `/api/histogram` and `/api/features` accept `q`: a free-text search over a feature's title, description and the entity fields its card shows (`SEARCH_FIELDS` in `@atm/shared`). All three share one definition of what matches, so the heatmap, the timeline and the feature list always describe the same population. With `q`, each listed feature carries `foundBy`: the values that matched, with the matching words marked.
+
+The same three accept `tags` (comma-separated tag ids) with `tagOperator` (`OR`, the default, or `AND`). Tags are classifier output ingested per dataset (see the `tags` source); the count endpoints intersect the precomputed per-tag bitmaps with their buckets, and an unknown tag id matches nothing. `/api/filter-counts` says what every filter value is worth: for each record type, dataset, place type and tag, how many features pressing it leaves under the other filters, the period (`timeSlice`) and, with bounds or a `placeId`, the scope. A category's values are counted under the other categories, the search and the tags; the tags under every category and the search, and under the selected tags too when they combine with AND. A category sent as `none` is an emptied one: its own values are still counted, the rest reads zero. The filter panel shows these beside every value, so they always agree with the map.
+
+Matching is on words as written, with web search syntax: plain words must all appear, `"quoted phrases"` must appear side by side, `OR` offers alternatives, and `-word` excludes. Nothing is stemmed and no word is dropped, so a name matches itself and not a lookalike (`Leeds` does not find `Leden`, `Kat` does not find `Katestraat`) and `haar` or `het` are words like any other. The words are indexed in the generated `search_tsv` column, which `rebuild-index` rebuilds whenever its definition in the code has changed, since a schema push cannot see that change; it likewise drops the old partial predicate from the place name indexes, which made every name lookup a slow parallel scan. A query that matches nothing returns zero counts everywhere.
+
+Heatmap and histogram counts under a search are computed by intersecting each cell's precomputed feature set with the set of matching features, so a search request costs about the same as an unfiltered one regardless of how many features match.
 
 ## Dating
 
 ### Feature dates
-Feature dates (`features.start_date` / `end_date`) are the source feature's own date range. They drive the histogram and heatmap, `temporal_frequency`, and thus an item's ranking.
+Feature dates (`features.start_date` / `end_date`) are the source feature's own date range. They drive the histogram, the heatmap and the date sorts.
 
 ### Place dates
-Place dates (`place_geometry.since` / `until`) mark the period a neighbourhood or district geometry was the city's division — these are the only place types whose geometry changes over time, as documented in Adamlink. They're used at ingest to match a neighbourhood/district feature's date range to the geometry of the right era.
+Place dates (`place_geometry.since` / `until`) mark the period a place existed in that shape: for a neighbourhood or district the period its geometry was the city's division, the only place types whose geometry changes over time as documented in Adamlink, and for an Adamlink street the years Adamlink gives for the street's existence. Area dates are used at ingest to match a neighbourhood/district feature's date range to the geometry of the right era; street dates are informational and shown in the place search, so two streets that shared a name in different centuries can be told apart.
  
 ### Place name dates
 Name dates (`place_historical_name.since` / `until`) record the period a historical name of an address or street was in use. They supply the `historicalLabel` shown on a feature. Adamlink provides historical names only for streets and addresses.
@@ -277,9 +331,40 @@ A street or address feature shows its historical name (from `place_historical_na
 
 Neighbourhood and district geometry, unlike a street's or address's, changes across history: each era's division is its own `place` row with its own `place_geometry` (polygon + `[since, until)` window). Which era a feature attaches to is decided **at ingest, not query time** — it's linked to the `place` whose window overlaps the feature's `[start, end]` the most. At query time the heatmap then counts that feature against its historical geometry's footprint, **even though the basemap shows the modern city**.
 
+A feature located by **coordinate** links to the place of its own era: addresses exist in two layers — historical Adamlink (up to 1943) and present-day BAG — so a feature dated before `ERA_CUTOFF` (1943) resolves to the Adamlink address, on/after it to the BAG address at the same point, always at the finest granularity that resolves (address > street > neighbourhood > district) within a per-type distance cap. A feature located by **name** instead resolves to the place whose name was in force nearest its date. Either way a street is a candidate only while it existed, and of an area's versions the one in force at the date is preferred. An address matched outside its register's era, such as an 1898 programme at "Amstel 115", a name only BAG has since Adamlink recorded the house as "Binnen Amstel 115", moves to its **twin**: the address the other source records in the same BAG building with the same house number. Both sources state the building (`place_geometry.building_id`), so the pairing is theirs, not a distance guess. When a building holds several twins, those that share one of the place's own names are kept (the same street, not another street on the corner), then those whose name record is nearest the feature's date (Adamlink keeps a point per register); the match stands unless one is left. Either way, a name matching two equally-plausible places, or a coordinate with nothing in range, is skipped rather than linked to a guess.
+
 Both name- and geometry-windows run from `since` up to but not including `until` (at year granularity), so a boundary year falls in exactly one window; `until = null` means "still current".
 
 ## Data ingestion
+
+### Getting the data
+
+Ingestion reads files from a local data directory; how you obtain each differs by source:
+
+- **Adamlink place data** — download the TTLs from [adamlink.nl/data](https://adamlink.nl/data): the neighbourhoods & districts, streets, LPS, adressen and buildings (gebouwen) files. Static, versioned downloads.
+- **PDOK base registries (CBS / NWB / BAG)** — not downloaded by hand. `db:fetch` queries the [PDOK](https://www.pdok.nl) WFS and writes a ground-truth file:
+
+  ```bash
+  bun run db:fetch -s cbs-areas     -o <data-dir>/cbs-areas.geojson
+  bun run db:fetch -s nwb-streets   -o <data-dir>/nwb-streets.geojson
+  bun run db:fetch -s bag-addresses -o <data-dir>/bag-addresses.ndjson
+  bun run db:fetch -s municipality  -o <data-dir>/municipality.geojson
+  ```
+
+  Splitting fetch from ingest keeps ingestion offline and reproducible and pins each PDOK snapshot as an inspectable file; re-run a fetch to refresh it.
+- **Feature datasets (Beeldbank, Joods Monument, Delpher)** — currently private derivatives of mostly-public source collections, so they are not publicly distributable.
+- **Classifier tags (optional)** — the output of a tagger run over an ingested dataset, as JSONL with one row per record: `{"id": <the dataset's natural key>, "tags": ["<tag id>", ...]}`. The id must be the same natural key the dataset's ingestor derives feature ids from (for Beeldbank the record's identifier, not its image URL); if the classifier emits another key, convert the file first. One file per run, ingested with that run's id as `--tagger`.
+- **Amsterdam Diaries entries** — extracted from the Amsterdam Diaries Time Machine dump ([Zenodo](https://zenodo.org/records/14385058), unzipped) with `db:extract`, as JSONL with one line per entry and place it mentions inside the municipality boundary: the entry's ark and its reading page on the Diaries site (the diary's subject by slug and the entry's position among that subject's entries), date, diary, author (with their page on the Diaries site, asked of the site's API during the extract), the place with its Adamlink or Wikidata id and a point, and per place an excerpt of the transcription around its first mention (whole lines, up to 3,000 characters, with the mention offsets and whether the text continues before or after). The ingest stamps each excerpt with the index place its mention resolved to, so the card opens the entry at the place it shows. The people and places an entry names are not kept: the index answers what, when, where and why an item is here, and sends the reader to the source for the rest. Mentions of areas (the city, a district, a water) stay on the card but get no point, since the dump's coordinate is a centroid.
+- **Cinema Context programmes** — extracted from the Cinema Context database dump (pg_dump, plain SQL) with `db:extract`, as JSONL with one programme per line whose venue lies inside the municipality boundary: its permanent id, date, venue with its kind and its page at the site, the venue's address as written and its coordinates, the programme in order. The ingest keeps only the films: a programme becomes a `ScreeningEvent` with its films in the source's order, titled with the first, its live acts are left out, and a programme without a film is not ingested. It links to the venue's address matched by name, era-ranked like every name match, and falls back to the point when the address is written as a range or a description.
+
+  Both extracts need the municipality boundary from `db:fetch`:
+
+  ```bash
+  bun run db:extract -s cinema-context    -i <cinema-context-dump.sql> -o <data-dir>/cinema-context.jsonl    -m <data-dir>/municipality.geojson
+  bun run db:extract -s amsterdam-diaries -i <diaries-dump-dir>        -o <data-dir>/amsterdam-diaries.jsonl -m <data-dir>/municipality.geojson
+  ```
+
+All files land in the data directory; the ingestion steps below read them.
 
 ### Place data ingestion
 
@@ -287,22 +372,35 @@ The project uses [Adamlink](https://adamlink.nl) as its geographic backbone. Ada
 
 Adamlink place data must be ingested before any dataset. See the [Development](#development) or [Production](#production) sections for the full ingestion order.
 
-Every `place` row is sourced from Adamlink. A feature is skipped at ingest if it can't be resolved to an existing place, or if it lacks the stable source identifier its `id` is derived from — no feature row is created and nothing unlinked lands in the database.
+Adamlink is the backbone, but it doesn't cover everything — its addresses stop at 1943, it lacks Weesp's addresses and areas (its street layer does reach Weesp), and it misses some Amsterdam streets. Three national base registries fill those gaps (see [Place datasets](#place-datasets)), and every `place` row records its `source` (`adamlink` / `cbs` / `nwb` / `bag`) and a `url` to the origin record. A feature is skipped at ingest if it can't be resolved to an existing place, or if it lacks the stable source identifier its `id` is derived from — no feature row is created and nothing unlinked lands in the database.
 
-If you are deploying this for **another Dutch city**, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. The `geometry-point-template.ts` example shows how to match incoming coordinates to existing places; for creating new places, adapt the pattern from `lps.ts`. The core requirement is that each feature links to a `place` row that has a geometry.
+If you are deploying this for **another Dutch city**, you can bypass Adamlink by having your ingestion scripts create `place` rows directly with your own IDs and geometries. A `WKT`-method source like `delpher.ts` shows how a dataset matches incoming coordinates to existing places; for creating new places, adapt the pattern from `lps.ts`. The core requirement is that each feature links to a `place` row that has a geometry.
 
 For a city **outside the Netherlands** there is one more step: the Dutch national grid (RD / EPSG:28992) is hardcoded across the stack — the `place` geometry column, `insertPlaces`, `rebuild-index`, the grid-config and heatmap queries, and the frontend `proj4` definition — so you must swap that SRID for the target region's metric CRS in each of those spots and re-verify the grid math. RD is only valid over the Netherlands, so this step is unavoidable abroad.
 
 #### Place datasets
 
-All place geometry comes from these public Adamlink datasets.
+Place data comes from two kinds of source, distinguished by the `source` column. **Adamlink** is the backbone — historical geometry and address history. Three **PDOK base registries** fill what Adamlink lacks, for Amsterdam and the annexed municipality of Weesp.
+
+Adamlink (download the TTLs, see [Getting the data](#getting-the-data)):
 
 | Dataset | Description | Format |
 |---------|-------------|--------|
 | [Neighbourhoods & districts](https://adamlink.nl/geo/districts) | Neighbourhood (buurt) + district (wijk) polygons — historical (1600 wijken, 1850/1909 buurten) plus present-day CBS — split onto the `neighbourhood` and `district` place types; ingested by the `neighbourhoods-and-districts` source | TTL |
 | [Streets](https://adamlink.nl/data) | Street geometries (LINESTRING) with historical name variants | TTL |
-| [LPS](https://adamlink.nl/data) | Linked point set: historical address-to-geometry mappings from 7 Amsterdam registries (1832–1976) | TTL |
-| [Adressen](https://adamlink.nl/data) | Dated address observations linking to LPS points via `schema:geoContains` | TTL |
+| [LPS](https://adamlink.nl/data) | Locatiepunten: the points HisGis located address mentions at, with the BAG building each falls in | TTL |
+| [Adressen](https://adamlink.nl/data) | Adresvermeldingen: an address as noted on one of eight historical sources, mostly maps, from the 1802 Verpondingsnummers to the 1943 Publieke Werken map, each linked to its locatiepunt via `schema:geoContains` | TTL |
+| [Buildings](https://adamlink.nl/data) | Named buildings: a footprint (BAG) or a point for a vanished one, build and demolition years, name variants | TTL |
+
+Three PDOK base registries fill the gaps, fetched with `db:fetch` (scope Amsterdam + Weesp — see [Getting the data](#getting-the-data)). CBS and BAG ingest via the generic `pdok-places` source; NWB has its own `nwb-streets` source that reconciles against Adamlink at ingest.
+
+- **[CBS WijkenBuurten](https://service.pdok.nl/cbs/wijkenbuurten/2022/wfs/v1_0)** (`source` = `cbs`, GeoJSON) — Weesp's neighbourhoods (buurten) and districts (wijken), annexed by Amsterdam in 2022 and absent from Adamlink.
+- **[NWB Wegen](https://service.pdok.nl/rws/nwbwegen/wfs/v1_0)** (`source` = `nwb`, GeoJSON) — the fetcher pulls *all* Amsterdam streets (incl. annexed Weesp); the `nwb-streets` ingest (`-x <adamlinkstraten.ttl>`, required) reconciles them against Adamlink by BAG openbare-ruimte id (`bagOrl` ↔ Adamlink `owl:sameAs`) and does two jobs:
+  - **gap-fill** — streets absent from Adamlink become `nwb-<bagOrl>` places (`source` = `nwb`);
+  - **backfill** — streets Adamlink *names* but has no line for keep their Adamlink id, name, and dated names, and borrow the NWB geometry; that borrowed line is recorded on `place_geometry.source` = `nwb` (with a link to the BAG record), so it reads as an Adamlink street with NWB geometry.
+
+  Streets Adamlink already draws are skipped, as are NWB segments without a `bagOrl` (bridges/locks).
+- **[BAG](https://service.pdok.nl/lv/bag/wfs/v2_0)** (`source` = `bag`, NDJSON) — current addresses with the building (pand) each stands in; Adamlink's address history stops at 1943. An Adamlink LP carries the same building link, which pairs the two records of one address (see [Dates resolution](#dates-resolution)).
 
 ### Minimum required fields per feature
 
@@ -316,20 +414,32 @@ Optional: `description`, `content_url` (media), `entity` (schema.org JSONB), `ur
 
 ### Adding a dataset
 
-1. Pick a template from `packages/db/src/etl/examples/`: 
-   - `adamlink-point-template.ts` for data referencing Adamlink address URIs
-   - `geometry-point-template.ts` for data without Adamlink references (matches coordinates to nearest place)
-   - `neighbourhood-template.ts` for area-level data (matches a buurt/wijk by name + date to the right era)
-2. Copy it to `packages/db/src/etl/sources/<your-dataset>.ts`
-3. Update organisation, dataset, relation, and field mappings
-4. Run:
+A dataset is a subclass of `Ingestor` (`packages/db/src/etl/ingest/ingestor.ts`) that declares its provider/dataset metadata, a `transform` mapping each source row to a feature, and a `PLACE_EXTRACTION_METHODS` cascade — the ordered signals used to resolve each feature to a place, tried in turn until one resolves (else the feature is skipped and tallied by reason). Four signals are available:
+
+- `WKT` — a coordinate, matched to the nearest era-appropriate place within a distance cap (see [Dates resolution](#dates-resolution)); with `confirmBy` naming a text column, a candidate whose name is written in that text outranks its nearer neighbours at the same granularity
+- `TEXT` — a free-text field, scanned for known place names
+- `NAME` — a field holding one place name, such as an address, matched exactly against current and dated names and ranked by era
+- `URI` — an Adamlink place URI, matched exactly
+
+A source links every feature with its one relation (`RELATION_ID`). A source whose features relate to their place in more than one way lists them in `relations()` and picks one per record in `relationFor()`, as Cinema Context does for screenings and performances.
+
+Copy the existing source closest to your data and edit its metadata, `transform`, and methods:
+
+- `delpher.ts` — coordinate (`WKT`) features
+- `blogs.ts` — free-text (`TEXT`) features, place names scanned from the article body
+- `beeldbank.ts` — Adamlink `URI` features, with an address-URI → street-URI fallback cascade
+- `joods-monument.ts` — `URI` person features
+
+Then run:
 
 ```bash
 bun run db:ingest -s <dataset-name> -f <path-to-file>
 bun run db:rebuild-index
 ```
 
-`rebuild-index` computes spatial grid cells, the `cell_features` rollup the heatmap and histogram read, and frequency values. Must run after every data change — a feature ingested without it won't appear on the map.
+`rebuild-index` computes spatial grid cells, the `cell_features` rollup the heatmap and histogram read, the per-tag `tag_features` bitmaps, and frequency values. Must run after every data change, and after updating to a version that changes how the index is built: a feature ingested without it won't appear on the map, and bitmaps built by different versions cannot be combined.
+
+To offer topics for the dataset, run a classifier over it and ingest its output with the `tags` source, keyed by the dataset's natural keys (see [Getting the data](#getting-the-data)), then rebuild.
 
 ### Re-ingesting and corrections
 
@@ -339,18 +449,30 @@ Ingestion is idempotent and source-driven: corrections are made in the **source 
 
 **Fixing a place.** Re-ingest the relevant place source (`lps`, `streets`, `neighbourhoods-and-districts`, or `adressen`). Place rows refresh under one of two conflict modes — streets, neighbourhoods, and districts overwrite everything including their label from the source (`replaceAll`), while addresses refresh only their geometry and keep the label the `adressen` step owns (`replaceGeometry`). So you re-ingest `lps` to correct an address's point without losing its name, and `adressen` to correct the name.
 
+**Fixing tags.** Re-run the `tags` source with the corrected file and the same `--tagger`: it replaces that tagger's rows only, and other taggers' rows stay. Then rebuild.
+
+**Rebuilding from scratch.** `scripts/reingest.sh` wipes a deployment's bundled DB and runs every step above, extracting Cinema Context and the Diaries from their dumps when their files are missing. Run it from the deployment's clone. It reads `reingest.env` in the repo root (copy `reingest.env.example`): `DATA`, the absolute path of the source files, is required, and any file name that differs from the defaults goes there too.
+
+```bash
+scripts/reingest.sh dev          # host bun, self-hosted DB
+scripts/reingest.sh staging      # app image; APP_IMAGE_TAG in .env picks the lane
+scripts/reingest.sh production   # app image :production
+```
+
 ## API endpoints
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /api/metadata` | Time slices, record types, datasets, stats |
+| `GET /api/metadata` | Time slices, record types, place types, datasets, tags |
 | `GET /api/heatmaps` | Sparse heatmap data with grid dimensions |
 | `GET /api/histogram` | Feature count distribution by time period |
-| `GET /api/features` | Paginated features within geographic bounds |
-| `GET /api/available-tags` | Tags with feature counts |
-| `GET /api/tag-combinations` | Valid next tags for a tag selection — progressive tag filtering (WIP, not yet exposed in the UI) |
+| `GET /api/features` | Paginated features within geographic bounds or the display cells of a place |
+| `GET /api/filter-counts` | What every filter value is worth under the request's other filters, period and scope |
+| `GET /api/places` | Place name search and place lookup for the search filter |
 
-Heatmaps, histogram, features, and available-tags accept `recordTypes`, `datasets`, and `placeTypes` (`address` / `street` / `neighbourhood` / `district`) query parameters to filter results.
+Heatmaps, histogram, features, and filter-counts accept `recordTypes`, `datasets`, and `placeTypes` (`address` / `building` / `street` / `neighbourhood` / `district`) query parameters to filter results.
+
+Invalid input policy: malformed parameters (bad bounds, unknown `timeSlice`) return a 400 with a machine-readable `code`; well-formed filters that match nothing return empty results; display resolution (`binSize`, `cols`) is snapped to the nearest valid value. A fallback never widens a result beyond what was requested.
 
 ## Development
 
@@ -377,10 +499,27 @@ bun run db:ingest -s streets -f <path-to-adamlinkstraten.ttl>
 bun run db:ingest -s lps -f <path-to-lps.ttl>
 bun run db:ingest -s adressen -f <path-to-adressen.ttl>
 
+# PDOK gap-fills: fetch, then ingest
+bun run db:fetch  -s cbs-areas     -o <data-dir>/cbs-areas.geojson
+bun run db:fetch  -s nwb-streets   -o <data-dir>/nwb-streets.geojson
+bun run db:fetch  -s bag-addresses -o <data-dir>/bag-addresses.ndjson
+bun run db:fetch  -s municipality  -o <data-dir>/municipality.geojson
+bun run db:ingest -s pdok-places -f <data-dir>/cbs-areas.geojson
+bun run db:ingest -s nwb-streets -f <data-dir>/nwb-streets.geojson -x <data-dir>/adamlinkstraten.ttl
+bun run db:ingest -s pdok-places -f <data-dir>/bag-addresses.ndjson
+bun run db:ingest -s buildings -f <path-to-adamlinkgebouwen.ttl> -m <data-dir>/municipality.geojson
+
+# Cinema Context and the Diaries: extract from their dumps first
+bun run db:extract -s cinema-context    -i <cinema-context-dump.sql> -o <data-dir>/cinema-context.jsonl    -m <data-dir>/municipality.geojson
+bun run db:extract -s amsterdam-diaries -i <diaries-dump-dir>        -o <data-dir>/amsterdam-diaries.jsonl -m <data-dir>/municipality.geojson
+
 # Ingest datasets (any order)
 bun run db:ingest -s <dataset-name> -f <path-to-file>
 
-# Rebuild index
+# Tags (optional): classifier output for an ingested dataset, keyed by its natural keys
+bun run db:ingest -s tags -f <path-to-tags.jsonl> --tagger <tagger-id> --dataset <dataset-name>
+
+# Rebuild index (after every ingest, tags included)
 bun run db:rebuild-index
 
 # Run the frontend
@@ -393,9 +532,18 @@ bun run dev    # http://localhost:5175
 bun run db:studio    # http://local.drizzle.studio
 ```
 
+### URLs and the base path
+
+Never write an absolute app URL as a string. API calls build their URL with `apiUrl()` from
+`#lib/utils/api.js`, internal links use `resolve()` and static files `asset()` from `$app/paths`, so
+a build served under a path prefix reaches its own API and assets. A lint rule fails the
+build on a bare `/api/…` string or a static `href`/`src` starting with `/`.
+
 ### Testing
 
-`bun run test` runs both suites via `turbo run test`: the **db** tests against an isolated Postgres+PostGIS container (port `5434`, ephemeral — wiped on `test:db:down`), and the **app** unit tests (pure heatmap/cell maths, no DB). The db integration tests exercise the pipeline end-to-end — LPS + adressen + streets + beeldbank + Joods Monument ingestion on real-data fixtures under `packages/db/src/__tests__/fixtures/`, then the query layer (features, heatmap, timeline, histogram) and `rebuild-index` — alongside pure-function unit tests for the query helpers.
+The two packages use different runners. The app tests run under vitest, the db tests under bun's runner. `bun test` discovery is scoped to `packages/db` via `bunfig.toml`, so neither runner can pick up the other's files. Use `bun run test` for the full CI-identical run and `bun test <filter>` for quick db iterations.
+
+`bun run test` runs both suites via `turbo run test`: the **db** tests against an isolated Postgres+PostGIS container (port `5434`, ephemeral — wiped on `test:db:down`), and the **app** unit tests (pure utilities and the runes state modules, no DB or DOM). The db integration tests exercise the pipeline end-to-end — LPS + adressen + streets + beeldbank + Joods Monument ingestion on real-data fixtures under `packages/db/src/__tests__/fixtures/`, then the query layer (features, heatmap, timeline, histogram) and `rebuild-index` — alongside pure-function unit tests for the query helpers.
 
 ```bash
 bun run test:db:up     # start the isolated test DB (required for the db suite)
@@ -417,65 +565,75 @@ Images build in CI on push once tests pass; pulling and restarting on the server
 
 ### Self-hosted setup
 
-Bundled Postgres + PostGIS + `pg_roaringbitmap`. One clone per deployment, on the branch
-matching its image tag; all code runs from the image. Shown for staging — for production
-clone `main` and swap `staging.yml` → `production.yml`.
+Bundled Postgres + PostGIS + `pg_roaringbitmap`; all code runs from the image (one clone
+per deployment, on the branch matching its image tag). Shown for **production** — the
+**Staging** note after the block covers the two differences.
 
 ```bash
 ssh user@server
 
-# Docker Engine (not Docker Desktop) + compose plugin. Needs compose >= 2.24.
+# Docker Engine + compose plugin (>= 2.24)
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER      # log out and back in
 docker compose version
 
-# Clone the branch this deployment serves — no bun install, no build (code runs from the image).
-git clone -b staging git@github.com:amsterdamtimemachine/data-index.git ~/data-index-staging
-cd ~/data-index-staging
+git clone -b main git@github.com:amsterdamtimemachine/data-index.git ~/data-index-prod
+cd ~/data-index-prod
 
-cp .env.example .env                             # edit per the Environment variables table below
+cp .env.example .env                             # fill in per the Environment variables table below
 
-# $DC = docker compose preloaded with this deployment's overlays. Reuse it for every command
-# below and later (e.g. `$DC pull app`). For production, swap staging.yml → production.yml.
+# reuse $DC for every command below; for staging, swap production.yml → staging.yml
 export DC="docker compose --env-file .env \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.self-hosted.yml \
-  -f docker/docker-compose.staging.yml"
+  -f docker/docker-compose.production.yml"
 
-# Bundled Postgres + PostGIS + pg_roaringbitmap, bound to loopback. --build compiles
-# the DB image from docker/Dockerfile.db (first run only; cached after). --wait blocks
-# until healthy.
-$DC up -d --build --wait dataindex-db
-
-# Pull the prebuilt app image from GHCR (public — no login). The app service also has a build
-# section, so without this Compose would build it locally instead of running the released image.
+$DC pull dataindex-db
+$DC up -d --wait dataindex-db
 $DC pull app
 
 $DC run --rm app bun run db:push-schema
 
-# Place data first — a feature that resolves to no place is dropped silently, so the wrong
-# order yields an empty index rather than an error. DATA holds the source files, mounted
-# read-only at /data. Run the ingest in tmux/screen — beeldbank is multi-GB, and a dropped
-# SSH session would kill it partway.
+# put the source files in DATA first (see "Getting the data"); paths are /data/… not $DATA/…. Run in tmux.
 export DATA=/srv/atm-data
 alias etl="$DC run --rm -v $DATA:/data:ro app bun run db:ingest"
+alias fetch="$DC run --rm -v $DATA:/data app bun run db:fetch"
+alias extract="$DC run --rm -v $DATA:/data app bun run db:extract"
 
 etl -s neighbourhoods-and-districts -f /data/adamlinkbuurten.ttl
 etl -s streets  -f /data/adamlinkstraten.ttl
 etl -s lps      -f /data/lps.ttl
 etl -s adressen -f /data/adressen.ttl
 
+# PDOK gap-fills: fetch, then ingest
+fetch -s cbs-areas     -o /data/cbs-areas.geojson
+fetch -s nwb-streets   -o /data/nwb-streets.geojson
+fetch -s bag-addresses -o /data/bag-addresses.ndjson
+fetch -s municipality  -o /data/municipality.geojson
+etl -s pdok-places -f /data/cbs-areas.geojson
+etl -s nwb-streets -f /data/nwb-streets.geojson -x /data/adamlinkstraten.ttl
+etl -s pdok-places -f /data/bag-addresses.ndjson
+etl -s buildings -f /data/adamlinkgebouwen.ttl -m /data/municipality.geojson
+
 etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
+extract -s cinema-context    -i /data/<cinema-context-dump.sql> -o /data/cinema-context.jsonl    -m /data/municipality.geojson
+extract -s amsterdam-diaries -i /data/<diaries-dump-dir>        -o /data/amsterdam-diaries.jsonl -m /data/municipality.geojson
+etl -s cinema-context -f /data/cinema-context.jsonl
+etl -s amsterdam-diaries -f /data/amsterdam-diaries.jsonl
+# optional: classifier tags, one file per dataset keyed by that dataset's natural keys (remap_tags_to_feature_keys.py, beside the data), one tagger id per run
+etl -s tags -f /data/beeldbank-tags.jsonl --tagger google/siglip2-base-patch16-224 --dataset beeldbank --tagger-label google/siglip2-base-patch16-224 --tagger-url https://huggingface.co/google/siglip2-base-patch16-224
+etl -s tags -f /data/delpher-tags.jsonl   --tagger BAAI/bge-m3 --dataset delpher --tagger-label BAAI/bge-m3 --tagger-url https://huggingface.co/BAAI/bge-m3
+etl -s tags -f /data/meeting-demo-complete-diaries.jsonl --tagger BAAI/bge-m3 --dataset amsterdam-diaries --tagger-label BAAI/bge-m3 --tagger-url https://huggingface.co/BAAI/bge-m3
 
-# Builds place_cells, the cell_features rollup, frequencies and grid_config. Takes a
-# minute or so on a full dataset — it runs the heavy aggregation once here so requests
-# don't. Mandatory: features ingested without it won't appear on the map.
+# required, or the map stays empty; raise DB_STATEMENT_TIMEOUT_MS in .env if it times out
 $DC run --rm app bun run db:rebuild-index
 
-$DC up -d app        # app + DB bind to loopback only — put a reverse proxy in front of 127.0.0.1:$APP_PORT
+$DC up -d app        # loopback only — front with a reverse proxy on 127.0.0.1:$APP_PORT
 ```
+
+**Staging.** Same procedure, with two changes: clone `-b staging` (into e.g. `~/data-index-staging`) and use `docker/docker-compose.staging.yml` instead of `production.yml` — the overlays are identical apart from the image tag (`:staging` vs `:production`). If staging runs on the **same host** as production, also give its `.env` a distinct `COMPOSE_PROJECT_NAME` and a free `APP_PORT` / `DB_PORT` so the two don't collide — see [Adding a second deployment on the same host](#adding-a-second-deployment-on-the-same-host).
 
 ### Existing Postgres setup
 
@@ -483,8 +641,7 @@ Point the app at a Postgres you already run — no bundled DB container. It need
 `pg_roaringbitmap`; PostGIS you likely already have.
 
 ```bash
-# 1. On the DB host — add pg_roaringbitmap. It isn't packaged, so build from source against
-#    the server's Postgres major version (the same steps docker/Dockerfile.db runs).
+# 1. On the DB host — build pg_roaringbitmap from source against the server's Postgres major:
 psql -c "SHOW server_version;"                    # note the major, e.g. 16
 sudo apt-get install -y build-essential git postgresql-server-dev-16   # match the major
 git clone --depth 1 --branch v1.2.0 https://github.com/ChenHuajun/pg_roaringbitmap.git
@@ -497,74 +654,74 @@ cd ~/data-index-prod
 cp .env.example .env                              # point DB_* at the existing server (reachable
                                                   # from the app container); rest per the table below
 
-# No self-hosted overlay — the app uses your DB_* instead of a bundled container.
 export DC="docker compose --env-file .env \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.production.yml"
 
-# Must print only `app` and never `dataindex-db`, confirming no bundled DB is in scope.
-$DC config --services
+$DC config --services                             # should list only: app
 
-$DC pull app                                      # prebuilt image from GHCR; else Compose builds it locally
+$DC pull app
 $DC run --rm app bun run db:push-schema
 export DATA=/srv/atm-data
 alias etl="$DC run --rm -v $DATA:/data:ro app bun run db:ingest"
+alias fetch="$DC run --rm -v $DATA:/data app bun run db:fetch"
+alias extract="$DC run --rm -v $DATA:/data app bun run db:extract"
 etl -s neighbourhoods-and-districts -f /data/adamlinkbuurten.ttl
 etl -s streets  -f /data/adamlinkstraten.ttl
 etl -s lps      -f /data/lps.ttl
 etl -s adressen -f /data/adressen.ttl
+# PDOK gap-fills: fetch, then ingest
+fetch -s cbs-areas     -o /data/cbs-areas.geojson
+fetch -s nwb-streets   -o /data/nwb-streets.geojson
+fetch -s bag-addresses -o /data/bag-addresses.ndjson
+fetch -s municipality  -o /data/municipality.geojson
+etl -s pdok-places -f /data/cbs-areas.geojson
+etl -s nwb-streets -f /data/nwb-streets.geojson -x /data/adamlinkstraten.ttl
+etl -s pdok-places -f /data/bag-addresses.ndjson
+etl -s buildings -f /data/adamlinkgebouwen.ttl -m /data/municipality.geojson
 etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
+extract -s cinema-context    -i /data/<cinema-context-dump.sql> -o /data/cinema-context.jsonl    -m /data/municipality.geojson
+extract -s amsterdam-diaries -i /data/<diaries-dump-dir>        -o /data/amsterdam-diaries.jsonl -m /data/municipality.geojson
+etl -s cinema-context -f /data/cinema-context.jsonl
+etl -s amsterdam-diaries -f /data/amsterdam-diaries.jsonl
+etl -s tags -f /data/beeldbank-tags.jsonl --tagger google/siglip2-base-patch16-224 --dataset beeldbank --tagger-label google/siglip2-base-patch16-224 --tagger-url https://huggingface.co/google/siglip2-base-patch16-224   # optional: classifier tags, keyed by natural keys
 $DC run --rm app bun run db:rebuild-index
 
 $DC up -d app
 ```
 
-### Deploying a new image
-
-Run this from the deployment's own clone, with the same `-f` overlays you started it with. `COMPOSE_PROJECT_NAME` in that clone's `.env` keeps it pointed at its own containers.
+### Updating the app image
 
 ```bash
 ssh user@server
-cd ~/data-index-staging
-
-# The images are public, so no docker login is needed. Only if the GHCR package is
-# ever made private:
-#   echo $GHCR_TOKEN | docker login ghcr.io -u <github-user> --password-stdin
+cd ~/data-index-prod
 
 export DC="docker compose --env-file .env \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.self-hosted.yml \
-  -f docker/docker-compose.staging.yml"
+  -f docker/docker-compose.production.yml"
 
 $DC pull app
-$DC up -d app
-```
 
-Naming only `app` leaves a bundled database running and its volume untouched.
-
-If the new image changes the schema or the ingestors, re-run them from the image you just pulled — never from the checkout:
-
-```bash
+# only if the new image changed the schema, an ingestor or how the index is built:
 $DC run --rm app bun run db:push-schema
 $DC run --rm -v $DATA:/data:ro app bun run db:ingest -s <source> -f /data/<file>
 $DC run --rm app bun run db:rebuild-index
-```
 
-**Upgrading a deployment that predates `cell_features`.** Its database was initialised by
-the stock postgis image, so the extension hook never ran on that volume — the data is
-fine, but `db:push-schema` will fail until the extension exists. Recreate the DB container
-on the new image (the volume, and the data, survive), add the extension once, then rebuild:
+$DC up -d app                                    # recreates app only; the bundled DB is untouched
 
-```bash
-$DC up -d --build --wait dataindex-db      # new image, same pgdata volume
-$DC exec dataindex-db psql -U "$DB_USER" -d "$DB_NAME" -c 'CREATE EXTENSION IF NOT EXISTS roaringbitmap;'
-$DC run --rm app bun run db:push-schema    # creates cell_features
-$DC run --rm app bun run db:rebuild-index  # populates it — the map is empty until this runs
+# to move the bundled DB to a newer image too:
+$DC pull dataindex-db && $DC up -d --wait dataindex-db
+$DC exec dataindex-db update-postgis.sh          # only if the PostGIS minor changed
 ```
 
 Only the `app` service is named, so `pull`/`up -d app` leaves a bundled DB running and its volume untouched.
+
+After a `git pull`, `scripts/sync-env.sh -w` folds variables added to `.env.example` into
+`.env` at their place in the example, keeping every value already set (previous copy in
+`.env.bak`). Run it without `-w` to preview the result.
 
 ### Adding a second deployment on the same host
 
@@ -572,6 +729,32 @@ Repeat a setup section in a second clone: the other branch, its own `.env` with 
 `COMPOSE_PROJECT_NAME` and free `APP_PORT` / `DB_PORT`, and `production.yml` in place of
 `staging.yml`. Nothing is shared — separate volumes, container names and ports — so the
 order you set them up in doesn't matter, and neither does the `-f` overlay order.
+
+The `experimental` branch is the integration branch for features under trial. CI builds
+it into the `experimental` image tag, and a clone with `APP_IMAGE_TAG=experimental` in its
+`.env` runs it with the staging overlay. Feature branches merge into `experimental` to be
+previewed and into `staging` to graduate; a dropped feature is reverted on `experimental`
+alone. The lane has its own database, so a schema change on the branch lands with the
+reingest script and never touches the stable deployment.
+
+### Serving under a path prefix
+
+The app can live under a path prefix, for a second deployment on the same hostname. The
+prefix is baked in at build time: `docker build --build-arg BASE_PATH=/experimental` (the
+`experimental` CI build passes it), and the image then serves at `/experimental` and health
+checks itself there. Route by prefix in Caddy without stripping it, SvelteKit expects the
+prefix to arrive:
+
+```
+handle /experimental* {
+        reverse_proxy 127.0.0.1:3001
+}
+handle {
+        reverse_proxy 127.0.0.1:3000
+}
+```
+
+Leave `BASE_PATH` unset for a deployment at the root; the published images are built that way.
 
 ### Environment variables
 
@@ -584,13 +767,18 @@ order you set them up in doesn't matter, and neither does the `-f` overlay order
 | `DB_PASSWORD` | Yes | `atm_dev_password` | PostgreSQL password |
 | `DB_NAME` | Yes | `amsterdam_time_machine` | PostgreSQL database name |
 | `APP_PORT` | No | `3000` | App port on host |
-| `PUBLIC_DEFAULT_CELL` | No | - | Default cell to select on load |
+| `APP_IMAGE_TAG` | No | `staging` | Image tag the staging overlay pulls; `experimental` for the integration branch |
+| `PUBLIC_DEFAULT_CENTER` | No | - | Map centre (WGS84 `lon,lat`) auto-selected on load, resolved to the cell containing it |
 | `PUBLIC_TILE_SOURCE_URL` | No | OpenFreeMap | Vector tile source URL |
 | `PUBLIC_EXACT_CELLS` | No | `false` | Reproject heatmap cells to their exact RD footprint via proj4 (removes the ~0.4° skew); default draws axis-aligned rectangles |
-| `PRECOMP_TIME_BIN_YEARS` | No | `10` | Base time bin size (years). Shapes the `cell_features` buckets, so changing it requires a `db:rebuild-index` — the queries would otherwise fold base bins at the new width against buckets stored at the old one. Also caps time granularity: a requested `binSize` is rounded down to a multiple of this |
+| `PRECOMP_TIME_BIN_YEARS` | No | `50` | Base time bin size (years). Shapes the `cell_features` buckets, so changing it requires a `db:rebuild-index` — the queries would otherwise fold base bins at the new width against buckets stored at the old one. Also caps time granularity: a requested `binSize` is rounded down to a multiple of this |
 | `PRECOMP_GRID_CELL_METERS` | No | `100` | Base spatial cell size (meters) |
-| `DISPLAY_GRID_DEFAULT_COLS` | No | `75` | Default heatmap grid width (columns); rows are derived from the data's aspect ratio so cells are square |
+| `DISPLAY_GRID_DEFAULT_COLS` | No | `125` | Default heatmap grid width (columns); rows are derived from the data's aspect ratio so cells are square |
 | `DISPLAY_GRID_MIN_COLS` / `DISPLAY_GRID_MAX_COLS` | No | `10` / `200` | Grid width (column count) bounds |
 | `DISPLAY_TIME_BIN_DEFAULT_YEARS` | No | `50` | Default display bin size (years) |
 | `DISPLAY_TIME_BIN_MIN_YEARS` / `DISPLAY_TIME_BIN_MAX_YEARS` | No | `10` / `100` | Bin size bounds (years) |
-| `CACHE_TTL_MINUTES` | No | `10` | TTL for cached DB queries |
+| `ADDRESS_MAX_DISTANCE_M` | No | `30` | Max metres a feature's coordinate may sit from an address before it won't link to it |
+| `STREET_MAX_DISTANCE_M` | No | `50` | Same, for streets (areas link by containment, no radius) |
+| `ERA_CUTOFF` | No | `1943-01-01` | Historical↔present address boundary: a feature dated before this resolves to an Adamlink address, on/after to a BAG one |
+| `CURRENT_ANCHOR` | No | `2020-01-01` | Present-day reference date for scoring current place names |
+| `CACHE_TTL_MINUTES` | No | `10` | TTL for cached DB queries (metadata, record types, time slices). Raise it on a deployed box; the data only changes at rebuild |

@@ -1,0 +1,75 @@
+[
+ {
+  "id": "region-1",
+  "textGranularity": "block",
+  "body": [
+   {
+    "source": {
+     "id": "https://example.org/tags/regions/text"
+    }
+   }
+  ],
+  "items": [
+   "line-1",
+   {
+    "id": "line-2"
+   }
+  ]
+ },
+ {
+  "id": "line-1",
+  "textGranularity": "line",
+  "body": [
+   {
+    "value": "Vandaag liep ik over de Kalverstraat."
+   }
+  ]
+ },
+ {
+  "id": "line-2",
+  "textGranularity": "line",
+  "body": [
+   {
+    "value": "Daarna naar het Olympisch Stadion en Schiphol."
+   }
+  ]
+ },
+ {
+  "id": "region-2",
+  "textGranularity": "block",
+  "body": [
+   {
+    "source": {
+     "id": "https://id.amsterdamtimemachine.nl/ark:/81741/amsterdam-diaries/tags/regions/visual"
+    }
+   }
+  ],
+  "target": {
+   "source": {
+    "@id": "https://iiif.example.org/scan-1"
+   },
+   "selector": [
+    {
+     "type": "FragmentSelector",
+     "value": "xywh=10,20,300,400"
+    }
+   ]
+  }
+ },
+ {
+  "id": "region-3",
+  "textGranularity": "block",
+  "items": [
+   "line-3"
+  ]
+ },
+ {
+  "id": "line-3",
+  "textGranularity": "line",
+  "body": [
+   {
+    "value": "Thuis gebleven, regen in de stad."
+   }
+  ]
+ }
+]

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { mergeCss } from '$utils/utils';
+	import { mergeCss } from '#lib/utils/utils.js';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -7,10 +7,7 @@
 		children?: Snippet;
 	}
 
-	let {
-		class: className,
-		children
-	}: Props = $props();
+	let { class: className, children }: Props = $props();
 
 	const baseClasses = 'font-bold';
 </script>

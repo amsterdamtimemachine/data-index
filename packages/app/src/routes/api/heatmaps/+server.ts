@@ -1,17 +1,16 @@
 // src/routes/api/heatmaps/+server.ts
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { HeatmapResolutionConfig } from '@atm/shared/types';
-import { DISPLAY_GRID_DEFAULT_COLS, DISPLAY_GRID_MIN_COLS, DISPLAY_GRID_MAX_COLS, DISPLAY_TIME_BIN_DEFAULT_YEARS } from '@atm/shared';
+import { DISPLAY_TIME_BIN_DEFAULT_YEARS } from '@atm/shared';
 import { getHeatmap, getHeatmapTimeline } from '@atm/db/queries';
-import { parseRecordTypes, parseDatasets, parsePlaceTypes } from '$lib/server/query-params';
-
-function parseGridParam(value: string | null, defaultVal: number): number {
-	if (value === null) return defaultVal;
-	const parsed = parseInt(value, 10);
-	if (isNaN(parsed)) return defaultVal;
-	return Math.min(Math.max(parsed, DISPLAY_GRID_MIN_COLS), DISPLAY_GRID_MAX_COLS);
-}
+import {
+	parseRecordTypes,
+	parseDatasets,
+	parsePlaceTypes,
+	parseMatchFilters,
+	parseGridCols
+} from '#lib/server/query-params.js';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -22,40 +21,60 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		// Parse grid resolution — only width (cols); rows are derived from the data's
 		// aspect ratio server-side so display cells are square.
-		const cols = parseGridParam(url.searchParams.get('cols'), DISPLAY_GRID_DEFAULT_COLS);
+		const cols = parseGridCols(url);
 		const resolution: HeatmapResolutionConfig = { cols };
 
 		// Parse bin size
 		// Forwarded as-is; the query layer clamps and snaps it to a valid bin (normaliseBinSize).
 		const binSizeParam = url.searchParams.get('binSize');
-		const binSize = binSizeParam ? parseInt(binSizeParam, 10) || DISPLAY_TIME_BIN_DEFAULT_YEARS : DISPLAY_TIME_BIN_DEFAULT_YEARS;
+		const binSize = binSizeParam
+			? parseInt(binSizeParam, 10) || DISPLAY_TIME_BIN_DEFAULT_YEARS
+			: DISPLAY_TIME_BIN_DEFAULT_YEARS;
+
+		// Optional: restrict counts to features matching a text search and/or tags.
+		const filters = parseMatchFilters(url);
 
 		console.log(
-			`🔥 Heatmaps API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, timeSlice: ${timeSliceParam || 'all'}, grid width: ${cols} cols, binSize: ${binSize}`
+			`Heatmaps API request - recordTypes: ${recordTypes?.join(', ') || 'all'}, placeTypes: ${placeTypes?.join(', ') || 'all'}, datasets: ${datasetIds?.join(', ') || 'all'}, timeSlice: ${timeSliceParam || 'all'}, grid width: ${cols} cols, binSize: ${binSize}, q: ${filters.searchQuery || 'none'}, tags: ${filters.tags?.join(', ') || 'none'} (${filters.tagOperator})`
 		);
 
 		if (timeSliceParam) {
-			const heatmapResponse = await getHeatmap(timeSliceParam, resolution, recordTypes, datasetIds, placeTypes, binSize);
+			const heatmapResponse = await getHeatmap(
+				timeSliceParam,
+				resolution,
+				recordTypes,
+				datasetIds,
+				placeTypes,
+				binSize,
+				filters
+			);
 			const cellCount = Object.values(heatmapResponse.timeline)[0]?.indices.length ?? 0;
-			console.log(`✅ Heatmap for ${timeSliceParam}: ${cellCount} cells`);
+			console.log(`Heatmap for ${timeSliceParam}: ${cellCount} cells`);
 
-			return json(heatmapResponse, {
+			return Response.json(heatmapResponse, {
 				headers: {
 					'Cache-Control': 'no-cache',
 					'Access-Control-Allow-Origin': '*'
 				}
 			});
 		} else {
-			const heatmapResponse = await getHeatmapTimeline(resolution, recordTypes, datasetIds, placeTypes, binSize);
+			const heatmapResponse = await getHeatmapTimeline(
+				resolution,
+				recordTypes,
+				datasetIds,
+				placeTypes,
+				binSize,
+				filters
+			);
 			const timeSliceCount = Object.keys(heatmapResponse.timeline).length;
 			const totalCells = Object.values(heatmapResponse.timeline).reduce(
 				(sum, h) => sum + h.indices.length,
 				0
 			);
 
-			console.log(`✅ Heatmap timeline: ${timeSliceCount} slices, ${totalCells} total cells`);
+			console.log(`Heatmap timeline: ${timeSliceCount} slices, ${totalCells} total cells`);
 
-			return json(heatmapResponse, {
+			return Response.json(heatmapResponse, {
 				headers: {
 					'Cache-Control': 'no-cache',
 					'Access-Control-Allow-Origin': '*'
@@ -64,11 +83,8 @@ export const GET: RequestHandler = async ({ url }) => {
 		}
 	} catch (err) {
 		if (err && typeof err === 'object' && 'status' in err) throw err;
-		console.error('❌ Heatmaps API error:', err);
-		throw error(500, {
-			code: 'INTERNAL_ERROR',
-			message: 'Failed to load heatmap data'
-		});
+		console.error('Heatmaps API error:', err);
+		throw error(500, 'Failed to load heatmap data', { code: 'INTERNAL_ERROR' });
 	}
 };
 

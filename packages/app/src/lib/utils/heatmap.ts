@@ -17,6 +17,12 @@ function rdToWgs84(x: number, y: number): [number, number] {
 	return [lon, lat];
 }
 
+/** Reproject a WGS84 point to RD/28992 [x, y] metres — the inverse of rdToWgs84. */
+function wgs84ToRd(lon: number, lat: number): [number, number] {
+	const [x, y] = proj4('WGS84', 'EPSG:28992', [lon, lat]);
+	return [x, y];
+}
+
 /**
  * Calculate cell bounds for a specific cell
  */
@@ -68,7 +74,7 @@ export function parseRowColFromCellId(cellId: string): { row: number; col: numbe
 }
 
 /**
- * Find cell bounds from cellId 
+ * Find cell bounds from cellId
  */
 export function getCellBoundsFromCellId(
 	cellId: string,
@@ -85,6 +91,88 @@ export function getCellBoundsFromCellId(
 	}
 
 	return calculateCellBounds(row, col, dimensions);
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+	return Math.max(lo, Math.min(hi, n));
+}
+
+/**
+ * Map a WGS84 point to the display cell containing it — the inverse of
+ * calculateCellBounds, clamped into range so an edge/outside point resolves to the
+ * nearest valid cell instead of out of bounds.
+ */
+export function getCellIdFromLonLat(
+	lon: number,
+	lat: number,
+	dimensions: HeatmapDimensions
+): string {
+	const { minLon, maxLon, minLat, maxLat, colsAmount, rowsAmount } = dimensions;
+	const col = clamp(
+		Math.floor(((lon - minLon) / (maxLon - minLon)) * colsAmount),
+		0,
+		colsAmount - 1
+	);
+	const row = clamp(
+		Math.floor(((lat - minLat) / (maxLat - minLat)) * rowsAmount),
+		0,
+		rowsAmount - 1
+	);
+	return getCellIdFromRowCol(row, col);
+}
+
+/**
+ * The cell under a WGS84 point, resolved the way the cells were drawn: in RD space
+ * when the grid is reprojected (cells are axis-aligned squares there), in lon/lat
+ * otherwise. O(1) arithmetic — no hit-testing against rendered geometry. Unlike
+ * getCellIdFromLonLat this does not clamp: a point outside the grid is null.
+ */
+export function cellIdAtLonLat(
+	lon: number,
+	lat: number,
+	dimensions: HeatmapDimensions,
+	reprojected: boolean
+): string | null {
+	const { colsAmount, rowsAmount } = dimensions;
+	const useRd =
+		reprojected &&
+		dimensions.rdOriginX != null &&
+		dimensions.rdOriginY != null &&
+		dimensions.rdCellWidth != null &&
+		dimensions.rdCellHeight != null;
+
+	let col: number;
+	let row: number;
+	if (useRd) {
+		const { rdOriginX, rdOriginY, rdCellWidth, rdCellHeight } =
+			dimensions as Required<HeatmapDimensions>;
+		const [x, y] = wgs84ToRd(lon, lat);
+		col = Math.floor((x - rdOriginX) / rdCellWidth);
+		row = Math.floor((y - rdOriginY) / rdCellHeight);
+	} else {
+		const { minLon, maxLon, minLat, maxLat } = dimensions;
+		col = Math.floor(((lon - minLon) / (maxLon - minLon)) * colsAmount);
+		row = Math.floor(((lat - minLat) / (maxLat - minLat)) * rowsAmount);
+	}
+	if (col < 0 || col >= colsAmount || row < 0 || row >= rowsAmount) {
+		return null;
+	}
+	return getCellIdFromRowCol(row, col);
+}
+
+/** Cells that were active before but are not any more — the only ones a heatmap
+ * change has to zero, instead of resetting the whole grid. */
+export function staleCells(
+	previous: Iterable<string>,
+	active: { has(id: string): boolean }
+): string[] {
+	const stale: string[] = [];
+	for (const id of previous) {
+		if (!active.has(id)) {
+			stale.push(id);
+		}
+	}
+	return stale;
 }
 
 /**
@@ -179,6 +267,121 @@ export function generateCellGeometries(
 	}
 
 	return geometries;
+}
+
+/**
+ * GeoJSON outline of a display-cell set: every cell edge not shared with another
+ * cell in the set. Consumes the CellGeometry rings the map renders, so the
+ * outline lands exactly on drawn cell borders (also in exact-reproject mode).
+ */
+// the perimeter as polygon rings: a line layer outlines a polygon closed, with a
+// joint at every corner, where a line string would end in two caps
+export interface PlaceOutline {
+	type: 'Feature';
+	geometry: { type: 'MultiPolygon'; coordinates: [number, number][][][] };
+	properties: Record<string, never>;
+}
+
+export function placeOutlineGeometry(
+	cells: number[],
+	geometries: CellGeometry[],
+	colsAmount: number
+): PlaceOutline {
+	const inSet = new Set(cells);
+	// The perimeter's edges as grid corners (col, row), each pointing
+	// counter-clockwise around its cell, so a walk along them keeps the region on its
+	// left. Corners are whole numbers, so neighbours always meet exactly; each
+	// corner's coordinate is taken from a cell that has it.
+	const edges: Corner[][] = [];
+	const coordinates = new Map<string, [number, number]>();
+	for (const idx of cells) {
+		const cell = geometries[idx];
+		if (!cell) {
+			continue;
+		}
+		// ring is SW→SE→NE→NW→SW; an edge is kept when its neighbour is not in the set
+		const ring = cell.coordinates[0];
+		const sw: Corner = [cell.col, cell.row];
+		const se: Corner = [cell.col + 1, cell.row];
+		const ne: Corner = [cell.col + 1, cell.row + 1];
+		const nw: Corner = [cell.col, cell.row + 1];
+		coordinates.set(cornerKey(sw), ring[0]);
+		coordinates.set(cornerKey(se), ring[1]);
+		coordinates.set(cornerKey(ne), ring[2]);
+		coordinates.set(cornerKey(nw), ring[3]);
+		if (!inSet.has(idx - colsAmount)) {
+			edges.push([sw, se]); // south
+		}
+		if (cell.col === colsAmount - 1 || !inSet.has(idx + 1)) {
+			edges.push([se, ne]); // east
+		}
+		if (!inSet.has(idx + colsAmount)) {
+			edges.push([ne, nw]); // north
+		}
+		if (cell.col === 0 || !inSet.has(idx - 1)) {
+			edges.push([nw, sw]); // west
+		}
+	}
+	const rings = joinRings(edges).map((ring) => [
+		ring.map((corner) => coordinates.get(cornerKey(corner))!)
+	]);
+	return {
+		type: 'Feature',
+		geometry: { type: 'MultiPolygon', coordinates: rings },
+		properties: {}
+	};
+}
+
+// a grid corner: column and row of the cell lines that meet there
+type Corner = [number, number];
+
+const cornerKey = (corner: Corner) => `${corner[0]},${corner[1]}`;
+
+// the turn from one direction to the next: positive left, negative right
+function turn(from: Corner, via: Corner, to: Corner): number {
+	return (via[0] - from[0]) * (to[1] - via[1]) - (via[1] - from[1]) * (to[0] - via[0]);
+}
+
+// The edges chained into closed rings, so a corner is one joint and no two segments
+// overlap. Where two cells touch only at a corner the perimeter passes it twice; the
+// walk takes the left turn there, which keeps each cell group its own ring.
+function joinRings(edges: Corner[][]): Corner[][] {
+	const unused = new Map<string, Corner[][]>();
+	for (const edge of edges) {
+		const key = cornerKey(edge[0]);
+		const list = unused.get(key) ?? [];
+		list.push(edge);
+		unused.set(key, list);
+	}
+	const rings: Corner[][] = [];
+	for (const first of edges) {
+		const fromFirst = unused.get(cornerKey(first[0]));
+		if (!fromFirst || !fromFirst.includes(first)) {
+			continue;
+		}
+		fromFirst.splice(fromFirst.indexOf(first), 1);
+		const ring: Corner[] = [first[0], first[1]];
+		let previous = first[0];
+		let current = first[1];
+		while (cornerKey(current) !== cornerKey(first[0])) {
+			const candidates = unused.get(cornerKey(current));
+			if (!candidates || candidates.length === 0) {
+				break;
+			}
+			let next = candidates[0];
+			for (const candidate of candidates) {
+				if (turn(previous, current, candidate[1]) > turn(previous, current, next[1])) {
+					next = candidate;
+				}
+			}
+			candidates.splice(candidates.indexOf(next), 1);
+			ring.push(next[1]);
+			previous = current;
+			current = next[1];
+		}
+		rings.push(ring);
+	}
+	return rings;
 }
 
 /**

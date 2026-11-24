@@ -1,16 +1,28 @@
 <script lang="ts">
-	import { mergeCss } from '$utils/utils';
+	import { mergeCss } from '#lib/utils/utils.js';
 
 	interface Props {
 		level?: 1 | 2 | 3 | 4 | 5 | 6;
 		depth?: 1 | 2 | 3 | 4 | 5 | 6;
 		id?: string;
 		style?: string;
+		// a dialog's title takes the first focus, so a screen reader starts there
+		tabindex?: number;
+		autofocus?: boolean;
 		class?: string;
 		children?: import('svelte').Snippet;
 	}
 
-	let { level, depth, id, style, class: className, children }: Props = $props();
+	let {
+		level,
+		depth,
+		id,
+		style,
+		tabindex,
+		autofocus,
+		class: className,
+		children
+	}: Props = $props();
 
 	const headingLevel = $derived(depth ?? level ?? 1);
 
@@ -24,10 +36,14 @@
 	};
 </script>
 
+<!-- autofocus is set only on a dialog's title, where it gives the dialog its first focus -->
+<!-- svelte-ignore a11y_autofocus -->
 <svelte:element
 	this={`h${headingLevel}`}
 	{id}
 	{style}
+	{tabindex}
+	{autofocus}
 	class={mergeCss('block font-sans', levelStyles[headingLevel], className)}
 >
 	{@render children?.()}

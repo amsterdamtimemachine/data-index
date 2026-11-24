@@ -1,17 +1,40 @@
 import type { HeatmapCellBounds } from './heatmap';
 
-export type RecordType = 'image' | 'text' | 'person' | 'unknown';
+export type RecordType = 'image' | 'text' | 'person' | 'event' | 'story' | 'unknown';
 
-export type FeaturesSortField = 'relevance' | 'spatialFrequency' | 'date';
+/** Who produced data, after PROV: an institution, a classifier run, a person. */
+export type AgentKind = 'Organization' | 'SoftwareAgent' | 'Person';
+
+/** A classifier model that tagged a feature, with its page (model card or repository). */
+export interface Classifier {
+  id: string;
+  label: string;
+  url?: string;
+}
+
+// 'sample', 'spatialFrequency' and 'datePrecision' interleave record types and
+// datasets (double rotation); 'date' is flat chronology.
+export type FeaturesSortField = 'sample' | 'spatialFrequency' | 'datePrecision' | 'date';
 export type SortDirection = 'asc' | 'desc';
 export type TagOperator = 'AND' | 'OR';
+
+/**
+ * Filters that select individual features rather than bucket categories: a text
+ * search and/or a tag selection. The heatmap, histogram and feature list apply
+ * them identically (see @atm/db queries/match-filters.ts).
+ */
+export interface MatchFilters {
+  searchQuery?: string;
+  tags?: string[];
+  tagOperator?: TagOperator;
+}
 
 /**
  * Schema.org entity types
  */
 export interface EntityBase {
   id?: string;
-  type: "Person" | "CreativeWork" | "MediaObject";
+  type: "Person" | "CreativeWork" | "MediaObject" | "ScreeningEvent" | "Manuscript";
   name: string;
 }
 
@@ -24,7 +47,10 @@ export interface PersonEntity extends EntityBase {
 }
 
 export interface CreativeWorkEntity extends EntityBase {
+  type: "CreativeWork" | "MediaObject";
   dateCreated?: string;
+  // a published text's issue date (Schema.org datePublished), YYYY-MM-DD or a start/end range
+  datePublished?: string;
   author?: string;
   url?: string;
 }
@@ -32,19 +58,121 @@ export interface CreativeWorkEntity extends EntityBase {
 export interface MediaObjectEntity extends CreativeWorkEntity {
   type: "MediaObject";
   contentUrl: string;
+  // the archive's own wording of the dating, with its uncertainty ("1953 (ca.) t/m
+  // 1995 (ca.)"); dateCreated holds the same dating as ISO dates
+  dateText?: string;
+}
+
+export interface MovieEntity {
+  type: "Movie";
+  name: string;
+  url?: string;
+  dateCreated?: string;
+  countryOfOrigin?: string;
+  director?: string;
+  productionCompany?: string;
+}
+
+/**
+ * The venue of a programme, as the source records it: identifier is its permanent id
+ * at the source, additionalType the source's own kind ("Cinema", "mobile theatre").
+ */
+export interface VenueEntity {
+  type: "Place";
+  name: string;
+  identifier: string;
+  // the venue's page at the source
+  url?: string;
+  additionalType?: string;
+  address?: string;
+}
+
+/** One programme at a venue on a date, with its films in the source's order; the title is the first. */
+export interface ScreeningEventEntity extends EntityBase {
+  type: "ScreeningEvent";
+  // source precision: YYYY-MM-DD, YYYY-MM or YYYY
+  startDate: string;
+  location: VenueEntity;
+  items: MovieEntity[];
+}
+
+/** The diary an entry belongs to, with its page at the holding archive. */
+export interface BookEntity {
+  type: "Book";
+  name: string;
+  url?: string;
+}
+
+/** A span of an excerpt where a place is named, as the writer spelled it. */
+export interface ExcerptMention {
+  start: number;
+  end: number;
+}
+
+/**
+ * The part of an entry's transcription around the first mention of one place: whole
+ * lines, the offsets of every mention of that place inside it, and whether the entry
+ * continues before or after it.
+ */
+// A drawing or picture on the diary page, as the source records it: the scan on the
+// Diaries IIIF server, the box on it ("x,y,w,h") and where it sits in the excerpt's text
+export interface ExcerptImage {
+  source: string;
+  region: string;
+  anchor: number;
+}
+
+export interface Excerpt {
+  // the index place the entry was linked to for this mention; the card's key
+  placeId?: string;
+  text: string;
+  truncatedBefore: boolean;
+  truncatedAfter: boolean;
+  mentions: ExcerptMention[];
+  // the images anchored within the text, in reading order; absent when there are none
+  images?: ExcerptImage[];
+}
+
+/**
+ * One diary entry: a dated piece of writing with an excerpt of its transcription per
+ * Amsterdam place it mentions, its diary and author. The index answers what, when,
+ * where and why it is here; the people and places the entry names are the source's
+ * to show.
+ */
+export interface ManuscriptEntity extends EntityBase {
+  type: "Manuscript";
+  // source precision: YYYY-MM-DD, YYYY-MM or YYYY
+  dateCreated?: string;
+  excerpts: Excerpt[];
+  author?: { type: "Person"; name: string; url?: string };
+  isPartOf?: BookEntity;
 }
 
 /** Discriminated union of all concrete entity types. */
-export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity;
+export type Entity = PersonEntity | CreativeWorkEntity | MediaObjectEntity | ScreeningEventEntity | ManuscriptEntity;
+
+
+// the place types, as the registry in vocab orders them
+import type { PlaceType } from '../vocab/place-types';
+import type { SearchHit } from '../vocab/search-fields';
+export type { PlaceType };
+
+/** Where a place came from — Adamlink (historical) or a PDOK base registry. */
+export type PlaceSource = 'adamlink' | 'cbs' | 'nwb' | 'bag';
 
 
 /**
- * Query parameters for fetching features
+ * Spatial population of a features query: a display cell's bounds (inverted to a
+ * base-cell range server-side) or a place's cell set.
  */
-export type PlaceType = 'address' | 'street' | 'neighbourhood' | 'district';
+export type FeaturesArea =
+  | { kind: 'bounds'; bounds: HeatmapCellBounds }
+  // the display cells the place lies in, at the grid width the map renders (cols)
+  | { kind: 'place'; placeId: string; cols?: number };
 
 export interface FeaturesQuery {
-  bounds: HeatmapCellBounds;
+  // the population; not needed when featureId names the feature
+  area?: FeaturesArea;
   recordTypes?: RecordType[];
   datasetIds?: string[];
   placeTypes?: PlaceType[];
@@ -53,6 +181,15 @@ export interface FeaturesQuery {
   timeSlice?: string;
   sort?: FeaturesSortField;
   sortDirection?: SortDirection;
+  // Shuffle seed for sort='sample'; same seed = same order (stable pagination).
+  seed?: string;
+  // the text search (websearch syntax) over the title, the description and the
+  // entity's searchable fields
+  searchQuery?: string;
+  // one feature, as the card the list showed: by its id, and at the place its card
+  // is at when it has several; within the population when one is given
+  featureId?: string;
+  featurePlaceId?: string;
   page?: number;
   pageSize?: number;
 }
@@ -65,20 +202,40 @@ export interface FeatureResult {
   url?: string;
   recordType: RecordType;
   placeType?: PlaceType;
+  // the index place this result is shown at
+  placeId?: string;
   label: string;
   description?: string;
   contentUrl?: string;
   dateRange: [number, number];
-  tags: string[];
+  // the feature's period, YYYY-MM-DD, inclusive
+  startDate?: string;
+  endDate?: string;
+  tags: string[]; // tag ids; the UI translates them
+  // the classifier models behind the tags, one row each on the card
+  classifiers: Classifier[];
   datasetLabel?: string;
-  organisationLabel?: string;
-  organisationUrl?: string;
+  // the whole dataset as a download, when the source offers one
+  datasetDistributionUrl?: string;
+  providerLabel?: string;
+  providerUrl?: string;
   spatialFrequency: number;
-  temporalFrequency: number;
   entity?: Entity;
   relationId?: string;
+  // the date belongs to the relation (screened at a place on a day): the card words it with the place
+  relationDated?: boolean;
   displayName?: string;
   historicalLabel?: string;
+  // with a search active: the feature's values that match it, the matching words marked
+  foundBy?: SearchHit[];
+  placeSource?: PlaceSource;
+  placeUrl?: string;
+  placeProviderLabel?: string;
+  placeProviderUrl?: string;
+  // Set only when the geometry comes from a different provider than the place
+  // (e.g. an Adamlink street backfilled from NWB): that provider and its page.
+  geometryProviderLabel?: string;
+  geometryProviderUrl?: string;
 }
 
 /**

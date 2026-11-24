@@ -7,10 +7,12 @@
  * Direct DB inspections are kept in `dbAssertions.ts` so test bodies read
  * like behaviour assertions instead of SQL.
  */
+import type { MediaObjectEntity } from '@atm/shared';
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { setupTestDb, cleanTestDb, seedTestData, teardownTestDb } from './setup';
 import * as dbq from './dbAssertions';
 
+import { PLACE_PROVIDERS } from '@atm/shared';
 import { getFeatures } from '../queries/features';
 import { getHeatmap, getHeatmapTimeline } from '../queries/heatmap';
 import { getHistogram } from '../queries/histogram';
@@ -26,7 +28,7 @@ beforeAll(async () => {
   await cleanTestDb();
   await seedTestData();
 
-  // Compute spatial_frequency and temporal_frequency
+  // Compute spatial_frequency
   const { rebuildIndex } = await import('../etl/post-process/rebuild-index');
   await rebuildIndex();
 });
@@ -123,7 +125,10 @@ describe('Feature ingestion', () => {
   });
 
   test('features have entity JSONB with correct schema.org type', async () => {
-    expect((await dbq.firstFeatureEntity('beeldbank')).type).toBe('MediaObject');
+    const image = await dbq.firstFeatureEntity('beeldbank');
+    expect(image.type).toBe('MediaObject');
+    // the archive's wording of the dating, beside the ISO dates
+    expect((image as MediaObjectEntity).dateText).toBeTruthy();
     expect((await dbq.firstFeatureEntity('joods-monument')).type).toBe('Person');
   });
 });
@@ -137,13 +142,6 @@ describe('rebuild-index', () => {
     const matches = await dbq.placesWithMatchingSpatialFrequencyCount();
     const total = await dbq.featuredPlaceCount();
     expect(matches).toBe(total);
-  });
-
-  test('temporal_frequency reflects year span / base_bin', async () => {
-    // JM features: 1900-1945 span = 45 years, base bin 10y → 5 (rounded up)
-    const tf = await dbq.firstFeatureTemporalFrequency('joods-monument');
-    expect(tf).toBeGreaterThanOrEqual(4);
-    expect(tf).toBeLessThanOrEqual(6);
   });
 });
 
@@ -174,19 +172,24 @@ describe('computeTimeSlices', () => {
 });
 
 describe('getMetadata', () => {
-  test('returns datasets, recordTypes, timeSlices, stats', async () => {
+  test('returns datasets, recordTypes, placeTypes, timeSlices', async () => {
     const meta = await getMetadata();
-    // dataset ids, record types and total all match the seeded data (no hardcoded lists)
+    // dataset ids and record types match the seeded data (no hardcoded lists)
     expect(meta.datasets.map(d => d.id).sort()).toEqual(await dbq.datasetIdList());
     expect([...meta.recordTypes].map(String).sort()).toEqual(await dbq.recordTypeList());
+    // place types come from cell_features: only types with features on the map
+    expect(meta.placeTypes.length).toBeGreaterThan(0);
+    for (const t of meta.placeTypes) {
+      expect(['address', 'street', 'neighbourhood', 'district']).toContain(t);
+    }
     expect(meta.timeSlices.length).toBeGreaterThan(0);
-    expect(meta.stats!.totalFeatures).toBe(await dbq.featureCount());
+    expect(meta).not.toHaveProperty('stats');
   });
 });
 
 describe('getFeatures', () => {
   test('returns features within bounds', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, pageSize: 50 });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, pageSize: 50 });
     // BOUNDS cover the whole dataset, so the query must return EVERY feature —
     // cross-checked against a direct COUNT rather than a hardcoded total.
     expect(r.total).toBe(await dbq.featureCount());
@@ -194,7 +197,7 @@ describe('getFeatures', () => {
   });
 
   test('filters by recordType', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, recordTypes: ['person'], pageSize: 50 });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, recordTypes: ['person'], pageSize: 50 });
     for (const f of r.data) {
       expect(f.recordType).toBe('person');
     }
@@ -203,7 +206,7 @@ describe('getFeatures', () => {
   });
 
   test('filters by datasetIds', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, datasetIds: ['joods-monument'], pageSize: 50 });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, datasetIds: ['joods-monument'], pageSize: 50 });
     const expectedLabel = await dbq.datasetLabel('joods-monument');
     for (const f of r.data) {
       expect(f.datasetLabel).toBe(expectedLabel);
@@ -212,7 +215,7 @@ describe('getFeatures', () => {
   });
 
   test('returns displayName and historicalLabel', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, pageSize: 50 });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, pageSize: 50 });
     const withLabel = r.data.find(f => f.displayName);
     expect(withLabel).toBeDefined();
     // historicalLabel should also be populated for features within the registry date range
@@ -220,20 +223,41 @@ describe('getFeatures', () => {
     expect(withHistorical).toBeDefined();
   });
 
-  test('returns datasetLabel and organisationLabel matching the source tables', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, datasetIds: ['joods-monument'], pageSize: 50 });
+  test('a feature carries its period and whether its relation is dated', async () => {
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, pageSize: 50 });
+    expect(r.data.length).toBeGreaterThan(0);
+    for (const f of r.data) {
+      expect(f.relationDated).toBe(false);
+      expect(f.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(f.endDate! >= f.startDate!).toBe(true);
+    }
+  });
+
+  test('resolves the place provider from place.source via the agents join', async () => {
+    // Seeded places are all Adamlink LPs, so every feature carries the Adamlink provider.
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, pageSize: 50 });
+    const withProvider = r.data.find(f => f.placeProviderLabel);
+    expect(withProvider).toBeDefined();
+    expect(withProvider!.placeSource).toBe('adamlink');
+    expect(withProvider!.placeProviderLabel).toBe(PLACE_PROVIDERS.adamlink.label); // from agents, seeded from PLACE_PROVIDERS
+    expect(withProvider!.placeProviderUrl).toBe(PLACE_PROVIDERS.adamlink.url);
+    expect(withProvider!.placeUrl).toBeTruthy(); // per-record link, distinct from the provider homepage
+  });
+
+  test('returns datasetLabel and providerLabel matching the source tables', async () => {
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, datasetIds: ['joods-monument'], pageSize: 50 });
     const dsLabel = await dbq.datasetLabel('joods-monument');
-    const orgLabel = await dbq.organisationLabelForDataset('joods-monument');
+    const orgLabel = await dbq.providerLabelForDataset('joods-monument');
     expect(r.data.length).toBeGreaterThan(0);
     for (const f of r.data) {
       expect(f.datasetLabel).toBe(dsLabel); // value cross-check vs datasets table
-      expect(f.organisationLabel).toBe(orgLabel); // vs organisations table
-      expect(f.organisationUrl).toBeTruthy();
+      expect(f.providerLabel).toBe(orgLabel); // vs agents table
+      expect(f.providerUrl).toBeTruthy();
     }
   });
 
   test('truncates description to 128 characters', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, pageSize: 50 });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, pageSize: 50 });
     for (const f of r.data) {
       if (f.description) {
         expect(f.description.length).toBeLessThanOrEqual(128);
@@ -242,8 +266,8 @@ describe('getFeatures', () => {
   });
 
   test('pagination works correctly', async () => {
-    const p1 = await getFeatures({ bounds: BOUNDS, page: 1, pageSize: 2 });
-    const p2 = await getFeatures({ bounds: BOUNDS, page: 2, pageSize: 2 });
+    const p1 = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, page: 1, pageSize: 2 });
+    const p2 = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, page: 2, pageSize: 2 });
     expect(p1.data.length).toBeLessThanOrEqual(2);
     expect(p1.total).toBe(p2.total);
     expect(p1.totalPages).toBe(Math.ceil(p1.total / 2));
@@ -256,7 +280,7 @@ describe('getFeatures', () => {
   });
 
   test('results are interleaved by record type when multiple types present', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, pageSize: 50 });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, pageSize: 50 });
     const types = new Set(r.data.map(f => f.recordType));
     if (types.size >= 2) {
       // First few results should rotate through types, not cluster by type
@@ -267,7 +291,7 @@ describe('getFeatures', () => {
   });
 
   test('sort by date desc returns newer features first within each type', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, sort: 'date', sortDirection: 'desc', pageSize: 50 });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, sort: 'date', sortDirection: 'desc', pageSize: 50 });
     const byType = new Map<string, typeof r.data>();
     for (const f of r.data) {
       if (!byType.has(f.recordType)) byType.set(f.recordType, []);
@@ -287,7 +311,7 @@ describe('getFeatures', () => {
     // Pick a slice that contains some JM features (1900-1950 should)
     const slice1900 = slices.find(s => s.key === '1900_1950');
     if (slice1900) {
-      const r = await getFeatures({ bounds: BOUNDS, timeSlice: slice1900.key, pageSize: 50 });
+      const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, timeSlice: slice1900.key, pageSize: 50 });
       // JM features (1900-1945) should be included
       const jmCount = r.data.filter(f => f.datasetLabel === 'Joods Monument').length;
       expect(jmCount).toBeGreaterThan(0);

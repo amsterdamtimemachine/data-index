@@ -7,7 +7,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
-import { upsertSource } from '../etl/helpers';
+import { upsertSource } from '../etl/writers/feature-writer';
 import { rebuildIndex } from '../etl/post-process/rebuild-index';
 import { getFeatures } from '../queries/features';
 import { getHistogram } from '../queries/histogram';
@@ -24,9 +24,9 @@ describe('placeTypes filter (address / street / neighbourhood / district)', () =
     await setupTestDb();
     await cleanTestDb();
     await upsertSource({
-      organisation: { id: 'pt-org', label: 'PT Org' },
+      provider: { id: 'pt-org', label: 'PT Org' },
       dataset: { id: 'pt-ds', label: 'PT DS' },
-      relation: { id: 'isAbout', label: 'Is About' },
+      relations: [{ id: 'isAbout', label: 'Is About' }],
     });
 
     // One place of each type (RD/28992), all within the Amsterdam WGS84 bounds.
@@ -63,27 +63,27 @@ describe('placeTypes filter (address / street / neighbourhood / district)', () =
   });
 
   test('getFeatures filters to a single place type', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, placeTypes: ['street'] });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, placeTypes: ['street'] });
     expect(r.total).toBe(1);
     expect(r.data.map(f => f.recordType)).toEqual(['text']);
   });
 
   test('getFeatures honours the district place type (wijk, separate from neighbourhood)', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, placeTypes: ['district'] });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, placeTypes: ['district'] });
     expect(r.total).toBe(1);
     // district and neighbourhood are distinct types — filtering one must not return the other
-    const nbhd = await getFeatures({ bounds: BOUNDS, placeTypes: ['neighbourhood'] });
+    const nbhd = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, placeTypes: ['neighbourhood'] });
     expect(nbhd.total).toBe(1);
   });
 
   test('getFeatures accepts multiple place types', async () => {
-    const r = await getFeatures({ bounds: BOUNDS, placeTypes: ['address', 'neighbourhood'] });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS }, placeTypes: ['address', 'neighbourhood'] });
     expect(r.total).toBe(2);
     expect(new Set(r.data.map(f => f.recordType))).toEqual(new Set(['image', 'person']));
   });
 
   test('getFeatures without placeTypes returns every type', async () => {
-    const r = await getFeatures({ bounds: BOUNDS });
+    const r = await getFeatures({ area: { kind: 'bounds', bounds: BOUNDS } });
     expect(r.total).toBe(4);
   });
 

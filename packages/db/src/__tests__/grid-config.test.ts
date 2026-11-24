@@ -11,7 +11,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { setupTestDb, cleanTestDb, teardownTestDb, db } from './setup';
-import { upsertSource } from '../etl/helpers';
+import { upsertSource } from '../etl/writers/feature-writer';
 import { rebuildIndex } from '../etl/post-process/rebuild-index';
 import { getGridConfig } from '../queries/grid-config';
 import { getHeatmapTimeline } from '../queries/heatmap';
@@ -29,9 +29,9 @@ describe('grid_config + display-grid derivation', () => {
     await setupTestDb();
     await cleanTestDb();
     await upsertSource({
-      organisation: { id: 'gc-org', label: 'GC Org' },
+      provider: { id: 'gc-org', label: 'GC Org' },
       dataset: { id: 'gc-ds', label: 'GC DS' },
-      relation: { id: 'isAbout', label: 'Is About' },
+      relations: [{ id: 'isAbout', label: 'Is About' }],
     });
     await db.execute(sql`INSERT INTO place (id, type) VALUES ('gc-sw', 'address'), ('gc-ne', 'address')`);
     await db.execute(sql`INSERT INTO place_geometry (place_id, geometry) VALUES ('gc-sw', ST_SetSRID(ST_MakePoint(${ORIGIN_X}, ${ORIGIN_Y}), 28992)), ('gc-ne', ST_SetSRID(ST_MakePoint(${NE_X}, ${NE_Y}), 28992))`);

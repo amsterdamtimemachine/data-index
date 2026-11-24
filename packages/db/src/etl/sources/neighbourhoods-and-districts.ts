@@ -22,7 +22,7 @@
  */
 import { readFileSync } from 'fs';
 import { Parser } from 'n3';
-import { insertPlaces } from '../helpers';
+import { insertPlaces } from '../writers/place-writer';
 
 type DistrictType = 'district' | 'neighbourhood';
 
@@ -117,10 +117,15 @@ export async function ingest(filePath: string) {
     // Present-day (CBS) → open-ended window from the vintage year; historical units →
     // their own TTL begin/end (e.g. an 1850 buurt → since 1850, until 1909).
     const end = endYears.get(uri) ?? null;
-    const since = cbs
-      ? (type === 'district' ? CBS_WIJK_VALID_SINCE : CBS_BUURT_VALID_SINCE)
-      : `${begin}-01-01`;
-    const until = cbs ? null : (end ? `${end}-01-01` : null);
+    let since = `${begin}-01-01`;
+    let until: string | null = null;
+    if (cbs && type === 'district') {
+      since = CBS_WIJK_VALID_SINCE;
+    } else if (cbs) {
+      since = CBS_BUURT_VALID_SINCE;
+    } else if (end) {
+      until = `${end}-01-01`;
+    }
 
     districts.push({ uri, label, wkt, type, since, until });
   }
@@ -130,7 +135,7 @@ export async function ingest(filePath: string) {
   console.log(`Resolved ${districts.length} places: ${wijken} districts (wijken), ${buurten} neighbourhoods (buurten)${skipped ? `, ${skipped} skipped` : ''}`);
 
   const inserted = await insertPlaces(
-    districts.map(d => ({ id: d.uri, type: d.type, label: d.label, wkt: d.wkt, since: d.since, until: d.until })),
+    districts.map(d => ({ id: d.uri, type: d.type, label: d.label, source: 'adamlink', url: d.uri, wkt: d.wkt, since: d.since, until: d.until })),
     { sourceSrid: 4326, onConflict: 'replaceAll' }
   );
 
