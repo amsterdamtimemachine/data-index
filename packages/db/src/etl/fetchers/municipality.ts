@@ -9,6 +9,7 @@
  */
 import { writeFileSync } from 'fs';
 import { ACTIVE_SCOPE } from './config';
+import { getJson } from '../util/http';
 
 const SERVICE = 'https://service.pdok.nl/kadaster/bestuurlijkegebieden/wfs/v1_0';
 const FES = 'http://www.opengis.net/fes/2.0';
@@ -18,9 +19,7 @@ export async function run(outPath: string) {
   const filter = `<fes:Filter xmlns:fes="${FES}"><fes:Or>${codes.join('')}</fes:Or></fes:Filter>`;
   const url = `${SERVICE}?service=WFS&version=2.0.0&request=GetFeature&typeNames=bestuurlijkegebieden:Gemeentegebied`
     + `&outputFormat=application/json&srsName=EPSG:28992&filter=${encodeURIComponent(filter)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`PDOK ${res.status} for ${url}`);
-  const collection = await res.json() as { features: { properties: { identificatie: string; naam: string } }[] };
+  const collection = await getJson<{ features: { properties: { identificatie: string; naam: string } }[] }>(url);
   writeFileSync(outPath, JSON.stringify(collection));
   const found = collection.features.map((f) => `${f.properties.naam} (${f.properties.identificatie})`);
   console.log(`Wrote ${collection.features.length} municipality boundaries to ${outPath}: ${found.join(', ')}`);

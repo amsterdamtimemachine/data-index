@@ -1,0 +1,65 @@
+[
+ {
+  "@id": "book-1",
+  "@type": "Book",
+  "name": "Dagboek van Anna",
+  "url": {
+   "@id": "https://example.org/dagboek-anna"
+  },
+  "author": {
+   "@id": "person-1"
+  },
+  "about": {
+   "@id": "person-1",
+   "name": "Anna de Vries"
+  },
+  "hasPart": [
+   {
+    "@id": "entry-1"
+   },
+   {
+    "@id": "entry-2"
+   }
+  ]
+ },
+ {
+  "@id": "person-1",
+  "@type": "Person",
+  "name": "Anna de Vries"
+ },
+ {
+  "type": "Annotation",
+  "motivation": "classifying",
+  "body": [
+   {
+    "@id": "entry-1",
+    "name": "1 mei 1943",
+    "dateCreated": {
+     "@value": "1943-05-01"
+    },
+    "hasPart": [
+     "region-1",
+     "region-2"
+    ],
+    "isPartOf": {
+     "@id": "book-1"
+    }
+   }
+  ]
+ },
+ {
+  "type": "Annotation",
+  "motivation": "classifying",
+  "body": [
+   {
+    "@id": "entry-2",
+    "name": "2 mei 1943",
+    "dateCreated": "1943-05-02",
+    "hasPart": [
+     "region-3"
+    ],
+    "isPartOf": "book-1"
+   }
+  ]
+ }
+]

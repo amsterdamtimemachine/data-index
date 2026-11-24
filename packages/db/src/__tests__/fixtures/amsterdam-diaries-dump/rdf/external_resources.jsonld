@@ -1,0 +1,34 @@
+[
+ {
+  "@id": "https://adamlink.nl/geo/street/kalverstraat/2158",
+  "name": "Kalverstraat",
+  "geo": {
+   "latitude": 52.3705,
+   "longitude": 4.892
+  }
+ },
+ {
+  "@id": "http://www.wikidata.org/entity/Q503319",
+  "description": "sportgebouw in Amsterdam",
+  "geo": {
+   "latitude": 52.3435,
+   "longitude": 4.8545
+  }
+ },
+ {
+  "@id": "http://www.wikidata.org/entity/Q9694",
+  "name": "Luchthaven Schiphol",
+  "geo": {
+   "latitude": 52.3081,
+   "longitude": 4.764169
+  }
+ },
+ {
+  "@id": "http://www.wikidata.org/entity/Q727",
+  "name": "Amsterdam",
+  "geo": {
+   "latitude": 52.3728,
+   "longitude": 4.8936
+  }
+ }
+]

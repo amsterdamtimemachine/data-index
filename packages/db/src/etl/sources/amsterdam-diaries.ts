@@ -3,7 +3,7 @@
  * every Amsterdam place it mentions. The index keeps what, when, where and why it
  * is here; the people and places an entry names are the source's to show.
  *
- * Reads the JSONL exported from the Amsterdam Diaries Time Machine dump: one line
+ * Reads the JSONL db:extract writes from the Amsterdam Diaries Time Machine dump: one line
  * per entry and place, the same entry fields repeated with a different `place`, so
  * the writer links the one feature to each place in turn. A street, address or
  * building resolves by its Adamlink id; a Wikidata place by the name the source gives
@@ -21,9 +21,11 @@ import { ExtractionArgs, PlaceExtractionMethod, Resolved } from '../places/place
 import { NewFeature } from '../../schema';
 import { Excerpt, ManuscriptEntity, RecordType, parsePartialDate, partialDateRange } from '@atm/shared';
 
-type DiaryPlace = { uri: string; name: string; kind: string; geom_wkt: string };
+// kind: address, street or building for an Adamlink place, else wikidata
+export type DiaryPlace = { uri: string; name: string | null; kind: string; geom_wkt: string };
 
-type DiaryEntryRecord = {
+/** An entry at one of its places, as db:extract writes it from the Diaries dump. */
+export type DiaryEntryRow = {
   id: string;
   url: string;
   name: string | null;
@@ -35,6 +37,9 @@ type DiaryEntryRecord = {
   // this row's place, and every Amsterdam place of the entry
   place: DiaryPlace;
   places: DiaryPlace[];
+};
+
+type DiaryEntryRecord = DiaryEntryRow & {
   // the place's Adamlink id when it is one the index holds by id (a street, an
   // address or a building); empty otherwise, so the name, then the point, takes over
   place_uri?: string;
@@ -80,7 +85,7 @@ export class AmsterdamDiariesIngestor extends Ingestor<DiaryEntryRecord> {
   // the place methods read columns of the row: lift the place's id, name and point to the top
   private placeColumns(row: DiaryEntryRecord, place: DiaryPlace): DiaryEntryRecord {
     row.geom_wkt = place.geom_wkt;
-    row.place_name = place.name;
+    row.place_name = place.name ?? undefined;
     if (place.kind === 'street' || place.kind === 'address' || place.kind === 'building') {
       row.place_uri = place.uri;
     } else {

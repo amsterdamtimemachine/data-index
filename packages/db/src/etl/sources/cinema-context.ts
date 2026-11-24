@@ -2,7 +2,7 @@
  * Import Cinema Context programmes: one programme of one venue on one date as an
  * event, at the venue's address.
  *
- * Reads the JSONL exported from the Cinema Context database dump: one line per
+ * Reads the JSONL db:extract writes from the Cinema Context database dump: one line per
  * programme with its venue, the venue's address as written and its point, the items
  * in order, and the newspapers it was listed in. Only the films are kept: a programme
  * becomes a ScreeningEvent screened at its venue with its films as items, its live acts
@@ -22,7 +22,8 @@ import { ProgrammeEntityFactory, type SourceItem } from '../ingest/entity-factor
 import { ExtractionArgs, PlaceExtractionMethod } from '../places/place-index';
 import { RecordType, parsePartialDate, partialDateRange } from '@atm/shared';
 
-type CinemaContextRecord = {
+/** A programme as db:extract writes it from the Cinema Context dump. */
+export type CinemaContextRecord = {
   perm_id: string | null;
   // the programme's page at the source, present with a permanent id
   url: string | null;
