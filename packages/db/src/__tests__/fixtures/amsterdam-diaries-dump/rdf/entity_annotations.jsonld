@@ -1,0 +1,137 @@
+[
+ {
+  "body": [
+   {
+    "purpose": "classifying",
+    "source": {
+     "label": "Place"
+    }
+   },
+   {
+    "purpose": "identifying",
+    "source": {
+     "id": "https://adamlink.nl/geo/street/kalverstraat/2158",
+     "label": "Kalverstraat"
+    }
+   }
+  ],
+  "target": {
+   "source": "line-1-body",
+   "selector": [
+    {
+     "type": "TextPositionSelector",
+     "start": 24,
+     "end": 36
+    }
+   ]
+  }
+ },
+ {
+  "body": [
+   {
+    "purpose": "classifying",
+    "source": {
+     "label": "Place"
+    }
+   },
+   {
+    "purpose": "identifying",
+    "source": {
+     "id": "http://www.wikidata.org/entity/Q503319",
+     "label": "Olympisch Stadion"
+    }
+   }
+  ],
+  "target": {
+   "source": "line-2-body",
+   "selector": [
+    {
+     "type": "TextPositionSelector",
+     "start": 16,
+     "end": 33
+    }
+   ]
+  }
+ },
+ {
+  "body": [
+   {
+    "purpose": "classifying",
+    "source": {
+     "label": "Place"
+    }
+   },
+   {
+    "purpose": "identifying",
+    "source": {
+     "id": "http://www.wikidata.org/entity/Q9694",
+     "label": "Schiphol"
+    }
+   }
+  ],
+  "target": {
+   "source": "line-2-body",
+   "selector": [
+    {
+     "type": "TextPositionSelector",
+     "start": 37,
+     "end": 45
+    }
+   ]
+  }
+ },
+ {
+  "body": [
+   {
+    "purpose": "classifying",
+    "source": {
+     "label": "Place"
+    }
+   },
+   {
+    "purpose": "identifying",
+    "source": {
+     "id": "http://www.wikidata.org/entity/Q727",
+     "label": "Amsterdam"
+    }
+   }
+  ],
+  "target": {
+   "source": "line-3-body",
+   "selector": [
+    {
+     "type": "TextPositionSelector",
+     "start": 28,
+     "end": 32
+    }
+   ]
+  }
+ },
+ {
+  "body": [
+   {
+    "purpose": "classifying",
+    "source": {
+     "label": "Person"
+    }
+   },
+   {
+    "purpose": "identifying",
+    "source": {
+     "id": "https://example.org/person/x",
+     "label": "X"
+    }
+   }
+  ],
+  "target": {
+   "source": "line-1-body",
+   "selector": [
+    {
+     "type": "TextPositionSelector",
+     "start": 0,
+     "end": 7
+    }
+   ]
+  }
+ }
+]

@@ -354,8 +354,15 @@ Ingestion reads files from a local data directory; how you obtain each differs b
   Splitting fetch from ingest keeps ingestion offline and reproducible and pins each PDOK snapshot as an inspectable file; re-run a fetch to refresh it.
 - **Feature datasets (Beeldbank, Joods Monument, Delpher)** — currently private derivatives of mostly-public source collections, so they are not publicly distributable.
 - **Classifier tags (optional)** — the output of a tagger run over an ingested dataset, as JSONL with one row per record: `{"id": <the dataset's natural key>, "tags": ["<tag id>", ...]}`. The id must be the same natural key the dataset's ingestor derives feature ids from (for Beeldbank the record's identifier, not its image URL); if the classifier emits another key, convert the file first. One file per run, ingested with that run's id as `--tagger`.
-- **Amsterdam Diaries entries** — exported from the Amsterdam Diaries Time Machine dump (Zenodo) with a script kept next to the dump (`export_amsterdam_diaries.py`), as JSONL with one line per entry and Amsterdam place it mentions: the entry's ark and its reading page on the Diaries site (the diary's subject by slug and the entry's position among that subject's entries), date, diary, author (with their page on the Diaries site, asked of the site's API when the script runs), the place with its Adamlink or Wikidata id and a point, and per place an excerpt of the transcription around its first mention (whole lines, up to 3,000 characters, with the mention offsets and whether the text continues before or after). The ingest stamps each excerpt with the index place its mention resolved to, so the card opens the entry at the place it shows. The people and places an entry names are not kept: the index answers what, when, where and why an item is here, and sends the reader to the source for the rest. Mentions of areas (the city, a district, a water) stay on the card but get no point, since the dump's coordinate is a centroid.
-- **Cinema Context programmes** — exported from the Cinema Context database dump with a script kept next to the dump (`export_cinema_context.py`, in the data project), as JSONL with one programme per line: its permanent id, date, venue with its kind and its page at the site, the venue's address as written and its coordinates, the programme in order. Amsterdam only by default. The ingest keeps only the films: a programme becomes a `ScreeningEvent` with its films in the source's order, titled with the first, its live acts are left out, and a programme without a film is not ingested. It links to the venue's address matched by name, era-ranked like every name match, and falls back to the point when the address is written as a range or a description.
+- **Amsterdam Diaries entries** — extracted from the Amsterdam Diaries Time Machine dump ([Zenodo](https://zenodo.org/records/14385058), unzipped) with `db:extract`, as JSONL with one line per entry and place it mentions inside the municipality boundary: the entry's ark and its reading page on the Diaries site (the diary's subject by slug and the entry's position among that subject's entries), date, diary, author (with their page on the Diaries site, asked of the site's API during the extract), the place with its Adamlink or Wikidata id and a point, and per place an excerpt of the transcription around its first mention (whole lines, up to 3,000 characters, with the mention offsets and whether the text continues before or after). The ingest stamps each excerpt with the index place its mention resolved to, so the card opens the entry at the place it shows. The people and places an entry names are not kept: the index answers what, when, where and why an item is here, and sends the reader to the source for the rest. Mentions of areas (the city, a district, a water) stay on the card but get no point, since the dump's coordinate is a centroid.
+- **Cinema Context programmes** — extracted from the Cinema Context database dump (pg_dump, plain SQL) with `db:extract`, as JSONL with one programme per line whose venue lies inside the municipality boundary: its permanent id, date, venue with its kind and its page at the site, the venue's address as written and its coordinates, the programme in order. The ingest keeps only the films: a programme becomes a `ScreeningEvent` with its films in the source's order, titled with the first, its live acts are left out, and a programme without a film is not ingested. It links to the venue's address matched by name, era-ranked like every name match, and falls back to the point when the address is written as a range or a description.
+
+  Both extracts need the municipality boundary from `db:fetch`:
+
+  ```bash
+  bun run db:extract -s cinema-context    -i <cinema-context-dump.sql> -o <data-dir>/cinema-context.jsonl    -m <data-dir>/municipality.geojson
+  bun run db:extract -s amsterdam-diaries -i <diaries-dump-dir>        -o <data-dir>/amsterdam-diaries.jsonl -m <data-dir>/municipality.geojson
+  ```
 
 All files land in the data directory; the ingestion steps below read them.
 
@@ -444,6 +451,14 @@ Ingestion is idempotent and source-driven: corrections are made in the **source 
 
 **Fixing tags.** Re-run the `tags` source with the corrected file and the same `--tagger`: it replaces that tagger's rows only, and other taggers' rows stay. Then rebuild.
 
+**Rebuilding from scratch.** `scripts/reingest.sh` wipes a deployment's bundled DB and runs every step above, extracting Cinema Context and the Diaries from their dumps when their files are missing. Run it from the deployment's clone. It reads `reingest.env` in the repo root (copy `reingest.env.example`): `DATA`, the absolute path of the source files, is required, and any file name that differs from the defaults goes there too.
+
+```bash
+scripts/reingest.sh dev          # host bun, self-hosted DB
+scripts/reingest.sh staging      # app image; APP_IMAGE_TAG in .env picks the lane
+scripts/reingest.sh production   # app image :production
+```
+
 ## API endpoints
 
 | Endpoint | Purpose |
@@ -488,10 +503,15 @@ bun run db:ingest -s adressen -f <path-to-adressen.ttl>
 bun run db:fetch  -s cbs-areas     -o <data-dir>/cbs-areas.geojson
 bun run db:fetch  -s nwb-streets   -o <data-dir>/nwb-streets.geojson
 bun run db:fetch  -s bag-addresses -o <data-dir>/bag-addresses.ndjson
+bun run db:fetch  -s municipality  -o <data-dir>/municipality.geojson
 bun run db:ingest -s pdok-places -f <data-dir>/cbs-areas.geojson
 bun run db:ingest -s nwb-streets -f <data-dir>/nwb-streets.geojson -x <data-dir>/adamlinkstraten.ttl
 bun run db:ingest -s pdok-places -f <data-dir>/bag-addresses.ndjson
 bun run db:ingest -s buildings -f <path-to-adamlinkgebouwen.ttl> -m <data-dir>/municipality.geojson
+
+# Cinema Context and the Diaries: extract from their dumps first
+bun run db:extract -s cinema-context    -i <cinema-context-dump.sql> -o <data-dir>/cinema-context.jsonl    -m <data-dir>/municipality.geojson
+bun run db:extract -s amsterdam-diaries -i <diaries-dump-dir>        -o <data-dir>/amsterdam-diaries.jsonl -m <data-dir>/municipality.geojson
 
 # Ingest datasets (any order)
 bun run db:ingest -s <dataset-name> -f <path-to-file>
@@ -578,6 +598,7 @@ $DC run --rm app bun run db:push-schema
 export DATA=/srv/atm-data
 alias etl="$DC run --rm -v $DATA:/data:ro app bun run db:ingest"
 alias fetch="$DC run --rm -v $DATA:/data app bun run db:fetch"
+alias extract="$DC run --rm -v $DATA:/data app bun run db:extract"
 
 etl -s neighbourhoods-and-districts -f /data/adamlinkbuurten.ttl
 etl -s streets  -f /data/adamlinkstraten.ttl
@@ -588,6 +609,7 @@ etl -s adressen -f /data/adressen.ttl
 fetch -s cbs-areas     -o /data/cbs-areas.geojson
 fetch -s nwb-streets   -o /data/nwb-streets.geojson
 fetch -s bag-addresses -o /data/bag-addresses.ndjson
+fetch -s municipality  -o /data/municipality.geojson
 etl -s pdok-places -f /data/cbs-areas.geojson
 etl -s nwb-streets -f /data/nwb-streets.geojson -x /data/adamlinkstraten.ttl
 etl -s pdok-places -f /data/bag-addresses.ndjson
@@ -596,6 +618,8 @@ etl -s buildings -f /data/adamlinkgebouwen.ttl -m /data/municipality.geojson
 etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
+extract -s cinema-context    -i /data/<cinema-context-dump.sql> -o /data/cinema-context.jsonl    -m /data/municipality.geojson
+extract -s amsterdam-diaries -i /data/<diaries-dump-dir>        -o /data/amsterdam-diaries.jsonl -m /data/municipality.geojson
 etl -s cinema-context -f /data/cinema-context.jsonl
 etl -s amsterdam-diaries -f /data/amsterdam-diaries.jsonl
 # optional: classifier tags, one file per dataset keyed by that dataset's natural keys (remap_tags_to_feature_keys.py, beside the data), one tagger id per run
@@ -641,6 +665,7 @@ $DC run --rm app bun run db:push-schema
 export DATA=/srv/atm-data
 alias etl="$DC run --rm -v $DATA:/data:ro app bun run db:ingest"
 alias fetch="$DC run --rm -v $DATA:/data app bun run db:fetch"
+alias extract="$DC run --rm -v $DATA:/data app bun run db:extract"
 etl -s neighbourhoods-and-districts -f /data/adamlinkbuurten.ttl
 etl -s streets  -f /data/adamlinkstraten.ttl
 etl -s lps      -f /data/lps.ttl
@@ -649,6 +674,7 @@ etl -s adressen -f /data/adressen.ttl
 fetch -s cbs-areas     -o /data/cbs-areas.geojson
 fetch -s nwb-streets   -o /data/nwb-streets.geojson
 fetch -s bag-addresses -o /data/bag-addresses.ndjson
+fetch -s municipality  -o /data/municipality.geojson
 etl -s pdok-places -f /data/cbs-areas.geojson
 etl -s nwb-streets -f /data/nwb-streets.geojson -x /data/adamlinkstraten.ttl
 etl -s pdok-places -f /data/bag-addresses.ndjson
@@ -656,6 +682,8 @@ etl -s buildings -f /data/adamlinkgebouwen.ttl -m /data/municipality.geojson
 etl -s beeldbank      -f /data/beeldbank.csv
 etl -s joods-monument -f /data/results_jm.csv
 etl -s delpher        -f /data/delpher_newspapers.csv
+extract -s cinema-context    -i /data/<cinema-context-dump.sql> -o /data/cinema-context.jsonl    -m /data/municipality.geojson
+extract -s amsterdam-diaries -i /data/<diaries-dump-dir>        -o /data/amsterdam-diaries.jsonl -m /data/municipality.geojson
 etl -s cinema-context -f /data/cinema-context.jsonl
 etl -s amsterdam-diaries -f /data/amsterdam-diaries.jsonl
 etl -s tags -f /data/beeldbank-tags.jsonl --tagger google/siglip2-base-patch16-224 --dataset beeldbank --tagger-label google/siglip2-base-patch16-224 --tagger-url https://huggingface.co/google/siglip2-base-patch16-224   # optional: classifier tags, keyed by natural keys

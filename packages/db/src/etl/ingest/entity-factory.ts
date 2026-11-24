@@ -59,8 +59,19 @@ export class MediaObjectEntityFactory extends EntityFactory<MediaObjectEntity> {
 
 // the source row's shape, as the cinema-context source reads it
 type ProgrammeVenue = { perm_id?: string; url?: string; name?: string; type?: string };
-// a live act comes as an item without a title, and is left out
-export type SourceItem = { title?: string; url?: string; year?: string; country?: string; director?: string; production_company?: string };
+// an item on the bill as the extract writes it; a live act comes without a title, and is left out
+export type SourceItem = {
+    title?: string;
+    film_perm_id?: string;
+    year?: string;
+    country?: string;
+    director?: string;
+    production_company?: string;
+    url?: string;
+    // the film's own title, when the bill lists it under another
+    original_title?: string;
+    live?: string;
+};
 
 /**
  * A programme's films in the source's order. Live acts are left out: the index keeps
