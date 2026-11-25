@@ -134,27 +134,53 @@ function windowYears(window: [string | null, string | null]): string {
 	return '';
 }
 
+// the division a historical neighbourhood or district belongs to, by the historians' term
+const DIVISION: Partial<Record<PlaceSearchMatch['type'], string>> = {
+	district: 'districtDivision',
+	neighbourhood: 'neighbourhoodDivision'
+};
+
+// the years an address was noted on a register: "vermeld in 1909", "6× vermeld tussen 1802 en 1943"
+function recordedYears(years: number[]): string {
+	if (years.length === 1) {
+		return `${translate('recorded')} ${translate('windowIn')} ${years[0]}`;
+	}
+	return fill(translate('recordedTimes'), {
+		count: String(years.length),
+		first: String(years[0]),
+		last: String(years[years.length - 1])
+	});
+}
+
 /**
- * What a place search row's years mean, in the source's terms. A street or area's
- * window is its existence: "bestaat vanaf 1663", "bestond 1850 tot 1909". A street's
- * old name carries the years it held: "naam 1850 tot 1943". An address has no
- * validity, only the registers it was noted on: "vermeld in 1853" for the matched
- * record, "vermeld 1832 tot 1943" over all of them. A place from a current register
+ * What a place search row's years mean, in the source's terms. A street's window is its
+ * existence: "bestaat vanaf 1663", "bestond 1850 tot 1909". A historical neighbourhood
+ * or district carries the years its division was in force: "buurtindeling 1850 tot
+ * 1909"; a present-day one, which the source does not date, reads "huidig". A street's
+ * old name carries the years it held: "naam 1850 tot 1943". An address has no validity,
+ * only the registers it was noted on: "vermeld in 1853" for the matched record, "6×
+ * vermeld tussen 1802 en 1943" over all of them. A place from a current register
  * carries no dates: "huidig". '' when the source gave none.
  */
 export function formatPlaceWindow(match: PlaceSearchMatch): string {
+	const division = DIVISION[match.type];
 	if (match.type === 'address') {
-		let window = match.recordedWindow;
-		if (match.matchedNameId && match.matchedWindow) {
-			window = match.matchedWindow;
+		if (match.matchedNameId && match.matchedWindow?.[0]) {
+			return recordedYears([Number(match.matchedWindow[0].slice(0, 4))]);
 		}
-		if (window) {
-			return `${translate('recorded')} ${windowYears(window)}`;
+		if (match.recordedYears.length > 0) {
+			return recordedYears(match.recordedYears);
 		}
 	} else if (match.matchedNameId) {
 		if (match.matchedWindow) {
 			return `${translate('nameHeld')} ${windowYears(match.matchedWindow)}`;
 		}
+	} else if (division && match.geometryWindow) {
+		const [since, until] = match.geometryWindow;
+		if (since && until) {
+			return `${translate(division)} ${since.slice(0, 4)} ${translate('windowUntil')} ${until.slice(0, 4)}`;
+		}
+		return translate('currentRegister');
 	} else if (match.geometryWindow) {
 		const [since, until] = match.geometryWindow;
 		if (since && !until) {

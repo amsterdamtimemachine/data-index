@@ -45,9 +45,8 @@ type SearchRow = {
   matched_name_id: string | null;
   geometry_since: string | null;
   geometry_until: string | null;
-  // the earliest and latest dated name record of the place
-  recorded_since: string | null;
-  recorded_until: string | null;
+  // the years of the place's dated name records, in order
+  recorded_years: number[] | null;
   feature_count: string;
   cells: number[] | null;
 };
@@ -85,10 +84,6 @@ function toMatch(row: SearchRow): PlaceSearchMatch {
   if (row.geometry_since || row.geometry_until) {
     geometryWindow = [row.geometry_since, row.geometry_until];
   }
-  let recordedWindow: [string | null, string | null] | null = null;
-  if (row.recorded_since || row.recorded_until) {
-    recordedWindow = [row.recorded_since, row.recorded_until];
-  }
   return {
     placeId: row.id,
     name: row.name,
@@ -98,16 +93,16 @@ function toMatch(row: SearchRow): PlaceSearchMatch {
     matchedNameId: row.matched_name_id,
     matchedWindow,
     geometryWindow,
-    recordedWindow,
+    recordedYears: row.recorded_years ?? [],
     featureCount: parseInt(row.feature_count),
     cells
   };
 }
 
-// the first and last year a place's name was recorded, over its dated name rows
-const recordedWindowSql = (placeId: SQL) => sql`
-  (SELECT MIN(hn.since) FROM place_historical_name hn WHERE hn.place_id = ${placeId} AND hn.since IS NOT NULL)::text AS recorded_since,
-  (SELECT MAX(hn.until) FROM place_historical_name hn WHERE hn.place_id = ${placeId} AND hn.until IS NOT NULL)::text AS recorded_until`;
+// the years a place's name was recorded, one per year with a dated name row
+const recordedYearsSql = (placeId: SQL) => sql`
+  (SELECT array_agg(DISTINCT EXTRACT(YEAR FROM hn.since)::int ORDER BY EXTRACT(YEAR FROM hn.since)::int)
+   FROM place_historical_name hn WHERE hn.place_id = ${placeId} AND hn.since IS NOT NULL) AS recorded_years`;
 
 export async function searchPlaces(query: string, options: PlaceSearchOptions = {}): Promise<PlaceSearchMatch[]> {
   const q = query.trim().slice(0, MAX_QUERY_LENGTH);
@@ -176,7 +171,7 @@ export async function searchPlaces(query: string, options: PlaceSearchOptions = 
       page.matched_name, page.matched_since::text, page.matched_until::text,
       page.matched_historical, page.matched_name_id,
       page.geometry_since::text, page.geometry_until::text,
-      ${recordedWindowSql(sql`page.id`)},
+      ${recordedYearsSql(sql`page.id`)},
       (SELECT COUNT(*) FROM feature_to_place fp WHERE fp.place_id = page.id) AS feature_count,
       ${cells} AS cells
     FROM page
@@ -202,7 +197,7 @@ export async function getPlaceById(placeId: string, options: PlaceByIdOptions = 
       (h.id IS NOT NULL) AS matched_historical,
       h.id AS matched_name_id,
       pg.since::text AS geometry_since, pg.until::text AS geometry_until,
-      ${recordedWindowSql(sql`page.id`)},
+      ${recordedYearsSql(sql`page.id`)},
       (SELECT COUNT(*) FROM feature_to_place fp WHERE fp.place_id = page.id) AS feature_count,
       ${cells} AS cells
     FROM place page

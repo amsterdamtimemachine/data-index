@@ -203,8 +203,8 @@ describe('place search', () => {
   test('a house in both registers lists twice, the current register first, even before a dated old-name match', async () => {
     const matches = await searchPlaces('Kerkstraat 9');
     expect(matches.map((m) => m.placeId)).toEqual([BAG_TWIN, BOTH]);
-    expect(matches[0].recordedWindow).toBeNull();
-    expect(matches[1].recordedWindow).toEqual(['1900-01-01', '1943-01-01']);
+    expect(matches[0].recordedYears).toEqual([]);
+    expect(matches[1].recordedYears).toEqual([1900]);
 
     const alone = await searchPlaces('Kerkstraat 7');
     expect(alone.map((m) => m.placeId)).toEqual([BAG_ALONE]);
