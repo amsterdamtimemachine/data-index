@@ -23,10 +23,6 @@ case "$TARGET" in
 esac
 
 CONFIG="${REINGEST_CONFIG:-scripts/reingest.env}"
-if [ ! -f "$CONFIG" ] && [ -z "${REINGEST_CONFIG:-}" ] && [ -f reingest.env ]; then
-  echo "note: using reingest.env in the repo root; move it to scripts/reingest.env" >&2
-  CONFIG=reingest.env
-fi
 if [ -f "$CONFIG" ]; then
   # shellcheck disable=SC1090
   source "$CONFIG"
