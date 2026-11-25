@@ -9,7 +9,7 @@
 #   scripts/reingest.sh production    # app image :production
 #   scripts/reingest.sh staging -y    # without the prompt
 #
-# Settings come from reingest.env in the repo root (copy reingest.env.example; or the
+# Settings come from scripts/reingest.env (copy scripts/reingest.env.example; or the
 # file REINGEST_CONFIG names); what it leaves out comes from the environment, then the
 # defaults below. DATA is required: the absolute path of the source files.
 #
@@ -22,7 +22,11 @@ case "$TARGET" in
   *) echo "usage: $0 <dev|staging|production> [-y]" >&2; exit 1 ;;
 esac
 
-CONFIG="${REINGEST_CONFIG:-reingest.env}"
+CONFIG="${REINGEST_CONFIG:-scripts/reingest.env}"
+if [ ! -f "$CONFIG" ] && [ -z "${REINGEST_CONFIG:-}" ] && [ -f reingest.env ]; then
+  echo "note: using reingest.env in the repo root; move it to scripts/reingest.env" >&2
+  CONFIG=reingest.env
+fi
 if [ -f "$CONFIG" ]; then
   # shellcheck disable=SC1090
   source "$CONFIG"

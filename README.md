@@ -451,7 +451,7 @@ Ingestion is idempotent and source-driven: corrections are made in the **source 
 
 **Fixing tags.** Re-run the `tags` source with the corrected file and the same `--tagger`: it replaces that tagger's rows only, and other taggers' rows stay. Then rebuild.
 
-**Rebuilding from scratch.** `scripts/reingest.sh` wipes a deployment's bundled DB and runs every step above, extracting Cinema Context and the Diaries from their dumps when their files are missing. Run it from the deployment's clone. It reads `reingest.env` in the repo root (copy `reingest.env.example`): `DATA`, the absolute path of the source files, is required, and any file name that differs from the defaults goes there too.
+**Rebuilding from scratch.** `scripts/reingest.sh` wipes a deployment's bundled DB and runs every step above, extracting Cinema Context and the Diaries from their dumps when their files are missing. Run it from the deployment's clone. It reads `scripts/reingest.env` (copy `scripts/reingest.env.example`): `DATA`, the absolute path of the source files, is required, and any file name that differs from the defaults goes there too.
 
 ```bash
 scripts/reingest.sh dev          # host bun, self-hosted DB
