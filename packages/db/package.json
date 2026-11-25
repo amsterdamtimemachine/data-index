@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@atm/shared": "workspace:*",
-    "@streamparser/json": "^0.0.22",
+    "@streamparser/json": "^0.0.26",
     "commander": "^12.1.0",
     "csv-parse": "^7.0.3",
     "drizzle-orm": "^0.45.4",
