@@ -22,7 +22,7 @@ function match(overrides: Partial<PlaceSearchMatch>): PlaceSearchMatch {
 		geometryWindow: null,
 		featureCount: 0,
 		cells: [],
-		recordedWindow: null,
+		recordedYears: [],
 		...overrides
 	};
 }
@@ -64,11 +64,29 @@ describe('formatPlaceWindow', () => {
 			type: 'address',
 			matchedNameId: 'n',
 			matchedWindow: ['1853-01-01', '1853-12-31'],
-			recordedWindow: ['1832-01-01', '1943-12-31']
+			recordedYears: [1832, 1853, 1943]
 		});
 		expect(formatPlaceWindow(record)).toBe('vermeld in 1853');
-		const span = match({ type: 'address', recordedWindow: ['1832-01-01', '1943-12-31'] });
-		expect(formatPlaceWindow(span)).toBe('vermeld 1832 tot 1943');
+		const once = match({ type: 'address', recordedYears: [1909] });
+		expect(formatPlaceWindow(once)).toBe('vermeld in 1909');
+		// the registers are not a period: how many, and the first and last
+		const several = match({ type: 'address', recordedYears: [1802, 1832, 1853, 1876, 1909, 1943] });
+		expect(formatPlaceWindow(several)).toBe('6× vermeld tussen 1802 en 1943');
+	});
+
+	test("a historical neighbourhood or district carries its division's years; a present-day one is current", () => {
+		expect(
+			formatPlaceWindow(match({ type: 'district', geometryWindow: ['1600-01-01', '1850-01-01'] }))
+		).toBe('wijkindeling 1600 tot 1850');
+		expect(
+			formatPlaceWindow(
+				match({ type: 'neighbourhood', geometryWindow: ['1850-01-01', '1909-01-01'] })
+			)
+		).toBe('buurtindeling 1850 tot 1909');
+		// a present-day unit: the source gives no date, the start year is the ingest's own
+		expect(
+			formatPlaceWindow(match({ type: 'neighbourhood', geometryWindow: ['1921-01-01', null] }))
+		).toBe('huidig');
 	});
 
 	test('a place from a current register reads "huidig"; an undated Adamlink place nothing', () => {

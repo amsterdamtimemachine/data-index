@@ -22,8 +22,8 @@ export type PlaceSearchMatch = {
    */
   cells: number[];
   /**
-   * [since, until] over the place's dated name records: the first and last year a name
-   * of it was noted on a register. Null when it has none.
+   * The years a name of the place was noted on a register, one per year with a dated
+   * name record, in order; empty when it has none.
    */
-  recordedWindow: [string | null, string | null] | null;
+  recordedYears: number[];
 };

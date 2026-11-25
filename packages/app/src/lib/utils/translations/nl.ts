@@ -199,6 +199,11 @@ export const NL = {
 	existed: 'bestond',
 	nameHeld: 'naam',
 	recorded: 'vermeld',
+	// an address noted on several registers: "6× vermeld tussen 1802 en 1943"
+	recordedTimes: '{count}× vermeld tussen {first} en {last}',
+	// the years a historical division was in force: "wijkindeling 1600 tot 1850"
+	districtDivision: 'wijkindeling',
+	neighbourhoodDivision: 'buurtindeling',
 	currentRegister: 'huidig',
 	filters: 'Filters',
 	// the heading over an expanded card's provenance

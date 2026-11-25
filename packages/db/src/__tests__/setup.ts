@@ -7,6 +7,7 @@ import { sql } from 'drizzle-orm';
 import { searchVectorDdl } from '../search-vector';
 import { resolve } from 'path';
 import { db } from '../client';
+import { clearResolverCaches } from '../etl/places/cache';
 
 export { db };
 
@@ -182,6 +183,8 @@ export async function setupTestDb() {
 export async function cleanTestDb() {
   await assertTestDb();
   await db.execute(sql`TRUNCATE cell_features, grid_config, place_cells, tag_features, feature_tags, feature_to_place, features, place_historical_name, place_geometry, place, relation, tags, datasets, agents CASCADE`);
+  // the place resolvers cache by name and point for the process: an emptied DB starts them afresh
+  clearResolverCaches();
 }
 
 export async function teardownTestDb() {
